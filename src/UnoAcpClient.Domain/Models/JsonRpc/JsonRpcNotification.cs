@@ -17,18 +17,20 @@ namespace UnoAcpClient.Domain.Models.JsonRpc
        public string Method { get; set; } = string.Empty;
 
        /// <summary>
-       /// 可选的消息标识符。
-       /// 根据 JSON-RPC 2.0 规范，通知通常不包含 id，但 ACP 协议的某些通知需要响应，因此保留此可选字段。
-       /// </summary>
-       [JsonPropertyName("id")]
-       public object? Id { get; set; }
+      /// 可选的消息标识符。
+      /// 根据 JSON-RPC 2.0 规范，通知通常不包含 id，但 ACP 协议的某些通知需要响应，因此保留此可选字段。
+      /// </summary>
+      [JsonPropertyName("id")]
+      [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+      public object? Id { get; set; }
 
         /// <summary>
         /// 方法的参数。
-        /// 可以是对象、数组、原始值或省略。
-        /// </summary>
-        [JsonPropertyName("params")]
-        public JsonElement? Params { get; set; }
+       /// 可以是对象、数组、原始值或省略。
+       /// </summary>
+       [JsonPropertyName("params")]
+       [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+       public JsonElement? Params { get; set; }
 
         /// <summary>
        /// 创建一个新的 JsonRpcNotification 实例。

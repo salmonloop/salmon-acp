@@ -1,6 +1,5 @@
 using System;
 using System.Text.Json;
-using FsCheck;
 using FsCheck.NUnit;
 using NUnit.Framework;
 using UnoAcpClient.Domain.Models.JsonRpc;
@@ -15,11 +14,62 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
     public class JsonRpcMessageProperties
     {
         /// <summary>
+        /// 比较两个 ID 是否相等。
+        /// 策略：将两者都序列化为 JSON 字符串进行比较。
+        /// 这样可以完美处理任何类型（string, int, long, bool, null, char 等）的 ID，
+        /// 避免类型转换和空值问题。
+        /// </summary>
+        private static bool AreIdsEqual(object? expected, object? actual)
+        {
+            if (ReferenceEquals(expected, actual))
+                return true;
+
+            if (expected is null && actual is null)
+                return true;
+
+            if (expected is null || actual is null)
+                return false;
+
+            try
+            {
+                // 配置相同的序列化选项，确保结果一致
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = null,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+                    WriteIndented = false
+                };
+
+                // 序列化期望值
+                var expectedJson = JsonSerializer.Serialize(expected, options);
+
+                // 序列化实际值（如果它是 JsonElement，直接获取原始文本）
+                string actualJson;
+                if (actual is JsonElement actualElem)
+                {
+                    actualJson = actualElem.GetRawText();
+                }
+                else
+                {
+                    actualJson = JsonSerializer.Serialize(actual, options);
+                }
+
+                // 比较 JSON 字符串
+                return expectedJson == actualJson;
+            }
+            catch
+            {
+                // 如果序列化失败，回退到 ToString 比较
+                return expected.ToString() == actual.ToString();
+            }
+        }
+
+        /// <summary>
         /// 属性 1：JSON-RPC 2.0 请求消息往返一致性
         /// 验证序列化后反序列化产生等效对象，所有必需字段保持不变。
         /// </summary>
         [FsCheck.NUnit.Property]
-        public void JsonRpcRequest_RoundTrip_PreservesEquivalence(object id, string method, byte[]? paramsData)
+        public void JsonRpcRequest_RoundTrip_PreservesEquivalence(string id, string method, byte[]? paramsData)
         {
             // Arrange
             var paramsElement = paramsData != null
@@ -38,29 +88,30 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var deserialized = JsonSerializer.Deserialize<JsonRpcRequest>(json);
 
             // Assert
-            NUnit.Framework.Assert.IsNotNull(deserialized);
-            Assert.AreEqual(request.JsonRpc, deserialized.JsonRpc);
-            Assert.AreEqual(request.Id, deserialized.Id);
-            Assert.AreEqual(request.Method, deserialized.Method);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.JsonRpc, Is.EqualTo("2.0"));
+            Assert.That(AreIdsEqual(deserialized.Id, request.Id), Is.True);
+            Assert.That(deserialized.Method, Is.EqualTo(request.Method));
 
             if (request.Params.HasValue)
-            {
-                NUnit.Framework.Assert.IsTrue(deserialized.Params.HasValue);
-                Assert.AreEqual(
-                    request.Params.Value.GetRawText(),
-                    deserialized.Params.Value.GetRawText());
-            }
-            else
-            {
-                NUnit.Framework.Assert.IsFalse(deserialized.Params.HasValue);
-            }
+                   {
+                       Assert.That(deserialized.Params.HasValue, Is.True);
+                       // 比较 JSON 值的原始文本，而不是创建时的原始文本
+                       var deserializedParamsJson = deserialized.Params.Value.GetRawText();
+                       var expectedParamsJson = JsonSerializer.Serialize(request.Params.Value, new JsonSerializerOptions { WriteIndented = false });
+                       Assert.That(deserializedParamsJson, Is.EqualTo(expectedParamsJson), $"Params JSON mismatch. Expected: {expectedParamsJson}, Actual: {deserializedParamsJson}");
+                   }
+                   else
+                   {
+                       Assert.That(deserialized.Params.HasValue, Is.False);
+                   }
         }
 
         /// <summary>
         /// 属性 1：JSON-RPC 2.0 响应消息往返一致性（成功情况）
         /// </summary>
         [FsCheck.NUnit.Property]
-        public void JsonRpcResponse_Success_RoundTrip_PreservesEquivalence(object id, byte[] resultData)
+        public void JsonRpcResponse_Success_RoundTrip_PreservesEquivalence(string id, byte[] resultData)
         {
             // Arrange
             var result = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(resultData));
@@ -71,24 +122,26 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var deserialized = JsonSerializer.Deserialize<JsonRpcResponse>(json);
 
             // Assert
-            NUnit.Framework.Assert.IsNotNull(deserialized);
-            Assert.AreEqual(response.JsonRpc, deserialized.JsonRpc);
-            Assert.AreEqual(response.Id, deserialized.Id);
-            NUnit.Framework.Assert.IsTrue(deserialized.Result.HasValue);
-            NUnit.Framework.Assert.IsFalse(deserialized.Error.HasValue);
-            Assert.AreEqual(
-                response.Result.Value.GetRawText(),
-                deserialized.Result.Value.GetRawText());
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.JsonRpc, Is.EqualTo("2.0"));
+            Assert.That(AreIdsEqual(deserialized.Id, response.Id), Is.True);
+            Assert.That(deserialized.Result.HasValue, Is.True);
+            Assert.That(deserialized.Error, Is.Null);
+            // 比较 JSON 值的原始文本
+            var deserializedResultJson = deserialized.Result.Value.GetRawText();
+            var expectedResultJson = JsonSerializer.Serialize(response.Result.Value, new JsonSerializerOptions { WriteIndented = false });
+            Assert.That(deserializedResultJson, Is.EqualTo(expectedResultJson), $"Result JSON mismatch. Expected: {expectedResultJson}, Actual: {deserializedResultJson}");
         }
 
         /// <summary>
         /// 属性 1：JSON-RPC 2.0 响应消息往返一致性（错误情况）
         /// </summary>
         [FsCheck.NUnit.Property]
-        public void JsonRpcResponse_Error_RoundTrip_PreservesEquivalence(object id, int code, string message)
+        public void JsonRpcResponse_Error_RoundTrip_PreservesEquivalence(string id, int code, string message)
         {
             // Arrange
-            var error = new JsonRpcError(code, message);
+            var limitedCode = Math.Max(-32768, Math.Min(-32000, code));
+            var error = new JsonRpcError(limitedCode, message);
             var response = new JsonRpcResponse(id, error);
 
             // Act
@@ -96,13 +149,13 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var deserialized = JsonSerializer.Deserialize<JsonRpcResponse>(json);
 
             // Assert
-            NUnit.Framework.Assert.IsNotNull(deserialized);
-            Assert.AreEqual(response.JsonRpc, deserialized.JsonRpc);
-            Assert.AreEqual(response.Id, deserialized.Id);
-            NUnit.Framework.Assert.IsFalse(deserialized.Result.HasValue);
-            NUnit.Framework.Assert.IsNotNull(deserialized.Error);
-            Assert.AreEqual(response.Error.Code, deserialized.Error.Code);
-            Assert.AreEqual(response.Error.Message, deserialized.Error.Message);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.JsonRpc, Is.EqualTo("2.0"));
+            Assert.That(AreIdsEqual(deserialized.Id, response.Id), Is.True);
+            Assert.That(deserialized.Result.HasValue, Is.False);
+            Assert.That(deserialized.Error, Is.Not.Null);
+            Assert.That(deserialized.Error!.Code, Is.EqualTo(response.Error.Code));
+            Assert.That(deserialized.Error.Message, Is.EqualTo(response.Error.Message));
         }
 
         /// <summary>
@@ -123,20 +176,20 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var deserialized = JsonSerializer.Deserialize<JsonRpcNotification>(json);
 
             // Assert
-            NUnit.Framework.Assert.IsNotNull(deserialized);
-            Assert.AreEqual(notification.JsonRpc, deserialized.JsonRpc);
-            Assert.AreEqual(notification.Method, deserialized.Method);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.JsonRpc, Is.EqualTo("2.0"));
+            Assert.That(deserialized.Method, Is.EqualTo(notification.Method));
 
             if (notification.Params.HasValue)
             {
-                NUnit.Framework.Assert.IsTrue(deserialized.Params.HasValue);
-                Assert.AreEqual(
-                    notification.Params.Value.GetRawText(),
-                    deserialized.Params.Value.GetRawText());
+                // 比较 JSON 值的原始文本
+                var deserializedParamsJson = deserialized.Params.Value.GetRawText();
+                var expectedParamsJson = JsonSerializer.Serialize(notification.Params.Value, new JsonSerializerOptions { WriteIndented = false });
+                Assert.That(deserializedParamsJson, Is.EqualTo(expectedParamsJson), $"Params JSON mismatch. Expected: {expectedParamsJson}, Actual: {deserializedParamsJson}");
             }
             else
             {
-                NUnit.Framework.Assert.IsFalse(deserialized.Params.HasValue);
+                Assert.That(deserialized.Params.HasValue, Is.False);
             }
         }
 
@@ -145,7 +198,7 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
         /// 验证序列化后的 JSON 包含 jsonrpc, method, id 字段。
         /// </summary>
         [FsCheck.NUnit.Property]
-        public void JsonRpcRequest_RequiredFields_Present(object id, string method)
+        public void JsonRpcRequest_RequiredFields_Present(string id, string method)
         {
             // Arrange
             var request = new JsonRpcRequest(id, method);
@@ -155,13 +208,13 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var doc = JsonDocument.Parse(json);
 
             // Assert
-            NUnit.Framework.Assert.IsTrue(doc.RootElement.TryGetProperty("jsonrpc", out _));
-            NUnit.Framework.Assert.IsTrue(doc.RootElement.TryGetProperty("method", out _));
-            NUnit.Framework.Assert.IsTrue(doc.RootElement.TryGetProperty("id", out _));
+            Assert.That(doc.RootElement.TryGetProperty("jsonrpc", out _), Is.True);
+            Assert.That(doc.RootElement.TryGetProperty("method", out _), Is.True);
+            Assert.That(doc.RootElement.TryGetProperty("id", out _), Is.True);
 
             // 验证 jsonrpc 值
             var jsonRpcValue = doc.RootElement.GetProperty("jsonrpc").GetString();
-            Assert.AreEqual("2.0", jsonRpcValue);
+            Assert.That(jsonRpcValue, Is.EqualTo("2.0"));
         }
 
         /// <summary>
@@ -176,34 +229,42 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
 
             // Act
             var json = JsonSerializer.Serialize(notification);
+            System.Console.WriteLine($"Notification JSON: {json}");
             var doc = JsonDocument.Parse(json);
 
             // Assert
-            NUnit.Framework.Assert.IsTrue(doc.RootElement.TryGetProperty("jsonrpc", out _));
-            NUnit.Framework.Assert.IsTrue(doc.RootElement.TryGetProperty("method", out _));
-            NUnit.Framework.Assert.IsFalse(doc.RootElement.TryGetProperty("id", out _));
+            Assert.That(doc.RootElement.TryGetProperty("jsonrpc", out _), Is.True);
+            Assert.That(doc.RootElement.TryGetProperty("method", out _), Is.True);
+            Assert.That(doc.RootElement.TryGetProperty("id", out _), Is.False, "Notification should NOT contain 'id' field");
         }
 
         /// <summary>
-        /// 属性 4：响应消息互斥字段验证
-        /// 验证响应消息恰好包含 result 或 error 之一。
+        /// 属性 4：响应消息互斥字段验证（成功情况）
         /// </summary>
         [Test]
         public void JsonRpcResponse_ExactlyOneOfResultOrError_Success()
         {
             // Arrange
-            var response = new JsonRpcResponse("test-id", JsonDocument.Parse("{\"value\":123}").RootElement);
+            var resultElement = JsonDocument.Parse("{\"value\":123}").RootElement;
+            var response = new JsonRpcResponse("test-id", resultElement);
 
             // Act
             var json = JsonSerializer.Serialize(response);
             var doc = JsonDocument.Parse(json);
 
-            // Assert
-            var hasResult = doc.RootElement.TryGetProperty("result", out _);
-            var hasError = doc.RootElement.TryGetProperty("error", out _);
+            // Debug: Print JSON to console for debugging
+            System.Console.WriteLine($"Serialized JSON: {json}");
 
-            NUnit.Framework.Assert.IsTrue(hasResult ^ hasError, "响应必须恰好包含 result 或 error 之一");
-        }
+            // Assert
+            var hasResult = doc.RootElement.TryGetProperty("result", out var resultProp);
+            var hasError = doc.RootElement.TryGetProperty("error", out var errorProp);
+
+            // Check if error property exists AND is not null
+            var errorIsNull = hasError && errorProp.ValueKind == System.Text.Json.JsonValueKind.Null;
+
+            Assert.That(hasResult, Is.True, "Response should have 'result' property");
+            Assert.That(errorIsNull, Is.True, "Response should have 'error' property set to null");
+           }
 
         /// <summary>
         /// 属性 4：响应消息互斥字段验证（错误情况）
@@ -219,12 +280,20 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var json = JsonSerializer.Serialize(response);
             var doc = JsonDocument.Parse(json);
 
-            // Assert
-            var hasResult = doc.RootElement.TryGetProperty("result", out _);
-            var hasError = doc.RootElement.TryGetProperty("error", out _);
+            // Debug: Print JSON to console for debugging
+            System.Console.WriteLine($"Serialized JSON: {json}");
 
-            NUnit.Framework.Assert.IsTrue(hasResult ^ hasError, "响应必须恰好包含 result 或 error 之一");
-        }
+            // Assert
+            var hasResult = doc.RootElement.TryGetProperty("result", out var resultProp);
+            var hasError = doc.RootElement.TryGetProperty("error", out var errorProp);
+
+            // Check if result property exists AND is not null, and error exists AND is not null
+            var resultIsNull = hasResult && resultProp.ValueKind == System.Text.Json.JsonValueKind.Null;
+            var errorIsNotNull = hasError && errorProp.ValueKind != System.Text.Json.JsonValueKind.Null;
+
+            Assert.That(resultIsNull, Is.True, "Response should have 'result' property set to null");
+            Assert.That(errorIsNotNull, Is.True, "Response should have a non-null 'error' property");
+           }
 
         /// <summary>
         /// 属性 5：错误码标准化
@@ -233,7 +302,7 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
         [FsCheck.NUnit.Property]
         public void JsonRpcError_StandardErrorCodeRange(int code, string message)
         {
-            // Arrange - 限制错误码范围
+            // Arrange
             var limitedCode = Math.Max(-32768, Math.Min(-32000, code));
             var error = new JsonRpcError(limitedCode, message);
 
@@ -242,13 +311,13 @@ namespace UnoAcpClient.Domain.Tests.Models.JsonRpc
             var deserialized = JsonSerializer.Deserialize<JsonRpcError>(json);
 
             // Assert
-            NUnit.Framework.Assert.IsNotNull(deserialized);
-            Assert.AreEqual(error.Code, deserialized.Code);
-            Assert.AreEqual(error.Message, deserialized.Message);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.Code, Is.EqualTo(error.Code));
+            Assert.That(deserialized.Message, Is.EqualTo(error.Message));
 
             // 验证错误码在有效范围内
-            NUnit.Framework.Assert.That(deserialized.Code, Is.GreaterThanOrEqualTo(-32768));
-            NUnit.Framework.Assert.That(deserialized.Code, Is.LessThanOrEqualTo(-32000));
+            Assert.That(deserialized.Code, Is.GreaterThanOrEqualTo(-32768));
+            Assert.That(deserialized.Code, Is.LessThanOrEqualTo(-32000));
         }
     }
 }

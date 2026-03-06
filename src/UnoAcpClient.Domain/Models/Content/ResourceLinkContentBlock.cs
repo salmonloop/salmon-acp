@@ -10,8 +10,9 @@ namespace UnoAcpClient.Domain.Models.Content
     {
         /// <summary>
         /// 内容块类型标识符，固定为 "resourceLink"。
+        /// 此属性被 [JsonIgnore] 忽略，因为类型信息已由 JsonPolymorphic 自动处理。
         /// </summary>
-        [JsonPropertyName("type")]
+        [JsonIgnore]
         public override string Type => "resourceLink";
 
         /// <summary>

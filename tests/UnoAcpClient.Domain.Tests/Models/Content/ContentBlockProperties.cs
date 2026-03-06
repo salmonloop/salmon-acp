@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
-using FsCheck;
 using FsCheck.NUnit;
 using NUnit.Framework;
 using UnoAcpClient.Domain.Models.Content;
@@ -15,6 +14,22 @@ namespace UnoAcpClient.Domain.Tests.Models.Content
     [TestFixture]
     public class ContentBlockProperties
     {
+       private readonly JsonSerializerOptions _jsonOptions;
+
+       public ContentBlockProperties()
+       {
+           // 配置序列化选项：使用小写命名策略，以匹配 "type" 字段
+           _jsonOptions = new JsonSerializerOptions
+           {
+               PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+               PropertyNameCaseInsensitive = true,
+               WriteIndented = false
+           };
+
+           // 添加 JsonPolymorphic 转换器支持
+           _jsonOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+       }
+
         /// <summary>
         /// 属性 6：文本内容块往返一致性
         /// </summary>
@@ -23,15 +38,17 @@ namespace UnoAcpClient.Domain.Tests.Models.Content
         {
             // Arrange
             var block = new TextContentBlock(text);
+            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
 
             // Act
-            var json = JsonSerializer.Serialize(block);
-            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json) as TextContentBlock;
+            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
+            System.Console.WriteLine($"Text JSON: {json}");
+            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as TextContentBlock;
 
             // Assert
-            NUnit.Framework.NUnit.Framework.Assert.IsNotNull(deserialized);
-            NUnit.Framework.Assert.AreEqual("text", deserialized.Type);
-            NUnit.Framework.Assert.AreEqual(block.Text, deserialized.Text);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.Type, Is.EqualTo("text"));
+            Assert.That(deserialized.Text, Is.EqualTo(block.Text));
         }
 
         /// <summary>
@@ -42,16 +59,18 @@ namespace UnoAcpClient.Domain.Tests.Models.Content
         {
             // Arrange
             var block = new ImageContentBlock(data, mimeType);
+            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
 
             // Act
-            var json = JsonSerializer.Serialize(block);
-            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json) as ImageContentBlock;
+            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
+            System.Console.WriteLine($"Image JSON: {json}");
+            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as ImageContentBlock;
 
             // Assert
-            NUnit.Framework.NUnit.Framework.Assert.IsNotNull(deserialized);
-            NUnit.Framework.Assert.AreEqual("image", deserialized.Type);
-            NUnit.Framework.Assert.AreEqual(block.Data, deserialized.Data);
-            NUnit.Framework.Assert.AreEqual(block.MimeType, deserialized.MimeType);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.Type, Is.EqualTo("image"));
+            Assert.That(deserialized.Data, Is.EqualTo(block.Data));
+            Assert.That(deserialized.MimeType, Is.EqualTo(block.MimeType));
         }
 
         /// <summary>
@@ -62,16 +81,18 @@ namespace UnoAcpClient.Domain.Tests.Models.Content
         {
             // Arrange
             var block = new AudioContentBlock(data, mimeType);
+            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
 
             // Act
-            var json = JsonSerializer.Serialize(block);
-            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json) as AudioContentBlock;
+            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
+            System.Console.WriteLine($"Audio JSON: {json}");
+            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as AudioContentBlock;
 
             // Assert
-            NUnit.Framework.NUnit.Framework.Assert.IsNotNull(deserialized);
-            NUnit.Framework.Assert.AreEqual("audio", deserialized.Type);
-            NUnit.Framework.Assert.AreEqual(block.Data, deserialized.Data);
-            NUnit.Framework.Assert.AreEqual(block.MimeType, deserialized.MimeType);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.Type, Is.EqualTo("audio"));
+            Assert.That(deserialized.Data, Is.EqualTo(block.Data));
+            Assert.That(deserialized.MimeType, Is.EqualTo(block.MimeType));
         }
 
         /// <summary>
@@ -83,17 +104,19 @@ namespace UnoAcpClient.Domain.Tests.Models.Content
             // Arrange
             var resource = new EmbeddedResource(uri, text, mimeType);
             var block = new ResourceContentBlock(resource);
+            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
 
             // Act
-            var json = JsonSerializer.Serialize(block);
-            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json) as ResourceContentBlock;
+            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
+            System.Console.WriteLine($"Resource JSON: {json}");
+            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as ResourceContentBlock;
 
             // Assert
-            NUnit.Framework.NUnit.Framework.Assert.IsNotNull(deserialized);
-            NUnit.Framework.Assert.AreEqual("resource", deserialized.Type);
-            NUnit.Framework.Assert.AreEqual(block.Resource.Uri, deserialized.Resource.Uri);
-            NUnit.Framework.Assert.AreEqual(block.Resource.Text, deserialized.Resource.Text);
-            NUnit.Framework.Assert.AreEqual(block.Resource.MimeType, deserialized.Resource.MimeType);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.Type, Is.EqualTo("resource"));
+            Assert.That(deserialized.Resource.Uri, Is.EqualTo(block.Resource.Uri));
+            Assert.That(deserialized.Resource.Text, Is.EqualTo(block.Resource.Text));
+            Assert.That(deserialized.Resource.MimeType, Is.EqualTo(block.Resource.MimeType));
         }
 
         /// <summary>
@@ -111,15 +134,42 @@ namespace UnoAcpClient.Domain.Tests.Models.Content
             };
 
             // Act
-            var json = JsonSerializer.Serialize(blocks);
-            var deserialized = JsonSerializer.Deserialize<ContentBlock[]>(json);
+            var json = JsonSerializer.Serialize(blocks, _jsonOptions);
+            var deserialized = JsonSerializer.Deserialize<ContentBlock[]>(json, _jsonOptions);
 
             // Assert
-            NUnit.Framework.NUnit.Framework.Assert.IsNotNull(deserialized);
-            NUnit.Framework.Assert.AreEqual(blocks.Count, deserialized.Length);
-            NUnit.Framework.Assert.IsInstanceOf<TextContentBlock>(deserialized[0]);
-            NUnit.Framework.Assert.IsInstanceOf<ImageContentBlock>(deserialized[1]);
-            NUnit.Framework.Assert.IsInstanceOf<AudioContentBlock>(deserialized[2]);
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized!.Length, Is.EqualTo(blocks.Count));
+            Assert.That(deserialized[0], Is.InstanceOf<TextContentBlock>());
+            Assert.That(deserialized[1], Is.InstanceOf<ImageContentBlock>());
+            Assert.That(deserialized[2], Is.InstanceOf<AudioContentBlock>());
+        }
+
+        /// <summary>
+        /// 属性 7：ContentBlock 数组序列化时 type 字段存在
+        /// </summary>
+        [Test]
+        public void ContentBlock_Array_TypeDiscriminator_Present()
+        {
+            // Arrange
+            var blocks = new List<ContentBlock>
+            {
+                new TextContentBlock("Test"),
+                new ImageContentBlock("data", "image/jpeg")
+            };
+
+            // Act
+            var json = JsonSerializer.Serialize(blocks, _jsonOptions);
+            System.Console.WriteLine($"Array JSON: {json}");
+            var doc = JsonDocument.Parse(json);
+
+            // Assert
+            Assert.That(doc.RootElement.GetArrayLength(), Is.GreaterThan(0));
+
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                Assert.That(element.TryGetProperty("type", out _), Is.True, "每个 ContentBlock 必须包含 type 字段");
+            }
         }
     }
 }
