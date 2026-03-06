@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Uno.Resizetizer;
 
+
 namespace UnoAcpClient;
 
 /// <summary>
@@ -26,7 +27,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     {
         MainWindow = new Window();
 #if DEBUG
-        MainWindow.UseStudio();
+        // MainWindow.UseStudio(); // Requires Uno Studio configuration
 #endif
 
         if (MainWindow.Content is not Frame rootFrame)
