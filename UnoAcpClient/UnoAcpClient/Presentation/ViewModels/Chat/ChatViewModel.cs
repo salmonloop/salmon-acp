@@ -15,17 +15,14 @@ using UnoAcpClient.Domain.Services;
 namespace UnoAcpClient.Presentation.ViewModels.Chat
 {
     /// <summary>
-    /// Chat  ViewModel，管理会话、消息显示、权限请求等 UI 逻辑
+    /// Chat ViewModel，管理会话、消息显示、权限请求等 UI 逻辑
     /// 这是重构后的主要 ViewModel，使用新的 ACP 协议 API
     /// </summary>
-    public partial class ChatViewModel : ViewModelBase
+    public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         private readonly IChatService _chatService;
         private readonly SynchronizationContext _syncContext;
-        private IDisposable? _sessionUpdateSubscription;
-        private IDisposable? _permissionRequestSubscription;
-        private IDisposable? _fileSystemRequestSubscription;
-        private IDisposable? _errorSubscription;
+        private bool _disposed;
 
         [ObservableProperty]
         private ObservableCollection<ChatMessageViewModel> _messageHistory = new();
@@ -44,9 +41,6 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
 
         [ObservableProperty]
         private string? _agentVersion;
-
-        [ObservableProperty]
-        private bool _canSendPrompt;
 
         [ObservableProperty]
         private bool _isInitializing;
@@ -579,16 +573,28 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
 
         partial void OnCurrentPromptChanged(string value)
         {
-            CanSendPromptCommand.NotifyCanExecuteChanged();
+            SendPromptCommand.NotifyCanExecuteChanged();
         }
 
-        public override void Dispose()
+        public void Dispose()
         {
-            base.Dispose();
-            _chatService.SessionUpdateReceived -= OnSessionUpdateReceived;
-            _chatService.PermissionRequestReceived -= OnPermissionRequestReceived;
-            _chatService.FileSystemRequestReceived -= OnFileSystemRequestReceived;
-            _chatService.ErrorOccurred -= OnErrorOccurred;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    _chatService.SessionUpdateReceived -= OnSessionUpdateReceived;
+                    _chatService.PermissionRequestReceived -= OnPermissionRequestReceived;
+                    _chatService.FileSystemRequestReceived -= OnFileSystemRequestReceived;
+                    _chatService.ErrorOccurred -= OnErrorOccurred;
+                }
+                _disposed = true;
+            }
         }
     }
 

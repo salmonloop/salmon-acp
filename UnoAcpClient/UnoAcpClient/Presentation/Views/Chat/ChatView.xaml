@@ -1,246 +1,134 @@
 <Page x:Class="UnoAcpClient.Presentation.Views.Chat.ChatView"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:local="using:UnoAcpClient.Presentation.Views.Chat"
-      xmlns:vm="using:UnoAcpClient.Presentation.ViewModels.Chat"
-      xmlns:converters="using:UnoAcpClient.Presentation.Converters"
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      mc:Ignorable="d"
-      Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:UnoAcpClient.Presentation.Views.Chat"
+    xmlns:vm="using:UnoAcpClient.Presentation.ViewModels.Chat"
+    xmlns:converters="using:UnoAcpClient.Presentation.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
         <converters:PlanStatusToColorConverter x:Key="PlanStatusToColorConverter"/>
-
-        <!-- 文本消息模板 -->
-        <DataTemplate x:Key="TextMessageTemplate" x:DataType="vm:ChatMessageViewModel">
-            <StackPanel Margin="4" MaxWidth="400" HorizontalAlignment="{x:Bind IsOutgoing, Converter={StaticResource DirectionToAlignmentConverter}}">
-                <Border Background="{ThemeResource CardBackgroundFillColorDefault}"
-                        BorderBrush="{ThemeResource CardBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="{x:Bind Title}"
-                                   FontWeight="Bold"
-                                   FontSize="12"
-                                   Visibility="{x:Bind Title, Converter={StaticResource BoolToVisibilityConverter}}"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock Text="{x:Bind TextContent}"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock Text="{x:Bind Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
-                                   FontSize="10"
-                                   Opacity="0.6"
-                                   Margin="0,8,0,0"
-                                   HorizontalAlignment="Right"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </DataTemplate>
-
-        <!-- 图片消息模板 -->
-        <DataTemplate x:Key="ImageMessageTemplate" x:DataType="vm:ChatMessageViewModel">
-            <StackPanel Margin="4" MaxWidth="400" HorizontalAlignment="{x:Bind IsOutgoing, Converter={StaticResource DirectionToAlignmentConverter}}">
-                <Border Background="{ThemeResource CardBackgroundFillColorDefault}"
-                        BorderBrush="{ThemeResource CardBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="12">
-                    <StackPanel>
-                        <Image Source="{x:Bind ImageData}"
-                               MaxHeight="300"
-                               Stretch="Uniform"/>
-                        <TextBlock Text="{x:Bind Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
-                                   FontSize="10"
-                                   Opacity="0.6"
-                                   Margin="0,8,0,0"
-                                   HorizontalAlignment="Right"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </DataTemplate>
-
-        <!-- 工具调用模板 -->
-        <DataTemplate x:Key="ToolCallTemplate" x:DataType="vm:ChatMessageViewModel">
-            <StackPanel Margin="4" MaxWidth="400">
-                <Border Background="{ThemeResource SystemListLowColor}"
-                        BorderBrush="{ThemeResource CardBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="{x:Bind Title}"
-                                   FontWeight="Bold"
-                                   FontSize="12"
-                                   Margin="0,0,0,8"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="工具:" FontWeight="Bold"/>
-                            <TextBlock Text="{x:Bind ToolCallId}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                            <TextBlock Text="类型:" FontWeight="Bold"/>
-                            <TextBlock Text="{x:Bind ToolCallKind}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                            <TextBlock Text="状态:" FontWeight="Bold"/>
-                            <TextBlock Text="{x:Bind ToolCallStatus}"/>
-                        </StackPanel>
-                        <TextBlock Text="{x:Bind ToolCallJson}"
-                                   FontFamily="Consolas"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"
-                                   Margin="0,8,0,0"
-                                   MaxHeight="100"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </DataTemplate>
-
-        <!-- 计划条目模板 -->
-        <DataTemplate x:Key="PlanEntryTemplate" x:DataType="vm:ChatMessageViewModel">
-            <StackPanel Margin="4" MaxWidth="400">
-                <Border Background="{ThemeResource SystemListLowColor}"
-                        BorderBrush="{ThemeResource CardBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="{x:Bind Title}"
-                                   FontWeight="Bold"
-                                   FontSize="12"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                            <TextBlock Text="状态:" FontWeight="Bold"/>
-                            <TextBlock Text="{x:Bind PlanEntry.StatusDisplayName}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                            <TextBlock Text="优先级:" FontWeight="Bold"/>
-                            <TextBlock Text="{x:Bind PlanEntry.PriorityDisplayName}"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </DataTemplate>
-
-        <!-- 模式切换模板 -->
-        <DataTemplate x:Key="ModeChangeTemplate" x:DataType="vm:ChatMessageViewModel">
-            <StackPanel Margin="4" MaxWidth="400" HorizontalAlignment="Center">
-                <Border Background="{ThemeResource AccentFillColorDefault}"
-                        BorderBrush="{ThemeResource CardBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="{x:Bind Title}"
-                                   FontWeight="Bold"
-                                   FontSize="12"
-                                   HorizontalAlignment="Center"/>
-                        <TextBlock Text="{x:Bind ModeId}"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Margin="0,4,0,0"
-                                   HorizontalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </DataTemplate>
-
-        <!-- 消息模板选择器 -->
-        <converters:MessageTemplateSelector x:Key="MessageTemplateSelector"
-                                           TextMessageTemplate="{StaticResource TextMessageTemplate}"
-                                           ImageMessageTemplate="{StaticResource ImageMessageTemplate}"
-                                           ToolCallTemplate="{StaticResource ToolCallTemplate}"
-                                           PlanEntryTemplate="{StaticResource PlanEntryTemplate}"
-                                           ModeChangeTemplate="{StaticResource ModeChangeTemplate}"
-                                           DefaultTemplate="{StaticResource TextMessageTemplate}"/>
+        <converters:TimeFormatConverter x:Key="TimeFormatConverter"/>
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <Grid RowDefinitions="Auto,*,Auto">
         <!-- 顶部状态栏 -->
-        <StackPanel Grid.Row="0"
-                    Padding="16"
-                    Orientation="Vertical"
-                    Spacing="8">
+        <StackPanel Grid.Row="0" Padding="16" Orientation="Vertical" Spacing="8">
             <!-- 连接状态和 Agent 信息 -->
-            <StackPanel Orientation="Horizontal"
-                        Spacing="16">
-                <Ellipse Width="12"
-                         Height="12"
-                         Fill="Green"/>
-                <TextBlock Text="已连接到 Agent:"
-                           VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind ViewModel.AgentName, Mode=OneWay}"
-                           VerticalAlignment="Center"
-                           FontWeight="Bold"/>
-                <TextBlock Text=" ("
-                           VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind ViewModel.AgentVersion, Mode=OneWay}"
-                           VerticalAlignment="Center"/>
-                <TextBlock Text=")"
-                           VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <Ellipse Width="12" Height="12" Fill="Green"/>
+                <TextBlock Text="已连接到 Agent:" VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind ViewModel.AgentName, Mode=OneWay}" VerticalAlignment="Center" FontWeight="Bold"/>
+                <TextBlock Text=" (" VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind ViewModel.AgentVersion, Mode=OneWay}" VerticalAlignment="Center"/>
+                <TextBlock Text=")" VerticalAlignment="Center"/>
                 <Button Content="断开连接"
-                        Command="{x:Bind ViewModel.DisconnectCommand}"
-                        HorizontalAlignment="Right"
-                        Margin="Auto,0,0,0"/>
+                    Command="{x:Bind ViewModel.DisconnectCommand}"
+                    HorizontalAlignment="Right"
+                    Margin="120,0,0,0"/>
             </StackPanel>
 
             <!-- 会话模式选择 -->
-            <StackPanel Orientation="Horizontal"
-                        Spacing="8"
-                        Visibility="{x:Bind ViewModel.IsSessionActive, Converter={StaticResource BoolToVisibilityConverter}}">
-                <TextBlock Text="当前模式:"
-                           VerticalAlignment="Center"
-                           Width="60"/>
+            <StackPanel Orientation="Horizontal" Spacing="8"
+                Visibility="{x:Bind ViewModel.IsSessionActive, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock Text="当前模式:" VerticalAlignment="Center" Width="60"/>
                 <ComboBox ItemsSource="{x:Bind ViewModel.AvailableModes, Mode=OneWay}"
-                          SelectedItem="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
-                          Width="200"
-                          DisplayMemberPath="ModeName"
-                          PlaceholderText="选择模式..."/>
+                    SelectedItem="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
+                    Width="200"
+                    DisplayMemberPath="ModeName"
+                    PlaceholderText="选择模式..."/>
                 <Button Content="应用模式"
-                        Command="{x:Bind ViewModel.SetModeCommand}"
-                        CommandParameter="{x:Bind ViewModel.SelectedMode, Mode=OneWay}"/>
+                    Command="{x:Bind ViewModel.SetModeCommand}"
+                    CommandParameter="{x:Bind ViewModel.SelectedMode, Mode=OneWay}"/>
             </StackPanel>
 
             <!-- 错误信息 -->
             <TextBlock Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
-                       Foreground="Red"
-                       Visibility="{x:Bind ViewModel.ErrorMessage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                Foreground="Red"
+                Visibility="{x:Bind ViewModel.ErrorMessage, Converter={StaticResource BoolToVisibilityConverter}}"/>
         </StackPanel>
 
         <!-- 消息历史 -->
-        <ScrollViewer Grid.Row="1"
-                      Padding="16"
-                      VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" Padding="16" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}">
-                <ItemsControl.ItemTemplateSelector>
-                    {StaticResource MessageTemplateSelector}
-                </ItemsControl.ItemTemplateSelector>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ChatMessageViewModel">
+                        <StackPanel Margin="4" MaxWidth="400">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefault}"
+                                BorderBrush="{ThemeResource CardBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12">
+                                <StackPanel>
+                                    <TextBlock Text="{x:Bind Title}"
+                                        FontWeight="Bold"
+                                        FontSize="12"
+                                        Visibility="{x:Bind Title, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Margin="0,0,0,8"/>
+
+                                    <!-- 文本内容 -->
+                                    <TextBlock Text="{x:Bind TextContent}"
+                                        TextWrapping="Wrap"
+                                        Visibility="{x:Bind HasTextContent, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                    <!-- 工具调用信息 -->
+                                    <StackPanel Visibility="{x:Bind HasToolCall, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="工具:" FontWeight="Bold"/>
+                                            <TextBlock Text="{x:Bind ToolCallId}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                            <TextBlock Text="类型:" FontWeight="Bold"/>
+                                            <TextBlock Text="{x:Bind ToolCallKind}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                            <TextBlock Text="状态:" FontWeight="Bold"/>
+                                            <TextBlock Text="{x:Bind ToolCallStatus}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- 计划条目信息 -->
+                                    <StackPanel Visibility="{x:Bind HasPlanEntry, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Text="{x:Bind PlanEntry.StatusDisplayName}" Foreground="Blue"/>
+                                        <TextBlock Text="{x:Bind PlanEntry.Content}" Margin="0,4,0,0"/>
+                                    </StackPanel>
+
+                                    <TextBlock Text="{x:Bind Timestamp, Converter={StaticResource TimeFormatConverter}}"
+                                        FontSize="10"
+                                        Opacity="0.6"
+                                        Margin="0,8,0,0"
+                                        HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
 
         <!-- 计划面板 -->
         <Border Grid.Row="2"
-                Background="{ThemeResource CardBackgroundFillColorDefault}"
-                BorderBrush="{ThemeResource CardBorderBrush}"
-                BorderThickness="0,1,0,0"
-                Padding="16"
-                Visibility="{x:Bind ViewModel.ShowPlanPanel, Converter={StaticResource BoolToVisibilityConverter}}">
+            Background="{ThemeResource CardBackgroundFillColorDefault}"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="16"
+            Visibility="{x:Bind ViewModel.ShowPlanPanel, Converter={StaticResource BoolToVisibilityConverter}}">
             <StackPanel Spacing="8">
-                <TextBlock Text="Agent 计划"
-                           FontWeight="Bold"
-                           FontSize="16"/>
+                <TextBlock Text="Agent 计划" FontWeight="Bold" FontSize="16"/>
                 <ItemsControl ItemsSource="{x:Bind ViewModel.CurrentPlan, Mode=OneWay}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:PlanEntryViewModel">
                             <StackPanel Margin="0,4" Spacing="4">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="{x:Bind StatusDisplayName}"
-                                               Foreground="{x:Bind Status, Converter={StaticResource PlanStatusToColorConverter}}"/>
-                                    <TextBlock Text="{x:Bind PriorityDisplayName}"
-                                               FontStyle="Italic"/>
-                                    <TextBlock Text="{x:Bind Content}"
-                                               TextWrapping="Wrap"/>
+                                        Foreground="{x:Bind Status, Converter={StaticResource PlanStatusToColorConverter}}"/>
+                                    <TextBlock Text="{x:Bind PriorityDisplayName}" FontStyle="Italic"/>
+                                    <TextBlock Text="{x:Bind Content}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </StackPanel>
                         </DataTemplate>
@@ -250,40 +138,39 @@
         </Border>
 
         <!-- 消息输入 -->
-        <StackPanel Grid.Row="3"
-                    Padding="16"
-                    Orientation="Vertical"
-                    Spacing="8"
-                    Visibility="{x:Bind ViewModel.IsSessionActive, Converter={StaticResource BoolToVisibilityConverter}}">
+        <StackPanel Grid.Row="2"
+            Padding="16"
+            Orientation="Vertical"
+            Spacing="8"
+            Visibility="{x:Bind ViewModel.IsSessionActive, Converter={StaticResource BoolToVisibilityConverter}}"
+            Margin="0,16,0,0">
             <TextBox PlaceholderText="输入消息..."
-                     Text="{x:Bind ViewModel.CurrentPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     TextWrapping="Wrap"
-                     AcceptsReturn="True"
-                     Height="80"/>
-            <StackPanel Orientation="Horizontal"
-                        Spacing="8">
-                <Button Content="发送"
-                        Command="{x:Bind ViewModel.SendPromptCommand}"/>
-                <Button Content="取消会话"
-                        Command="{x:Bind ViewModel.CancelSessionCommand}"/>
+                Text="{x:Bind ViewModel.CurrentPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                TextWrapping="Wrap"
+                AcceptsReturn="True"
+                Height="80"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="发送" Command="{x:Bind ViewModel.SendPromptCommand}"/>
+                <Button Content="取消会话" Command="{x:Bind ViewModel.CancelSessionCommand}"/>
                 <Button Content="清除历史"
-                        Command="{x:Bind ViewModel.ClearHistoryCommand}"
-                        Margin="Auto,0,0,0"/>
+                    Command="{x:Bind ViewModel.ClearHistoryCommand}"
+                    Margin="120,0,0,0"/>
             </StackPanel>
         </StackPanel>
 
         <!-- 初始化和连接按钮 -->
-        <StackPanel Grid.Row="3"
-                    Padding="16"
-                    Orientation="Horizontal"
-                    Spacing="8"
-                    Visibility="{x:Bind ViewModel.IsSessionActive, Converter={StaticResource InverseBoolConverter}}">
+        <StackPanel Grid.Row="2"
+            Padding="16"
+            Orientation="Horizontal"
+            Spacing="8"
+            Visibility="{x:Bind ViewModel.IsSessionActive, Converter={StaticResource InverseBoolConverter}}"
+            Margin="0,16,0,0">
             <Button Content="初始化并连接"
-                    Command="{x:Bind ViewModel.InitializeAndConnectCommand}"
-                    IsEnabled="{x:Bind ViewModel.IsInitializing, Converter={StaticResource InverseBoolConverter}}"/>
+                Command="{x:Bind ViewModel.InitializeAndConnectCommand}"
+                IsEnabled="{x:Bind ViewModel.IsInitializing, Converter={StaticResource InverseBoolConverter}}"/>
             <Button Content="创建新会话"
-                    Command="{x:Bind ViewModel.CreateNewSessionCommand}"
-                    IsEnabled="{x:Bind ViewModel.IsConnecting, Converter={StaticResource InverseBoolConverter}}"/>
+                Command="{x:Bind ViewModel.CreateNewSessionCommand}"
+                IsEnabled="{x:Bind ViewModel.IsConnecting, Converter={StaticResource InverseBoolConverter}}"/>
         </StackPanel>
     </Grid>
 </Page>

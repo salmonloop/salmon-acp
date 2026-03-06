@@ -17,13 +17,13 @@ namespace UnoAcpClient.Presentation.Converters
             {
                 return status switch
                 {
-                    PlanEntryStatus.Pending => new SolidColorBrush(Colors.Gray),
-                    PlanEntryStatus.InProgress => new SolidColorBrush(Colors.Blue),
-                    PlanEntryStatus.Completed => new SolidColorBrush(Colors.Green),
-                    _ => new SolidColorBrush(Colors.Gray)
+                    PlanEntryStatus.Pending => new SolidColorBrush(Microsoft.UI.Colors.Gray),
+                    PlanEntryStatus.InProgress => new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 120, 215)),
+                    PlanEntryStatus.Completed => new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 180, 0)),
+                    _ => new SolidColorBrush(Microsoft.UI.Colors.Gray)
                 };
             }
-            return new SolidColorBrush(Colors.Gray);
+            return new SolidColorBrush(Microsoft.UI.Colors.Gray);
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

@@ -1,4 +1,4 @@
-```using FluentValidation;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -15,6 +15,8 @@ using UnoAcpClient.Infrastructure.Client;
 using UnoAcpClient.Infrastructure.Logging;
 using UnoAcpClient.Infrastructure.Network;
 using UnoAcpClient.Infrastructure.Serialization;
+using UnoAcpClient.Infrastructure.Services;
+using UnoAcpClient.Infrastructure.Services.Security;
 using UnoAcpClient.Infrastructure.Storage;
 using UnoAcpClient.Infrastructure.Transport;
 using UnoAcpClient.Presentation.ViewModels;
@@ -64,38 +66,38 @@ public static class DependencyInjection
         services.AddSingleton<IMessageValidator, MessageValidator>();
 
         // 能力管理器
-        services.AddSingleton<ICapabilityManager, CapabilityManager>();
+        services.AddSingleton<ICapabilityManager, Infrastructure.Services.CapabilityManager>();
 
         // 会话管理器
-        services.AddSingleton<ISessionManager, SessionManager>();
+        services.AddSingleton<ISessionManager, Infrastructure.Services.SessionManager>();
 
         // 路径验证器
-        services.AddSingleton<IPathValidator, PathValidator>();
+        services.AddSingleton<IPathValidator, Infrastructure.Services.Security.PathValidator>();
 
         // 权限管理器
-        services.AddSingleton<IPermissionManager, PermissionManager>();
+        services.AddSingleton<IPermissionManager, Infrastructure.Services.Security.PermissionManager>();
 
         // 错误日志器
         services.AddSingleton<IErrorLogger, ErrorLogger>();
 
         // 连接管理器（使用工厂方法支持动态传输选择）
         services.AddSingleton<IConnectionManager>(sp =>
-        {
-            var protocolService = sp.GetRequiredService<IAcpProtocolService>();
-            var logger = sp.GetRequiredService<Serilog.ILogger>();
+        	{
+        				var protocolService = sp.GetRequiredService<IAcpProtocolService>();
+        				var logger = sp.GetRequiredService<Serilog.ILogger>();
 
-            ITransport TransportFactory(TransportType type)
-            {
-                var l = sp.GetRequiredService<Serilog.ILogger>();
-                return type switch
-                {
-                    TransportType.HttpSse => new HttpSseTransport(l),
-                    _ => new WebSocketTransport(l)
-                };
-            }
+        				Infrastructure.Network.ITransport TransportFactory(TransportType type)
+        				{
+        					var l = sp.GetRequiredService<Serilog.ILogger>();
+        					return type switch
+        					{
+        						TransportType.HttpSse => new HttpSseTransport(l),
+        						_ => new WebSocketTransport(l)
+        					};
+        				}
 
-            return new ConnectionManager(protocolService, logger, TransportFactory);
-        });
+        				return new ConnectionManager(protocolService, logger, TransportFactory);
+        			});
     }
 
     private static void RegisterInfrastructureServices(IServiceCollection services)
@@ -109,11 +111,10 @@ public static class DependencyInjection
         // Validator
         services.AddSingleton<IValidator<ServerConfiguration>, ServerConfigurationValidator>();
 
-        // Stdio 传输层
-        services.AddSingleton<ITransport>(sp =>
+        // Stdio 传输层 (使用 Infrastructure.Transport 命名空间中的 StdioTransport)
+        services.AddSingleton<Domain.Interfaces.Transport.ITransport>(sp =>
         {
-            var logger = sp.GetRequiredService<Serilog.ILogger>();
-            return new StdioTransport("agent-command", Array.Empty<string>(), logger);
+            return new StdioTransport("agent-command", Array.Empty<string>());
         });
     }
 
@@ -131,13 +132,22 @@ public static class DependencyInjection
         // Chat 服务（核心重构部分）
         services.AddSingleton<IChatService>(sp =>
         {
-            var transport = sp.GetRequiredService<ITransport>();
+            var transport = sp.GetRequiredService<UnoAcpClient.Domain.Interfaces.Transport.ITransport>();
             var parser = sp.GetRequiredService<IMessageParser>();
             var validator = sp.GetRequiredService<IMessageValidator>();
             var errorLogger = sp.GetRequiredService<IErrorLogger>();
 
             var acpClient = new AcpClient(transport, parser, validator, errorLogger);
             return new ChatService(acpClient, errorLogger);
+        });
+
+        // 错误恢复服务
+        services.AddSingleton<IErrorRecoveryService>(sp =>
+        {
+            var chatService = sp.GetRequiredService<IChatService>();
+            var pathValidator = sp.GetRequiredService<IPathValidator>();
+            var errorLogger = sp.GetRequiredService<IErrorLogger>();
+            return new ErrorRecoveryService(chatService, pathValidator, errorLogger);
         });
     }
 
@@ -155,7 +165,8 @@ public static class DependencyInjection
     private static string GetAppDataPath()
     {
 #if __ANDROID__
-        return Android.App.Application.Context.FilesDir?.AbsolutePath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnoAcpClient");
+        return Android.App.Application.Context.FilesDir?.AbsolutePath
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnoAcpClient");
 #elif __IOS__
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "..", "Library", "Application Support", "UnoAcpClient");
 #elif __MACOS__

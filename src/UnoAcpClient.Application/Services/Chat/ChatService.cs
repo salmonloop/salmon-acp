@@ -21,7 +21,6 @@ namespace UnoAcpClient.Application.Services.Chat
     {
         private readonly IAcpClient _acpClient;
         private readonly IErrorLogger _errorLogger;
-
         private string? _currentSessionId;
         private Plan? _currentPlan;
         private SessionModeState? _currentMode;
@@ -41,10 +40,10 @@ namespace UnoAcpClient.Application.Services.Chat
         public event EventHandler<FileSystemRequestEventArgs>? FileSystemRequestReceived;
         public event EventHandler<string>? ErrorOccurred;
 
-        public ChatService(IAcpClient acpClient, IErrorLogger? errorLogger = null)
+        public ChatService(IAcpClient acpClient, IErrorLogger errorLogger)
         {
             _acpClient = acpClient ?? throw new ArgumentNullException(nameof(acpClient));
-            _errorLogger = errorLogger ?? new Domain.Services.ErrorLogger();
+            _errorLogger = errorLogger ?? throw new ArgumentNullException(nameof(errorLogger));
             _sessionHistory = new ObservableCollection<SessionUpdateEntry>();
 
             // 订阅 ACP 客户端事件
@@ -107,7 +106,13 @@ namespace UnoAcpClient.Application.Services.Chat
         private void OnErrorOccurred(object? sender, string error)
         {
             ErrorOccurred?.Invoke(this, error);
-            _errorLogger.LogError("ChatService", "Error occurred", error, null, null);
+            var entry = new ErrorLogEntry(
+                "Error occurred",
+                error,
+                ErrorSeverity.Error,
+                nameof(OnErrorOccurred),
+                _currentSessionId);
+            _errorLogger.LogError(entry);
         }
 
         private SessionUpdateEntry? CreateSessionUpdateEntry(SessionUpdate update, string sessionId)
@@ -155,7 +160,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "InitializeAsync", ex.Message, ex.StackTrace, null);
+                var entry = new ErrorLogEntry(
+                    "InitializeAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(InitializeAsync),
+                    null,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -178,7 +190,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "CreateSessionAsync", ex.Message, ex.StackTrace, _currentSessionId);
+                var entry = new ErrorLogEntry(
+                    "CreateSessionAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(CreateSessionAsync),
+                    _currentSessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -193,7 +212,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "LoadSessionAsync", ex.Message, ex.StackTrace, @params.SessionId);
+                var entry = new ErrorLogEntry(
+                    "LoadSessionAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(LoadSessionAsync),
+                    @params.SessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -207,7 +233,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "SendPromptAsync", ex.Message, ex.StackTrace, @params.SessionId);
+                var entry = new ErrorLogEntry(
+                    "SendPromptAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(SendPromptAsync),
+                    @params.SessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -225,7 +258,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "SetSessionModeAsync", ex.Message, ex.StackTrace, @params.SessionId);
+                var entry = new ErrorLogEntry(
+                    "SetSessionModeAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(SetSessionModeAsync),
+                    @params.SessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -239,7 +279,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "SetSessionConfigOptionAsync", ex.Message, ex.StackTrace, @params.SessionId);
+                var entry = new ErrorLogEntry(
+                    "SetSessionConfigOptionAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(SetSessionConfigOptionAsync),
+                    @params.SessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -261,7 +308,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "CancelSessionAsync", ex.Message, ex.StackTrace, @params.SessionId);
+                var entry = new ErrorLogEntry(
+                    "CancelSessionAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(CancelSessionAsync),
+                    @params.SessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -274,7 +328,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "RespondToPermissionRequestAsync", ex.Message, ex.StackTrace, null);
+                var entry = new ErrorLogEntry(
+                    "RespondToPermissionRequestAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(RespondToPermissionRequestAsync),
+                    null,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -287,7 +348,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "RespondToFileSystemRequestAsync", ex.Message, ex.StackTrace, null);
+                var entry = new ErrorLogEntry(
+                    "RespondToFileSystemRequestAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(RespondToFileSystemRequestAsync),
+                    null,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
@@ -305,12 +373,19 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "DisconnectAsync", ex.Message, ex.StackTrace, null);
+                var entry = new ErrorLogEntry(
+                    "DisconnectAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(DisconnectAsync),
+                    null,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }
 
-        public async Task<List<SessionMode>?> GetAvailableModesAsync()
+        public async Task<List<UnoAcpClient.Domain.Models.Protocol.SessionMode>?> GetAvailableModesAsync()
         {
             try
             {
@@ -325,7 +400,14 @@ namespace UnoAcpClient.Application.Services.Chat
             }
             catch (Exception ex)
             {
-                _errorLogger.LogError("ChatService", "GetAvailableModesAsync", ex.Message, ex.StackTrace, _currentSessionId);
+                var entry = new ErrorLogEntry(
+                    "GetAvailableModesAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(GetAvailableModesAsync),
+                    _currentSessionId,
+                    ex);
+                _errorLogger.LogError(entry);
                 throw;
             }
         }

@@ -129,7 +129,7 @@ namespace UnoAcpClient.Application.Services.Chat
         /// <summary>
         /// 获取支持的会话模式列表
         /// </summary>
-        Task<List<SessionMode>?> GetAvailableModesAsync();
+        Task<List<UnoAcpClient.Domain.Models.Protocol.SessionMode>?> GetAvailableModesAsync();
 
         /// <summary>
         /// 清除会话历史
