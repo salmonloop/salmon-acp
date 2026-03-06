@@ -1,14 +1,17 @@
-name: CI
-
+name: CI/CD
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+  release:
+    types: [ created ]
 
 env:
   DOTNET_VERSION: '9.0.x'
   CONFIGURATION: 'Release'
+  PROJECT_NAME: 'UnoAcpClient'
 
 jobs:
   build:
@@ -33,7 +36,7 @@ jobs:
       run: dotnet build UnoAcpClient.sln --configuration ${{ env.CONFIGURATION }} --no-restore
 
     - name: Test
-      run: dotnet test UnoAcpClient.sln --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal
+      run: dotnet test UnoAcpClient.sln --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal --collect:"XPlat Code Coverage"
 
     - name: Upload test results
       if: always()
@@ -41,13 +44,88 @@ jobs:
       with:
         name: test-results
         path: '**/TestResults/*.trx'
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: '**/coverage*.xml'
 
-  package:
-    name: Package Applications
+  package-wasm:
+    name: Package WebAssembly
     needs: build
     runs-on: windows-latest
-
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Publish WebAssembly
+        run: |
+          cd UnoAcpClient/UnoAcpClient
+          dotnet publish -f net9.0-browserwasm -c ${{ env.CONFIGURATION }} -o ../../publish/wasm
+      - name: Upload WebAssembly artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: wasm-build
+          path: publish/wasm
+
+  package-desktop:
+    name: Package Desktop
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Publish Desktop (Windows)
+        run: |
+          cd UnoAcpClient/UnoAcpClient
+          dotnet publish -f net9.0-desktop -c ${{ env.CONFIGURATION }} -o ../../publish/desktop-windows
+      - name: Upload Desktop artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: desktop-windows-build
+          path: publish/desktop-windows
+
+  publish:
+    name: Publish Releases
+    needs: [package-wasm, package-desktop]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Download WebAssembly artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: wasm-build
+          path: wasm
+      - name: Download Desktop artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: desktop-windows-build
+          path: desktop
+      - name: Upload Release Asset (WASM)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./wasm/wwwroot/UnoAcpClient.zip
+          asset_name: UnoAcpClient-wasm.zip
+          asset_content_type: application/zip
+      - name: Upload Release Asset (Desktop)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./desktop/UnoAcpClient.zip
+          asset_name: UnoAcpClient-desktop.zip
+          asset_content_type: application/zip
     - name: Checkout
       uses: actions/checkout@v3
 
@@ -66,17 +144,6 @@ jobs:
       with:
         name: wasm-build
         path: publish/wasm
-
-    - name: Publish Desktop
-      run: |
-        cd UnoAcpClient/UnoAcpClient
-        dotnet publish -f net9.0-desktop -c ${{ env.CONFIGURATION }} -o ../../publish/desktop
-
-    - name: Upload Desktop artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: desktop-build
-        path: publish/desktop
 
   code-quality:
     name: Code Quality Checks
