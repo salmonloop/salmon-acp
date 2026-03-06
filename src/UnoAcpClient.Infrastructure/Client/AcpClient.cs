@@ -15,6 +15,8 @@ using UnoAcpClient.Domain.Models.Tool;
 using UnoAcpClient.Domain.Services;
 using UnoAcpClient.Domain.Services.Security;
 using UnoAcpClient.Infrastructure.Serialization;
+using UnoAcpClient.Domain.Services;
+using UnoAcpClient.Infrastructure.Logging;
 namespace UnoAcpClient.Infrastructure.Client
 {
     /// <summary>
@@ -30,6 +32,7 @@ namespace UnoAcpClient.Infrastructure.Client
         private readonly ISessionManager _sessionManager;
         private readonly IPathValidator _pathValidator;
         private readonly IPermissionManager _permissionManager;
+        private readonly IErrorLogger _errorLogger;
 
         private readonly ConcurrentDictionary<object, TaskCompletionSource<JsonRpcResponse>> _pendingRequests = new();
         private readonly object _lock = new();
@@ -95,7 +98,8 @@ namespace UnoAcpClient.Infrastructure.Client
         public AcpClient(
             ITransport transport,
             IMessageParser? parser = null,
-            IMessageValidator? validator = null)
+            IMessageValidator? validator = null,
+            IErrorLogger? errorLogger = null)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _parser = parser ?? new MessageParser();
@@ -104,6 +108,7 @@ namespace UnoAcpClient.Infrastructure.Client
             _sessionManager = new Services.SessionManager();
             _pathValidator = new Services.Security.PathValidator();
             _permissionManager = new Services.Security.PermissionManager();
+            _errorLogger = errorLogger ?? new Logging.ErrorLogger();
 
             // 注册传输层事件
             _transport.MessageReceived += OnMessageReceived;
@@ -441,12 +446,14 @@ namespace UnoAcpClient.Infrastructure.Client
                     }
                     else
                     {
+                        _errorLogger.LogError(new ErrorLogEntry("REQ_TIMEOUT", $"Request {request.Id} timed out", ErrorSeverity.Warning, "SendRequestAsync"));
                         throw new TimeoutException("Request timed out");
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _errorLogger.LogError(new ErrorLogEntry("REQ_ERROR", $"Request {request.Id} failed: {ex.Message}", ErrorSeverity.Error, "SendRequestAsync", null, ex));
                 _pendingRequests.TryRemove(request.Id, out _);
                 throw;
             }
@@ -647,6 +654,7 @@ namespace UnoAcpClient.Infrastructure.Client
         /// </summary>
         private void OnErrorOccurred(string errorMessage)
         {
+            _errorLogger.LogError(new ErrorLogEntry("CLIENT_ERROR", errorMessage, ErrorSeverity.Error));
             ErrorOccurred?.Invoke(this, errorMessage);
         }
 
