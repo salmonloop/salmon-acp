@@ -1,4 +1,5 @@
 .kiro/
 .vscode/
+.run/
 
 .env
