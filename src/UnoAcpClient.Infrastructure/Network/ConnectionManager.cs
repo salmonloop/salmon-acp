@@ -5,6 +5,8 @@ using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
+using Polly;
+using Polly.Retry;
 using Serilog;
 using UnoAcpClient.Domain.Exceptions;
 using UnoAcpClient.Domain.Models;
@@ -20,6 +22,7 @@ namespace UnoAcpClient.Infrastructure.Network
         private readonly IAcpProtocolService _protocolService;
         private readonly ILogger _logger;
         private readonly Func<TransportType, ITransport> _transportFactory;
+        private readonly AsyncRetryPolicy _retryPolicy;
         
         private ITransport _transport;
         private readonly Subject<AcpMessage> _incomingMessages;
@@ -30,6 +33,8 @@ namespace UnoAcpClient.Infrastructure.Network
         private ServerConfiguration _currentConfig;
         private System.Timers.Timer _heartbeatTimer;
         private bool _disposed;
+        private bool _isReconnecting;
+        private bool _isManualDisconnect;
 
         /// <summary>
         /// 获取传入消息的可观察流
@@ -62,6 +67,26 @@ namespace UnoAcpClient.Infrastructure.Network
                 Status = ConnectionStatus.Disconnected
             });
             _pendingRequests = new Dictionary<string, TaskCompletionSource<AcpMessage>>();
+            
+            // 配置重试策略：最多重试 3 次，使用指数退避
+            _retryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(
+                    retryCount: 3,
+                    sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    onRetry: (exception, timeSpan, retryCount, context) =>
+                    {
+                        _logger.Warning(
+                            "连接尝试 {RetryCount}/3 失败: {Error}. 将在 {Delay} 秒后重试",
+                            retryCount, exception.Message, timeSpan.TotalSeconds);
+                        
+                        // 更新连接状态为重连中
+                        UpdateConnectionState(
+                            ConnectionStatus.Reconnecting, 
+                            _currentConfig?.ServerUrl ?? string.Empty,
+                            $"重试 {retryCount}/3",
+                            retryCount);
+                    });
         }
 
         /// <summary>
@@ -98,8 +123,11 @@ namespace UnoAcpClient.Infrastructure.Network
                 // 订阅传输层的消息和状态变化
                 SubscribeToTransport();
 
-                // 建立连接
-                await _transport.ConnectAsync(config.ServerUrl, ct);
+                // 使用重试策略建立连接
+                await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    await _transport.ConnectAsync(config.ServerUrl, ct);
+                });
 
                 // 发送初始化消息
                 await SendInitializeMessageAsync(ct);
@@ -108,15 +136,12 @@ namespace UnoAcpClient.Infrastructure.Network
                 StartHeartbeat(config.HeartbeatInterval);
 
                 // 更新状态为已连接
-                var connectedState = new ConnectionState
-                {
-                    Status = ConnectionStatus.Connected,
-                    ServerUrl = config.ServerUrl,
-                    ConnectedAt = DateTime.UtcNow
-                };
-                _connectionStateChanges.OnNext(connectedState);
+                UpdateConnectionState(ConnectionStatus.Connected, config.ServerUrl);
 
                 _logger.Information("成功连接到服务器: {ServerUrl}", config.ServerUrl);
+                
+                // 获取当前连接状态并返回
+                var connectedState = _connectionStateChanges.Value;
                 return ConnectionResult.Success(connectedState);
             }
             catch (OperationCanceledException)
@@ -133,8 +158,8 @@ namespace UnoAcpClient.Infrastructure.Network
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "连接时发生意外错误");
-                UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl, "意外错误");
+                _logger.Error(ex, "连接时发生意外错误，已达到最大重试次数");
+                UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl, "连接失败，已达到最大重试次数");
                 return ConnectionResult.Failure($"连接失败: {ex.Message}");
             }
         }
@@ -147,6 +172,9 @@ namespace UnoAcpClient.Infrastructure.Network
             try
             {
                 _logger.Information("开始断开连接");
+                
+                // 设置手动断开标志，防止自动重连
+                _isManualDisconnect = true;
 
                 // 停止心跳定时器
                 StopHeartbeat();
@@ -166,6 +194,9 @@ namespace UnoAcpClient.Infrastructure.Network
 
                 // 更新状态
                 UpdateConnectionState(ConnectionStatus.Disconnected, _currentConfig?.ServerUrl ?? string.Empty);
+                
+                // 清除配置信息
+                _currentConfig = null;
 
                 _logger.Information("已断开连接");
             }
@@ -173,6 +204,10 @@ namespace UnoAcpClient.Infrastructure.Network
             {
                 _logger.Error(ex, "断开连接时发生错误");
                 throw;
+            }
+            finally
+            {
+                _isManualDisconnect = false;
             }
         }
 
@@ -370,6 +405,12 @@ namespace UnoAcpClient.Infrastructure.Network
                     break;
                 case TransportState.Disconnected:
                     connectionStatus = ConnectionStatus.Disconnected;
+                    // 如果是意外断开（有配置信息且不是手动断开或正在重连），尝试自动重连
+                    if (_currentConfig != null && !_isManualDisconnect && !_isReconnecting)
+                    {
+                        _logger.Information("检测到连接意外断开，准备自动重连");
+                        _ = AutoReconnectAsync();
+                    }
                     break;
                 case TransportState.Error:
                     connectionStatus = ConnectionStatus.Error;
@@ -382,16 +423,93 @@ namespace UnoAcpClient.Infrastructure.Network
         }
 
         /// <summary>
+        /// 自动重连到服务器
+        /// </summary>
+        private async Task AutoReconnectAsync()
+        {
+            if (_currentConfig == null)
+            {
+                _logger.Warning("无法自动重连：缺少配置信息");
+                return;
+            }
+
+            if (_isReconnecting)
+            {
+                _logger.Debug("已经在重连中，跳过此次重连请求");
+                return;
+            }
+
+            try
+            {
+                _isReconnecting = true;
+                _logger.Information("开始自动重连到服务器: {ServerUrl}", _currentConfig.ServerUrl);
+                
+                // 更新状态为重连中
+                UpdateConnectionState(ConnectionStatus.Reconnecting, _currentConfig.ServerUrl, "正在自动重连");
+
+                // 清理现有连接
+                if (_transport != null)
+                {
+                    UnsubscribeFromTransport();
+                    try
+                    {
+                        await _transport.DisconnectAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning(ex, "清理旧连接时发生错误");
+                    }
+                }
+
+                // 创建新的传输层实例
+                _transport = _transportFactory(_currentConfig.Transport);
+                
+                // 订阅传输层的消息和状态变化
+                SubscribeToTransport();
+
+                // 使用重试策略建立连接
+                await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    await _transport.ConnectAsync(_currentConfig.ServerUrl, CancellationToken.None);
+                });
+
+                // 发送初始化消息
+                await SendInitializeMessageAsync(CancellationToken.None);
+
+                // 重新启动心跳定时器
+                StartHeartbeat(_currentConfig.HeartbeatInterval);
+
+                // 更新状态为已连接
+                UpdateConnectionState(ConnectionStatus.Connected, _currentConfig.ServerUrl);
+
+                _logger.Information("自动重连成功: {ServerUrl}", _currentConfig.ServerUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "自动重连失败，已达到最大重试次数");
+                UpdateConnectionState(
+                    ConnectionStatus.Error, 
+                    _currentConfig.ServerUrl, 
+                    "自动重连失败，已达到最大重试次数");
+            }
+            finally
+            {
+                _isReconnecting = false;
+            }
+        }
+
+        /// <summary>
         /// 更新连接状态
         /// </summary>
-        private void UpdateConnectionState(ConnectionStatus status, string serverUrl, string errorMessage = null)
+        private void UpdateConnectionState(ConnectionStatus status, string serverUrl, string errorMessage = null, int retryCount = 0)
         {
             var state = new ConnectionState
             {
                 Status = status,
                 ServerUrl = serverUrl,
                 ErrorMessage = errorMessage ?? string.Empty,
-                ConnectedAt = status == ConnectionStatus.Connected ? DateTime.UtcNow : (DateTime?)null
+                ConnectedAt = status == ConnectionStatus.Connected ? DateTime.UtcNow : (DateTime?)null,
+                RetryCount = retryCount
             };
 
             _connectionStateChanges.OnNext(state);
