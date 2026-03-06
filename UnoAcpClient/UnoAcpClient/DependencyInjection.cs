@@ -74,9 +74,14 @@ public static class DependencyInjection
 
     private static void RegisterApplicationServices(IServiceCollection services)
     {
-        // 应用服务将在后续任务中实现
-        // services.AddSingleton<IConnectionService, ConnectionService>();
-        // services.AddSingleton<IMessageService, MessageService>();
+        // 注册用例
+        services.AddTransient<UnoAcpClient.Application.UseCases.ConnectToServerUseCase>();
+        services.AddTransient<UnoAcpClient.Application.UseCases.DisconnectUseCase>();
+        services.AddTransient<UnoAcpClient.Application.UseCases.SendMessageUseCase>();
+
+        // 注册应用服务
+        services.AddSingleton<IConnectionService, ConnectionService>();
+        services.AddSingleton<IMessageService, MessageService>();
     }
 
     private static void RegisterViewModels(IServiceCollection services)
