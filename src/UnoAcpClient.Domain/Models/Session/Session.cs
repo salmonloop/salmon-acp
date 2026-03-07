@@ -60,13 +60,13 @@ namespace UnoAcpClient.Domain.Models.Session
         /// MCP 服务器配置列表。
         /// </summary>
         [JsonPropertyName("mcpServers")]
-        public Dictionary<string, object>? McpServers { get; set; }
+        public object? McpServers { get; set; }
 
         /// <summary>
         /// 会话的配置选项。
         /// </summary>
         [JsonPropertyName("configOptions")]
-        public Dictionary<string, object>? ConfigOptions { get; set; }
+        public object? ConfigOptions { get; set; }
 
         /// <summary>
         /// 创建新的会话实例。
@@ -202,7 +202,7 @@ namespace UnoAcpClient.Domain.Models.Session
         /// 配置选项（用于 config_update 类型的更新）。
         /// </summary>
         [JsonPropertyName("configOptions")]
-        public Dictionary<string, object>? ConfigOptions { get; set; }
+        public object? ConfigOptions { get; set; }
 
         /// <summary>
         /// 创建新的会话更新条目实例。
@@ -287,7 +287,7 @@ namespace UnoAcpClient.Domain.Models.Session
         /// </summary>
         /// <param name="configOptions">配置选项</param>
         /// <returns>会话更新条目</returns>
-        public static SessionUpdateEntry CreateConfigUpdate(Dictionary<string, object> configOptions)
+        public static SessionUpdateEntry CreateConfigUpdate(object configOptions)
         {
             return new SessionUpdateEntry
             {

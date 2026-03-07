@@ -13,7 +13,7 @@ namespace UnoAcpClient.Domain.Models.Content
     [JsonDerivedType(typeof(TextContentBlock), "text")]
     [JsonDerivedType(typeof(ImageContentBlock), "image")]
     [JsonDerivedType(typeof(AudioContentBlock), "audio")]
-    [JsonDerivedType(typeof(ResourceLinkContentBlock), "resourceLink")]
+    [JsonDerivedType(typeof(ResourceLinkContentBlock), "resource_link")]
     [JsonDerivedType(typeof(ResourceContentBlock), "resource")]
     public abstract class ContentBlock
     {

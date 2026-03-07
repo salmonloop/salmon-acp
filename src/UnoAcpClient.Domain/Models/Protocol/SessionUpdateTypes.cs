@@ -277,7 +277,7 @@ namespace UnoAcpClient.Domain.Models.Protocol
         /// 配置选项列表。
         /// </summary>
         [JsonPropertyName("configOptions")]
-        public Dictionary<string, object>? ConfigOptions { get; set; }
+        public object? ConfigOptions { get; set; }
 
         /// <summary>
         /// 创建新的 ConfigUpdateUpdate 实例。
@@ -290,7 +290,7 @@ namespace UnoAcpClient.Domain.Models.Protocol
         /// 创建新的 ConfigUpdateUpdate 实例。
         /// </summary>
         /// <param name="configOptions">配置选项</param>
-        public ConfigUpdateUpdate(Dictionary<string, object>? configOptions = null)
+        public ConfigUpdateUpdate(object? configOptions = null)
         {
             ConfigOptions = configOptions;
         }

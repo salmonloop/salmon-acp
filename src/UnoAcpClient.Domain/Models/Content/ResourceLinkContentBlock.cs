@@ -9,11 +9,11 @@ namespace UnoAcpClient.Domain.Models.Content
     public class ResourceLinkContentBlock : ContentBlock
     {
         /// <summary>
-        /// 内容块类型标识符，固定为 "resourceLink"。
+        /// 内容块类型标识符，固定为 "resource_link"。
         /// 此属性被 [JsonIgnore] 忽略，因为类型信息已由 JsonPolymorphic 自动处理。
         /// </summary>
         [JsonIgnore]
-        public override string Type => "resourceLink";
+        public override string Type => "resource_link";
 
         /// <summary>
         /// 资源的 URI 标识符。

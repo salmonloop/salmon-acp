@@ -533,10 +533,32 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
 
         private void UpdateConfigOptions(ConfigUpdateUpdate configUpdate)
         {
-            if (configUpdate.ConfigOptions != null)
+            if (configUpdate.ConfigOptions is System.Text.Json.JsonElement element && element.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
                 ConfigOptions.Clear();
-                foreach (var kvp in configUpdate.ConfigOptions)
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var idProp))
+                    {
+                        var id = idProp.GetString() ?? string.Empty;
+                        ConfigOptions.Add(ConfigOptionViewModel.CreateFromJson(id, item));
+                    }
+                }
+                ShowConfigOptionsPanel = ConfigOptions.Count > 0;
+            }
+            else if (configUpdate.ConfigOptions is System.Text.Json.JsonElement objElement && objElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                ConfigOptions.Clear();
+                foreach (var prop in objElement.EnumerateObject())
+                {
+                    ConfigOptions.Add(ConfigOptionViewModel.CreateFromJson(prop.Name, prop.Value));
+                }
+                ShowConfigOptionsPanel = ConfigOptions.Count > 0;
+            }
+            else if (configUpdate.ConfigOptions is System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, object>> dict)
+            {
+                ConfigOptions.Clear();
+                foreach (var kvp in dict)
                 {
                     ConfigOptions.Add(ConfigOptionViewModel.CreateFromJson(kvp.Key, kvp.Value));
                 }
@@ -639,7 +661,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     }
                 }
 
-                
+
                 // 加载配置选项
                 if (response.ConfigOptions is System.Text.Json.JsonElement element && element.ValueKind == System.Text.Json.JsonValueKind.Array)
                 {
@@ -693,7 +715,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                 var userContent = new TextContentBlock { Text = CurrentPrompt };
                 AddMessageToHistory(userContent, isOutgoing: true);
 
-                
+
                 var promptParams = new SessionPromptParams
                 {
                     SessionId = CurrentSessionId!,
