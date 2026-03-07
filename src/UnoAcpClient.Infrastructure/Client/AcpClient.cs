@@ -164,11 +164,14 @@ namespace UnoAcpClient.Infrastructure.Client
             }
 
             // 验证协议版本
-            if (initializeResponse.ProtocolVersion != @params.ProtocolVersion)
+            var serverVersionStr = initializeResponse.ProtocolVersion?.ToString() ?? string.Empty;
+            var clientVersionStr = @params.ProtocolVersion?.ToString() ?? string.Empty;
+            
+            if (serverVersionStr != clientVersionStr)
             {
                 throw new AcpException(
                     JsonRpcErrorCode.ProtocolVersionMismatch,
-                    $"Protocol version mismatch. Expected: {@params.ProtocolVersion}, Actual: {initializeResponse.ProtocolVersion}");
+                    $"Protocol version mismatch. Expected: {clientVersionStr}, Actual: {serverVersionStr}");
             }
 
             // 存储 Agent 信息
