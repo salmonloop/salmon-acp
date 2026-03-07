@@ -58,15 +58,19 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
         private string? _toolCallJson;
 
         // 计划条目
-        [ObservableProperty]
-        private PlanEntryViewModel? _planEntry;
+       [ObservableProperty]
+       private PlanEntryViewModel? _planEntry;
 
-        // 模式切换
-        [ObservableProperty]
-        private string? _modeId;
+       // 模式切换
+       [ObservableProperty]
+       private string? _modeId;
 
-        // 原始内容块
-        private ContentBlock? _contentBlock;
+       // 资源内容
+       [ObservableProperty]
+       private ResourceViewModel? _resourceViewModel;
+
+       // 原始内容块
+       private ContentBlock? _contentBlock;
 
         public ChatMessageViewModel()
         {
@@ -164,24 +168,52 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
         }
 
         public static ChatMessageViewModel CreateFromModeChange(string id, string? modeId, string? title, bool isOutgoing = false)
-        {
-            return new ChatMessageViewModel
-            {
-                Id = id,
-                IsOutgoing = isOutgoing,
-                ContentType = "mode_change",
-                ModeId = modeId,
-                Title = title ?? "Mode Changed",
-                Timestamp = DateTime.Now
-            };
-        }
+       {
+           return new ChatMessageViewModel
+           {
+               Id = id,
+               IsOutgoing = isOutgoing,
+               ContentType = "mode_change",
+               ModeId = modeId,
+               Title = title ?? "Mode Changed",
+               Timestamp = DateTime.Now
+           };
+       }
+
+      public static ChatMessageViewModel CreateFromResourceContent(string id, ResourceContentBlock block, bool isOutgoing = false)
+      {
+          return new ChatMessageViewModel
+          {
+              Id = id,
+              IsOutgoing = isOutgoing,
+              ContentType = "resource_content",
+              Title = "Resource Content",
+              Timestamp = DateTime.Now,
+              ResourceViewModel = ResourceViewModel.CreateFromContent(block)
+          };
+      }
+
+       public static ChatMessageViewModel CreateFromResourceLink(string id, ResourceLinkContentBlock block, bool isOutgoing = false)
+       {
+           return new ChatMessageViewModel
+           {
+               Id = id,
+               IsOutgoing = isOutgoing,
+               ContentType = "resource_link",
+               Title = block.Title ?? block.Name ?? "Resource Link",
+               Timestamp = DateTime.Now,
+               ResourceViewModel = ResourceViewModel.CreateFromLink(block)
+           };
+       }
 
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
-        public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
-        public bool HasAudioContent => !string.IsNullOrEmpty(AudioData);
-        public bool HasToolCall => !string.IsNullOrEmpty(ToolCallId);
-        public bool HasPlanEntry => PlanEntry != null;
-        public bool HasModeChange => !string.IsNullOrEmpty(ModeId);
+       public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
+       public bool HasAudioContent => !string.IsNullOrEmpty(AudioData);
+       public bool HasToolCall => !string.IsNullOrEmpty(ToolCallId);
+       public bool HasPlanEntry => PlanEntry != null;
+       public bool HasModeChange => !string.IsNullOrEmpty(ModeId);
+       public bool HasResourceContent => ResourceViewModel?.IsResourceContent == true;
+       public bool HasResourceLink => ResourceViewModel?.IsResourceLink == true;
     }
 
     /// <summary>

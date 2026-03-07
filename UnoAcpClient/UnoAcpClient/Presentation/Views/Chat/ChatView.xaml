@@ -94,9 +94,37 @@
 
                                     <!-- 计划条目信息 -->
                                     <StackPanel Visibility="{x:Bind HasPlanEntry, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <TextBlock Text="{x:Bind PlanEntry.StatusDisplayName}" Foreground="Blue"/>
-                                        <TextBlock Text="{x:Bind PlanEntry.Content}" Margin="0,4,0,0"/>
+                                    <TextBlock Text="{x:Bind PlanEntry.StatusDisplayName}" Foreground="Blue"/>
+                                    <TextBlock Text="{x:Bind PlanEntry.Content}" Margin="0,4,0,0"/>
                                     </StackPanel>
+
+                                    <!-- 资源内容块 -->
+                                    <Border Background="LightGray"
+                                    CornerRadius="4"
+                                    Padding="8"
+                                    Margin="0,4,0,0"
+                                    Visibility="{x:Bind HasResourceContent, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Bind ResourceViewModel.DisplayTitle}" FontWeight="Bold" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ResourceViewModel.Uri}" FontSize="9" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{x:Bind ResourceViewModel.Content}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="10" MaxHeight="150"/>
+                                    </StackPanel>
+                                    </Border>
+
+                                    <!-- 资源链接 -->
+                                    <Border Background="LightYellow"
+                                    CornerRadius="4"
+                                    Padding="8"
+                                    Margin="0,4,0,0"
+                                    Visibility="{x:Bind HasResourceLink, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Bind ResourceViewModel.DisplayTitle}" FontWeight="Bold" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ResourceViewModel.Uri}" FontSize="9" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
+                                    <HyperlinkButton Content="{x:Bind ResourceViewModel.LinkText}" NavigateUri="{x:Bind ResourceViewModel.Uri}"/>
+                                    </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Text="{x:Bind Timestamp, Converter={StaticResource TimeFormatConverter}}" FontSize="10" Opacity="0.6" Margin="0,8,0,0" HorizontalAlignment="Right"/>
 
                                     <TextBlock Text="{x:Bind Timestamp, Converter={StaticResource TimeFormatConverter}}"
                                         FontSize="10"
