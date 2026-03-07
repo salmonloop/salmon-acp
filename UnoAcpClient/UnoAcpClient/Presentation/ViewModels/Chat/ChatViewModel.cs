@@ -611,7 +611,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                 var sessionParams = new SessionNewParams
                 {
                     Cwd = Environment.CurrentDirectory,
-                    McpServers = null // 可以根据配置添加 MCP 服务器
+                    McpServers = new object[0] // 可以根据配置添加 MCP 服务器
                 };
 
                 var response = await _chatService.CreateSessionAsync(sessionParams);
@@ -639,16 +639,31 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     }
                 }
 
+                
                 // 加载配置选项
-                if (response.ConfigOptions != null)
+                if (response.ConfigOptions is System.Text.Json.JsonElement element && element.ValueKind == System.Text.Json.JsonValueKind.Array)
                 {
                     ConfigOptions.Clear();
-                    foreach (var kvp in response.ConfigOptions)
+                    foreach (var item in element.EnumerateArray())
                     {
-                        ConfigOptions.Add(ConfigOptionViewModel.CreateFromJson(kvp.Key, kvp.Value));
+                        if (item.TryGetProperty("id", out var idProp))
+                        {
+                            var id = idProp.GetString() ?? string.Empty;
+                            ConfigOptions.Add(ConfigOptionViewModel.CreateFromJson(id, item));
+                        }
                     }
                     ShowConfigOptionsPanel = ConfigOptions.Count > 0;
                 }
+                else if (response.ConfigOptions is System.Text.Json.JsonElement objElement && objElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    ConfigOptions.Clear();
+                    foreach (var prop in objElement.EnumerateObject())
+                    {
+                        ConfigOptions.Add(ConfigOptionViewModel.CreateFromJson(prop.Name, prop.Value));
+                    }
+                    ShowConfigOptionsPanel = ConfigOptions.Count > 0;
+                }
+
 
                 MessageHistory.Clear();
             }

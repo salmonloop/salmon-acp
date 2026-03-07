@@ -63,11 +63,14 @@ namespace UnoAcpClient.Domain.Models.Protocol
         [JsonPropertyName("modes")]
         public List<SessionMode>? Modes { get; set; }
 
+        
         /// <summary>
         /// 可用的配置选项列表（可选）。
+        /// 根据对端Agent返回的实际数据格式，这里是一个数组。
         /// </summary>
         [JsonPropertyName("configOptions")]
-        public Dictionary<string, object>? ConfigOptions { get; set; }
+        public object? ConfigOptions { get; set; }
+
 
         /// <summary>
         /// 创建新的 SessionNewResponse 实例。
@@ -82,7 +85,7 @@ namespace UnoAcpClient.Domain.Models.Protocol
         /// <param name="sessionId">会话 ID</param>
         /// <param name="modes">可用模式列表</param>
         /// <param name="configOptions">配置选项</param>
-        public SessionNewResponse(string sessionId, List<SessionMode>? modes = null, Dictionary<string, object>? configOptions = null)
+        public SessionNewResponse(string sessionId, List<SessionMode>? modes = null, object? configOptions = null)
         {
             SessionId = sessionId;
             Modes = modes;
