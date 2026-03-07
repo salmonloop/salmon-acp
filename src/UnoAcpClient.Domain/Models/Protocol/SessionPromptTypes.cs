@@ -18,11 +18,13 @@ namespace UnoAcpClient.Domain.Models.Protocol
         [JsonPropertyName("sessionId")]
         public string SessionId { get; set; } = string.Empty;
 
+        
         /// <summary>
-        /// 要发送的提示文本（必填）。
+        /// 要发送的提示内容块列表（必填，对端要求为数组）。
         /// </summary>
         [JsonPropertyName("prompt")]
-        public string Prompt { get; set; } = string.Empty;
+        public object Prompt { get; set; } = new object[0];
+
 
         /// <summary>
         /// 最大生成的令牌数（可选）。
@@ -47,14 +49,16 @@ namespace UnoAcpClient.Domain.Models.Protocol
         /// <summary>
         /// 创建新的 SessionPromptParams 实例。
         /// </summary>
+        
         /// <param name="sessionId">会话 ID</param>
-        /// <param name="prompt">提示文本</param>
+        /// <param name="prompt">提示内容块数组</param>
         /// <param name="maxTokens">最大令牌数</param>
         /// <param name="stopSequences">停止序列</param>
-        public SessionPromptParams(string sessionId, string prompt, int? maxTokens = null, List<string>? stopSequences = null)
+        public SessionPromptParams(string sessionId, object prompt, int? maxTokens = null, List<string>? stopSequences = null)
         {
             SessionId = sessionId;
             Prompt = prompt;
+
             MaxTokens = maxTokens;
             StopSequences = stopSequences;
         }

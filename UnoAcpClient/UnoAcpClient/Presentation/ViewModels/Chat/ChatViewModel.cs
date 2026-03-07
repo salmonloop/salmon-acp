@@ -693,13 +693,15 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                 var userContent = new TextContentBlock { Text = CurrentPrompt };
                 AddMessageToHistory(userContent, isOutgoing: true);
 
+                
                 var promptParams = new SessionPromptParams
                 {
                     SessionId = CurrentSessionId!,
-                    Prompt = CurrentPrompt,
+                    Prompt = new[] { new { type = "text", text = CurrentPrompt } },
                     MaxTokens = null,
                     StopSequences = null
                 };
+
 
                 await _chatService.SendPromptAsync(promptParams);
                 CurrentPrompt = string.Empty;
