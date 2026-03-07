@@ -16,11 +16,15 @@ namespace UnoAcpClient.Domain.Models.Protocol
         [JsonPropertyName("cwd")]
         public string Cwd { get; set; } = string.Empty;
 
+        
+        
         /// <summary>
-        /// MCP 服务器配置列表（可选）。
+        /// MCP 服务器配置列表（根据对端Agent要求，似乎是必填的数组）。
         /// </summary>
         [JsonPropertyName("mcpServers")]
-        public Dictionary<string, object>? McpServers { get; set; }
+        public object McpServers { get; set; } = new object[0];
+
+
 
         /// <summary>
         /// 创建新的 SessionNewParams 实例。
@@ -34,10 +38,10 @@ namespace UnoAcpClient.Domain.Models.Protocol
         /// </summary>
         /// <param name="cwd">工作目录</param>
         /// <param name="mcpServers">MCP 服务器配置</param>
-        public SessionNewParams(string cwd, Dictionary<string, object>? mcpServers = null)
+        public SessionNewParams(string cwd, object? mcpServers = null)
         {
             Cwd = cwd;
-            McpServers = mcpServers;
+            McpServers = mcpServers ?? new object[0];
         }
     }
 
