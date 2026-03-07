@@ -176,9 +176,9 @@ namespace UnoAcpClient.Infrastructure.Network
             // Handle disconnection events
             _client.DisconnectionHappened.Subscribe(info =>
             {
-                _logger.Warning("WebSocket disconnection happened: {Type}, {CloseStatus}", 
+                _logger.Warning("WebSocket disconnection happened: {Type}, {CloseStatus}",
                     info.Type, info.CloseStatus);
-                
+
                 if (info.Type != DisconnectionType.Exit)
                 {
                     _stateSubject.OnNext(TransportState.Error);

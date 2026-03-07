@@ -9,16 +9,97 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Page.Resources>
-        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
-        <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
-        <converters:PlanStatusToColorConverter x:Key="PlanStatusToColorConverter"/>
-        <converters:TimeFormatConverter x:Key="TimeFormatConverter"/>
-    </Page.Resources>
+    mc:Ignorable="d" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+   <Page.Resources>
+   <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+   <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+   <converters:PlanStatusToColorConverter x:Key="PlanStatusToColorConverter"/>
+   <converters:TimeFormatConverter x:Key="TimeFormatConverter"/>
+   <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+   </Page.Resources>
+   <Grid RowDefinitions="Auto,Auto,*,Auto">
+   <!-- 传输配置面板 (Row 0) -->
+   <Border Grid.Row="0"
+           Background="{ThemeResource CardBackgroundFillColorDefault}"
+           BorderBrush="{ThemeResource CardBorderBrush}"
+           BorderThickness="0,0,0,1"
+           Padding="16"
+           Visibility="{x:Bind ViewModel.ShowTransportConfigPanel, Converter={StaticResource BoolToVisibilityConverter}}">
+    <StackPanel Spacing="12">
+     <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBlock Text="连接配置" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+      <Button Content="隐藏" Command="{x:Bind ViewModel.ToggleTransportConfigPanelCommand}" FontSize="12"/>
+     </StackPanel>
 
-    <Grid RowDefinitions="Auto,*,Auto">
-        <!-- 顶部状态栏 -->
-        <StackPanel Grid.Row="0" Padding="16" Orientation="Vertical" Spacing="8">
+     <!-- 传输类型选择 -->
+     <StackPanel Orientation="Horizontal" Spacing="16">
+      <RadioButton Content="Stdio (本地)"
+                   IsChecked="{x:Bind ViewModel.TransportConfig.IsStdio, Mode=OneWay}"
+                   GroupName="TransportType"
+                   CommandParameter="Stdio"
+                   Click="OnTransportTypeChanged"/>
+      <RadioButton Content="WebSocket (远程)"
+                   IsChecked="{x:Bind ViewModel.TransportConfig.IsWebSocket, Mode=OneWay}"
+                   GroupName="TransportType"
+                   CommandParameter="WebSocket"
+                   Click="OnTransportTypeChanged"/>
+      <RadioButton Content="HTTP SSE (远程)"
+                   IsChecked="{x:Bind ViewModel.TransportConfig.IsHttpSse, Mode=OneWay}"
+                   GroupName="TransportType"
+                   CommandParameter="HttpSse"
+                   Click="OnTransportTypeChanged"/>
+     </StackPanel>
+
+     <!-- Stdio 配置 -->
+     <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.TransportConfig.IsStdio, Converter={StaticResource BoolToVisibilityConverter}}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+       <TextBlock Text="命令:" Width="60" VerticalAlignment="Center"/>
+       <TextBox Text="{x:Bind ViewModel.TransportConfig.StdioCommand, Mode=TwoWay}"
+                PlaceholderText="例如：agent-command"
+                MinWidth="300"/>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+       <TextBlock Text="参数:" Width="60" VerticalAlignment="Center"/>
+       <TextBox Text="{x:Bind ViewModel.TransportConfig.StdioArgs, Mode=TwoWay}"
+                PlaceholderText="例如：--port 8080"/>
+      </StackPanel>
+     </StackPanel>
+
+     <!-- 远程配置 (WebSocket/HTTP SSE) -->
+     <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.TransportConfig.IsWebSocket, Converter={StaticResource BoolToVisibilityConverter}}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+       <TextBlock Text="URL:" Width="60" VerticalAlignment="Center"/>
+       <TextBox Text="{x:Bind ViewModel.TransportConfig.RemoteUrl, Mode=TwoWay}"
+                PlaceholderText="例如：ws://localhost:8080 或 wss://example.com"
+                MinWidth="400"/>
+      </StackPanel>
+     </StackPanel>
+
+     <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.TransportConfig.IsHttpSse, Converter={StaticResource BoolToVisibilityConverter}}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+       <TextBlock Text="URL:" Width="60" VerticalAlignment="Center"/>
+       <TextBox Text="{x:Bind ViewModel.TransportConfig.RemoteUrl, Mode=TwoWay}"
+                PlaceholderText="例如：http://localhost:8080 或 https://example.com"
+                MinWidth="400"/>
+      </StackPanel>
+     </StackPanel>
+
+     <!-- 错误信息 -->
+     <TextBlock Text="{x:Bind ViewModel.ConnectionErrorMessage}"
+                Foreground="Red"
+                Visibility="{x:Bind ViewModel.ConnectionErrorMessage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+     <!-- 连接按钮 -->
+     <Button Content="{x:Bind ViewModel.IsConnecting, Converter={StaticResource InverseBoolConverter}, FallbackValue='连接中...'}"
+             Command="{x:Bind ViewModel.ApplyTransportConfigCommand}"
+             IsEnabled="{x:Bind ViewModel.IsConnecting, Converter={StaticResource InverseBoolConverter}}"
+             HorizontalAlignment="Left"
+             Padding="16,8"/>
+    </StackPanel>
+   </Border>
+
+   <!-- 顶部状态栏 (Row 1) -->
+   <StackPanel Grid.Row="1" Padding="16" Orientation="Vertical" Spacing="8">
             <!-- 连接状态和 Agent 信息 -->
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <Ellipse Width="12" Height="12" Fill="Green"/>

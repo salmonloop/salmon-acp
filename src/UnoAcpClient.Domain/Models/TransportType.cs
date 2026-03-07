@@ -1,18 +1,22 @@
-namespace UnoAcpClient.Domain.Models
+namespace UnoAcpClient.Domain.Models;
+
+/// <summary>
+/// 传输类型枚举
+/// </summary>
+public enum TransportType
 {
     /// <summary>
-    /// 传输类型枚举
+    /// Stdio (标准输入/输出) 传输 - 用于本地 Agent
     /// </summary>
-    public enum TransportType
-    {
-        /// <summary>
-        /// WebSocket 传输
-        /// </summary>
-        WebSocket,
+    Stdio,
 
-        /// <summary>
-        /// HTTP Server-Sent Events 传输
-        /// </summary>
-        HttpSse
-    }
+    /// <summary>
+    /// WebSocket 传输 - 用于远程 Agent
+    /// </summary>
+    WebSocket,
+
+    /// <summary>
+    /// HTTP Server-Sent Events (SSE) 传输 - 用于远程 Agent
+    /// </summary>
+    HttpSse
 }

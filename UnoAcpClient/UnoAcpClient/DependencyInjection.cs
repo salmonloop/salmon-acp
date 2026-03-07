@@ -1,9 +1,11 @@
 using FluentValidation;
+using UnoAcpClient.Infrastructure.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using UnoAcpClient.Application.Services;
 using UnoAcpClient.Application.Services.Chat;
+using UnoAcpClient.Domain.Interfaces;
 using UnoAcpClient.Application.UseCases;
 using UnoAcpClient.Application.Validators;
 using UnoAcpClient.Domain.Interfaces;
@@ -109,14 +111,20 @@ public static class DependencyInjection
         services.AddSingleton<IConfigurationService, ConfigurationManager>();
 
         // Validator
+        // Validator
         services.AddSingleton<IValidator<ServerConfiguration>, ServerConfigurationValidator>();
 
-        // Stdio 传输层 (使用 Infrastructure.Transport 命名空间中的 StdioTransport)
+        // 传输层工厂
+        services.AddSingleton<UnoAcpClient.Domain.Interfaces.ITransportFactory, TransportFactory>();
+
+        // Stdio 传输层 (默认，使用 Infrastructure.Transport 命名空间中的 StdioTransport)
+        // 注意：此单例主要用于向后兼容，实际运行时应通过 ITransportFactory 创建
         services.AddSingleton<Domain.Interfaces.Transport.ITransport>(sp =>
         {
-            return new StdioTransport("agent-command", Array.Empty<string>());
+            var logger = sp.GetRequiredService<Serilog.ILogger>();
+            return new StdioTransport("agent-command", Array.Empty<string>(), logger);
         });
-    }
+        }
 
     private static void RegisterApplicationServices(IServiceCollection services)
     {
@@ -129,16 +137,23 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionService, ConnectionService>();
         services.AddSingleton<IMessageService, MessageService>();
 
-        // Chat 服务（核心重构部分）
-        services.AddSingleton<IChatService>(sp =>
+        // Chat 服务工厂（支持动态创建）
+        services.AddSingleton<ChatServiceFactory>(sp =>
         {
-            var transport = sp.GetRequiredService<UnoAcpClient.Domain.Interfaces.Transport.ITransport>();
+            var transportFactory = sp.GetRequiredService<ITransportFactory>();
             var parser = sp.GetRequiredService<IMessageParser>();
             var validator = sp.GetRequiredService<IMessageValidator>();
             var errorLogger = sp.GetRequiredService<IErrorLogger>();
+            var capabilityManager = sp.GetRequiredService<ICapabilityManager>();
+            var logger = sp.GetRequiredService<Serilog.ILogger>();
+            return new ChatServiceFactory(transportFactory, parser, validator, errorLogger, capabilityManager, logger);
+        });
 
-            var acpClient = new AcpClient(transport, parser, validator, errorLogger);
-            return new ChatService(acpClient, errorLogger);
+        // Chat 服务（默认实例，使用默认传输）
+        services.AddSingleton<IChatService>(sp =>
+        {
+            var factory = sp.GetRequiredService<ChatServiceFactory>();
+            return factory.CreateDefaultChatService();
         });
 
         // 错误恢复服务
