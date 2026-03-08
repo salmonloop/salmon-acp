@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 echo ========================================
 echo Uno ACP Client Build Script
 echo ========================================

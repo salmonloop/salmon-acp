@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 echo Starting Uno ACP Client...
 
 set "REPO_ROOT=%~dp0"
@@ -31,7 +32,17 @@ echo Install Visual Studio 2022 (or Build Tools 2022) workload "Desktop developm
 exit /b 1
 
 :runapp
-powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%.tools\run-winui3-msix.ps1" -Configuration Debug
+set "PWSH_EXE="
+for /f "usebackq delims=" %%I in (`where pwsh 2^>nul`) do (
+  set "PWSH_EXE=%%I"
+  goto :gotpwsh
+)
+:gotpwsh
+if defined PWSH_EXE (
+  "%PWSH_EXE%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%.tools\run-winui3-msix.ps1" -Configuration Debug
+) else (
+  powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%.tools\run-winui3-msix.ps1" -Configuration Debug
+)
 set "EC=%errorlevel%"
 popd >nul
 exit /b %EC%

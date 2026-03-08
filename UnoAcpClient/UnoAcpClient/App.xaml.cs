@@ -10,9 +10,37 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 {
     public static IServiceProvider ServiceProvider { get; private set; } = null!;
 
+    internal static void BootLog(string message)
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnoAcpClient");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "boot.log"), $"[{DateTime.Now:O}] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
+    }
+
     public App()
     {
         this.InitializeComponent();
+
+        this.UnhandledException += (_, e) =>
+        {
+            BootLog("App.UnhandledException: " + e.Exception);
+            e.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            BootLog("AppDomain.UnhandledException: " + e.ExceptionObject);
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            BootLog("TaskScheduler.UnobservedTaskException: " + e.Exception);
+            e.SetObserved();
+        };
 
         var services = new global::Microsoft.Extensions.DependencyInjection.ServiceCollection();
         services.AddUnoAcpClient();
@@ -23,11 +51,30 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     protected override void OnLaunched(global::Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        BootLog("OnLaunched: start");
         MainWindow = new Microsoft.UI.Xaml.Window();
+        BootLog("OnLaunched: window created");
 
 #if WINDOWS
-        // Native WinUI 3 backdrop (Mica) - requires content backgrounds to be transparent.
-        MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
+        // Native WinUI 3 backdrop. Mica is Windows 11+; fall back to Desktop Acrylic on Windows 10.
+        // Avoid hard-failing at startup on older Windows builds.
+        try
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+            {
+                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
+                BootLog("OnLaunched: MicaBackdrop set");
+            }
+            else if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+            {
+                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
+                BootLog("OnLaunched: DesktopAcrylicBackdrop set");
+            }
+        }
+        catch
+        {
+            BootLog("OnLaunched: backdrop set failed");
+        }
 #endif
 
 #if DEBUG
@@ -39,15 +86,18 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             rootFrame = new Frame { AllowDrop = false };
             MainWindow.Content = rootFrame;
             rootFrame.NavigationFailed += OnNavigationFailed;
+            BootLog("OnLaunched: root frame created");
         }
 
         if (rootFrame.Content == null)
         {
             rootFrame.Navigate(typeof(MainPage), args.Arguments);
+            BootLog("OnLaunched: navigated to MainPage");
         }
 
         // MainWindow.SetWindowIcon();
         MainWindow.Activate();
+        BootLog("OnLaunched: window activated");
     }
 
     void OnNavigationFailed(object sender, NavigationFailedEventArgs e)

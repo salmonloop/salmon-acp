@@ -22,10 +22,12 @@ public sealed partial class MainPage : Page
 
     public MainPage()
     {
+        App.BootLog("MainPage: ctor start");
         // 1. 在初始化组件前获取 ViewModel，确保 x:Bind 绑定正常
         SettingsVM = App.ServiceProvider.GetRequiredService<SettingsViewModel>();
 
         this.InitializeComponent();
+        App.BootLog("MainPage: InitializeComponent done");
 
 #if !WINDOWS
         // Cross-platform fallback "Mica-like" backdrop.
@@ -40,9 +42,29 @@ public sealed partial class MainPage : Page
 
         // 3. 初始化动画状态
         UpdateNavigationTransitions();
+        App.BootLog("MainPage: transitions updated");
 
-        // 4. 启动后默认进入对话界面
+        // 4. 初始化导航默认选中项（避免 XAML 初始化期间 SelectionChanged 触发导致 NRE）
+        MainRailNav.SelectionChanged -= OnMainRailNavSelectionChanged;
+        BottomRailNav.SelectionChanged -= OnBottomRailNavSelectionChanged;
+        SubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
+        try
+        {
+            MainRailNav.SelectedItem = ChatNavItem;
+            BottomRailNav.SelectedIndex = -1;
+            SubMenuColumn.Visibility = Visibility.Collapsed;
+            SubMenuList.SelectedIndex = -1;
+        }
+        finally
+        {
+            MainRailNav.SelectionChanged += OnMainRailNavSelectionChanged;
+            BottomRailNav.SelectionChanged += OnBottomRailNavSelectionChanged;
+            SubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
+        }
+
+        // 5. 启动后默认进入对话界面
         NavigateTo(typeof(ChatView));
+        App.BootLog("MainPage: navigated to ChatView");
     }
 
     private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -87,6 +109,11 @@ public sealed partial class MainPage : Page
 
     private void OnMainRailNavSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (BottomRailNav is null || SubMenuColumn is null || ContentFrame is null)
+        {
+            return;
+        }
+
         if (MainRailNav.SelectedItem is ListViewItem item && item == ChatNavItem)
         {
             // 互斥逻辑：选中上方导航时，清除下方导航的选中状态
@@ -96,6 +123,9 @@ public sealed partial class MainPage : Page
 
             // 聊天界面不需要二级菜单
             SubMenuColumn.Visibility = Visibility.Collapsed;
+            SubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
+            SubMenuList.SelectedIndex = -1;
+            SubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
             NavigateTo(typeof(ChatView));
         }
     }
@@ -111,6 +141,9 @@ public sealed partial class MainPage : Page
 
             // 展开二级导航栏（设置），并默认加载外观设置
             SubMenuColumn.Visibility = Visibility.Visible;
+            SubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
+            SubMenuList.SelectedIndex = 1; // "外观"
+            SubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
             NavigateTo(typeof(DisplaySettingsPage));
         }
     }
@@ -118,6 +151,11 @@ public sealed partial class MainPage : Page
     // 处理二级导航的切换逻辑
     private void OnSubMenuSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (ContentFrame is null || SubMenuColumn is null || SubMenuColumn.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
         if (sender is ListView listView && listView.SelectedItem is ListViewItem item)
         {
             string content = item.Content?.ToString() ?? "";

@@ -60,9 +60,10 @@
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
 
-    <!-- Unpackaged WinUI 3 requires Windows App SDK initialization. -->
-    <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
-    <WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+    <!-- MSIX-packaged WinUI 3 should rely on the Windows App SDK framework package (do not bundle WinAppSDK runtime DLLs). -->
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>false</WindowsAppSdkUndockedRegFreeWinRTInitialize>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
