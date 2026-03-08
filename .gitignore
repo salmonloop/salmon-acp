@@ -6,6 +6,7 @@
 .run/
 .vs/
 .idea/
+.tools/
 *.user
 *.suo
 *.userosscache

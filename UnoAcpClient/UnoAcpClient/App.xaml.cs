@@ -26,13 +26,18 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     protected override void OnLaunched(global::Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         MainWindow = new Window();
+
+#if WINDOWS
+        MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
+#endif
+
 #if DEBUG
         // MainWindow.UseStudio(); // Requires Uno Studio configuration
 #endif
 
         if (MainWindow.Content is not Frame rootFrame)
         {
-            rootFrame = new Frame();
+            rootFrame = new Frame { AllowDrop = false };
             MainWindow.Content = rootFrame;
             rootFrame.NavigationFailed += OnNavigationFailed;
         }
@@ -66,6 +71,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 #endif
             builder.SetMinimumLevel(LogLevel.Information);
             builder.AddFilter("Uno", LogLevel.Warning);
+            builder.AddFilter("Uno.UI.Runtime.Skia.Win32.Win32DragDropExtension", LogLevel.None);
             builder.AddFilter("Windows", LogLevel.Warning);
             builder.AddFilter("Microsoft", LogLevel.Warning);
         });

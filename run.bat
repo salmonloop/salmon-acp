@@ -1,3 +1,3 @@
 @echo off
 echo Starting Uno ACP Client...
-dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj --framework net9.0-desktop
+dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj --framework net10.0-desktop

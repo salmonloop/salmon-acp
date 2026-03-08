@@ -32,6 +32,9 @@ namespace UnoAcpClient.Presentation.ViewModels
         [ObservableProperty]
         private string _theme = "System";
 
+        [ObservableProperty]
+        private bool _isAnimationEnabled = true;
+
         public SettingsViewModel(
             IConfigurationService configService,
             ILogger<SettingsViewModel> logger) : base(logger)
@@ -120,7 +123,5 @@ namespace UnoAcpClient.Presentation.ViewModels
             };
         }
 
-        public event EventHandler? OnSaveRequested;
-        public event EventHandler? OnCancelRequested;
     }
 }

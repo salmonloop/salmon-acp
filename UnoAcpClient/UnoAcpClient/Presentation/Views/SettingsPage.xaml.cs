@@ -1,61 +1,77 @@
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using UnoAcpClient.Domain.Services;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using UnoAcpClient.Domain.Models;
 using UnoAcpClient.Presentation.ViewModels;
+using UnoAcpClient.Presentation.ViewModels.Chat;
 
-namespace UnoAcpClient.Presentation.Views;
-
-public sealed partial class SettingsPage : Page
+namespace UnoAcpClient.Presentation.Views
 {
-    public SettingsViewModel ViewModel { get; }
-    private readonly IConfigurationService _configService;
-    private readonly ConfigurationEditorViewModel _editorViewModel;
-
-    public SettingsPage()
+    public sealed partial class SettingsPage : Page
     {
-        this.InitializeComponent();
-        ViewModel = App.ServiceProvider.GetRequiredService<SettingsViewModel>();
-        _configService = App.ServiceProvider.GetRequiredService<IConfigurationService>();
-        _editorViewModel = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
-        DataContext = ViewModel;
-        _ = ViewModel.LoadConfigurationsAsync();
-    }
+        public SettingsViewModel ViewModel { get; }
+        public ChatViewModel ChatViewModel { get; }
 
-    private async void AddConfiguration_Click(object sender, RoutedEventArgs e)
-    {
-        _editorViewModel.LoadNewConfiguration();
-        await ShowEditorDialogAsync();
-    }
-
-    private async void EditConfiguration_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.SelectedConfiguration != null)
+        public SettingsPage()
         {
-            _editorViewModel.LoadConfiguration(ViewModel.SelectedConfiguration);
-            await ShowEditorDialogAsync();
+            this.InitializeComponent();
+
+            // 从全局 DI 容器获取 ViewModel 以保持状态同步
+            ViewModel = App.ServiceProvider.GetRequiredService<SettingsViewModel>();
+            ChatViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
+
+            this.Loaded += SettingsPage_Loaded;
         }
-    }
 
-    private async void DeleteConfiguration_Click(object sender, RoutedEventArgs e)
-    {
-        await ViewModel.DeleteConfigurationAsync();
-    }
-
-    private async void SaveConfiguration_Click(object sender, RoutedEventArgs e)
-    {
-        await ViewModel.LoadConfigurationsAsync();
-    }
-
-    private async Task ShowEditorDialogAsync()
-    {
-        var dialog = new ConfigurationEditorDialog(_editorViewModel);
-        dialog.XamlRoot = this.XamlRoot;
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
+        private async void SettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
-            await _configService.SaveConfigurationAsync(_editorViewModel.Configuration);
+            // 加载已保存的配置列表
             await ViewModel.LoadConfigurationsAsync();
+        }
+
+        private void OnTransportTypeChanged(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioButton radioButton && radioButton.CommandParameter is string transportTypeStr)
+            {
+                var transportType = transportTypeStr switch
+                {
+                    "Stdio" => TransportType.Stdio,
+                    "WebSocket" => TransportType.WebSocket,
+                    "HttpSse" => TransportType.HttpSse,
+                    _ => TransportType.Stdio
+                };
+
+                if (ChatViewModel?.TransportConfig != null)
+                {
+                    ChatViewModel.TransportConfig.SelectedTransportType = transportType;
+                }
+            }
+        }
+
+        private void AddConfiguration_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.AddConfiguration();
+        }
+
+        private void EditConfiguration_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is ServerConfiguration config)
+            {
+                ViewModel.EditConfiguration(config);
+            }
+        }
+
+        private async void DeleteConfiguration_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is ServerConfiguration config)
+            {
+                ViewModel.SelectedConfiguration = config;
+                await ViewModel.DeleteConfigurationAsync();
+            }
+        }
+
+        private void SaveConfiguration_Click(object sender, RoutedEventArgs e)
+        {
+            // 此处可以添加全局保存逻辑，目前大部分绑定是双向的
         }
     }
 }

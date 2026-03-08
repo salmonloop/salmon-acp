@@ -120,7 +120,7 @@ dotnet build UnoAcpClient.sln --configuration Debug
 dotnet test
 
 # 运行 Uno Platform 应用（Desktop）
-dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj --framework net9.0-desktop
+dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj --framework net10.0-desktop
 ```
 
 ### 下一步

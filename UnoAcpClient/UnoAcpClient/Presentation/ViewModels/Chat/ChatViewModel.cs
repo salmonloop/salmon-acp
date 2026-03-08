@@ -23,7 +23,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
     public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         private readonly ChatServiceFactory _chatServiceFactory;
-        private IChatService _chatService;
+        private IChatService? _chatService;
         private readonly SynchronizationContext _syncContext;
         private bool _disposed;
 
@@ -352,7 +352,10 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     // 设置响应回调
                     viewModel.OnRespond = async (outcome, optionId) =>
                     {
-                        await _chatService.RespondToPermissionRequestAsync(e.MessageId, outcome, optionId);
+                        if (_chatService != null)
+                        {
+                            await _chatService.RespondToPermissionRequestAsync(e.MessageId, outcome, optionId);
+                        }
                         ShowPermissionDialog = false;
                         PendingPermissionRequest = null;
                     };
@@ -386,7 +389,10 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     // 设置响应回调
                     viewModel.OnRespond = async (success, content, message) =>
                     {
-                        await _chatService.RespondToFileSystemRequestAsync(e.MessageId, success, content, message);
+                        if (_chatService != null)
+                        {
+                            await _chatService.RespondToFileSystemRequestAsync(e.MessageId, success, content, message);
+                        }
                         ShowFileSystemDialog = false;
                         PendingFileSystemRequest = null;
                     };
@@ -412,7 +418,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
 
         private void UpdateAgentInfo()
         {
-            if (_chatService.AgentInfo != null)
+            if (_chatService?.AgentInfo != null)
             {
                 AgentName = _chatService.AgentInfo.Name;
                 AgentVersion = _chatService.AgentInfo.Version;
@@ -422,9 +428,12 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
         private void LoadSessionHistory()
         {
             MessageHistory.Clear();
-            foreach (var entry in _chatService.SessionHistory)
+            if (_chatService != null)
             {
-                AddEntryToMessageHistory(entry);
+                foreach (var entry in _chatService.SessionHistory)
+                {
+                    AddEntryToMessageHistory(entry);
+                }
             }
         }
 
@@ -605,6 +614,11 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                    }
                };
 
+               if (_chatService == null)
+               {
+                   throw new InvalidOperationException("Chat service is not initialized");
+               }
+
                var response = await _chatService.InitializeAsync(initParams);
                UpdateAgentInfo();
            }
@@ -636,6 +650,11 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     McpServers = new object[0] // 可以根据配置添加 MCP 服务器
                 };
 
+                if (_chatService == null)
+                {
+                    throw new InvalidOperationException("Chat service is not initialized");
+                }
+
                 var response = await _chatService.CreateSessionAsync(sessionParams);
                 CurrentSessionId = response.SessionId;
                 IsSessionActive = true;
@@ -646,12 +665,15 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     AvailableModes.Clear();
                     foreach (var mode in response.Modes)
                     {
-                        AvailableModes.Add(new SessionModeViewModel
+                        if (mode != null)
                         {
-                            ModeId = mode.Id,
-                            ModeName = mode.Name,
-                            Description = mode.Description
-                        });
+                            AvailableModes.Add(new SessionModeViewModel
+                            {
+                                ModeId = mode.Id ?? string.Empty,
+                                ModeName = mode.Name ?? string.Empty,
+                                Description = mode.Description ?? string.Empty
+                            });
+                        }
                     }
 
                     // 选择第一个模式作为默认
@@ -725,7 +747,10 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                 };
 
 
-                await _chatService.SendPromptAsync(promptParams);
+                if (_chatService != null)
+                {
+                    await _chatService.SendPromptAsync(promptParams);
+                }
                 CurrentPrompt = string.Empty;
             }
             catch (Exception ex)
@@ -758,7 +783,10 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     ModeId = mode.ModeId
                 };
 
-                await _chatService.SetSessionModeAsync(modeParams);
+                if (_chatService != null)
+                {
+                    await _chatService.SetSessionModeAsync(modeParams);
+                }
                 SelectedMode = mode;
             }
             catch (Exception ex)
@@ -789,7 +817,10 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                     Reason = "User cancelled"
                 };
 
-                await _chatService.CancelSessionAsync(cancelParams);
+                if (_chatService != null)
+                {
+                    await _chatService.CancelSessionAsync(cancelParams);
+                }
             }
             catch (Exception ex)
             {
@@ -808,7 +839,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
             MessageHistory.Clear();
             CurrentPlan.Clear();
             ShowPlanPanel = false;
-            _chatService.ClearHistory();
+            _chatService?.ClearHistory();
         }
 
         [RelayCommand]
@@ -819,7 +850,10 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
                 IsBusy = true;
                 ClearError();
 
-                await _chatService.DisconnectAsync();
+                if (_chatService != null)
+                {
+                    await _chatService.DisconnectAsync();
+                }
                 CurrentSessionId = null;
                 IsSessionActive = false;
                 MessageHistory.Clear();
@@ -855,7 +889,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
            {
                if (!_disposed)
                {
-                   if (disposing)
+                   if (disposing && _chatService != null)
                    {
                        UnsubscribeFromChatService(_chatService);
                    }

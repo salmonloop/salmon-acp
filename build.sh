@@ -20,7 +20,7 @@ echo
 echo "[4/4] Publishing application..."
 dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
   --configuration Release \
-  --framework net9.0-desktop \
+  --framework net10.0-desktop \
   --output publish/windows-desktop \
   --no-build
 

@@ -5,33 +5,124 @@
     xmlns:local="using:UnoAcpClient.Presentation.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:UnoAcpClient.Presentation.ViewModels"
+    xmlns:chat="using:UnoAcpClient.Presentation.ViewModels.Chat"
+    xmlns:models="using:UnoAcpClient.Domain.Models"
+    xmlns:converters="using:UnoAcpClient.Presentation.Converters"
     mc:Ignorable="d"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    Background="Transparent">
 
-    <Grid RowDefinitions="Auto,*" Padding="16">
-        <!-- 标题栏 -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,16">
-            <TextBlock Text="服务器配置" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
-            <Button Content="添加配置" Click="AddConfiguration_Click"/>
-            <Button Content="编辑" Click="EditConfiguration_Click"/>
-            <Button Content="删除" Click="DeleteConfiguration_Click"/>
-            <Button Content="刷新" Click="SaveConfiguration_Click"/>
-        </StackPanel>
+    <Page.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
 
-        <!-- 配置列表 -->
-        <ListView Grid.Row="1"
-                  ItemsSource="{Binding Configurations}"
-                  SelectedItem="{Binding SelectedConfiguration, Mode=TwoWay}"
-                  SelectionMode="Single">
-            <ListView.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Padding="8">
-                        <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                        <TextBlock Text="{Binding ServerUrl}" FontSize="12" Opacity="0.7"/>
-                        <TextBlock Text="{Binding Transport}" FontSize="10" Opacity="0.5"/>
+        <!-- 兼容性定义：如果系统没有定义 LayerOnAcrylicFillColorDefaultBrush，则回退到 SolidColorBrush -->
+        <StaticResource x:Key="CardBackgroundFillBrush" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
+    </Page.Resources>
+
+    <ScrollViewer Padding="40,24">
+        <StackPanel Spacing="32" MaxWidth="800" HorizontalAlignment="Left">
+            <TextBlock Text="连接与服务配置" FontSize="28" FontWeight="Bold" Margin="0,0,0,12"/>
+
+            <!-- 1. 当前活动连接配置 -->
+            <StackPanel Spacing="16">
+                <TextBlock Text="活动会话连接" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColor}"/>
+
+                <Border Background="{ThemeResource CardBackgroundFillBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="24">
+                    <StackPanel Spacing="20">
+                        <!-- 传输类型选择 -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="传输协议" FontWeight="Medium"/>
+                            <StackPanel Orientation="Horizontal" Spacing="24">
+                                <RadioButton Content="Stdio (本地)"
+                                             IsChecked="{x:Bind ChatViewModel.TransportConfig.IsStdio, Mode=OneWay}"
+                                             Click="OnTransportTypeChanged" CommandParameter="Stdio"/>
+                                <RadioButton Content="WebSocket"
+                                             IsChecked="{x:Bind ChatViewModel.TransportConfig.IsWebSocket, Mode=OneWay}"
+                                             Click="OnTransportTypeChanged" CommandParameter="WebSocket"/>
+                                <RadioButton Content="HTTP SSE"
+                                             IsChecked="{x:Bind ChatViewModel.TransportConfig.IsHttpSse, Mode=OneWay}"
+                                             Click="OnTransportTypeChanged" CommandParameter="HttpSse"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Stdio 配置项 -->
+                        <StackPanel Spacing="12" Visibility="{x:Bind ChatViewModel.TransportConfig.IsStdio, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBox Header="执行命令"
+                                     PlaceholderText="例如: python, node"
+                                     Text="{x:Bind ChatViewModel.TransportConfig.StdioCommand, Mode=TwoWay}"/>
+                            <TextBox Header="参数"
+                                     PlaceholderText="例如: server.py"
+                                     Text="{x:Bind ChatViewModel.TransportConfig.StdioArgs, Mode=TwoWay}"/>
+                        </StackPanel>
+
+                        <!-- 远程 URL 配置项 -->
+                        <StackPanel Spacing="12" Visibility="{x:Bind ChatViewModel.TransportConfig.IsStdio, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}">
+                            <TextBox Header="服务器地址"
+                                     PlaceholderText="ws://localhost:8080"
+                                     Text="{x:Bind ChatViewModel.TransportConfig.RemoteUrl, Mode=TwoWay}"/>
+                        </StackPanel>
+
+                        <Button Content="连接到服务器"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Padding="20,8"
+                                Command="{x:Bind ChatViewModel.ApplyTransportConfigCommand}"
+                                IsEnabled="{x:Bind ChatViewModel.IsConnecting, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"/>
                     </StackPanel>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
-    </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- 2. 服务器配置管理 -->
+            <StackPanel Spacing="16">
+                <Grid>
+                    <TextBlock Text="预设服务器" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColor}" VerticalAlignment="Center"/>
+                    <Button HorizontalAlignment="Right" Click="AddConfiguration_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                            <TextBlock Text="新建"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <ListView ItemsSource="{x:Bind ViewModel.Configurations, Mode=OneWay}"
+                          SelectedItem="{x:Bind ViewModel.SelectedConfiguration, Mode=TwoWay}"
+                          SelectionMode="Single"
+                          Background="{ThemeResource CardBackgroundFillBrush}"
+                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                          BorderThickness="1"
+                          CornerRadius="8"
+                          MinHeight="120">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:ServerConfiguration">
+                            <Grid Padding="12,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{x:Bind Name}" FontWeight="Bold"/>
+                                    <TextBlock Text="{x:Bind ServerUrl}" FontSize="12" Opacity="0.6"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                    <Button Content="&#xE70F;" FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            Click="EditConfiguration_Click"
+                                            ToolTipService.ToolTip="编辑"/>
+                                    <Button Content="&#xE74D;" FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                            Style="{StaticResource SubtleButtonStyle}"
+                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                            Click="DeleteConfiguration_Click"
+                                            ToolTipService.ToolTip="删除"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

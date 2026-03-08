@@ -1,5 +1,7 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using UnoAcpClient.Domain.Models;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using UnoAcpClient.Presentation.ViewModels.Chat;
 
 namespace UnoAcpClient.Presentation.Views.Chat
@@ -8,32 +10,46 @@ namespace UnoAcpClient.Presentation.Views.Chat
     {
         public ChatViewModel ViewModel { get; }
 
-        public ChatView() : this(null)
+        public ChatView()
         {
+            this.InitializeComponent();
+
+            // 从全局服务容器获取 ViewModel 以确保状态在导航间持久化
+            ViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
         }
 
-        public ChatView(ChatViewModel? viewModel)
+        private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            InitializeComponent();
-            ViewModel = viewModel ?? App.ServiceProvider.GetRequiredService<ChatViewModel>();
-        }
-
-        private void OnTransportTypeChanged(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-        {
-            if (sender is RadioButton radioButton && radioButton.CommandParameter is string transportTypeStr)
+            // 支持 Ctrl+Enter 发送消息
+            if (e.Key == Windows.System.VirtualKey.Enter)
             {
-                var transportType = transportTypeStr switch
+                var ctrlPressed = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                if (ctrlPressed)
                 {
-                    "Stdio" => TransportType.Stdio,
-                    "WebSocket" => TransportType.WebSocket,
-                    "HttpSse" => TransportType.HttpSse,
-                    _ => TransportType.Stdio
-                };
-
-                if (ViewModel?.TransportConfig != null)
-                {
-                    ViewModel.TransportConfig.SelectedTransportType = transportType;
+                    // 在 ChatViewModel 中，发送命令是 SendPromptCommand
+                    if (ViewModel.SendPromptCommand != null && ViewModel.SendPromptCommand.CanExecute(null))
+                    {
+                        ViewModel.SendPromptCommand.Execute(null);
+                        e.Handled = true;
+                    }
                 }
+            }
+        }
+
+        private void OnGoToSettingsClick(object sender, RoutedEventArgs e)
+        {
+            // 通过视觉树向上查找 MainPage 实例以触发侧边栏切换
+            DependencyObject? current = this;
+            while (current != null && !(current is MainPage))
+            {
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            if (current is MainPage mainPage)
+            {
+                // 切换到底部导航栏的“设置”项
+                // 使用公开的 BottomRailNavList 属性以避免权限问题
+                mainPage.BottomRailNavList.SelectedIndex = 0;
             }
         }
     }

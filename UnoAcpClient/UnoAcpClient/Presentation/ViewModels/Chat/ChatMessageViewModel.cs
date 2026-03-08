@@ -69,9 +69,6 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
        [ObservableProperty]
        private ResourceViewModel? _resourceViewModel;
 
-       // 原始内容块
-       private ContentBlock? _contentBlock;
-
         public ChatMessageViewModel()
         {
             Timestamp = DateTime.Now;
@@ -206,6 +203,7 @@ namespace UnoAcpClient.Presentation.ViewModels.Chat
            };
        }
 
+        public bool HasTitle => !string.IsNullOrEmpty(Title);
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
        public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
        public bool HasAudioContent => !string.IsNullOrEmpty(AudioData);

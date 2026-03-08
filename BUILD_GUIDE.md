@@ -65,7 +65,7 @@ dotnet test UnoAcpClient.sln
 # 发布应用
 dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
   --configuration Release \
-  --framework net9.0-desktop \
+  --framework net10.0-desktop \
   --output publish/desktop
 ```
 
@@ -73,7 +73,7 @@ dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
 ```bash
 # 构建并运行
 dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
-  --framework net9.0-desktop
+  --framework net10.0-desktop
 ```
 
 ### 5. 运行应用
@@ -81,7 +81,7 @@ dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
 #### Windows Desktop
 ```bash
 dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
-  --framework net9.0-desktop
+  --framework net10.0-desktop
 ```
 
 #### WebAssembly (浏览器)
@@ -96,7 +96,7 @@ dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
 ```bash
 dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
   --configuration Release \
-  --framework net9.0-desktop \
+  --framework net10.0-desktop \
   --runtime win-x64 \
   --self-contained true \
   --output publish/windows-x64
@@ -174,7 +174,7 @@ dotnet restore
 
 # 或直接
 dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
-  --framework net9.0-desktop
+  --framework net10.0-desktop
 ```
 
 ### 发布前检查
