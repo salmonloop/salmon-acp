@@ -36,6 +36,9 @@
       "commandLineArgs": "{ProjectDir}/bin/Debug/net10.0-desktop/SalmonEgg.dll",
       "distributionName": "",
       "compatibleTargetFramework": "desktop"
+    },
+    "SalmonEgg (MSIX Package)": {
+      "commandName": "MsixPackage"
     }
   }
 }

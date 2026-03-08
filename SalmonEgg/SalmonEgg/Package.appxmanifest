@@ -32,7 +32,7 @@
       <Extensions>
         <uap:Extension Category="windows.protocol">
           <uap:Protocol Name="s8p">
-            <uap:Logo></uap:Logo>
+            <uap:Logo>AppIcon.png</uap:Logo>
             <uap:DisplayName>Salmon Egg</uap:DisplayName>
           </uap:Protocol>
         </uap:Extension>
