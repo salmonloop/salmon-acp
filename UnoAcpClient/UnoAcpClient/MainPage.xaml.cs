@@ -14,6 +14,8 @@ public sealed partial class MainPage : Page
 {
     public SettingsViewModel SettingsVM { get; }
 
+
+
     // 公开暴露导航列表，以便子页面可以触发全局导航切换
     public ListView MainRailNavList => MainRailNav;
     public ListView BottomRailNavList => BottomRailNav;
@@ -134,7 +136,7 @@ public sealed partial class MainPage : Page
 }
 public sealed partial class MainPage
 {
-    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
         SettingsVM.PropertyChanged -= OnSettingsViewModelPropertyChanged;

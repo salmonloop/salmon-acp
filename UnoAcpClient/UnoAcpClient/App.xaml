@@ -4,15 +4,8 @@
 
     <Application.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <!-- Load WinUI resources -->
-                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
-            </ResourceDictionary.MergedDictionaries>
-
             <!-- 兼容性资源定义：确保在所有平台上都有回退项 -->
-            <SolidColorBrush x:Key="SystemControlConditionalTransparentBrush" Color="Transparent" />
             <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="{ThemeResource SystemAltHighColor}" />
-            <StaticResource x:Key="CardBackgroundFillBrush" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
 
             <!-- 定义 SubtleButtonStyle 兼容样式 -->
             <!-- 解决 "Couldn't statically resolve resource SubtleButtonStyle" 警告 -->
@@ -25,7 +18,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <ContentPresenter x:Name="ContentPresenter"
+                            <ContentPresenter x:Name="SubtleStyleContentPresenter"
                                               Background="{TemplateBinding Background}"
                                               BorderBrush="{TemplateBinding BorderBrush}"
                                               BorderThickness="{TemplateBinding BorderThickness}"
@@ -42,7 +35,6 @@
 
             <!-- App backdrop (Mica-like) fallback usable across platforms -->
             <AcrylicBrush x:Key="AppBackdropBrush"
-                          BackgroundSource="HostBackdrop"
                           TintColor="{ThemeResource SystemAltHighColor}"
                           TintOpacity="0.85"
                           FallbackColor="{ThemeResource SystemAltHighColor}" />

@@ -15,9 +15,6 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
-
-        <!-- 兼容性定义：如果系统没有定义 LayerOnAcrylicFillColorDefaultBrush，则回退到 SolidColorBrush -->
-        <StaticResource x:Key="CardBackgroundFillBrush" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
     </Page.Resources>
 
     <ScrollViewer Padding="40,24">
@@ -28,7 +25,7 @@
             <StackPanel Spacing="16">
                 <TextBlock Text="活动会话连接" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColor}"/>
 
-                <Border Background="{ThemeResource CardBackgroundFillBrush}"
+                <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
@@ -91,7 +88,7 @@
                 <ListView ItemsSource="{x:Bind ViewModel.Configurations, Mode=OneWay}"
                           SelectedItem="{x:Bind ViewModel.SelectedConfiguration, Mode=TwoWay}"
                           SelectionMode="Single"
-                          Background="{ThemeResource CardBackgroundFillBrush}"
+                          Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                           BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                           BorderThickness="1"
                           CornerRadius="8"

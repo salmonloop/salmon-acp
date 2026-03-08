@@ -1,7 +1,5 @@
 using System;
-using Microsoft.Extensions.Logging;
 using Uno.Resizetizer;
-
 
 namespace UnoAcpClient;
 
@@ -21,11 +19,11 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         ServiceProvider = services.BuildServiceProvider();
     }
 
-    protected Window? MainWindow { get; private set; }
+    protected Microsoft.UI.Xaml.Window? MainWindow { get; private set; }
 
     protected override void OnLaunched(global::Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        MainWindow = new Window();
+        MainWindow = new Microsoft.UI.Xaml.Window();
 
 #if WINDOWS
         // Native WinUI 3 backdrop (Mica) - requires content backgrounds to be transparent.
@@ -48,7 +46,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             rootFrame.Navigate(typeof(MainPage), args.Arguments);
         }
 
-        MainWindow.SetWindowIcon();
+        // MainWindow.SetWindowIcon();
         MainWindow.Activate();
     }
 

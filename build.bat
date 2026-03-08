@@ -19,7 +19,23 @@ echo Install it via Visual Studio Installer: Individual components: Windows 10 S
 exit /b 1
 
 :sdkok
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" goto :vsok
+echo.
+echo ERROR: Visual Studio Build Tools not found (vswhere.exe missing).
+echo WinUI 3 builds require Visual Studio 2022 (or Build Tools 2022) with MSBuild and C++ build tools.
+echo Install: Visual Studio Installer -^> Workloads: "Desktop development with C++" (includes MSBuild + MSVC).
+exit /b 1
 
+:vsok
+for /f "usebackq delims=" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%I"
+if defined VSINSTALL goto :build
+echo.
+echo ERROR: MSVC C++ toolchain not installed.
+echo Install Visual Studio 2022 (or Build Tools 2022) workload "Desktop development with C++", and ensure "MSVC v143 - VS 2022 C++ x64/x86 build tools" is selected.
+exit /b 1
+
+:build
 echo.
 echo [2/4] Building project...
 dotnet build UnoAcpClient.sln --configuration Release --no-restore
@@ -34,7 +50,7 @@ echo.
 echo [4/4] Publishing application...
 dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj ^
   --configuration Release ^
-  --framework net10.0-windows10.0.19041.0 ^
+  --framework net10.0-windows10.0.26100.0 ^
   --output publish/windows-desktop ^
   --no-build
 

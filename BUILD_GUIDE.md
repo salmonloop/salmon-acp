@@ -9,6 +9,9 @@ build.bat
 
 # 方式 2: 直接运行
 run.bat
+
+# 方式 3: 运行 Skia 桌面版（不走 WinUI3/MSIX）
+run.bat desktop
 ```
 
 ### Linux/macOS 用户
@@ -65,7 +68,7 @@ dotnet test UnoAcpClient.sln
 # 发布应用
 dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
   --configuration Release \
-  --framework net10.0-windows10.0.19041.0 \
+  --framework net9.0-windows10.0.19041.0 \
   --output publish/windows
 ```
 
@@ -73,16 +76,18 @@ dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
 ```bash
 # 构建并运行
 dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
-  --framework net10.0-windows10.0.19041.0
+  --framework net9.0-windows10.0.19041.0
 ```
 
 ### 5. 运行应用
 
 #### Windows Desktop
 ```bash
-dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
-  --framework net10.0-windows10.0.19041.0
+run.bat
 ```
+
+> 说明：Windows 原生 WinUI 3 目标使用 MSIX 方式安装/启动（避免 unpackaged WinUI3 在部分系统上启动即崩溃）。
+> 首次安装需要在“管理员 PowerShell”运行一次 `run.bat` 以将开发证书加入本机证书存储。
 
 #### WebAssembly (浏览器)
 ```bash
@@ -96,7 +101,7 @@ dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
 ```bash
 dotnet publish UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
   --configuration Release \
-  --framework net10.0-windows10.0.19041.0 \
+  --framework net9.0-windows10.0.19041.0 \
   --runtime win-x64 \
   --self-contained true \
   --output publish/windows-x64
@@ -174,7 +179,7 @@ dotnet restore
 
 # 或直接
 dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj \
-  --framework net10.0-windows10.0.19041.0
+  --framework net9.0-windows10.0.19041.0
 ```
 
 ### 发布前检查

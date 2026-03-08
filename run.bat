@@ -1,6 +1,8 @@
 @echo off
 echo Starting Uno ACP Client...
 
+if /I "%1"=="desktop" goto :desktop
+
 set "WINSDK_BIN=%ProgramFiles(x86)%\Windows Kits\10\bin"
 if exist "%WINSDK_BIN%" goto :run
 set "WINSDK_BIN=%ProgramFiles%\Windows Kits\10\bin"
@@ -11,4 +13,23 @@ echo Install it via Visual Studio Installer: Individual components: Windows 10 S
 exit /b 1
 
 :run
-dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj --framework net10.0-windows10.0.19041.0
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" goto :vsok
+echo ERROR: Visual Studio Build Tools not found (vswhere.exe missing).
+echo WinUI 3 builds require Visual Studio 2022 (or Build Tools 2022) with MSBuild and C++ build tools.
+echo Install: Visual Studio Installer -^> Workloads: "Desktop development with C++" (includes MSBuild + MSVC).
+exit /b 1
+
+:vsok
+for /f "usebackq delims=" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%I"
+if defined VSINSTALL goto :runapp
+echo ERROR: MSVC C++ toolchain not installed.
+echo Install Visual Studio 2022 (or Build Tools 2022) workload "Desktop development with C++", and ensure "MSVC v143 - VS 2022 C++ x64/x86 build tools" is selected.
+exit /b 1
+
+:runapp
+powershell -NoProfile -ExecutionPolicy Bypass -File .\.tools\run-winui3-msix.ps1 -Configuration Debug
+exit /b %errorlevel%
+
+:desktop
+dotnet run --project UnoAcpClient/UnoAcpClient/UnoAcpClient.csproj --framework net10.0-desktop

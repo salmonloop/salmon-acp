@@ -17,16 +17,13 @@
         <converters:MessageDirectionToAlignmentConverter x:Key="HorizontalAlignmentConverter"/>
         <converters:TimeFormatConverter x:Key="TimeFormatConverter"/>
 
-        <!-- 兼容性资源定义 -->
-        <StaticResource x:Key="MessageBubbleBackground" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
-
         <!-- 消息气泡模板 -->
         <DataTemplate x:Key="MessageTemplate" x:DataType="vm:ChatMessageViewModel">
             <Grid Margin="0,8" HorizontalAlignment="{x:Bind IsOutgoing, Converter={StaticResource HorizontalAlignmentConverter}, Mode=OneWay}">
                 <Border CornerRadius="12"
                         Padding="12,8"
                         MaxWidth="500"
-                        Background="{ThemeResource MessageBubbleBackground}"
+                        Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1">
                     <StackPanel>
@@ -86,7 +83,7 @@
 
             <!-- 顶部状态条 -->
             <Border Grid.Row="0"
-                    Background="{ThemeResource MessageBubbleBackground}"
+                    Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                     BorderThickness="0,0,0,1"
                     Padding="16,8">
