@@ -40,6 +40,13 @@
                 </Setter>
             </Style>
 
+            <!-- App backdrop (Mica-like) fallback usable across platforms -->
+            <AcrylicBrush x:Key="AppBackdropBrush"
+                          BackgroundSource="HostBackdrop"
+                          TintColor="{ThemeResource SystemAltHighColor}"
+                          TintOpacity="0.85"
+                          FallbackColor="{ThemeResource SystemAltHighColor}" />
+
         </ResourceDictionary>
     </Application.Resources>
 

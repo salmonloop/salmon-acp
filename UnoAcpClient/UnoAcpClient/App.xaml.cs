@@ -27,10 +27,6 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     {
         MainWindow = new Window();
 
-#if WINDOWS
-        MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
-#endif
-
 #if DEBUG
         // MainWindow.UseStudio(); // Requires Uno Studio configuration
 #endif

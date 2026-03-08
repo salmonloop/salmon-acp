@@ -118,3 +118,11 @@ public sealed partial class MainPage : Page
 #pragma warning restore Uno0001
     }
 }
+public sealed partial class MainPage
+{
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        SettingsVM.PropertyChanged -= OnSettingsViewModelPropertyChanged;
+    }
+}

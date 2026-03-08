@@ -6,7 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:UnoAcpClient.Presentation.ViewModels"
     mc:Ignorable="d"
-    Background="Transparent"
+    Background="{ThemeResource AppBackdropBrush}"
     AllowDrop="False">
 
     <Page.Resources>
@@ -178,12 +178,6 @@
         <!-- 第三列：主内容区 -->
         <Frame x:Name="ContentFrame"
                Grid.Column="2"
-               Background="Transparent">
-            <Frame.ContentTransitions>
-                <TransitionCollection>
-                    <NavigationThemeTransition />
-                </TransitionCollection>
-            </Frame.ContentTransitions>
-        </Frame>
+               Background="Transparent" />
     </Grid>
 </Page>
