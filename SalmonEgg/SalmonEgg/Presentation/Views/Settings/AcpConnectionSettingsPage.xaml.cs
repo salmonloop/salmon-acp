@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SalmonEgg.Domain.Models;
@@ -26,13 +27,17 @@ public sealed partial class AcpConnectionSettingsPage : Page
     private async void OnAddProfileClick(object sender, RoutedEventArgs e)
     {
         var editorVm = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
-        editorVm.LoadNewConfiguration();
+        editorVm.LoadNewFromTransportConfig(ViewModel.Chat.TransportConfig, "新预设");
 
         var dialog = new ConfigurationEditorDialog(editorVm);
         dialog.XamlRoot = XamlRoot;
-        await dialog.ShowAsync();
+        var result = await dialog.ShowAsync();
 
-        await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
+        if (result == ContentDialogResult.Primary)
+        {
+            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
+            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
+        }
     }
 
     private async void OnEditProfileClick(object sender, RoutedEventArgs e)
@@ -47,9 +52,13 @@ public sealed partial class AcpConnectionSettingsPage : Page
 
         var dialog = new ConfigurationEditorDialog(editorVm);
         dialog.XamlRoot = XamlRoot;
-        await dialog.ShowAsync();
+        var result = await dialog.ShowAsync();
 
-        await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
+        if (result == ContentDialogResult.Primary)
+        {
+            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
+            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
+        }
     }
 
     private async void OnDeleteProfileClick(object sender, RoutedEventArgs e)
@@ -61,5 +70,23 @@ public sealed partial class AcpConnectionSettingsPage : Page
 
         await ViewModel.Profiles.DeleteCommand.ExecuteAsync(config);
     }
-}
 
+    private async void OnSaveAsNewFromCurrentClick(object sender, RoutedEventArgs e)
+    {
+        var baseName = ViewModel.Profiles.SelectedProfile?.Name;
+        var name = string.IsNullOrWhiteSpace(baseName) ? "新预设" : $"复制 - {baseName}";
+
+        var editorVm = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
+        editorVm.LoadNewFromTransportConfig(ViewModel.Chat.TransportConfig, name);
+
+        var dialog = new ConfigurationEditorDialog(editorVm);
+        dialog.XamlRoot = XamlRoot;
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
+            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
+        }
+    }
+}

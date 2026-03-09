@@ -13,6 +13,9 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     public static Microsoft.UI.Xaml.Window? MainWindowInstance => (Current as App)?.MainWindow;
 
+    private readonly SalmonEgg.Domain.Services.IAppSettingsService? _appSettingsService;
+    private readonly SalmonEgg.Domain.Services.IAppMaintenanceService? _maintenanceService;
+
     internal static void BootLog(string message)
     {
         try
@@ -28,6 +31,14 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     public App()
     {
+        var services = new global::Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSalmonEgg();
+        ServiceProvider = services.BuildServiceProvider();
+
+        // Resolve DI dependencies before InitializeComponent() so x:Bind has stable inputs.
+        _appSettingsService = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppSettingsService>();
+        _maintenanceService = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppMaintenanceService>();
+
         this.InitializeComponent();
 
         this.UnhandledException += (_, e) =>
@@ -44,10 +55,6 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             BootLog("TaskScheduler.UnobservedTaskException: " + e.Exception);
             e.SetObserved();
         };
-
-        var services = new global::Microsoft.Extensions.DependencyInjection.ServiceCollection();
-        services.AddSalmonEgg();
-        ServiceProvider = services.BuildServiceProvider();
     }
 
     protected Microsoft.UI.Xaml.Window? MainWindow { get; private set; }
@@ -101,16 +108,14 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         // Best-effort cache cleanup based on retention settings.
         try
         {
-            var appSettings = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppSettingsService>();
-            var maintenance = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppMaintenanceService>();
-            if (appSettings != null && maintenance != null)
+            if (_appSettingsService != null && _maintenanceService != null)
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        var settings = await appSettings.LoadAsync().ConfigureAwait(false);
-                        await maintenance.CleanupCacheAsync(settings.CacheRetentionDays).ConfigureAwait(false);
+                        var settings = await _appSettingsService.LoadAsync().ConfigureAwait(false);
+                        await _maintenanceService.CleanupCacheAsync(settings.CacheRetentionDays).ConfigureAwait(false);
                     }
                     catch
                     {

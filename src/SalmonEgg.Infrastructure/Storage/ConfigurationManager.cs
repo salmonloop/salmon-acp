@@ -76,7 +76,17 @@ public sealed class ConfigurationManager : IConfigurationService
             return null;
         }
 
-        if (string.IsNullOrWhiteSpace(yamlModel.ServerUrl) || string.IsNullOrWhiteSpace(yamlModel.Name))
+        if (string.IsNullOrWhiteSpace(yamlModel.Name))
+        {
+            return null;
+        }
+
+        if (TransportFromString(yamlModel.Transport) != TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.ServerUrl))
+        {
+            return null;
+        }
+
+        if (TransportFromString(yamlModel.Transport) == TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.StdioCommand))
         {
             return null;
         }
@@ -107,7 +117,18 @@ public sealed class ConfigurationManager : IConfigurationService
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(yamlModel.ServerUrl) || string.IsNullOrWhiteSpace(yamlModel.Name))
+                if (string.IsNullOrWhiteSpace(yamlModel.Name))
+                {
+                    continue;
+                }
+
+                var transport = TransportFromString(yamlModel.Transport);
+                if (transport != TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.ServerUrl))
+                {
+                    continue;
+                }
+
+                if (transport == TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.StdioCommand))
                 {
                     continue;
                 }
@@ -158,6 +179,8 @@ public sealed class ConfigurationManager : IConfigurationService
             Name = config.Name,
             Transport = TransportToString(config.Transport),
             ServerUrl = config.ServerUrl,
+            StdioCommand = config.StdioCommand,
+            StdioArgs = config.StdioArgs,
             HeartbeatIntervalSeconds = config.HeartbeatInterval,
             ConnectionTimeoutSeconds = config.ConnectionTimeout,
             Authentication = new AuthenticationYamlV1 { Mode = mode },
@@ -174,6 +197,8 @@ public sealed class ConfigurationManager : IConfigurationService
             Id = string.IsNullOrWhiteSpace(yamlModel.Id) ? fallbackId : yamlModel.Id,
             Name = yamlModel.Name ?? string.Empty,
             ServerUrl = yamlModel.ServerUrl ?? string.Empty,
+            StdioCommand = yamlModel.StdioCommand ?? string.Empty,
+            StdioArgs = yamlModel.StdioArgs ?? string.Empty,
             Transport = TransportFromString(yamlModel.Transport),
             HeartbeatInterval = yamlModel.HeartbeatIntervalSeconds > 0 ? yamlModel.HeartbeatIntervalSeconds : 30,
             ConnectionTimeout = yamlModel.ConnectionTimeoutSeconds > 0 ? yamlModel.ConnectionTimeoutSeconds : 10

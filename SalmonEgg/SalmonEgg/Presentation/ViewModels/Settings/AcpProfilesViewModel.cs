@@ -98,4 +98,51 @@ public partial class AcpProfilesViewModel : ObservableObject
             _logger.LogError(ex, "Failed to delete server profile {ProfileId}", profile.Id);
         }
     }
+
+    public async Task SaveAsync(ServerConfiguration profile)
+    {
+        if (profile == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _configurationService.SaveConfigurationAsync(profile).ConfigureAwait(false);
+            await RefreshAsync().ConfigureAwait(false);
+            SelectById(profile.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save server profile {ProfileId}", profile.Id);
+        }
+    }
+
+    public async Task SaveNewAsync(ServerConfiguration profile)
+    {
+        if (profile == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.Id))
+        {
+            profile.Id = Guid.NewGuid().ToString();
+        }
+
+        await SaveAsync(profile).ConfigureAwait(false);
+    }
+
+    private void SelectById(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return;
+        }
+
+        _syncContext.Post(_ =>
+        {
+            SelectedProfile = Profiles.FirstOrDefault(p => p.Id == id);
+        }, null);
+    }
 }

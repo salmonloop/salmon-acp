@@ -15,7 +15,10 @@ namespace SalmonEgg.Presentation.ViewModels
         private bool _isBusy;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasError))]
         private string _errorMessage = string.Empty;
+
+        public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
         protected ViewModelBase(ILogger logger)
         {

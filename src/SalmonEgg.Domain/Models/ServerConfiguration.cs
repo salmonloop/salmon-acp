@@ -21,6 +21,16 @@ namespace SalmonEgg.Domain.Models
         public string ServerUrl { get; set; } = string.Empty;
 
         /// <summary>
+        /// Stdio 命令（仅当 Transport=Stdio 时使用）
+        /// </summary>
+        public string StdioCommand { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Stdio 参数（仅当 Transport=Stdio 时使用）
+        /// </summary>
+        public string StdioArgs { get; set; } = string.Empty;
+
+        /// <summary>
         /// 传输类型
         /// </summary>
         public TransportType Transport { get; set; }
@@ -44,5 +54,25 @@ namespace SalmonEgg.Domain.Models
         /// 连接超时（秒）
         /// </summary>
         public int ConnectionTimeout { get; set; } = 10;
+
+        public string EndpointDisplay
+        {
+            get
+            {
+                if (Transport == TransportType.Stdio)
+                {
+                    var command = (StdioCommand ?? string.Empty).Trim();
+                    var args = (StdioArgs ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(command))
+                    {
+                        return string.Empty;
+                    }
+
+                    return string.IsNullOrWhiteSpace(args) ? command : $"{command} {args}";
+                }
+
+                return ServerUrl ?? string.Empty;
+            }
+        }
     }
 }

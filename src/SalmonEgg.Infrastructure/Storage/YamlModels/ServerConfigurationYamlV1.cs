@@ -16,6 +16,10 @@ internal sealed class ServerConfigurationYamlV1
 
     public string ServerUrl { get; set; } = string.Empty;
 
+    public string StdioCommand { get; set; } = string.Empty;
+
+    public string StdioArgs { get; set; } = string.Empty;
+
     public int HeartbeatIntervalSeconds { get; set; } = 30;
 
     public int ConnectionTimeoutSeconds { get; set; } = 10;

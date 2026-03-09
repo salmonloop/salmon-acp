@@ -23,17 +23,27 @@ namespace SalmonEgg.Application.Validators
                 .MaximumLength(100)
                 .WithMessage("Configuration name cannot exceed 100 characters");
 
-            // Validate server URL
-            RuleFor(x => x.ServerUrl)
-                .NotEmpty()
-                .WithMessage("Server URL cannot be empty")
-                .Must(BeValidUrl)
-                .WithMessage("Server URL format is invalid, must be a valid WebSocket (ws:// or wss://) or HTTP (http:// or https://) URL");
-
             // Validate transport type
             RuleFor(x => x.Transport)
                 .IsInEnum()
                 .WithMessage("Invalid transport type");
+
+            // Validate endpoint based on transport
+            When(x => x.Transport == TransportType.Stdio, () =>
+            {
+                RuleFor(x => x.StdioCommand)
+                    .NotEmpty()
+                    .WithMessage("Stdio transport requires a command");
+            });
+
+            When(x => x.Transport == TransportType.WebSocket || x.Transport == TransportType.HttpSse, () =>
+            {
+                RuleFor(x => x.ServerUrl)
+                    .NotEmpty()
+                    .WithMessage("Server URL cannot be empty")
+                    .Must(BeValidUrl)
+                    .WithMessage("Server URL format is invalid, must be a valid WebSocket (ws:// or wss://) or HTTP (http:// or https://) URL");
+            });
 
             // Validate heartbeat interval
             RuleFor(x => x.HeartbeatInterval)

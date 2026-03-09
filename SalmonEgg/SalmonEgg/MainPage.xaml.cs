@@ -229,9 +229,9 @@ public sealed partial class MainPage : Page
             SettingsSubNavPanel.Visibility = Visibility.Visible;
 
             SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
-            SettingsSubMenuList.SelectedIndex = 1; // "外观"
+            SettingsSubMenuList.SelectedIndex = 0; // "常规"
             SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
-            NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage));
+            NavigateTo(typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage));
         }
     }
 

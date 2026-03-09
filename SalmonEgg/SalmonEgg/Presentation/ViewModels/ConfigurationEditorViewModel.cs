@@ -1,4 +1,6 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using SalmonEgg.Application.Validators;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.ViewModels.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels;
 
@@ -29,7 +32,29 @@ public partial class ConfigurationEditorViewModel(
     private string _serverUrl = string.Empty;
 
     [ObservableProperty]
+    private string _stdioCommand = string.Empty;
+
+    [ObservableProperty]
+    private string _stdioArgs = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStdio))]
+    [NotifyPropertyChangedFor(nameof(IsRemote))]
     private TransportType _transport;
+
+    public ObservableCollection<TransportOption> TransportOptions { get; } = new()
+    {
+        new TransportOption(TransportType.Stdio, "Stdio（本地）"),
+        new TransportOption(TransportType.WebSocket, "WebSocket"),
+        new TransportOption(TransportType.HttpSse, "HTTP SSE"),
+    };
+
+    [ObservableProperty]
+    private TransportOption? _selectedTransportOption;
+
+    public bool IsStdio => Transport == TransportType.Stdio;
+
+    public bool IsRemote => Transport == TransportType.WebSocket || Transport == TransportType.HttpSse;
 
     [ObservableProperty]
     private string _token = string.Empty;
@@ -52,12 +77,29 @@ public partial class ConfigurationEditorViewModel(
     public bool IsEditing { get; private set; }
     public ServerConfiguration Configuration { get; private set; } = new();
 
+    partial void OnTransportChanged(TransportType value)
+    {
+        SelectedTransportOption = TransportOptions.FirstOrDefault(o => o.Type == value) ?? TransportOptions.FirstOrDefault();
+    }
+
+    partial void OnSelectedTransportOptionChanged(TransportOption? value)
+    {
+        if (value == null)
+        {
+            return;
+        }
+
+        Transport = value.Type;
+    }
+
     public void LoadConfiguration(ServerConfiguration config)
     {
         IsEditing = true;
         Configuration = config ?? new ServerConfiguration();
         Name = Configuration.Name;
         ServerUrl = Configuration.ServerUrl;
+        StdioCommand = Configuration.StdioCommand;
+        StdioArgs = Configuration.StdioArgs;
         Transport = Configuration.Transport;
         Token = Configuration.Authentication?.Token ?? string.Empty;
         ApiKey = Configuration.Authentication?.ApiKey ?? string.Empty;
@@ -69,6 +111,8 @@ public partial class ConfigurationEditorViewModel(
             ProxyEnabled = Configuration.Proxy.Enabled;
             ProxyUrl = Configuration.Proxy.ProxyUrl ?? string.Empty;
         }
+
+        SelectedTransportOption = TransportOptions.FirstOrDefault(o => o.Type == Transport) ?? TransportOptions.FirstOrDefault();
     }
 
     public void LoadNewConfiguration()
@@ -85,7 +129,43 @@ public partial class ConfigurationEditorViewModel(
         };
         Name = Configuration.Name;
         ServerUrl = Configuration.ServerUrl;
+        StdioCommand = Configuration.StdioCommand;
+        StdioArgs = Configuration.StdioArgs;
         Transport = Configuration.Transport;
+        SelectedTransportOption = TransportOptions.FirstOrDefault(o => o.Type == Transport) ?? TransportOptions.FirstOrDefault();
+        Token = string.Empty;
+        ApiKey = string.Empty;
+        ProxyEnabled = false;
+        ProxyUrl = string.Empty;
+    }
+
+    public void LoadNewFromTransportConfig(TransportConfigViewModel transportConfig, string? name = null)
+    {
+        if (transportConfig == null)
+        {
+            LoadNewConfiguration();
+            return;
+        }
+
+        IsEditing = false;
+        Configuration = new ServerConfiguration
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = string.IsNullOrWhiteSpace(name) ? "New Configuration" : name.Trim(),
+            Transport = transportConfig.SelectedTransportType,
+            ServerUrl = transportConfig.SelectedTransportType == TransportType.Stdio ? string.Empty : (transportConfig.RemoteUrl ?? string.Empty),
+            StdioCommand = transportConfig.SelectedTransportType == TransportType.Stdio ? (transportConfig.StdioCommand ?? string.Empty) : string.Empty,
+            StdioArgs = transportConfig.SelectedTransportType == TransportType.Stdio ? (transportConfig.StdioArgs ?? string.Empty) : string.Empty,
+            HeartbeatInterval = 30,
+            ConnectionTimeout = 10
+        };
+
+        Name = Configuration.Name;
+        ServerUrl = Configuration.ServerUrl;
+        StdioCommand = Configuration.StdioCommand;
+        StdioArgs = Configuration.StdioArgs;
+        Transport = Configuration.Transport;
+        SelectedTransportOption = TransportOptions.FirstOrDefault(o => o.Type == Transport) ?? TransportOptions.FirstOrDefault();
         Token = string.Empty;
         ApiKey = string.Empty;
         ProxyEnabled = false;
@@ -100,8 +180,21 @@ public partial class ConfigurationEditorViewModel(
             ClearError();
 
             Configuration.Name = Name;
-            Configuration.ServerUrl = ServerUrl;
             Configuration.Transport = Transport;
+
+            if (Transport == TransportType.Stdio)
+            {
+                Configuration.ServerUrl = string.Empty;
+                Configuration.StdioCommand = StdioCommand;
+                Configuration.StdioArgs = StdioArgs;
+            }
+            else
+            {
+                Configuration.ServerUrl = ServerUrl;
+                Configuration.StdioCommand = string.Empty;
+                Configuration.StdioArgs = string.Empty;
+            }
+
             Configuration.HeartbeatInterval = HeartbeatInterval;
             Configuration.ConnectionTimeout = ConnectionTimeout;
 
@@ -144,4 +237,17 @@ public partial class ConfigurationEditorViewModel(
     public void Cancel()
     {
     }
+}
+
+public sealed class TransportOption
+{
+    public TransportOption(TransportType type, string name)
+    {
+        Type = type;
+        Name = name;
+    }
+
+    public TransportType Type { get; }
+
+    public string Name { get; }
 }
