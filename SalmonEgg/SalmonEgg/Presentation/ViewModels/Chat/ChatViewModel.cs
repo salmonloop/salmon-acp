@@ -82,6 +82,22 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private string? _modeConfigId;
 
+    // Slash commands
+    [ObservableProperty]
+    private ObservableCollection<SlashCommandViewModel> _availableSlashCommands = new();
+
+    [ObservableProperty]
+    private ObservableCollection<SlashCommandViewModel> _filteredSlashCommands = new();
+
+    [ObservableProperty]
+    private SlashCommandViewModel? _selectedSlashCommand;
+
+    [ObservableProperty]
+    private bool _showSlashCommands;
+
+    [ObservableProperty]
+    private string _slashGhostSuffix = string.Empty;
+
     [ObservableProperty]
     private ObservableCollection<PlanEntryViewModel> _currentPlan = new();
 
@@ -381,12 +397,131 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 {
                     UpdateConfigOptions(configUpdate);
                 }
+                else if (e.Update is AvailableCommandsUpdate commandsUpdate)
+                {
+                    UpdateSlashCommands(commandsUpdate);
+                }
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "处理会话更新时出错");
             }
         }, null);
+    }
+
+    private void UpdateSlashCommands(AvailableCommandsUpdate update)
+    {
+        AvailableSlashCommands.Clear();
+        foreach (var cmd in update.AvailableCommands)
+        {
+            AvailableSlashCommands.Add(new SlashCommandViewModel
+            {
+                Name = cmd.Name,
+                Description = cmd.Description,
+                InputHint = cmd.Input?.Hint
+            });
+        }
+
+        RefreshSlashCommandFilter();
+    }
+
+    partial void OnCurrentPromptChanged(string value)
+    {
+        RefreshSlashCommandFilter();
+    }
+
+    private void RefreshSlashCommandFilter()
+    {
+        var trimmed = (CurrentPrompt ?? string.Empty).TrimStart();
+        if (!trimmed.StartsWith("/"))
+        {
+            ShowSlashCommands = false;
+            SlashGhostSuffix = string.Empty;
+            FilteredSlashCommands.Clear();
+            SelectedSlashCommand = null;
+            return;
+        }
+
+        var afterSlash = trimmed.Length > 1 ? trimmed[1..] : string.Empty;
+        var token = afterSlash.Split(new[] { ' ', '\t', '\r', '\n' }, 2)[0];
+        var hasAny = AvailableSlashCommands.Count > 0;
+
+        FilteredSlashCommands.Clear();
+        if (hasAny)
+        {
+            foreach (var cmd in AvailableSlashCommands.Where(c => c.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase)))
+            {
+                FilteredSlashCommands.Add(cmd);
+            }
+        }
+
+        SelectedSlashCommand = FilteredSlashCommands.FirstOrDefault();
+        ShowSlashCommands = FilteredSlashCommands.Count > 0;
+
+        UpdateSlashGhostSuffix(token, trimmed);
+    }
+
+    private void UpdateSlashGhostSuffix(string token, string trimmedPrompt)
+    {
+        if (SelectedSlashCommand != null && token.Length <= SelectedSlashCommand.Name.Length)
+        {
+            var suffix = SelectedSlashCommand.Name[token.Length..];
+            SlashGhostSuffix = suffix + (trimmedPrompt.Contains(' ') ? string.Empty : " ");
+        }
+        else
+        {
+            SlashGhostSuffix = string.Empty;
+        }
+    }
+
+    public bool TryAcceptSelectedSlashCommand(bool commitWithInputPlaceholder = false)
+    {
+        if (!ShowSlashCommands || SelectedSlashCommand == null)
+        {
+            return false;
+        }
+
+        var trimmed = (CurrentPrompt ?? string.Empty).TrimStart();
+        var prefixWhitespaceCount = (CurrentPrompt ?? string.Empty).Length - trimmed.Length;
+        var afterSlash = trimmed.Length > 1 ? trimmed[1..] : string.Empty;
+        var rest = afterSlash.Split(new[] { ' ', '\t', '\r', '\n' }, 2);
+        var existingToken = rest.Length > 0 ? rest[0] : string.Empty;
+        var remainder = afterSlash.Length >= existingToken.Length ? afterSlash[existingToken.Length..] : string.Empty;
+
+        var completed = "/" + SelectedSlashCommand.Name;
+        if (!remainder.StartsWith(" "))
+        {
+            completed += " ";
+        }
+
+        if (commitWithInputPlaceholder && string.IsNullOrWhiteSpace(remainder) && !string.IsNullOrWhiteSpace(SelectedSlashCommand.InputHint))
+        {
+            // no-op: hint is shown in list; we don't inject it into the prompt
+        }
+
+        CurrentPrompt = new string(' ', prefixWhitespaceCount) + completed + remainder.TrimStart();
+        ShowSlashCommands = false;
+        SlashGhostSuffix = string.Empty;
+        return true;
+    }
+
+    public bool TryMoveSlashSelection(int delta)
+    {
+        if (!ShowSlashCommands || FilteredSlashCommands.Count == 0)
+        {
+            return false;
+        }
+
+        var index = SelectedSlashCommand != null ? FilteredSlashCommands.IndexOf(SelectedSlashCommand) : 0;
+        if (index < 0) index = 0;
+        index = Math.Clamp(index + delta, 0, FilteredSlashCommands.Count - 1);
+        SelectedSlashCommand = FilteredSlashCommands[index];
+
+        var trimmed = (CurrentPrompt ?? string.Empty).TrimStart();
+        var afterSlash = trimmed.Length > 1 ? trimmed[1..] : string.Empty;
+        var token = afterSlash.Split(new[] { ' ', '\t', '\r', '\n' }, 2)[0];
+        UpdateSlashGhostSuffix(token, trimmed);
+        return true;
     }
 
     private void OnPermissionRequestReceived(object? sender, PermissionRequestEventArgs e)

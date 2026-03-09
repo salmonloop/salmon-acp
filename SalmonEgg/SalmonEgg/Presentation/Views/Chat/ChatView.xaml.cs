@@ -93,6 +93,39 @@ namespace SalmonEgg.Presentation.Views.Chat
 
         private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (ViewModel.ShowSlashCommands)
+            {
+                switch (e.Key)
+                {
+                    case Windows.System.VirtualKey.Tab:
+                    case Windows.System.VirtualKey.Enter:
+                        if (ViewModel.TryAcceptSelectedSlashCommand())
+                        {
+                            if (sender is TextBox tb)
+                            {
+                                tb.SelectionStart = tb.Text?.Length ?? 0;
+                            }
+                            e.Handled = true;
+                            return;
+                        }
+                        break;
+                    case Windows.System.VirtualKey.Up:
+                        if (ViewModel.TryMoveSlashSelection(-1))
+                        {
+                            e.Handled = true;
+                            return;
+                        }
+                        break;
+                    case Windows.System.VirtualKey.Down:
+                        if (ViewModel.TryMoveSlashSelection(1))
+                        {
+                            e.Handled = true;
+                            return;
+                        }
+                        break;
+                }
+            }
+
             // 支持 Ctrl+Enter 发送消息
             if (e.Key == Windows.System.VirtualKey.Enter)
             {

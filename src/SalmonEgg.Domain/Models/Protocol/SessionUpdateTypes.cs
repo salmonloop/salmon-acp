@@ -65,6 +65,7 @@ namespace SalmonEgg.Domain.Models.Protocol
     [JsonDerivedType(typeof(ModeChangeUpdate), "current_mode_update")]
     [JsonDerivedType(typeof(ConfigUpdateUpdate), "config_update")]
     [JsonDerivedType(typeof(ConfigUpdateUpdate), "config_options_update")]
+    [JsonDerivedType(typeof(AvailableCommandsUpdate), "available_commands_update")]
     [JsonDerivedType(typeof(ConfigOptionUpdate), "config_option_update")]
     public class SessionUpdate
     {
