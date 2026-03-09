@@ -28,10 +28,13 @@
         <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="28">
-                    <TextBlock Text="Agent (ACP)"
-                               FontSize="28"
-                               FontWeight="Bold"
-                               Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+                        <HyperlinkButton Content="设置"
+                                         Style="{StaticResource SettingsBreadcrumbLinkStyle}"
+                                         Click="OnCrumbSettingsClick"/>
+                        <TextBlock Text="›" Style="{StaticResource SettingsBreadcrumbSeparatorTextStyle}"/>
+                        <TextBlock Text="Agent (ACP)" Style="{StaticResource SettingsBreadcrumbCurrentTextStyle}"/>
+                    </StackPanel>
 
                     <!-- Overview -->
                     <StackPanel Spacing="12">
@@ -50,7 +53,9 @@
                                       ColumnSpacing="14"
                                       VerticalAlignment="Center">
                                     <Viewbox Width="56" Height="56" VerticalAlignment="Center">
-                                        <SymbolIcon Symbol="World" Foreground="{ThemeResource AccentBrush}"/>
+                                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                                  Glyph="&#xE774;"
+                                                  Foreground="{ThemeResource AccentBrush}"/>
                                     </Viewbox>
 
                                     <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
@@ -72,6 +77,7 @@
                                 </Grid>
 
                                 <Grid ColumnDefinitions="Auto,*"
+                                      RowDefinitions="Auto,Auto"
                                       ColumnSpacing="12"
                                       RowSpacing="6">
                                     <TextBlock Grid.Row="0" Grid.Column="0"
@@ -94,89 +100,6 @@
                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                            Visibility="{x:Bind ViewModel.Chat.HasConnectionError, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                            TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <!-- Transport settings -->
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="配置"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
-                                   Foreground="{ThemeResource AccentBrush}"/>
-
-                        <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="16">
-                            <StackPanel Spacing="14">
-                                <TextBlock Text="修改配置后需要重新连接才能生效。"
-                                           Opacity="0.65"
-                                           FontSize="12"
-                                           TextWrapping="Wrap"/>
-
-                                <StackPanel Spacing="8">
-                                    <TextBlock Text="传输协议" FontWeight="Medium"/>
-                                    <ComboBox ItemsSource="{x:Bind ViewModel.TransportOptions, Mode=OneWay}"
-                                              SelectedItem="{x:Bind ViewModel.SelectedTransport, Mode=TwoWay}"
-                                              DisplayMemberPath="Name"
-                                              MinWidth="240"/>
-                                </StackPanel>
-
-                                <StackPanel Spacing="12"
-                                            Visibility="{x:Bind ViewModel.Chat.TransportConfig.IsStdio, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <TextBox Header="执行命令"
-                                             PlaceholderText="例如：python / node / agent.exe"
-                                             Text="{x:Bind ViewModel.Chat.TransportConfig.StdioCommand, Mode=TwoWay}"/>
-                                    <TextBox Header="参数"
-                                             PlaceholderText="例如：server.py --port 8080"
-                                             Text="{x:Bind ViewModel.Chat.TransportConfig.StdioArgs, Mode=TwoWay}"/>
-                                </StackPanel>
-
-                                <StackPanel Spacing="12"
-                                            Visibility="{x:Bind ViewModel.Chat.TransportConfig.IsStdio, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}">
-                                    <TextBox Header="服务器地址"
-                                             PlaceholderText="wss://example.com 或 http://localhost:8080/sse"
-                                             Text="{x:Bind ViewModel.Chat.TransportConfig.RemoteUrl, Mode=TwoWay}"/>
-                                </StackPanel>
-
-                                <InfoBar IsOpen="{x:Bind ViewModel.HasSelectedProfile, Mode=OneWay}"
-                                         Severity="Informational"
-                                         Title="当前预设"
-                                         Message="{x:Bind ViewModel.SelectedProfileName, Mode=OneWay}"
-                                         IsClosable="False"/>
-
-                                <InfoBar IsOpen="{x:Bind ViewModel.IsProfileDirty, Mode=OneWay}"
-                                         Severity="Warning"
-                                         Title="未保存的更改"
-                                         Message="当前配置已偏离所选预设。"
-                                         IsClosable="False">
-                                    <InfoBar.ActionButton>
-                                        <Button Content="更新预设"
-                                                Command="{x:Bind ViewModel.UpdateSelectedProfileFromCurrentCommand}"/>
-                                    </InfoBar.ActionButton>
-                                </InfoBar>
-
-                                <InfoBar IsOpen="{x:Bind ViewModel.HasSelectedProfile, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
-                                         Severity="Informational"
-                                         Title="未选择预设"
-                                         Message="你可以把当前配置保存为预设，方便下次一键切换。"
-                                         IsClosable="False">
-                                    <InfoBar.ActionButton>
-                                        <Button Content="保存为预设"
-                                                Command="{x:Bind ViewModel.SaveCurrentAsNewProfileCommand}"/>
-                                    </InfoBar.ActionButton>
-                                </InfoBar>
-
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="8"
-                                            HorizontalAlignment="Right"
-                                            Visibility="{x:Bind ViewModel.IsProfileDirty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <Button Content="另存为新预设"
-                                            Style="{StaticResource SubtleButtonStyle}"
-                                            Command="{x:Bind ViewModel.SaveCurrentAsCopyCommand}"/>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>

@@ -2,20 +2,93 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SalmonEgg.Domain.Models;
+using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
+using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.Views.Chat
 {
     public sealed partial class ChatView : Page
     {
+        private static bool _autoConnectAttempted;
+
         public ChatViewModel ViewModel { get; }
+        private readonly IConfigurationService _configurationService;
+        private readonly AppPreferencesViewModel _preferences;
 
         public ChatView()
         {
             // 从全局服务容器获取 ViewModel 以确保状态在导航间持久化
             ViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
+            _configurationService = App.ServiceProvider.GetRequiredService<IConfigurationService>();
+            _preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
 
             this.InitializeComponent();
+
+            Loaded += OnLoaded;
+        }
+
+        private async void OnLoaded(object sender, RoutedEventArgs e)
+        {
+            if (_autoConnectAttempted)
+            {
+                return;
+            }
+
+            _autoConnectAttempted = true;
+
+            // If there is no prior ACP profile, we'll show a prompt component later (not implemented yet).
+            var profileId = _preferences.LastSelectedServerId;
+            if (string.IsNullOrWhiteSpace(profileId))
+            {
+                return;
+            }
+
+            if (ViewModel.IsConnected || ViewModel.IsConnecting || ViewModel.IsInitializing)
+            {
+                return;
+            }
+
+            ServerConfiguration? config;
+            try
+            {
+                config = await _configurationService.LoadConfigurationAsync(profileId);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (config == null)
+            {
+                return;
+            }
+
+            ApplyServerConfigurationToTransportConfig(config);
+
+            try
+            {
+                await ViewModel.ApplyTransportConfigCommand.ExecuteAsync(null);
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplyServerConfigurationToTransportConfig(ServerConfiguration config)
+        {
+            ViewModel.TransportConfig.SelectedTransportType = config.Transport;
+
+            if (config.Transport == TransportType.Stdio)
+            {
+                ViewModel.TransportConfig.StdioCommand = config.StdioCommand ?? string.Empty;
+                ViewModel.TransportConfig.StdioArgs = config.StdioArgs ?? string.Empty;
+            }
+            else
+            {
+                ViewModel.TransportConfig.RemoteUrl = config.ServerUrl ?? string.Empty;
+            }
         }
 
         private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)

@@ -1,10 +1,9 @@
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using SalmonEgg.Domain.Models;
-using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Settings;
-using SalmonEgg.Presentation.Views;
 
 namespace SalmonEgg.Presentation.Views.Settings;
 
@@ -24,72 +23,35 @@ public sealed partial class AcpConnectionSettingsPage : Page
         await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
     }
 
-    private async void OnAddProfileClick(object sender, RoutedEventArgs e)
+    private void OnCrumbSettingsClick(object sender, RoutedEventArgs e)
     {
-        var editorVm = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
-        editorVm.LoadNewFromTransportConfig(ViewModel.Chat.TransportConfig, "新预设");
-
-        var dialog = new ConfigurationEditorDialog(editorVm);
-        dialog.XamlRoot = XamlRoot;
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
-            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
-        }
+        FindMainPage()?.NavigateToSettingsSubPage("General");
     }
 
-    private async void OnEditProfileClick(object sender, RoutedEventArgs e)
+    private MainPage? FindMainPage()
     {
-        if (sender is not Button button || button.Tag is not ServerConfiguration config)
+        DependencyObject? current = this;
+        while (current != null && current is not MainPage)
         {
-            return;
+            current = VisualTreeHelper.GetParent(current);
         }
 
-        var editorVm = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
-        editorVm.LoadConfiguration(config);
-
-        var dialog = new ConfigurationEditorDialog(editorVm);
-        dialog.XamlRoot = XamlRoot;
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
-            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
-        }
+        return current as MainPage;
     }
 
-    private async void OnDeleteProfileClick(object sender, RoutedEventArgs e)
+    private void OnAddProfileClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.Tag is not ServerConfiguration config)
-        {
-            return;
-        }
-
-        await ViewModel.Profiles.DeleteCommand.ExecuteAsync(config);
+        Frame?.Navigate(typeof(AgentProfileEditorPage), new AgentProfileEditorArgs(isEditing: false, profileId: null));
     }
 
-    private async void OnEditProfileMenuClick(object sender, RoutedEventArgs e)
+    private void OnEditProfileMenuClick(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuFlyoutItem item || item.Tag is not ServerConfiguration config)
         {
             return;
         }
 
-        var editorVm = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
-        editorVm.LoadConfiguration(config);
-
-        var dialog = new ConfigurationEditorDialog(editorVm);
-        dialog.XamlRoot = XamlRoot;
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
-            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
-        }
+        Frame?.Navigate(typeof(AgentProfileEditorPage), new AgentProfileEditorArgs(isEditing: true, profileId: config.Id));
     }
 
     private async void OnDeleteProfileMenuClick(object sender, RoutedEventArgs e)

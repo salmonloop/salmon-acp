@@ -19,7 +19,13 @@
         <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="28">
-                <TextBlock Text="数据与存储" FontSize="28" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+                        <HyperlinkButton Content="设置"
+                                         Style="{StaticResource SettingsBreadcrumbLinkStyle}"
+                                         Click="OnCrumbSettingsClick"/>
+                        <TextBlock Text="›" Style="{StaticResource SettingsBreadcrumbSeparatorTextStyle}"/>
+                        <TextBlock Text="数据与存储" Style="{StaticResource SettingsBreadcrumbCurrentTextStyle}"/>
+                    </StackPanel>
 
             <StackPanel Spacing="12">
                 <TextBlock Text="隐私" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>

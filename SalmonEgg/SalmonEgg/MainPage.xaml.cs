@@ -29,6 +29,7 @@ public sealed partial class MainPage : Page
     // 公开暴露导航列表，以便子页面可以触发全局导航切换
     public ListView MainRailNavList => MainRailNav;
     public ListView BottomRailNavList => BottomRailNav;
+    public ListView SettingsSubMenuListView => SettingsSubMenuList;
 
     public MainPage()
     {
@@ -82,6 +83,49 @@ public sealed partial class MainPage : Page
         // 5. 启动后默认进入对话界面
         NavigateTo(typeof(ChatView));
         App.BootLog("MainPage: navigated to ChatView");
+    }
+
+    public void NavigateToSettingsSubPage(string key)
+    {
+        // Ensure Settings panel is visible.
+        SubMenuColumn.Visibility = Visibility.Visible;
+        ChatSubNavPanel.Visibility = Visibility.Collapsed;
+        SettingsSubNavPanel.Visibility = Visibility.Visible;
+
+        SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
+        try
+        {
+            var index = key switch
+            {
+                "General" => 0,
+                "Appearance" => 1,
+                "AgentAcp" => 2,
+                "DataStorage" => 3,
+                "Shortcuts" => 4,
+                "Diagnostics" => 5,
+                "About" => 6,
+                _ => 0
+            };
+            SettingsSubMenuList.SelectedIndex = index;
+        }
+        finally
+        {
+            SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
+        }
+
+        var pageType = key switch
+        {
+            "General" => typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage),
+            "Appearance" => typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage),
+            "AgentAcp" => typeof(SalmonEgg.Presentation.Views.Settings.AcpConnectionSettingsPage),
+            "DataStorage" => typeof(SalmonEgg.Presentation.Views.Settings.DataStorageSettingsPage),
+            "Shortcuts" => typeof(SalmonEgg.Presentation.Views.Settings.ShortcutsSettingsPage),
+            "Diagnostics" => typeof(SalmonEgg.Presentation.Views.Settings.DiagnosticsSettingsPage),
+            "About" => typeof(SalmonEgg.Presentation.Views.Settings.AboutPage),
+            _ => typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage)
+        };
+
+        NavigateTo(pageType);
     }
 
     private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)

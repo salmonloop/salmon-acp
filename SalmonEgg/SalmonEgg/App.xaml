@@ -36,6 +36,33 @@
             <!-- Settings layout (Win11-like): fixed content column on wide windows, fluid on narrow ones -->
             <x:Double x:Key="SettingsContentMaxWidth">780</x:Double>
 
+            <!-- Win11-like breadcrumb (merged with title) -->
+            <Style x:Key="SettingsBreadcrumbLinkStyle" TargetType="HyperlinkButton">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="FontSize" Value="30" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="SettingsBreadcrumbCurrentTextStyle" TargetType="TextBlock">
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="FontSize" Value="30" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="SettingsBreadcrumbSeparatorTextStyle" TargetType="TextBlock">
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="FontSize" Value="30" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Opacity" Value="0.55" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
             <!-- 定义 SubtleButtonStyle 兼容样式 -->
             <!-- 解决 "Couldn't statically resolve resource SubtleButtonStyle" 警告 -->
             <Style x:Key="SubtleButtonStyle" TargetType="Button">

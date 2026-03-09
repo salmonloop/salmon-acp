@@ -77,6 +77,36 @@ public partial class ConfigurationEditorViewModel(
     public bool IsEditing { get; private set; }
     public ServerConfiguration Configuration { get; private set; } = new();
 
+    public void LoadBlankConfiguration()
+    {
+        IsEditing = false;
+        Configuration = new ServerConfiguration
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = string.Empty,
+            Transport = TransportType.Stdio,
+            ServerUrl = string.Empty,
+            StdioCommand = string.Empty,
+            StdioArgs = string.Empty,
+            HeartbeatInterval = 30,
+            ConnectionTimeout = 10
+        };
+
+        Name = Configuration.Name;
+        ServerUrl = Configuration.ServerUrl;
+        StdioCommand = Configuration.StdioCommand;
+        StdioArgs = Configuration.StdioArgs;
+        Transport = Configuration.Transport;
+        SelectedTransportOption = TransportOptions.FirstOrDefault(o => o.Type == Transport) ?? TransportOptions.FirstOrDefault();
+        Token = string.Empty;
+        ApiKey = string.Empty;
+        ProxyEnabled = false;
+        ProxyUrl = string.Empty;
+        HeartbeatInterval = Configuration.HeartbeatInterval;
+        ConnectionTimeout = Configuration.ConnectionTimeout;
+        ClearError();
+    }
+
     partial void OnTransportChanged(TransportType value)
     {
         SelectedTransportOption = TransportOptions.FirstOrDefault(o => o.Type == value) ?? TransportOptions.FirstOrDefault();
