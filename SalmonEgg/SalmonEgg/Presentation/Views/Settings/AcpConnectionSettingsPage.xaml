@@ -22,7 +22,7 @@
         <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="28">
-                    <TextBlock Text="连接（ACP）"
+                    <TextBlock Text="Agent (ACP)"
                                FontSize="28"
                                FontWeight="Bold"
                                Margin="0,0,0,12"/>
@@ -166,7 +166,7 @@
                                          IsClosable="False">
                                     <InfoBar.ActionButton>
                                         <Button Content="保存为预设"
-                                                Click="OnSaveAsNewFromCurrentClick"/>
+                                                Command="{x:Bind ViewModel.SaveCurrentAsNewProfileCommand}"/>
                                     </InfoBar.ActionButton>
                                 </InfoBar>
 
@@ -176,7 +176,7 @@
                                             Visibility="{x:Bind ViewModel.IsProfileDirty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                     <Button Content="另存为新预设"
                                             Style="{StaticResource SubtleButtonStyle}"
-                                            Click="OnSaveAsNewFromCurrentClick"/>
+                                            Command="{x:Bind ViewModel.SaveCurrentAsCopyCommand}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

@@ -70,23 +70,4 @@ public sealed partial class AcpConnectionSettingsPage : Page
 
         await ViewModel.Profiles.DeleteCommand.ExecuteAsync(config);
     }
-
-    private async void OnSaveAsNewFromCurrentClick(object sender, RoutedEventArgs e)
-    {
-        var baseName = ViewModel.Profiles.SelectedProfile?.Name;
-        var name = string.IsNullOrWhiteSpace(baseName) ? "新预设" : $"复制 - {baseName}";
-
-        var editorVm = App.ServiceProvider.GetRequiredService<ConfigurationEditorViewModel>();
-        editorVm.LoadNewFromTransportConfig(ViewModel.Chat.TransportConfig, name);
-
-        var dialog = new ConfigurationEditorDialog(editorVm);
-        dialog.XamlRoot = XamlRoot;
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            await ViewModel.Profiles.RefreshCommand.ExecuteAsync(null);
-            ViewModel.Profiles.SelectedProfile = ViewModel.Profiles.Profiles.FirstOrDefault(p => p.Id == editorVm.Configuration.Id);
-        }
-    }
 }

@@ -245,45 +245,46 @@ public sealed partial class MainPage : Page
 
         if (sender is ListView listView && listView.SelectedItem is ListViewItem item)
         {
+            var key = item.Tag?.ToString() ?? string.Empty;
             string content = item.Content?.ToString() ?? "";
 
-            if (content.Contains("常规"))
+            if (key == "General" || content.Contains("常规"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage));
                 return;
             }
 
-            if (content.Contains("外观"))
+            if (key == "Appearance" || content.Contains("外观"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage));
                 return;
             }
 
-            if (content.Contains("连接"))
+            if (key == "AgentAcp" || content.Contains("Agent") || content.Contains("ACP") || content.Contains("连接"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AcpConnectionSettingsPage));
                 return;
             }
 
-            if (content.Contains("数据"))
+            if (key == "DataStorage" || content.Contains("数据"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.DataStorageSettingsPage));
                 return;
             }
 
-            if (content.Contains("快捷键"))
+            if (key == "Shortcuts" || content.Contains("快捷键"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.ShortcutsSettingsPage));
                 return;
             }
 
-            if (content.Contains("诊断"))
+            if (key == "Diagnostics" || content.Contains("诊断"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.DiagnosticsSettingsPage));
                 return;
             }
 
-            if (content.Contains("关于"))
+            if (key == "About" || content.Contains("关于"))
             {
                 NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AboutPage));
                 return;

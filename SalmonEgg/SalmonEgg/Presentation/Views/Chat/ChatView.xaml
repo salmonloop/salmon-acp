@@ -63,13 +63,13 @@
                                FontWeight="Bold"
                                HorizontalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock Text="请前往“设置 > 连接”配置并连接到您的 Agent 服务器"
+                    <TextBlock Text="请前往“设置 > Agent (ACP)”配置并连接到您的 Agent"
                                FontSize="14"
                                Opacity="0.7"
                                HorizontalAlignment="Center"
                                TextAlignment="Center"/>
                 </StackPanel>
-                <Button Content="去配置连接"
+                <Button Content="去配置 Agent"
                         HorizontalAlignment="Center"
                         Style="{StaticResource AccentButtonStyle}"
                         Padding="24,8"

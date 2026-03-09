@@ -42,6 +42,41 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     public bool CanUpdateSelectedProfile => HasSelectedProfile && IsProfileDirty;
 
+    [RelayCommand]
+    private async Task SaveCurrentAsNewProfileAsync()
+    {
+        try
+        {
+            var profile = CreateProfileFromCurrentConfig(GenerateDefaultProfileName());
+            await Profiles.SaveNewAsync(profile);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save current config as new profile");
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveCurrentAsCopyAsync()
+    {
+        try
+        {
+            var baseName = Profiles.SelectedProfile?.Name;
+            if (string.IsNullOrWhiteSpace(baseName))
+            {
+                await SaveCurrentAsNewProfileAsync();
+                return;
+            }
+
+            var profile = CreateProfileFromCurrentConfig(GenerateUniqueName($"复制 - {baseName.Trim()}"));
+            await Profiles.SaveNewAsync(profile);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save current config as profile copy");
+        }
+    }
+
     public AcpConnectionSettingsViewModel(
         ChatViewModel chatViewModel,
         AcpProfilesViewModel profiles,
@@ -207,6 +242,70 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         {
             UpdateDirtyState();
         }
+    }
+
+    private ServerConfiguration CreateProfileFromCurrentConfig(string name)
+    {
+        var cfg = Chat.TransportConfig;
+        var transport = cfg.SelectedTransportType;
+
+        return new ServerConfiguration
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = name,
+            Transport = transport,
+            ServerUrl = transport == TransportType.Stdio ? string.Empty : (cfg.RemoteUrl ?? string.Empty),
+            StdioCommand = transport == TransportType.Stdio ? (cfg.StdioCommand ?? string.Empty) : string.Empty,
+            StdioArgs = transport == TransportType.Stdio ? (cfg.StdioArgs ?? string.Empty) : string.Empty,
+            HeartbeatInterval = 30,
+            ConnectionTimeout = 10
+        };
+    }
+
+    private string GenerateDefaultProfileName()
+    {
+        var cfg = Chat.TransportConfig;
+        var transport = cfg.SelectedTransportType;
+
+        string baseName;
+        if (transport == TransportType.Stdio)
+        {
+            var cmd = (cfg.StdioCommand ?? string.Empty).Trim();
+            baseName = string.IsNullOrWhiteSpace(cmd) ? "本地 Agent" : $"本地 - {cmd}";
+        }
+        else
+        {
+            var url = (cfg.RemoteUrl ?? string.Empty).Trim();
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host))
+            {
+                baseName = $"远程 - {uri.Host}";
+            }
+            else
+            {
+                baseName = "远程 Agent";
+            }
+        }
+
+        return GenerateUniqueName(baseName);
+    }
+
+    private string GenerateUniqueName(string baseName)
+    {
+        baseName = string.IsNullOrWhiteSpace(baseName) ? "新预设" : baseName.Trim();
+        if (Profiles.Profiles.Count == 0)
+        {
+            return baseName;
+        }
+
+        var candidate = baseName;
+        var index = 2;
+        while (Profiles.Profiles.Any(p => string.Equals(p.Name, candidate, StringComparison.OrdinalIgnoreCase)))
+        {
+            candidate = $"{baseName} ({index})";
+            index++;
+        }
+
+        return candidate;
     }
 
     public void Dispose()

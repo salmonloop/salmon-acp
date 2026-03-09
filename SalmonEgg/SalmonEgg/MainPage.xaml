@@ -288,13 +288,13 @@
                           SelectionMode="Single"
                           ItemContainerStyle="{StaticResource SubMenuItemStyle}"
                           SelectionChanged="OnSubMenuSelectionChanged">
-                    <ListViewItem Content="常规" />
-                    <ListViewItem Content="外观" />
-                    <ListViewItem Content="连接" />
-                    <ListViewItem Content="数据与存储" />
-                    <ListViewItem Content="快捷键" />
-                    <ListViewItem Content="诊断与日志" />
-                    <ListViewItem Content="关于" />
+                    <ListViewItem Content="常规" Tag="General" />
+                    <ListViewItem Content="外观" Tag="Appearance" />
+                    <ListViewItem Content="Agent (ACP)" Tag="AgentAcp" />
+                    <ListViewItem Content="数据与存储" Tag="DataStorage" />
+                    <ListViewItem Content="快捷键" Tag="Shortcuts" />
+                    <ListViewItem Content="诊断与日志" Tag="Diagnostics" />
+                    <ListViewItem Content="关于" Tag="About" />
                 </ListView>
             </Grid>
 
