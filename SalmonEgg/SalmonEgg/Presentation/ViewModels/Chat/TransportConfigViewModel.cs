@@ -12,6 +12,9 @@ public partial class TransportConfigViewModel : ObservableObject
     /// 当前选择的传输类型
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStdio))]
+    [NotifyPropertyChangedFor(nameof(IsWebSocket))]
+    [NotifyPropertyChangedFor(nameof(IsHttpSse))]
     private TransportType _selectedTransportType = TransportType.Stdio;
 
     /// <summary>

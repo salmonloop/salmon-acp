@@ -6,6 +6,7 @@ using FluentValidation;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Application.Validators;
 using SalmonEgg.Domain.Models;
+using SalmonEgg.Domain.Services;
 
 namespace SalmonEgg.Presentation.ViewModels;
 
@@ -13,9 +14,13 @@ namespace SalmonEgg.Presentation.ViewModels;
 /// 配置编辑器 ViewModel，用于添加/编辑服务器配置
 /// Requirements: 4.1, 5.1, 5.3
 /// </summary>
-public partial class ConfigurationEditorViewModel(IValidator<ServerConfiguration> validator, ILogger<ConfigurationEditorViewModel> logger) : ViewModelBase(logger)
+public partial class ConfigurationEditorViewModel(
+    IValidator<ServerConfiguration> validator,
+    IConfigurationService configurationService,
+    ILogger<ConfigurationEditorViewModel> logger) : ViewModelBase(logger)
 {
     private readonly IValidator<ServerConfiguration> _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+    private readonly IConfigurationService _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
 
     [ObservableProperty]
     private string _name = string.Empty;
@@ -126,7 +131,7 @@ public partial class ConfigurationEditorViewModel(IValidator<ServerConfiguration
                 return;
             }
 
-            OnSaveRequested?.Invoke(this, Configuration);
+            await _configurationService.SaveConfigurationAsync(Configuration);
         }
         catch (Exception ex)
         {
@@ -135,9 +140,8 @@ public partial class ConfigurationEditorViewModel(IValidator<ServerConfiguration
         }
     }
 
-    public event EventHandler<ServerConfiguration>? OnSaveRequested;
-    public event EventHandler? OnCancelRequested;
-
     [RelayCommand]
-    public void Cancel() => OnCancelRequested?.Invoke(this, EventArgs.Empty);
+    public void Cancel()
+    {
+    }
 }

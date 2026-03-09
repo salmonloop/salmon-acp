@@ -6,8 +6,8 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
-using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Navigation;
+using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Views;
 using SalmonEgg.Presentation.Views.Chat;
 
@@ -21,7 +21,7 @@ public sealed partial class MainPage : Page
     private double _subMenuResizeStartX;
     private double _subMenuResizeStartWidth;
 
-    public SettingsViewModel SettingsVM { get; }
+    public AppPreferencesViewModel Preferences { get; }
     public SidebarViewModel SidebarVM { get; }
 
 
@@ -34,7 +34,7 @@ public sealed partial class MainPage : Page
     {
         App.BootLog("MainPage: ctor start");
         // 1. 在初始化组件前获取 ViewModel，确保 x:Bind 绑定正常
-        SettingsVM = App.ServiceProvider.GetRequiredService<SettingsViewModel>();
+        Preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
         SidebarVM = App.ServiceProvider.GetRequiredService<SidebarViewModel>();
 
         this.InitializeComponent();
@@ -48,11 +48,12 @@ public sealed partial class MainPage : Page
         }
 #endif
 
-        // 2. 监听全局设置变化（如动画开关）
-        SettingsVM.PropertyChanged += OnSettingsViewModelPropertyChanged;
+        // 2. 监听全局设置变化（如动画开关、主题、背景材质）
+        Preferences.PropertyChanged += OnPreferencesPropertyChanged;
 
         // 3. 初始化主题与动画状态
         ApplyTheme();
+        ApplyBackdrop();
         UpdateNavigationTransitions();
         App.BootLog("MainPage: transitions updated");
 
@@ -83,22 +84,27 @@ public sealed partial class MainPage : Page
         App.BootLog("MainPage: navigated to ChatView");
     }
 
-    private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SettingsVM.IsAnimationEnabled))
+        if (e.PropertyName == nameof(Preferences.IsAnimationEnabled))
         {
             UpdateNavigationTransitions();
         }
 
-        if (e.PropertyName == nameof(SettingsVM.Theme))
+        if (e.PropertyName == nameof(Preferences.Theme))
         {
             ApplyTheme();
+        }
+
+        if (e.PropertyName == nameof(Preferences.Backdrop))
+        {
+            ApplyBackdrop();
         }
     }
 
     private void ApplyTheme()
     {
-        var theme = SettingsVM.Theme?.Trim();
+        var theme = Preferences.Theme?.Trim();
         var requested = theme switch
         {
             "Light" => ElementTheme.Light,
@@ -112,10 +118,48 @@ public sealed partial class MainPage : Page
         }
     }
 
+    private void ApplyBackdrop()
+    {
+#if WINDOWS
+        try
+        {
+            var window = App.MainWindowInstance;
+            if (window == null)
+            {
+                return;
+            }
+
+            var pref = (Preferences.Backdrop ?? "System").Trim();
+            Microsoft.UI.Xaml.Media.SystemBackdrop? backdrop = pref switch
+            {
+                "Mica" => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)
+                    ? new Microsoft.UI.Xaml.Media.MicaBackdrop()
+                    : OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+                        ? new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop()
+                        : null,
+                "Acrylic" => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+                    ? new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop()
+                    : null,
+                "Solid" => null,
+                _ => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)
+                    ? new Microsoft.UI.Xaml.Media.MicaBackdrop()
+                    : OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+                        ? new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop()
+                        : null
+            };
+
+            window.SystemBackdrop = backdrop;
+        }
+        catch
+        {
+        }
+#endif
+    }
+
     private void UpdateNavigationTransitions()
     {
         // 根据全局设置动态开启或关闭 Frame 的过渡动画
-        if (SettingsVM.IsAnimationEnabled)
+        if (Preferences.IsAnimationEnabled)
         {
             ContentFrame.ContentTransitions = new TransitionCollection
             {
@@ -135,7 +179,7 @@ public sealed partial class MainPage : Page
     private void NavigateTo(Type pageType)
     {
 #if WINDOWS
-        var transition = SettingsVM.IsAnimationEnabled
+        var transition = Preferences.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
         ContentFrame.Navigate(pageType, null, transition);
@@ -187,7 +231,7 @@ public sealed partial class MainPage : Page
             SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
             SettingsSubMenuList.SelectedIndex = 1; // "外观"
             SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
-            NavigateTo(typeof(DisplaySettingsPage));
+            NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage));
         }
     }
 
@@ -205,12 +249,13 @@ public sealed partial class MainPage : Page
 
             if (content.Contains("外观") || content.Contains("常规"))
             {
-                NavigateTo(typeof(DisplaySettingsPage));
+                NavigateTo(content.Contains("常规")
+                    ? typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage)
+                    : typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage));
             }
-            else if (content.Contains("连接状态"))
+            else if (content.Contains("连接"))
             {
-                // 连接配置已整合至 SettingsPage
-                NavigateTo(typeof(SettingsPage));
+                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AcpConnectionSettingsPage));
             }
         }
     }
@@ -281,6 +326,6 @@ public sealed partial class MainPage
     protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
-        SettingsVM.PropertyChanged -= OnSettingsViewModelPropertyChanged;
+        Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
     }
 }

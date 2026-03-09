@@ -5,17 +5,18 @@
     xmlns:local="using:SalmonEgg.Presentation.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:settings="using:SalmonEgg.Presentation.ViewModels.Settings"
     mc:Ignorable="d"
     Background="Transparent"
     AllowDrop="False">
 
     <ScrollViewer Padding="40,24">
         <StackPanel Spacing="32" MaxWidth="800" HorizontalAlignment="Left">
-            <TextBlock Text="常规设置" FontSize="28" FontWeight="Bold" Margin="0,0,0,12"/>
+            <TextBlock Text="常规" FontSize="28" FontWeight="Bold" Margin="0,0,0,12"/>
 
             <!-- 基础选项组 -->
             <StackPanel Spacing="12">
-                <TextBlock Text="基础选项" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock Text="启动与窗口" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
 
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
@@ -24,14 +25,14 @@
                         Padding="16">
                     <StackPanel Spacing="16">
                         <ToggleSwitch Header="开机自动启动"
-                                      IsOn="False"
+                                      IsOn="{x:Bind Preferences.LaunchOnStartup, Mode=TwoWay}"
                                       OnContent="开启"
                                       OffContent="关闭"/>
 
                         <MenuFlyoutSeparator Margin="-16,0" Visibility="Visible"/>
 
                         <ToggleSwitch Header="最小化到系统托盘"
-                                      IsOn="True"
+                                      IsOn="{x:Bind Preferences.MinimizeToTray, Mode=TwoWay}"
                                       OnContent="开启"
                                       OffContent="关闭"/>
                     </StackPanel>
@@ -49,9 +50,12 @@
                         Padding="16">
                     <StackPanel Spacing="8">
                         <TextBlock Text="选择界面语言" FontWeight="Medium" Margin="0,0,0,4"/>
-                        <ComboBox SelectedIndex="0" Width="240">
-                            <ComboBoxItem Content="简体中文 (Chinese Simplified)"/>
-                            <ComboBoxItem Content="English"/>
+                        <ComboBox Width="240"
+                                  SelectedValue="{x:Bind Preferences.Language, Mode=TwoWay}"
+                                  SelectedValuePath="Tag">
+                            <ComboBoxItem Content="跟随系统" Tag="System" />
+                            <ComboBoxItem Content="简体中文" Tag="zh-CN" />
+                            <ComboBoxItem Content="English" Tag="en-US" />
                         </ComboBox>
                         <TextBlock Text="部分设置在重新启动应用后生效"
                                    FontSize="12"
@@ -76,15 +80,15 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center" Spacing="2">
-                            <TextBlock Text="清理聊天记录" FontWeight="Medium"/>
-                            <TextBlock Text="永久删除本地所有会话历史，此操作不可撤销"
+                            <TextBlock Text="清理本地缓存（占位）" FontWeight="Medium"/>
+                            <TextBlock Text="后续将支持会话导出与缓存清理"
                                        FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <Button Grid.Column="1"
-                                Content="立即清理"
-                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                VerticalAlignment="Center"/>
+                                Content="暂不可用"
+                                IsEnabled="False"
+                                VerticalAlignment="Center" />
                     </Grid>
                 </Border>
             </StackPanel>

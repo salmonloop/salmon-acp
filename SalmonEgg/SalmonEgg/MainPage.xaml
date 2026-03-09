@@ -288,7 +288,7 @@
                           SelectionChanged="OnSubMenuSelectionChanged">
                     <ListViewItem Content="常规" />
                     <ListViewItem Content="外观" />
-                    <ListViewItem Content="连接状态" />
+                    <ListViewItem Content="连接" />
                 </ListView>
             </Grid>
 

@@ -40,7 +40,11 @@ public sealed class AppSettingsService : IAppSettingsService
             {
                 Theme = string.IsNullOrWhiteSpace(model.Theme) ? "System" : model.Theme,
                 IsAnimationEnabled = model.IsAnimationEnabled,
-                LastSelectedServerId = string.IsNullOrWhiteSpace(model.LastSelectedServerId) ? null : model.LastSelectedServerId
+                LastSelectedServerId = string.IsNullOrWhiteSpace(model.LastSelectedServerId) ? null : model.LastSelectedServerId,
+                LaunchOnStartup = model.LaunchOnStartup,
+                MinimizeToTray = model.MinimizeToTray,
+                Language = string.IsNullOrWhiteSpace(model.Language) ? "System" : model.Language,
+                Backdrop = string.IsNullOrWhiteSpace(model.Backdrop) ? "System" : model.Backdrop
             };
         }
         catch (YamlException)
@@ -65,7 +69,11 @@ public sealed class AppSettingsService : IAppSettingsService
             UpdatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             Theme = settings.Theme ?? "System",
             IsAnimationEnabled = settings.IsAnimationEnabled,
-            LastSelectedServerId = settings.LastSelectedServerId ?? string.Empty
+            LastSelectedServerId = settings.LastSelectedServerId ?? string.Empty,
+            LaunchOnStartup = settings.LaunchOnStartup,
+            MinimizeToTray = settings.MinimizeToTray,
+            Language = settings.Language ?? "System",
+            Backdrop = settings.Backdrop ?? "System"
         };
 
         var yaml = YamlSerialization.CreateSerializer().Serialize(model);

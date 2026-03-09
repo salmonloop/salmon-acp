@@ -144,7 +144,7 @@ namespace SalmonEgg.Application.Services.Chat
                     var newSessionParams = new SessionNewParams
                     {
                         Cwd = Environment.CurrentDirectory,
-                        McpServers = null
+                        McpServers = Array.Empty<object>()
                     };
 
                     var response = await _chatService.CreateSessionAsync(newSessionParams);

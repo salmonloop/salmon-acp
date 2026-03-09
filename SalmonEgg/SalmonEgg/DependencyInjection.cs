@@ -22,6 +22,7 @@ using SalmonEgg.Infrastructure.Client;
 using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
+using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg;
 
@@ -166,8 +167,6 @@ public static class DependencyInjection
     {
         // 原有 ViewModel
         services.AddTransient<MainViewModel>();
-        // Must be singleton so settings are shared across pages (MainPage listens for changes).
-        services.AddSingleton<SettingsViewModel>();
         services.AddTransient<ConfigurationEditorViewModel>();
 
         // 新的 Chat ViewModel（重构后）
@@ -176,6 +175,15 @@ public static class DependencyInjection
 
         // Sidebar navigation state (projects/sessions)
         services.AddSingleton<SidebarViewModel>();
+
+        // App preferences used by General/Appearance settings and window behaviors.
+        services.AddSingleton<AppPreferencesViewModel>();
+
+        // ACP connection profiles (server presets)
+        services.AddSingleton<AcpProfilesViewModel>();
+
+        // ACP connection settings page view model (wraps Chat + Profiles)
+        services.AddSingleton<AcpConnectionSettingsViewModel>();
     }
 
     private static string GetAppDataPath()

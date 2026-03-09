@@ -13,5 +13,15 @@ internal sealed class AppSettingsYamlV1
     public bool IsAnimationEnabled { get; set; } = true;
 
     public string LastSelectedServerId { get; set; } = string.Empty;
+
+    // General
+    public bool LaunchOnStartup { get; set; }
+
+    public bool MinimizeToTray { get; set; } = true;
+
+    public string Language { get; set; } = "System";
+
+    // Appearance
+    public string Backdrop { get; set; } = "System";
 }
 
