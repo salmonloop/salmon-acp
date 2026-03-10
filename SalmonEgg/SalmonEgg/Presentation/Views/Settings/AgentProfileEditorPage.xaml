@@ -20,37 +20,28 @@
         <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="18">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,0,0,10">
-                        <Button Style="{StaticResource SubtleButtonStyle}"
-                                Click="OnBackClick"
-                                ToolTipService.ToolTip="返回"
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="10"
+                                Margin="0,0,0,10"
                                 VerticalAlignment="Center">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE72B;"/>
-                        </Button>
-
-                        <StackPanel Grid.Column="1"
-                                    Orientation="Horizontal"
-                                    Spacing="10"
-                                    VerticalAlignment="Center">
-                            <HyperlinkButton x:Name="CrumbSettingsButton"
-                                             Content="设置"
-                                             Style="{StaticResource SettingsBreadcrumbLinkStyle}"
-                                             Click="OnCrumbSettingsClick"/>
-                            <TextBlock x:Name="CrumbSep1"
-                                       Text="›"
-                                       Style="{StaticResource SettingsBreadcrumbSeparatorTextStyle}"/>
-                            <HyperlinkButton x:Name="CrumbAgentButton"
-                                             Content="Agent (ACP)"
-                                             Style="{StaticResource SettingsBreadcrumbLinkStyle}"
-                                             Click="OnCrumbAgentClick"/>
-                            <TextBlock x:Name="CrumbSep2"
-                                       Text="›"
-                                       Style="{StaticResource SettingsBreadcrumbSeparatorTextStyle}"/>
-                            <TextBlock x:Name="CrumbCurrentText"
-                                       Text="{x:Bind PageTitle, Mode=OneWay}"
-                                       Style="{StaticResource SettingsBreadcrumbCurrentTextStyle}"/>
-                        </StackPanel>
-                    </Grid>
+                        <HyperlinkButton x:Name="CrumbSettingsButton"
+                                         Content="设置"
+                                         Style="{StaticResource SettingsBreadcrumbLinkStyle}"
+                                         Click="OnCrumbSettingsClick"/>
+                        <TextBlock x:Name="CrumbSep1"
+                                   Text="›"
+                                   Style="{StaticResource SettingsBreadcrumbSeparatorTextStyle}"/>
+                        <HyperlinkButton x:Name="CrumbAgentButton"
+                                         Content="Agent (ACP)"
+                                         Style="{StaticResource SettingsBreadcrumbLinkStyle}"
+                                         Click="OnCrumbAgentClick"/>
+                        <TextBlock x:Name="CrumbSep2"
+                                   Text="›"
+                                   Style="{StaticResource SettingsBreadcrumbSeparatorTextStyle}"/>
+                        <TextBlock x:Name="CrumbCurrentText"
+                                   Text="{x:Bind PageTitle, Mode=OneWay}"
+                                   Style="{StaticResource SettingsBreadcrumbCurrentTextStyle}"/>
+                    </StackPanel>
 
                     <InfoBar IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                              Severity="Error"

@@ -18,14 +18,12 @@
                 -->
                 <ResourceDictionary x:Key="Light">
                     <AcrylicBrush x:Key="LayerOnAcrylicFillColorDefaultBrush"
-                                  BackgroundSource="HostBackdrop"
                                   TintColor="#FFFFFF"
                                   TintOpacity="0.55"
                                   FallbackColor="#F7F7F7" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <AcrylicBrush x:Key="LayerOnAcrylicFillColorDefaultBrush"
-                                  BackgroundSource="HostBackdrop"
                                   TintColor="#1F1F1F"
                                   TintOpacity="0.45"
                                   FallbackColor="#1F1F1F" />
