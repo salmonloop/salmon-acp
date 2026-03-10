@@ -358,7 +358,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="工作区"
+                               Text="项目"
                                FontSize="16"
                                FontWeight="SemiBold"
                                Margin="20,24,16,16"
