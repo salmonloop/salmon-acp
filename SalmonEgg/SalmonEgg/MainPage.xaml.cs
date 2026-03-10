@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 #if WINDOWS
 using Microsoft.UI;
@@ -7,6 +10,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -24,18 +28,18 @@ namespace SalmonEgg;
 
 public sealed partial class MainPage : Page
 {
-    private const double SubMenuMinWidth = 200;
-    private const double SubMenuMaxWidth = 420;
+    private const double DefaultCompactPaneLength = 72;
+    private const double DefaultOpenPaneLength = 240;
     private const double RightPanelMinWidth = 240;
     private const double RightPanelMaxWidth = 520;
-    private bool _isResizingSubMenu;
-    private double _subMenuResizeStartX;
-    private double _subMenuResizeStartWidth;
     private bool _isResizingRightPanel;
     private double _rightPanelResizeStartX;
     private double _rightPanelResizeStartWidth;
     private string? _activeRightPanel;
     private bool _isLeftNavCollapsed;
+    private bool _suppressNavSelectionChanged;
+    private readonly Dictionary<object, NavigationViewItem> _navItemsByTag = new();
+    private readonly HashSet<ObservableCollection<SessionNavItemViewModel>> _watchedSessionCollections = new();
     private bool _hasNonClientDragRegions;
 #if WINDOWS
     private AppWindowTitleBar? _appWindowTitleBar;
@@ -43,13 +47,6 @@ public sealed partial class MainPage : Page
 
     public AppPreferencesViewModel Preferences { get; }
     public SidebarViewModel SidebarVM { get; }
-
-
-
-    // 公开暴露导航列表，以便子页面可以触发全局导航切换
-    public ListView MainRailNavList => MainRailNav;
-    public ListView BottomRailNavList => BottomRailNav;
-    public ListView SettingsSubMenuListView => SettingsSubMenuList;
 
     public MainPage()
     {
@@ -62,6 +59,7 @@ public sealed partial class MainPage : Page
         App.BootLog("MainPage: InitializeComponent done");
 
         Loaded += OnMainPageLoaded;
+        Unloaded += OnMainPageUnloaded;
         ContentFrame.Navigated += OnContentFrameNavigated;
         if (AppTitleBar != null)
         {
@@ -96,78 +94,259 @@ public sealed partial class MainPage : Page
         UpdateNavigationTransitions();
         App.BootLog("MainPage: transitions updated");
 
-        // 4. 初始化导航默认选中项（避免 XAML 初始化期间 SelectionChanged 触发导致 NRE）
-        MainRailNav.SelectionChanged -= OnMainRailNavSelectionChanged;
-        BottomRailNav.SelectionChanged -= OnBottomRailNavSelectionChanged;
-        SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
+        ConfigureNavigationView();
+
+        // 4. 启动后默认进入对话界面
+        NavigateToChat();
+        App.BootLog("MainPage: navigated to ChatView");
+    }
+
+    private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
+    {
+        SidebarVM.Projects.CollectionChanged -= OnProjectsCollectionChanged;
+        SidebarVM.PropertyChanged -= OnSidebarPropertyChanged;
+
+        foreach (var sessions in _watchedSessionCollections)
+        {
+            sessions.CollectionChanged -= OnSessionsCollectionChanged;
+        }
+        _watchedSessionCollections.Clear();
+    }
+
+    private sealed record NavTag(ProjectNavItemViewModel? Project = null, SessionNavItemViewModel? Session = null);
+
+    private void ConfigureNavigationView()
+    {
+        if (MainNavView == null || ChatNavRoot == null || SettingsNavRoot == null)
+        {
+            return;
+        }
+
+        // Wire up sources that drive the navigation structure.
+        SidebarVM.Projects.CollectionChanged += OnProjectsCollectionChanged;
+        SidebarVM.PropertyChanged += OnSidebarPropertyChanged;
+
+        // Map static settings items by Tag (string key).
+        RegisterNavItemByTag(GeneralSettingsNavItem);
+        RegisterNavItemByTag(AppearanceSettingsNavItem);
+        RegisterNavItemByTag(AgentAcpSettingsNavItem);
+        RegisterNavItemByTag(DataStorageSettingsNavItem);
+        RegisterNavItemByTag(ShortcutsSettingsNavItem);
+        RegisterNavItemByTag(DiagnosticsSettingsNavItem);
+        RegisterNavItemByTag(AboutSettingsNavItem);
+
+        ApplyLeftNavVisibility();
+        RebuildChatProjectMenu();
+    }
+
+    private void RegisterNavItemByTag(NavigationViewItem? item)
+    {
+        if (item?.Tag is string key && !string.IsNullOrWhiteSpace(key))
+        {
+            _navItemsByTag[key] = item;
+        }
+    }
+
+    private void OnProjectsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RebuildChatProjectMenu();
+    }
+
+    private void OnSidebarPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SidebarVM.SelectedProject))
+        {
+            SyncSelectedNavItemFromViewModel();
+        }
+    }
+
+    private void RebuildChatProjectMenu()
+    {
+        if (ChatNavRoot == null)
+        {
+            return;
+        }
+
+        // Rebuild to keep the hierarchy in sync (projects + sessions are dynamic).
+        ChatNavRoot.MenuItems.Clear();
+
+        foreach (var sessions in _watchedSessionCollections)
+        {
+            sessions.CollectionChanged -= OnSessionsCollectionChanged;
+        }
+        _watchedSessionCollections.Clear();
+
+        foreach (var project in SidebarVM.Projects)
+        {
+            if (project?.Sessions != null && _watchedSessionCollections.Add(project.Sessions))
+            {
+                project.Sessions.CollectionChanged += OnSessionsCollectionChanged;
+            }
+
+            var projectItem = new NavigationViewItem
+            {
+                Content = project.Name,
+                Tag = new NavTag(Project: project),
+                IsExpanded = project.IsExpanded
+            };
+
+            // Keep expand/collapse state in sync with the VM (used by other parts of the app).
+            projectItem.SetBinding(NavigationViewItem.IsExpandedProperty, new Binding
+            {
+                Source = project,
+                Path = new PropertyPath(nameof(ProjectNavItemViewModel.IsExpanded)),
+                Mode = BindingMode.TwoWay
+            });
+
+            foreach (var session in project.Sessions)
+            {
+                var sessionItem = new NavigationViewItem
+                {
+                    Content = session.Title,
+                    Tag = new NavTag(Project: project, Session: session)
+                };
+                projectItem.MenuItems.Add(sessionItem);
+            }
+
+            ChatNavRoot.MenuItems.Add(projectItem);
+        }
+
+        SyncSelectedNavItemFromViewModel();
+    }
+
+    private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RebuildChatProjectMenu();
+    }
+
+    private void SyncSelectedNavItemFromViewModel()
+    {
+        if (MainNavView == null || ChatNavRoot == null)
+        {
+            return;
+        }
+
+        var selectedProject = SidebarVM.SelectedProject;
+        var selectedSession = selectedProject?.SelectedSession;
+
+        NavigationViewItem? match = null;
+
+        if (selectedSession != null)
+        {
+            match = FindNavItemByTag(MainNavView.MenuItems, t => t is NavTag tag && ReferenceEquals(tag.Session, selectedSession));
+        }
+
+        match ??= selectedProject != null
+            ? FindNavItemByTag(MainNavView.MenuItems, t => t is NavTag tag && ReferenceEquals(tag.Project, selectedProject) && tag.Session == null)
+            : null;
+
+        if (match == null)
+        {
+            return;
+        }
+
+        _suppressNavSelectionChanged = true;
         try
         {
-            MainRailNav.SelectedItem = ChatNavItem;
-            BottomRailNav.SelectedIndex = -1;
-            SubMenuColumn.Visibility = Visibility.Visible;
-
-            ChatSubNavPanel.Visibility = Visibility.Visible;
-            SettingsSubNavPanel.Visibility = Visibility.Collapsed;
-
-            SettingsSubMenuList.SelectedIndex = -1;
+            MainNavView.SelectedItem = match;
         }
         finally
         {
-            MainRailNav.SelectionChanged += OnMainRailNavSelectionChanged;
-            BottomRailNav.SelectionChanged += OnBottomRailNavSelectionChanged;
-            SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
+            _suppressNavSelectionChanged = false;
+        }
+    }
+
+    private static NavigationViewItem? FindNavItemByTag(IList<object> items, Func<object?, bool> predicate)
+    {
+        foreach (var obj in items)
+        {
+            if (obj is NavigationViewItem nvi)
+            {
+                if (predicate(nvi.Tag))
+                {
+                    return nvi;
+                }
+
+                if (nvi.MenuItems is { Count: > 0 })
+                {
+                    var found = FindNavItemByTag(nvi.MenuItems, predicate);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
         }
 
-        // 5. 启动后默认进入对话界面
-        NavigateTo(typeof(ChatView));
-        UpdateRightPanelAvailability(true);
-        App.BootLog("MainPage: navigated to ChatView");
+        return null;
+    }
+
+    public void NavigateToChat()
+    {
+        EnsureChatContent();
+
+        if (MainNavView == null || ChatNavRoot == null)
+        {
+            return;
+        }
+
+        _suppressNavSelectionChanged = true;
+        try
+        {
+            MainNavView.SelectedItem = ChatNavRoot;
+        }
+        finally
+        {
+            _suppressNavSelectionChanged = false;
+        }
     }
 
     public void NavigateToSettingsSubPage(string key)
     {
-        // Ensure Settings panel is visible.
-        SubMenuColumn.Visibility = Visibility.Visible;
-        ChatSubNavPanel.Visibility = Visibility.Collapsed;
-        SettingsSubNavPanel.Visibility = Visibility.Visible;
-        UpdateRightPanelAvailability(false);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            key = "General";
+        }
 
-        SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
+        EnsureSettingsContent(key);
+
+        if (MainNavView == null)
+        {
+            return;
+        }
+
+        if (!_navItemsByTag.TryGetValue(key, out var target))
+        {
+            target = GeneralSettingsNavItem;
+        }
+
+        if (target == null)
+        {
+            return;
+        }
+
+        _suppressNavSelectionChanged = true;
         try
         {
-            var index = key switch
-            {
-                "General" => 0,
-                "Appearance" => 1,
-                "AgentAcp" => 2,
-                "DataStorage" => 3,
-                "Shortcuts" => 4,
-                "Diagnostics" => 5,
-                "About" => 6,
-                _ => 0
-            };
-            SettingsSubMenuList.SelectedIndex = index;
+            MainNavView.SelectedItem = target;
         }
         finally
         {
-            SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
+            _suppressNavSelectionChanged = false;
         }
-
-        var pageType = key switch
-        {
-            "General" => typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage),
-            "Appearance" => typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage),
-            "AgentAcp" => typeof(SalmonEgg.Presentation.Views.Settings.AcpConnectionSettingsPage),
-            "DataStorage" => typeof(SalmonEgg.Presentation.Views.Settings.DataStorageSettingsPage),
-            "Shortcuts" => typeof(SalmonEgg.Presentation.Views.Settings.ShortcutsSettingsPage),
-            "Diagnostics" => typeof(SalmonEgg.Presentation.Views.Settings.DiagnosticsSettingsPage),
-            "About" => typeof(SalmonEgg.Presentation.Views.Settings.AboutPage),
-            _ => typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage)
-        };
-
-        NavigateTo(pageType);
-        ApplyLeftNavVisibility();
     }
+
+    private static Type GetSettingsPageType(string key) => key switch
+    {
+        "General" => typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage),
+        "Appearance" => typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage),
+        "AgentAcp" => typeof(SalmonEgg.Presentation.Views.Settings.AcpConnectionSettingsPage),
+        "DataStorage" => typeof(SalmonEgg.Presentation.Views.Settings.DataStorageSettingsPage),
+        "Shortcuts" => typeof(SalmonEgg.Presentation.Views.Settings.ShortcutsSettingsPage),
+        "Diagnostics" => typeof(SalmonEgg.Presentation.Views.Settings.DiagnosticsSettingsPage),
+        "About" => typeof(SalmonEgg.Presentation.Views.Settings.AboutPage),
+        _ => typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage)
+    };
 
     private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -273,173 +452,70 @@ public sealed partial class MainPage : Page
 #endif
     }
 
-    private void OnMainRailNavSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void OnMainNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (BottomRailNav is null || SubMenuColumn is null || ContentFrame is null)
+        if (_suppressNavSelectionChanged || args.SelectedItem is not NavigationViewItem item)
         {
             return;
         }
 
-        if (MainRailNav.SelectedItem is ListViewItem item && item == ChatNavItem)
+        if (item.Tag is NavTag tag && tag.Project != null)
         {
-            // 互斥逻辑：选中上方导航时，清除下方导航的选中状态
-            BottomRailNav.SelectionChanged -= OnBottomRailNavSelectionChanged;
-            BottomRailNav.SelectedIndex = -1;
-            BottomRailNav.SelectionChanged += OnBottomRailNavSelectionChanged;
+            SidebarVM.SelectedProject = tag.Project;
+            if (tag.Session != null)
+            {
+                tag.Project.SelectedSession = tag.Session;
+            }
 
-            // 聊天界面显示项目/会话子导航
-            SubMenuColumn.Visibility = Visibility.Visible;
-            ChatSubNavPanel.Visibility = Visibility.Visible;
-            SettingsSubNavPanel.Visibility = Visibility.Collapsed;
+            EnsureChatContent();
+            return;
+        }
 
-            SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
-            SettingsSubMenuList.SelectedIndex = -1;
-            SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
+        if (item.Tag is string key)
+        {
+            if (key == "Chat")
+            {
+                EnsureChatContent();
+                return;
+            }
+
+            if (key == "Settings")
+            {
+                NavigateToSettingsSubPage("General");
+                return;
+            }
+
+            if (_navItemsByTag.ContainsKey(key))
+            {
+                EnsureSettingsContent(key);
+            }
+        }
+    }
+
+    private void OnMainNavItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+    {
+        // SelectionChanged handles navigation; keep to avoid XAML event binding errors and for future use.
+    }
+
+    private void EnsureChatContent()
+    {
+        if (ContentFrame?.CurrentSourcePageType != typeof(ChatView))
+        {
             NavigateTo(typeof(ChatView));
-            UpdateRightPanelAvailability(true);
-            ApplyLeftNavVisibility();
         }
+
+        UpdateRightPanelAvailability(true);
     }
 
-    private void OnBottomRailNavSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void EnsureSettingsContent(string key)
     {
-        if (BottomRailNav.SelectedItem is ListViewItem item && item == SettingsNavItem)
+        var pageType = GetSettingsPageType(key);
+        if (ContentFrame?.CurrentSourcePageType != pageType)
         {
-            // 互斥逻辑：选中下方导航时，清除上方导航的选中状态
-            MainRailNav.SelectionChanged -= OnMainRailNavSelectionChanged;
-            MainRailNav.SelectedIndex = -1;
-            MainRailNav.SelectionChanged += OnMainRailNavSelectionChanged;
-
-            // 展开二级导航栏（设置），并默认加载外观设置
-            SubMenuColumn.Visibility = Visibility.Visible;
-            ChatSubNavPanel.Visibility = Visibility.Collapsed;
-            SettingsSubNavPanel.Visibility = Visibility.Visible;
-
-            SettingsSubMenuList.SelectionChanged -= OnSubMenuSelectionChanged;
-            SettingsSubMenuList.SelectedIndex = 0; // "常规"
-            SettingsSubMenuList.SelectionChanged += OnSubMenuSelectionChanged;
-            NavigateTo(typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage));
-            UpdateRightPanelAvailability(false);
-            ApplyLeftNavVisibility();
-        }
-    }
-
-    // 处理二级导航的切换逻辑
-    private void OnSubMenuSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ContentFrame is null || SubMenuColumn is null || SubMenuColumn.Visibility != Visibility.Visible || SettingsSubNavPanel.Visibility != Visibility.Visible)
-        {
-            return;
+            NavigateTo(pageType);
         }
 
-        if (sender is ListView listView && listView.SelectedItem is ListViewItem item)
-        {
-            var key = item.Tag?.ToString() ?? string.Empty;
-            string content = item.Content?.ToString() ?? "";
-
-            if (key == "General" || content.Contains("常规"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.GeneralSettingsPage));
-                return;
-            }
-
-            if (key == "Appearance" || content.Contains("外观"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AppearanceSettingsPage));
-                return;
-            }
-
-            if (key == "AgentAcp" || content.Contains("Agent") || content.Contains("ACP") || content.Contains("连接"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AcpConnectionSettingsPage));
-                return;
-            }
-
-            if (key == "DataStorage" || content.Contains("数据"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.DataStorageSettingsPage));
-                return;
-            }
-
-            if (key == "Shortcuts" || content.Contains("快捷键"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.ShortcutsSettingsPage));
-                return;
-            }
-
-            if (key == "Diagnostics" || content.Contains("诊断"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.DiagnosticsSettingsPage));
-                return;
-            }
-
-            if (key == "About" || content.Contains("关于"))
-            {
-                NavigateTo(typeof(SalmonEgg.Presentation.Views.Settings.AboutPage));
-                return;
-            }
-        }
-    }
-
-    private void OnSubMenuResizerPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        if (SubMenuColumn is null || SubMenuResizer is null)
-        {
-            return;
-        }
-
-        _isResizingSubMenu = true;
-        _subMenuResizeStartX = e.GetCurrentPoint(this).Position.X;
-        _subMenuResizeStartWidth = SubMenuColumn.Width;
-
-        SubMenuResizer.CapturePointer(e.Pointer);
-        e.Handled = true;
-    }
-
-    private void OnSubMenuResizerPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (!_isResizingSubMenu || SubMenuColumn is null)
-        {
-            return;
-        }
-
-        var currentX = e.GetCurrentPoint(this).Position.X;
-        var delta = currentX - _subMenuResizeStartX;
-
-        var newWidth = _subMenuResizeStartWidth + delta;
-        if (newWidth < SubMenuMinWidth)
-        {
-            newWidth = SubMenuMinWidth;
-        }
-        else if (newWidth > SubMenuMaxWidth)
-        {
-            newWidth = SubMenuMaxWidth;
-        }
-
-        SubMenuColumn.Width = newWidth;
-        e.Handled = true;
-    }
-
-    private void OnSubMenuResizerPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        EndSubMenuResize(e.Pointer);
-        e.Handled = true;
-    }
-
-    private void OnSubMenuResizerPointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        EndSubMenuResize(e.Pointer);
-    }
-
-    private void EndSubMenuResize(Pointer pointer)
-    {
-        if (!_isResizingSubMenu || SubMenuResizer is null)
-        {
-            return;
-        }
-
-        _isResizingSubMenu = false;
-        SubMenuResizer.ReleasePointerCapture(pointer);
+        UpdateRightPanelAvailability(false);
     }
 
     private void OnRightPanelButtonClick(object sender, RoutedEventArgs e)
@@ -623,46 +699,22 @@ public sealed partial class MainPage : Page
 
     private void ApplyLeftNavVisibility()
     {
-        if (MainRailColumn == null || SubMenuColumn == null)
+        if (MainNavView == null)
         {
             return;
         }
 
         if (_isLeftNavCollapsed)
         {
-            MainRailColumn.Visibility = Visibility.Collapsed;
-            SubMenuColumn.Visibility = Visibility.Collapsed;
+            MainNavView.CompactPaneLength = 0;
+            MainNavView.OpenPaneLength = 0;
+            MainNavView.IsPaneOpen = false;
             return;
         }
 
-        MainRailColumn.Visibility = Visibility.Visible;
-        RestoreSubMenuVisibility();
-    }
-
-    private void RestoreSubMenuVisibility()
-    {
-        if (SubMenuColumn == null || ChatSubNavPanel == null || SettingsSubNavPanel == null)
-        {
-            return;
-        }
-
-        if (BottomRailNav?.SelectedItem == SettingsNavItem)
-        {
-            SubMenuColumn.Visibility = Visibility.Visible;
-            ChatSubNavPanel.Visibility = Visibility.Collapsed;
-            SettingsSubNavPanel.Visibility = Visibility.Visible;
-            return;
-        }
-
-        if (MainRailNav?.SelectedItem == ChatNavItem)
-        {
-            SubMenuColumn.Visibility = Visibility.Visible;
-            ChatSubNavPanel.Visibility = Visibility.Visible;
-            SettingsSubNavPanel.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        SubMenuColumn.Visibility = Visibility.Collapsed;
+        MainNavView.CompactPaneLength = DefaultCompactPaneLength;
+        MainNavView.OpenPaneLength = DefaultOpenPaneLength;
+        MainNavView.IsPaneOpen = true;
     }
 
     private void ConfigureTitleBar()

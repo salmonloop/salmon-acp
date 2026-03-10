@@ -153,9 +153,7 @@ namespace SalmonEgg.Presentation.Views.Chat
 
             if (current is MainPage mainPage)
             {
-                // 切换到底部导航栏的“设置”项
-                // 使用公开的 BottomRailNavList 属性以避免权限问题
-                mainPage.BottomRailNavList.SelectedIndex = 0;
+                mainPage.NavigateToSettingsSubPage("General");
             }
         }
     }

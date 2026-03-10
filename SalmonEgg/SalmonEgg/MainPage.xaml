@@ -290,178 +290,60 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- 第一列：极简一级导航 (Nav Rail) -->
-            <!-- Background 使用 Transparent 配合 App.xaml 中的 Mica 支持，BorderBrush 使用标准分隔线 -->
-            <Grid x:Name="MainRailColumn"
-                  Grid.Column="0"
-                  Width="72"
-                  Background="Transparent"
-                  BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                  BorderThickness="0,0,1,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+            <NavigationView x:Name="MainNavView"
+                            Grid.Column="0"
+                            Background="Transparent"
+                            PaneDisplayMode="LeftCompact"
+                            CompactPaneLength="72"
+                            OpenPaneLength="240"
+                            IsBackButtonVisible="Collapsed"
+                            IsPaneToggleButtonVisible="False"
+                            IsSettingsVisible="False"
+                            AlwaysShowHeader="False"
+                            SelectionChanged="OnMainNavSelectionChanged"
+                            ItemInvoked="OnMainNavItemInvoked">
+                <NavigationView.MenuItems>
+                    <NavigationViewItem x:Name="ChatNavRoot"
+                                        Content="对话"
+                                        Tag="Chat">
+                        <NavigationViewItem.Icon>
+                            <FontIcon Glyph="&#xE8BD;" />
+                        </NavigationViewItem.Icon>
+                    </NavigationViewItem>
 
-                <!-- 主业务导航 (顶部) -->
-                <ListView x:Name="MainRailNav" Grid.Row="0"
-                          SelectionMode="Single"
-                          Padding="0,12,0,0"
-                          ItemContainerStyle="{StaticResource NavRailItemStyle}"
-                          SelectionChanged="OnMainRailNavSelectionChanged">
-                    <ListViewItem x:Name="ChatNavItem">
-                        <StackPanel Spacing="4">
-                            <FontIcon Glyph="&#xE8BD;" FontSize="20"/>
-                            <TextBlock Text="对话" FontSize="10" HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </ListViewItem>
-                </ListView>
+                    <NavigationViewItemSeparator />
 
-                <!-- 系统设置导航 (底部) -->
-                <ListView x:Name="BottomRailNav" Grid.Row="1"
-                          Margin="0,0,0,16"
-                          SelectionMode="Single"
-                          ItemContainerStyle="{StaticResource NavRailItemStyle}"
-                          SelectionChanged="OnBottomRailNavSelectionChanged">
-                    <ListViewItem x:Name="SettingsNavItem">
-                        <StackPanel Spacing="4">
-                            <FontIcon Glyph="&#xE713;" FontSize="20"/>
-                            <TextBlock Text="设置" FontSize="10" HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </ListViewItem>
-                </ListView>
-            </Grid>
+                    <NavigationViewItem x:Name="SettingsNavRoot"
+                                        Content="设置"
+                                        Tag="Settings">
+                        <NavigationViewItem.Icon>
+                            <FontIcon Glyph="&#xE713;" />
+                        </NavigationViewItem.Icon>
+                        <NavigationViewItem.MenuItems>
+                            <NavigationViewItem x:Name="GeneralSettingsNavItem" Content="常规" Tag="General" />
+                            <NavigationViewItem x:Name="AppearanceSettingsNavItem" Content="外观" Tag="Appearance" />
+                            <NavigationViewItem x:Name="AgentAcpSettingsNavItem" Content="Agent (ACP)" Tag="AgentAcp" />
+                            <NavigationViewItem x:Name="DataStorageSettingsNavItem" Content="数据与存储" Tag="DataStorage" />
+                            <NavigationViewItem x:Name="ShortcutsSettingsNavItem" Content="快捷键" Tag="Shortcuts" />
+                            <NavigationViewItem x:Name="DiagnosticsSettingsNavItem" Content="诊断与日志" Tag="Diagnostics" />
+                            <NavigationViewItem x:Name="AboutSettingsNavItem" Content="关于" Tag="About" />
+                        </NavigationViewItem.MenuItems>
+                    </NavigationViewItem>
+                </NavigationView.MenuItems>
 
-            <!-- 第二列：子导航栏（Chat: 项目/会话；Settings: 设置子菜单） -->
-            <Grid x:Name="SubMenuColumn" Grid.Column="1"
-                  Width="240"
-                  Background="Transparent"
-                  BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                  BorderThickness="0,0,1,0"
-                  Visibility="Collapsed">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <!-- Chat 子导航：项目 / 会话 -->
-                <Grid x:Name="ChatSubNavPanel" Grid.RowSpan="2" Visibility="Collapsed">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0"
-                               Text="项目"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Margin="20,24,16,16"
-                               VerticalAlignment="Center"/>
-
-                    <ScrollViewer Grid.Row="1"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <Grid Margin="8,0,8,16">
-                            <ListView ItemsSource="{x:Bind SidebarVM.Projects, Mode=OneWay}"
-                                      SelectedItem="{x:Bind SidebarVM.SelectedProject, Mode=TwoWay}"
-                                      SelectionMode="Single"
-                                      HorizontalAlignment="Stretch"
-                                      ItemContainerStyle="{StaticResource ProjectGroupItemStyle}">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="nav:ProjectNavItemViewModel">
-                                        <Expander IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
-                                                  HorizontalAlignment="Stretch">
-                                            <Expander.Header>
-                                                <Grid Padding="12,10" HorizontalAlignment="Stretch">
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="Auto"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                    </Grid.RowDefinitions>
-                                                    <TextBlock Grid.Row="0" Text="{x:Bind Name, Mode=OneWay}" />
-                                                    <TextBlock Grid.Row="1"
-                                                               Text="{x:Bind Subtitle, Mode=OneWay}"
-                                                               FontSize="11"
-                                                               Opacity="0.65"
-                                                               Visibility="{x:Bind SubtitleVisibility, Mode=OneWay}"/>
-                                                </Grid>
-                                            </Expander.Header>
-
-                                            <ListView ItemsSource="{x:Bind Sessions, Mode=OneWay}"
-                                                      SelectedItem="{x:Bind SelectedSession, Mode=TwoWay}"
-                                                      SelectionMode="Single"
-                                                      HorizontalAlignment="Stretch"
-                                                      ItemContainerStyle="{StaticResource SessionSubMenuItemStyle}">
-                                                <ListView.ItemTemplate>
-                                                    <DataTemplate x:DataType="nav:SessionNavItemViewModel">
-                                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}" />
-                                                    </DataTemplate>
-                                                </ListView.ItemTemplate>
-                                            </ListView>
-                                        </Expander>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                        </Grid>
-                    </ScrollViewer>
-                </Grid>
-
-                <!-- Settings 子导航 -->
-                <Grid x:Name="SettingsSubNavPanel" Grid.RowSpan="2" Visibility="Collapsed">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0"
-                               Text="设置"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               Margin="20,24,16,16"
-                               VerticalAlignment="Center"/>
-
-                    <ListView x:Name="SettingsSubMenuList"
-                              Grid.Row="1"
-                              SelectionMode="Single"
-                              ItemContainerStyle="{StaticResource SubMenuItemStyle}"
-                              SelectionChanged="OnSubMenuSelectionChanged">
-                        <ListViewItem Content="常规" Tag="General" />
-                        <ListViewItem Content="外观" Tag="Appearance" />
-                        <ListViewItem Content="Agent (ACP)" Tag="AgentAcp" />
-                        <ListViewItem Content="数据与存储" Tag="DataStorage" />
-                        <ListViewItem Content="快捷键" Tag="Shortcuts" />
-                        <ListViewItem Content="诊断与日志" Tag="Diagnostics" />
-                        <ListViewItem Content="关于" Tag="About" />
-                    </ListView>
-                </Grid>
-
-                <!-- Resizer: drag the right edge to resize the whole sub menu column -->
-                <controls:ResizeGrip x:Name="SubMenuResizer"
-                                     Grid.RowSpan="2"
-                                     HorizontalAlignment="Right"
-                                     VerticalAlignment="Stretch"
-                                     Width="6"
-                                     Background="Transparent"
-                                     Style="{StaticResource SubMenuResizerThumbStyle}"
-                                     PointerPressed="OnSubMenuResizerPointerPressed"
-                                     PointerMoved="OnSubMenuResizerPointerMoved"
-                                     PointerReleased="OnSubMenuResizerPointerReleased"
-                                     PointerCaptureLost="OnSubMenuResizerPointerCaptureLost" />
-            </Grid>
-
-            <!-- 第三列：主内容区 -->
-            <Frame x:Name="ContentFrame"
-                   Grid.Column="2"
-                   Background="Transparent" />
+                <NavigationView.Content>
+                    <Frame x:Name="ContentFrame"
+                           Background="Transparent" />
+                </NavigationView.Content>
+            </NavigationView>
 
             <!-- 右侧边栏：Diff / Todo / Files -->
             <Grid x:Name="RightPanelColumn"
-                  Grid.Column="3"
+                  Grid.Column="1"
                   Width="320"
                   Background="Transparent"
                   BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"

@@ -74,7 +74,7 @@ namespace SalmonEgg.Presentation.Views
 
             if (current is MainPage mainPage)
             {
-                mainPage.MainRailNavList.SelectedIndex = 0;
+                mainPage.NavigateToChat();
             }
         }
     }
