@@ -270,7 +270,8 @@ namespace SalmonEgg.Infrastructure.Client
             JsonRpcResponse response;
             try
             {
-                response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
+                // session/prompt can be long-running (agents may take time before responding or streaming updates).
+                response = await SendRequestAsync(request, cancellationToken, timeout: TimeSpan.FromMinutes(2)).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -376,28 +377,19 @@ namespace SalmonEgg.Infrastructure.Client
         {
             EnsureInitialized();
 
-            var request = new JsonRpcRequest(
-                Interlocked.Increment(ref _nextMessageId),
+            // ACP defines session/cancel as a notification (no response expected).
+            var notification = new JsonRpcNotification(
                 "session/cancel",
                 JsonSerializer.SerializeToElement(@params, typeof(SessionCancelParams), _parser.Options));
 
-            var response = await SendRequestAsync(request, cancellationToken);
-
-            if (response.IsError)
-            {
-                throw new AcpException(response.Error!.Code, response.Error.Message, response.Error.Data);
-            }
-
-            var cancelResponse = JsonSerializer.Deserialize<SessionCancelResponse>(response.Result!.Value.GetRawText(), _parser.Options);
-            if (cancelResponse == null)
-            {
-                throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to parse session/cancel response");
-            }
+            await _transport.SendMessageAsync(
+                _parser.SerializeMessage(notification),
+                cancellationToken).ConfigureAwait(false);
 
             // 更新会话状态
             await _sessionManager.CancelSessionAsync(@params.SessionId, @params.Reason).ConfigureAwait(false);
 
-            return cancelResponse;
+            return new SessionCancelResponse(success: true);
         }
 
         /// <summary>
@@ -468,7 +460,9 @@ namespace SalmonEgg.Infrastructure.Client
         /// 发送请求并等待响应。
         /// </summary>
         
-        private async Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken)
+        private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(30);
+
+        private async Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken, TimeSpan? timeout = null)
         {
             var requestIdStr = request.Id?.ToString() ?? string.Empty;
             _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 开始处理请求 id={requestIdStr}, method={request.Method}", ErrorSeverity.Info, nameof(SendRequestAsync)));
@@ -477,6 +471,7 @@ namespace SalmonEgg.Infrastructure.Client
 
             try
             {
+                var effectiveTimeout = timeout ?? DefaultRequestTimeout;
 
                 var json = _parser.SerializeMessage(request);
                 _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 请求已序列化，长度={json.Length}, json={json.Substring(0, Math.Min(200, json.Length))}...", ErrorSeverity.Info, nameof(SendRequestAsync)));
@@ -487,8 +482,8 @@ namespace SalmonEgg.Infrastructure.Client
                // 等待响应或超时
                using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                {
-                   cts.CancelAfter(TimeSpan.FromSeconds(30));
-                   _errorLogger.LogError(new ErrorLogEntry("DEBUG", "[AcpClient.SendRequestAsync] 开始等待响应（30秒超时）...", ErrorSeverity.Info, nameof(SendRequestAsync)));
+                   cts.CancelAfter(effectiveTimeout);
+                   _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] Waiting for response (timeout={effectiveTimeout.TotalSeconds:0}s)...", ErrorSeverity.Info, nameof(SendRequestAsync)));
                    var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, cts.Token)).ConfigureAwait(false);
                    _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 等待完成，完成的任务: {(completedTask == tcs.Task ? "tcs.Task" : "timeout")}", ErrorSeverity.Info, nameof(SendRequestAsync)));
                     if (completedTask == tcs.Task)
@@ -504,7 +499,7 @@ namespace SalmonEgg.Infrastructure.Client
                                 : $"{TimeSpan.FromMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastRxMs).TotalSeconds:0.0}s ago";
 
                         var msg =
-                            $"Request timed out (id={requestIdStr}, method={request.Method}, lastRx={lastRxAge}). " +
+                            $"Request timed out (id={requestIdStr}, method={request.Method}, timeout={effectiveTimeout.TotalSeconds:0}s, lastRx={lastRxAge}). " +
                             "If the agent process doesn't speak ACP-over-stdio (e.g. it only supports MCP), it may never reply to ACP JSON-RPC requests.";
                         _errorLogger.LogError(new ErrorLogEntry("REQ_TIMEOUT", msg, ErrorSeverity.Warning, nameof(SendRequestAsync)));
                         throw new TimeoutException(msg);
