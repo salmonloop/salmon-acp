@@ -41,6 +41,12 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
         this.InitializeComponent();
 
+#if __SKIA__
+        // Skia uses the same WinUI resource keys, but a few template defaults (e.g., negative margins used for pixel
+        // snapping) can be clipped by the renderer. Load a small host-specific override dictionary only on Skia.
+        TryAddSkiaThemeOverrides();
+#endif
+
         this.UnhandledException += (_, e) =>
         {
             BootLog("App.UnhandledException: " + e.Exception);
@@ -56,6 +62,23 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             e.SetObserved();
         };
     }
+
+#if __SKIA__
+    private void TryAddSkiaThemeOverrides()
+    {
+        try
+        {
+            Resources.MergedDictionaries.Add(new Microsoft.UI.Xaml.ResourceDictionary
+            {
+                Source = new Uri("ms-appx:///Styles/Skia/SkiaThemeOverrides.xaml")
+            });
+        }
+        catch
+        {
+            // Best-effort; the app should still run without overrides.
+        }
+    }
+#endif
 
     protected Microsoft.UI.Xaml.Window? MainWindow { get; private set; }
 
@@ -140,9 +163,9 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     public static void InitializeLogging()
     {
-#if DEBUG
         var factory = LoggerFactory.Create(builder =>
         {
+#if DEBUG
 #if __WASM__
             builder.AddProvider(new global::Uno.Extensions.Logging.WebAssembly.WebAssemblyConsoleLoggerProvider());
 #elif __IOS__
@@ -152,6 +175,11 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             builder.AddConsole();
 #endif
             builder.SetMinimumLevel(LogLevel.Information);
+#else
+            // Keep release logs minimal, but still silence known noisy categories.
+            builder.AddConsole();
+            builder.SetMinimumLevel(LogLevel.Warning);
+#endif
             // Uno RemoteControl is a development-only feature (hot reload / diagnostics). When the
             // server isn't running it will emit noisy error logs; suppress it by default.
             builder.AddFilter("Uno.UI.RemoteControl", LogLevel.None);
@@ -168,7 +196,6 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         global::Uno.Extensions.LogExtensionPoint.AmbientLoggerFactory = factory;
 #if HAS_UNO
         global::Uno.UI.Adapter.Microsoft.Extensions.Logging.LoggingAdapter.Initialize();
-#endif
 #endif
     }
 }

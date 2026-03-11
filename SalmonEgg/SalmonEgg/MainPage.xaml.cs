@@ -140,6 +140,22 @@ public sealed partial class MainPage : Page
         _isRebuildingChatProjectMenu = true;
         try
         {
+            // Uno's NavigationView selection model (Skia) can throw if the selected item is removed while the
+            // internal IndexPath tree is being updated. Clear selection before mutating the hierarchy, then
+            // re-sync after rebuild.
+            if (MainNavView != null && MainNavView.SelectedItem is NavigationViewItem)
+            {
+                _suppressNavSelectionChanged = true;
+                try
+                {
+                    MainNavView.SelectedItem = null;
+                }
+                finally
+                {
+                    _suppressNavSelectionChanged = false;
+                }
+            }
+
             // Rebuild to keep the hierarchy in sync (projects + sessions are dynamic).
             ChatNavRoot.MenuItems.Clear();
 

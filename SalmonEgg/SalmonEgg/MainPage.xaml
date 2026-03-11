@@ -187,16 +187,17 @@
         <VisualStateManager.VisualStateGroups>
             <!-- Responsive shell layout (NavigationView + TitleBar). -->
             <VisualStateGroup x:Name="WindowWidthStates">
-                <!-- Narrow: keep content usable; menu becomes an overlay (minimal). -->
-                <VisualState x:Name="Narrow">
+                <!-- Wide: fully expanded fixed pane; show hierarchy inline. -->
+                <VisualState x:Name="Wide">
                     <VisualState.StateTriggers>
-                        <AdaptiveTrigger MinWindowWidth="0" />
+                        <AdaptiveTrigger MinWindowWidth="1000" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="MainNavView.PaneDisplayMode" Value="LeftMinimal" />
-                        <Setter Target="MainNavView.IsPaneOpen" Value="False" />
-                        <Setter Target="TopSearchBox.Visibility" Value="Collapsed" />
-                        <Setter Target="ChatNavRoot.IsExpanded" Value="False" />
+                        <Setter Target="MainNavView.PaneDisplayMode" Value="Left" />
+                        <Setter Target="MainNavView.IsPaneOpen" Value="True" />
+                        <Setter Target="TopSearchBox.Visibility" Value="Visible" />
+                        <Setter Target="TopSearchBox.Width" Value="340" />
+                        <Setter Target="ChatNavRoot.IsExpanded" Value="True" />
                     </VisualState.Setters>
                 </VisualState>
 
@@ -214,17 +215,16 @@
                     </VisualState.Setters>
                 </VisualState>
 
-                <!-- Wide: fully expanded fixed pane; show hierarchy inline. -->
-                <VisualState x:Name="Wide">
+                <!-- Narrow: keep content usable; menu becomes an overlay (minimal). -->
+                <VisualState x:Name="Narrow">
                     <VisualState.StateTriggers>
-                        <AdaptiveTrigger MinWindowWidth="1000" />
+                        <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="MainNavView.PaneDisplayMode" Value="Left" />
-                        <Setter Target="MainNavView.IsPaneOpen" Value="True" />
-                        <Setter Target="TopSearchBox.Visibility" Value="Visible" />
-                        <Setter Target="TopSearchBox.Width" Value="340" />
-                        <Setter Target="ChatNavRoot.IsExpanded" Value="True" />
+                        <Setter Target="MainNavView.PaneDisplayMode" Value="LeftMinimal" />
+                        <Setter Target="MainNavView.IsPaneOpen" Value="False" />
+                        <Setter Target="TopSearchBox.Visibility" Value="Collapsed" />
+                        <Setter Target="ChatNavRoot.IsExpanded" Value="False" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>

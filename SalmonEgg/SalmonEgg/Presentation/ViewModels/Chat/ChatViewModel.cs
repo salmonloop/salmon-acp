@@ -45,6 +45,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _sendPromptCts;
     private CancellationTokenSource? _transientNotificationCts;
     private string? _currentRemoteSessionId;
+    private ChatMessageViewModel? _activeAgentTextStreamMessage;
 
     // Local conversation binding: ConversationId (stable for sidebar/UI) -> active remote session id (per ACP) + transcript.
     private readonly Dictionary<string, ConversationBinding> _conversationBindings = new(StringComparer.Ordinal);
@@ -334,6 +335,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private void RestoreConversation(ConversationBinding binding)
     {
         // Restore transcript (do not pull from the remote session; conversations are local).
+        _activeAgentTextStreamMessage = null;
         MessageHistory.Clear();
         foreach (var msg in binding.Transcript)
         {
@@ -1104,7 +1106,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 if (e.Update is AgentMessageUpdate messageUpdate && messageUpdate.Content != null)
                 {
                     IsThinking = false;
-                    AddMessageToHistory(messageUpdate.Content, isOutgoing: false);
+                    HandleAgentContentChunk(messageUpdate.Content);
                 }
                 else if (e.Update is AgentThoughtUpdate)
                 {
@@ -1113,27 +1115,33 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 }
                 else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
                 {
+                    _activeAgentTextStreamMessage = null;
                     AddMessageToHistory(userMessageUpdate.Content, isOutgoing: true);
                 }
                 else if (e.Update is ToolCallUpdate toolCallUpdate)
                 {
                     IsThinking = true;
+                    _activeAgentTextStreamMessage = null;
                     AddToolCallToHistory(toolCallUpdate);
                 }
                 else if (e.Update is PlanUpdate planUpdate)
                 {
+                    _activeAgentTextStreamMessage = null;
                     UpdatePlan(planUpdate);
                 }
                 else if (e.Update is CurrentModeUpdate modeChange)
                 {
+                    _activeAgentTextStreamMessage = null;
                     OnModeChanged(modeChange);
                 }
                 else if (e.Update is ConfigUpdateUpdate configUpdate)
                 {
+                    _activeAgentTextStreamMessage = null;
                     UpdateConfigOptions(configUpdate);
                 }
                 else if (e.Update is AvailableCommandsUpdate commandsUpdate)
                 {
+                    _activeAgentTextStreamMessage = null;
                     UpdateSlashCommands(commandsUpdate);
                 }
             }
@@ -1142,6 +1150,50 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 Logger.LogError(ex, "处理会话更新时出错");
             }
         }, null);
+    }
+
+    private void HandleAgentContentChunk(ContentBlock content)
+    {
+        // ACP streams assistant responses via session/update (agent_message_chunk). Coalesce text chunks into a
+        // single chat bubble to match protocol intent and common client behavior.
+        if (content is TextContentBlock text)
+        {
+            AppendAgentTextChunk(text.Text ?? string.Empty);
+            return;
+        }
+
+        _activeAgentTextStreamMessage = null;
+        AddMessageToHistory(content, isOutgoing: false);
+    }
+
+    private void AppendAgentTextChunk(string chunk)
+    {
+        if (string.IsNullOrEmpty(chunk))
+        {
+            return;
+        }
+
+        if (_activeAgentTextStreamMessage == null ||
+            _activeAgentTextStreamMessage.IsOutgoing ||
+            !string.Equals(_activeAgentTextStreamMessage.ContentType, "text", StringComparison.Ordinal))
+        {
+            var id = Guid.NewGuid().ToString();
+            _activeAgentTextStreamMessage = ChatMessageViewModel.CreateFromTextContent(
+                id,
+                new TextContentBlock { Text = chunk },
+                isOutgoing: false);
+            AppendToTranscript(_activeAgentTextStreamMessage);
+            return;
+        }
+
+        _activeAgentTextStreamMessage.TextContent += chunk;
+
+        var binding = TryGetConversationBinding(CurrentSessionId);
+        if (binding != null)
+        {
+            binding.LastUpdatedAt = DateTime.UtcNow;
+            ScheduleConversationSave();
+        }
     }
 
     public async Task<bool> TrySwitchToSessionAsync(string sessionId)
@@ -1779,6 +1831,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             // 添加用户消息到历史
             var userContent = new TextContentBlock { Text = promptText };
             AddMessageToHistory(userContent, isOutgoing: true);
+            _activeAgentTextStreamMessage = null;
 
             var promptParams = new SessionPromptParams
             {
@@ -2051,6 +2104,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsInputEnabled));
         OnPropertyChanged(nameof(CanSendPromptUi));
+
+        if (!value)
+        {
+            // End-of-turn: stop coalescing into the current assistant bubble.
+            _activeAgentTextStreamMessage = null;
+        }
     }
 
     partial void OnIsConnectedChanged(bool value)
