@@ -224,9 +224,20 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         // 订阅事件
         SubscribeToEvents();
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
+        _preferences.PropertyChanged += OnPreferencesPropertyChanged;
 
         // Start restoring local conversation list immediately so the sidebar can show it ASAP.
         _ = RestoreConversationsAsync();
+    }
+
+    private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AppPreferencesViewModel.LastSelectedServerId))
+        {
+            // Preferences load is async; on some targets (e.g., Skia) TryAutoConnectAsync may run before
+            // LastSelectedServerId is hydrated. Re-attempt once it becomes available.
+            _ = TryAutoConnectAsync();
+        }
     }
 
     protected override void OnIsBusyChangedCore(bool value)
@@ -694,8 +705,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        _autoConnectAttempted = true;
-
         var profileId = _preferences.LastSelectedServerId;
         if (string.IsNullOrWhiteSpace(profileId))
         {
@@ -706,6 +715,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             return;
         }
+
+        // Only mark as attempted once we actually have enough information to try.
+        _autoConnectAttempted = true;
 
         await EnsureAcpProfilesLoadedAsync();
 
@@ -2071,6 +2083,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                if (disposing)
                {
                    _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
+                   _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
 
                    _conversationSaveCts?.Cancel();
                    _sendPromptCts?.Cancel();
