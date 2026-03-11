@@ -1009,7 +1009,7 @@ namespace SalmonEgg.Infrastructure.Client
         {
             if (!_isInitialized)
             {
-                throw new AcpException(JsonRpcErrorCode.NotInitialized, "ACP client is not initialized. Call InitializeAsync first.");
+                throw new InvalidOperationException("ACP client is not initialized. Call InitializeAsync first.");
             }
         }
 

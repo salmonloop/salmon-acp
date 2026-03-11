@@ -123,13 +123,13 @@ namespace SalmonEgg.Domain.Models.JsonRpc
         }
 
         /// <summary>
-        /// 创建一个未初始化的异常。
+        /// 创建一个未初始化的异常（客户端本地状态）。
         /// </summary>
         /// <returns>AcpException 实例</returns>
         public static AcpException CreateNotInitialized()
         {
             return new AcpException(
-                JsonRpcErrorCode.NotInitialized,
+                JsonRpcErrorCode.InvalidRequest,
                 "ACP client is not initialized. Call InitializeAsync first.");
         }
 

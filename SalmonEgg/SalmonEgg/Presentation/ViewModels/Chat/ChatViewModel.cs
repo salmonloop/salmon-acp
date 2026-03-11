@@ -14,6 +14,7 @@ using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Content;
+using SalmonEgg.Domain.Models.JsonRpc;
 using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
@@ -47,6 +48,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _transientNotificationCts;
     private string? _currentRemoteSessionId;
     private ChatMessageViewModel? _activeAgentTextStreamMessage;
+    private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
 
     // Local conversation binding: ConversationId (stable for sidebar/UI) -> active remote session id (per ACP) + transcript.
     private readonly Dictionary<string, ConversationBinding> _conversationBindings = new(StringComparer.Ordinal);
@@ -921,9 +923,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                UpdateAgentInfo();
                Logger.LogInformation("ACP 协议初始化完成，Agent: {Name} v{Version}", AgentName, AgentVersion);
 
-               // Some agents advertise external auth steps (e.g., "run `claude /login`") but do not implement an
-               // `authenticate` RPC. Treat auth methods as informational only.
-               _ = TryAuthenticateIfNeededAsync(initResponse);
+               IsConnected = _chatService.IsConnected && _chatService.IsInitialized;
+               CacheAuthMethods(initResponse);
+               ClearAuthenticationRequirement();
+
+               if (string.IsNullOrWhiteSpace(CurrentSessionId))
+               {
+                   CurrentSessionId = Guid.NewGuid().ToString();
+               }
+
+               IsSessionActive = !string.IsNullOrWhiteSpace(CurrentSessionId);
 
                // 初始化成功后，自动创建新会话（ACP 标准流程）
                // 参考：https://agentclientprotocol.com/protocol/session-setup
@@ -932,10 +941,26 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                {
                    Cwd = Environment.CurrentDirectory
                };
-                var response = await _chatService.CreateSessionAsync(sessionParams);
-                Logger.LogInformation("会话创建成功，SessionId={SessionId}", response.SessionId);
 
-                IsConnected = _chatService.IsConnected && _chatService.IsInitialized;
+                SessionNewResponse response;
+                try
+                {
+                    response = await _chatService.CreateSessionAsync(sessionParams);
+                }
+                catch (Exception ex) when (IsAuthenticationRequiredError(ex))
+                {
+                    var authenticated = await TryAuthenticateAsync(CancellationToken.None).ConfigureAwait(false);
+                    if (!authenticated)
+                    {
+                        // Keep the transport connected; the user may complete auth externally and retry.
+                        Logger.LogWarning("Authentication required before session creation.");
+                        ShowTransportConfigPanel = false;
+                        return;
+                    }
+
+                    response = await _chatService.CreateSessionAsync(sessionParams);
+                }
+                Logger.LogInformation("会话创建成功，SessionId={SessionId}", response.SessionId);
 
                 var remoteSessionId = response.SessionId;
                 var hasRemoteSession = !string.IsNullOrWhiteSpace(remoteSessionId);
@@ -1515,38 +1540,94 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private async Task<bool> TryAuthenticateIfNeededAsync(InitializeResponse initResponse)
+    private void CacheAuthMethods(InitializeResponse initResponse)
     {
-        if (_chatService == null)
-        {
-            return true;
-        }
+        _advertisedAuthMethods = initResponse.AuthMethods;
+    }
 
-        var methods = initResponse.AuthMethods;
-        if (methods == null || methods.Count == 0)
-        {
-            IsAuthenticationRequired = false;
-            AuthenticationHintMessage = null;
-            return true;
-        }
+    private AuthMethodDefinition? GetPrimaryAuthMethod() =>
+        _advertisedAuthMethods?.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.Id));
 
-        var method = methods.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.Id));
-        if (method == null)
-        {
-            IsAuthenticationRequired = false;
-            AuthenticationHintMessage = null;
-            return true;
-        }
+    private void ClearAuthenticationRequirement()
+    {
+        IsAuthenticationRequired = false;
+        AuthenticationHintMessage = null;
+    }
 
-        // Many agents (e.g., Claude Code) expose auth steps via authMethods but do not implement an `authenticate` RPC.
-        // Show the hint and let the user complete the auth flow outside the app.
-        var message = method.Description ?? "该 Agent 需要先完成登录/认证后才能正常回复。";
+    private void MarkAuthenticationRequired(AuthMethodDefinition? method, string? messageOverride = null)
+    {
+        var message =
+            messageOverride
+            ?? method?.Description
+            ?? "该 Agent 需要先完成登录/认证后才能正常回复。";
+
         IsAuthenticationRequired = true;
         AuthenticationHintMessage = message;
-        Logger.LogInformation("Agent advertised auth method. id={MethodId}, name={Name}, hint={Hint}", method.Id, method.Name, message);
+
+        if (method != null)
+        {
+            Logger.LogInformation(
+                "Agent requires authentication. id={MethodId}, name={Name}, hint={Hint}",
+                method.Id,
+                method.Name,
+                message);
+        }
+        else
+        {
+            Logger.LogInformation("Agent requires authentication but did not advertise a usable methodId. hint={Hint}", message);
+        }
+
         ShowTransientNotificationToast(message);
-        return true;
     }
+
+    private async Task<bool> TryAuthenticateAsync(CancellationToken cancellationToken)
+    {
+        if (_chatService is not { IsConnected: true, IsInitialized: true })
+        {
+            return false;
+        }
+
+        var method = GetPrimaryAuthMethod();
+        if (method == null || string.IsNullOrWhiteSpace(method.Id))
+        {
+            MarkAuthenticationRequired(method);
+            return false;
+        }
+
+        // Mark as required (blocks prompt sending) until authenticate succeeds.
+        MarkAuthenticationRequired(method);
+
+        try
+        {
+            var response = await _chatService
+                .AuthenticateAsync(new AuthenticateParams(method.Id), cancellationToken)
+                .ConfigureAwait(false);
+
+            if (response.Authenticated)
+            {
+                ClearAuthenticationRequirement();
+                return true;
+            }
+
+            MarkAuthenticationRequired(method, response.Message);
+            return false;
+        }
+        catch (AcpException ex) when (ex.ErrorCode == JsonRpcErrorCode.MethodNotFound)
+        {
+            // Agent advertised authMethods but does not implement `authenticate`. Fall back to informational hint.
+            MarkAuthenticationRequired(method);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Authenticate failed");
+            MarkAuthenticationRequired(method, $"认证失败：{ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool IsAuthenticationRequiredError(Exception ex) =>
+        ex is AcpException acp && acp.ErrorCode == JsonRpcErrorCode.AuthenticationRequired;
 
     private void LoadSessionHistory()
     {
@@ -1786,8 +1867,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
            var initResponse = await _chatService.InitializeAsync(initParams);
            UpdateAgentInfo();
-
-           _ = TryAuthenticateIfNeededAsync(initResponse);
+           CacheAuthMethods(initResponse);
+           ClearAuthenticationRequirement();
        }
        catch (Exception ex)
        {
@@ -1822,7 +1903,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 throw new InvalidOperationException("Chat service is not initialized");
             }
 
-            var response = await _chatService.CreateSessionAsync(sessionParams);
+            SessionNewResponse response;
+            try
+            {
+                response = await _chatService.CreateSessionAsync(sessionParams);
+            }
+            catch (Exception ex) when (IsAuthenticationRequiredError(ex))
+            {
+                var authenticated = await TryAuthenticateAsync(CancellationToken.None).ConfigureAwait(false);
+                if (!authenticated)
+                {
+                    return;
+                }
+
+                response = await _chatService.CreateSessionAsync(sessionParams);
+            }
             CurrentSessionId = response.SessionId;
             IsSessionActive = true;
 
@@ -1891,8 +1986,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         if (IsAuthenticationRequired)
         {
-            ShowTransientNotificationToast(AuthenticationHintMessage ?? "该 Agent 需要先完成登录/认证后才能回复。");
-            return;
+            var authenticated = await TryAuthenticateAsync(_sendPromptCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            if (!authenticated)
+            {
+                ShowTransientNotificationToast(AuthenticationHintMessage ?? "该 Agent 需要先完成登录/认证后才能回复。");
+                return;
+            }
         }
 
         var promptText = CurrentPrompt;
@@ -1917,7 +2016,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 _sendPromptCts?.Cancel();
                 _sendPromptCts = new CancellationTokenSource();
 
-                var remoteSessionId = await EnsureRemoteSessionAsync();
+                var remoteSessionId = await EnsureRemoteSessionAsync(_sendPromptCts.Token);
                 var promptParams = new SessionPromptParams
                 {
                     SessionId = remoteSessionId,
@@ -1930,11 +2029,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 {
                     await _chatService.SendPromptAsync(promptParams, _sendPromptCts.Token);
                 }
+                catch (Exception ex) when (IsAuthenticationRequiredError(ex))
+                {
+                    var authenticated = await TryAuthenticateAsync(_sendPromptCts.Token).ConfigureAwait(false);
+                    if (!authenticated)
+                    {
+                        throw;
+                    }
+
+                    await _chatService.SendPromptAsync(promptParams, _sendPromptCts.Token);
+                }
                 catch (Exception ex) when (IsRemoteSessionNotFound(ex))
                 {
                     // The agent process might have restarted; create a new remote session and retry once.
                     ClearRemoteSessionBindingForCurrentConversation();
-                    remoteSessionId = await EnsureRemoteSessionAsync();
+                    remoteSessionId = await EnsureRemoteSessionAsync(_sendPromptCts.Token);
                     promptParams.SessionId = remoteSessionId;
                     await _chatService.SendPromptAsync(promptParams, _sendPromptCts.Token);
                 }
@@ -2077,7 +2186,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private async Task<string> EnsureRemoteSessionAsync()
+    private async Task<string> EnsureRemoteSessionAsync(CancellationToken cancellationToken = default)
     {
         if (_chatService is not { IsConnected: true, IsInitialized: true })
         {
@@ -2102,7 +2211,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             McpServers = new List<McpServer>()
         };
 
-        var response = await _chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
+        SessionNewResponse response;
+        try
+        {
+            response = await _chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsAuthenticationRequiredError(ex))
+        {
+            var authenticated = await TryAuthenticateAsync(cancellationToken).ConfigureAwait(false);
+            if (!authenticated)
+            {
+                throw new InvalidOperationException(AuthenticationHintMessage ?? "该 Agent 需要先完成登录/认证后才能回复。");
+            }
+
+            response = await _chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
+        }
         binding.RemoteSessionId = response.SessionId;
         binding.BoundProfileId ??= _preferences.LastSelectedServerId;
         binding.LastUpdatedAt = DateTime.UtcNow;
@@ -2127,9 +2250,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     }
 
     private static bool IsRemoteSessionNotFound(Exception ex) =>
-        ex is SalmonEgg.Domain.Models.JsonRpc.AcpException acp
-        && acp.Message.Contains("Session", StringComparison.OrdinalIgnoreCase)
-        && acp.Message.Contains("not found", StringComparison.OrdinalIgnoreCase);
+        ex is AcpException acp
+        && (acp.ErrorCode == JsonRpcErrorCode.ResourceNotFound
+            || (acp.Message.Contains("Session", StringComparison.OrdinalIgnoreCase)
+                && acp.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)));
 
     [RelayCommand]
     private async Task SetModeAsync(SessionModeViewModel? mode)

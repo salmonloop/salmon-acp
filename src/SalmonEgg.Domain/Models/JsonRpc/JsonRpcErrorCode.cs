@@ -43,22 +43,27 @@ namespace SalmonEgg.Domain.Models.JsonRpc
         #region ACP 扩展错误码
 
         /// <summary>
-        /// -32000: Server error (reserved for implementation-defined server-errors)
-        /// ACP 协议级错误（未初始化）。
+        /// -32000: Authentication required
+        /// ACP：需要先进行认证（例如调用 authenticate 或完成外部登录流程）。
         /// </summary>
-        public const int NotInitialized = -32000;
+        public const int AuthenticationRequired = -32000;
 
         /// <summary>
-        /// -32001: Session not found
-        /// 会话未找到。
+        /// -32001: Permission denied
+        /// ACP：权限被拒绝。
         /// </summary>
-        public const int SessionNotFound = -32001;
+        public const int PermissionDenied = -32001;
 
         /// <summary>
-        /// -32002: Permission denied
-        /// 权限被拒绝。
+        /// -32002: Resource not found
+        /// ACP：资源未找到（例如会话、文件等）。
         /// </summary>
-        public const int PermissionDenied = -32002;
+        public const int ResourceNotFound = -32002;
+
+        /// <summary>
+        /// 兼容别名：会话未找到（ACP schema 中归类为 Resource not found）。
+        /// </summary>
+        public const int SessionNotFound = ResourceNotFound;
 
         /// <summary>
         /// -32003: Method not allowed
@@ -114,9 +119,8 @@ namespace SalmonEgg.Domain.Models.JsonRpc
                 MethodNotFound => "Method not found",
                 InvalidParams => "Invalid params",
                 InternalError => "Internal error",
-                NotInitialized => "Not initialized",
-                SessionNotFound => "Session not found",
                 PermissionDenied => "Permission denied",
+                ResourceNotFound => "Resource not found",
                 MethodNotAllowed => "Method not allowed",
                 ProtocolVersionMismatch => "Protocol version mismatch",
                 CapabilityNotSupported => "Capability not supported",
