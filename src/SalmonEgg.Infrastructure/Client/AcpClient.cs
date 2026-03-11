@@ -221,15 +221,6 @@ namespace SalmonEgg.Infrastructure.Client
             // 创建会话记录
             await _sessionManager.CreateSessionAsync(sessionNewResponse.SessionId, @params.Cwd).ConfigureAwait(false);
 
-            // 发送 session/initialized 通知（MCP 协议要求）
-            var sessionInitializedNotification = new JsonRpcNotification(
-                "notifications/session/initialized",
-                JsonSerializer.SerializeToElement(new { sessionId = sessionNewResponse.SessionId }, _parser.Options));
-
-            await _transport.SendMessageAsync(
-                _parser.SerializeMessage(sessionInitializedNotification),
-                CancellationToken.None).ConfigureAwait(false);
-
             return sessionNewResponse;
         }
 

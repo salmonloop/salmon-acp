@@ -115,11 +115,11 @@ namespace SalmonEgg.Application.Services.Chat
                                 _currentPlan = new Plan { Entries = planUpdate.Entries };
                             }
                             break;
-                        case ModeChangeUpdate modeChange:
+                        case CurrentModeUpdate modeChange:
                             // 更新当前模式
-                            if (!string.IsNullOrEmpty(modeChange.ModeId))
+                            if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
                             {
-                                _currentMode = new SessionModeState { CurrentModeId = modeChange.ModeId };
+                                _currentMode = new SessionModeState { CurrentModeId = modeChange.CurrentModeId };
                             }
                             break;
                         case ConfigOptionUpdate configOption:
@@ -185,8 +185,8 @@ namespace SalmonEgg.Application.Services.Chat
                     entry.Entries = planUpdate.Entries;
                     entry.Title = planUpdate.Title;
                     break;
-                case ModeChangeUpdate modeChange:
-                    entry.ModeId = modeChange.ModeId;
+                case CurrentModeUpdate modeChange:
+                    entry.ModeId = modeChange.CurrentModeId;
                     entry.Title = modeChange.Title;
                     break;
                 case ConfigUpdateUpdate configUpdate:
@@ -208,7 +208,7 @@ namespace SalmonEgg.Application.Services.Chat
                 ToolCallUpdate => "tool_call",
                 ToolCallStatusUpdate => "tool_call_update",
                 PlanUpdate => "plan",
-                ModeChangeUpdate => "current_mode_update",
+                CurrentModeUpdate => "current_mode_update",
                 ConfigUpdateUpdate => "config_options_update",
                 ConfigOptionUpdate => "config_option_update",
                 _ => "unknown"

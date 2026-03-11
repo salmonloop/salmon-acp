@@ -61,9 +61,7 @@ namespace SalmonEgg.Domain.Models.Protocol
     [JsonDerivedType(typeof(ToolCallUpdate), "tool_call")]
     [JsonDerivedType(typeof(ToolCallStatusUpdate), "tool_call_update")]
     [JsonDerivedType(typeof(PlanUpdate), "plan")]
-    [JsonDerivedType(typeof(ModeChangeUpdate), "mode_change")]
-    [JsonDerivedType(typeof(ModeChangeUpdate), "current_mode_update")]
-    [JsonDerivedType(typeof(ConfigUpdateUpdate), "config_update")]
+    [JsonDerivedType(typeof(CurrentModeUpdate), "current_mode_update")]
     [JsonDerivedType(typeof(ConfigUpdateUpdate), "config_options_update")]
     [JsonDerivedType(typeof(AvailableCommandsUpdate), "available_commands_update")]
     [JsonDerivedType(typeof(ConfigOptionUpdate), "config_option_update")]
@@ -238,38 +236,24 @@ namespace SalmonEgg.Domain.Models.Protocol
     }
 
     /// <summary>
-    /// 模式切换更新。
-    /// 用于通知客户端会话模式的变化。
+    /// 当前模式更新（current_mode_update）。
+    /// ACP 会通过 session/update 通知发送当前模式的变化。
     /// </summary>
-    public class ModeChangeUpdate : SessionUpdate
+    public class CurrentModeUpdate : SessionUpdate
     {
-        /// <summary>
-        /// 新的模式 ID。
-        /// </summary>
-        [JsonPropertyName("modeId")]
-        public string? ModeId { get; set; }
+        [JsonPropertyName("currentModeId")]
+        public string? CurrentModeId { get; set; }
 
-        /// <summary>
-        /// 标题（可选）。
-        /// </summary>
         [JsonPropertyName("title")]
         public string? Title { get; set; }
 
-        /// <summary>
-        /// 创建新的 ModeChangeUpdate 实例。
-        /// </summary>
-        public ModeChangeUpdate()
+        public CurrentModeUpdate()
         {
         }
 
-        /// <summary>
-        /// 创建新的 ModeChangeUpdate 实例。
-        /// </summary>
-        /// <param name="modeId">新的模式 ID</param>
-        /// <param name="title">标题</param>
-        public ModeChangeUpdate(string? modeId = null, string? title = null)
+        public CurrentModeUpdate(string? currentModeId = null, string? title = null)
         {
-            ModeId = modeId;
+            CurrentModeId = currentModeId;
             Title = title;
         }
     }

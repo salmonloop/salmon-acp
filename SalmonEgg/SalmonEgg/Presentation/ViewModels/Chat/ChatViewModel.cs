@@ -1124,7 +1124,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 {
                     UpdatePlan(planUpdate);
                 }
-                else if (e.Update is ModeChangeUpdate modeChange)
+                else if (e.Update is CurrentModeUpdate modeChange)
                 {
                     OnModeChanged(modeChange);
                 }
@@ -1556,12 +1556,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void OnModeChanged(ModeChangeUpdate modeChange)
+    private void OnModeChanged(CurrentModeUpdate modeChange)
     {
-        if (!string.IsNullOrEmpty(modeChange.ModeId))
+        if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
         {
             // 更新当前模式
-            var selectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == modeChange.ModeId);
+            var selectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == modeChange.CurrentModeId);
             if (selectedMode != null)
             {
                 SelectedMode = selectedMode;
