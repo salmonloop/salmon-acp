@@ -740,17 +740,14 @@ public sealed partial class MainPage : Page
         {
             "Diff" => "Diff",
             "Todo" => "Todo",
-            "Files" => "Files",
             _ => "Panel"
         };
 
         DiffPanel.Visibility = key == "Diff" ? Visibility.Visible : Visibility.Collapsed;
         TodoPanel.Visibility = key == "Todo" ? Visibility.Visible : Visibility.Collapsed;
-        FilesPanel.Visibility = key == "Files" ? Visibility.Visible : Visibility.Collapsed;
 
         DiffPanelButton.IsChecked = key == "Diff";
         TodoPanelButton.IsChecked = key == "Todo";
-        FilesPanelButton.IsChecked = key == "Files";
     }
 
     private void CloseRightPanel()
@@ -765,18 +762,15 @@ public sealed partial class MainPage : Page
 
         DiffPanel.Visibility = Visibility.Collapsed;
         TodoPanel.Visibility = Visibility.Collapsed;
-        FilesPanel.Visibility = Visibility.Collapsed;
 
         DiffPanelButton.IsChecked = false;
         TodoPanelButton.IsChecked = false;
-        FilesPanelButton.IsChecked = false;
     }
 
     private void UpdateRightPanelAvailability(bool isChat)
     {
         DiffPanelButton.IsEnabled = isChat;
         TodoPanelButton.IsEnabled = isChat;
-        FilesPanelButton.IsEnabled = isChat;
 
         if (!isChat)
         {

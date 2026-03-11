@@ -296,21 +296,15 @@
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       ToolTipService.ToolTip="Diff"
                                       Click="OnRightPanelButtonClick">
-                            <SymbolIcon Symbol="Sync" />
+                            <!-- SymbolIcon.Symbol must be a valid WinUI Symbol enum value -->
+                            <SymbolIcon Symbol="Preview" />
                         </ToggleButton>
                         <ToggleButton x:Name="TodoPanelButton"
                                       Tag="Todo"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       ToolTipService.ToolTip="Todo"
                                       Click="OnRightPanelButtonClick">
-                            <SymbolIcon Symbol="Accept" />
-                        </ToggleButton>
-                        <ToggleButton x:Name="FilesPanelButton"
-                                      Tag="Files"
-                                      Style="{StaticResource TitleBarToggleButtonStyle}"
-                                      ToolTipService.ToolTip="Files"
-                                      Click="OnRightPanelButtonClick">
-                            <SymbolIcon Symbol="Folder" />
+                            <SymbolIcon Symbol="Bullets" />
                         </ToggleButton>
                     </StackPanel>
                 </Grid>
@@ -399,9 +393,6 @@
                     </Grid>
                     <Grid x:Name="TodoPanel" Visibility="Collapsed">
                         <TextBlock Text="Todo 面板占位" Opacity="0.7" Margin="20,8" />
-                    </Grid>
-                    <Grid x:Name="FilesPanel" Visibility="Collapsed">
-                        <TextBlock Text="Files 面板占位" Opacity="0.7" Margin="20,8" />
                     </Grid>
                 </Grid>
 
