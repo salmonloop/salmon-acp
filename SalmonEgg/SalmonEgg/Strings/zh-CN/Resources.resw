@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="SettingsNav_General.Content" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="SettingsNav_Appearance.Content" xml:space="preserve">
+    <value>外观</value>
+  </data>
+  <data name="SettingsNav_AgentAcp.Content" xml:space="preserve">
+    <value>Agent (ACP)</value>
+  </data>
+  <data name="SettingsNav_DataStorage.Content" xml:space="preserve">
+    <value>数据与存储</value>
+  </data>
+  <data name="SettingsNav_Shortcuts.Content" xml:space="preserve">
+    <value>快捷键</value>
+  </data>
+  <data name="SettingsNav_Diagnostics.Content" xml:space="preserve">
+    <value>诊断与日志</value>
+  </data>
+  <data name="SettingsNav_About.Content" xml:space="preserve">
+    <value>关于</value>
+  </data>
+
+  <data name="Appearance_ThemeTitle.Text" xml:space="preserve">
+    <value>界面主题</value>
+  </data>
+  <data name="Appearance_ThemeDescription.Text" xml:space="preserve">
+    <value>选择您偏好的应用主题颜色</value>
+  </data>
+  <data name="Appearance_ThemeSystem.Content" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Appearance_ThemeLight.Content" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="Appearance_ThemeDark.Content" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="Appearance_MotionTitle.Text" xml:space="preserve">
+    <value>交互体验</value>
+  </data>
+  <data name="Appearance_MotionToggleTitle.Text" xml:space="preserve">
+    <value>全局过渡动画</value>
+  </data>
+  <data name="Appearance_MotionToggleDescription.Text" xml:space="preserve">
+    <value>开启后，页面切换将使用平滑过渡效果</value>
+  </data>
+  <data name="Appearance_MotionToggle.OnContent" xml:space="preserve">
+    <value>已开启</value>
+  </data>
+  <data name="Appearance_MotionToggle.OffContent" xml:space="preserve">
+    <value>已禁用</value>
+  </data>
+  <data name="Appearance_BackdropTitle.Text" xml:space="preserve">
+    <value>背景材质</value>
+  </data>
+  <data name="Appearance_BackdropDescription.Text" xml:space="preserve">
+    <value>选择窗口背景效果（不同系统版本会自动降级）</value>
+  </data>
+  <data name="Appearance_BackdropSystem.Content" xml:space="preserve">
+    <value>自动（系统推荐）</value>
+  </data>
+  <data name="Appearance_BackdropSolid.Content" xml:space="preserve">
+    <value>纯色</value>
+  </data>
+  <data name="Appearance_Notice.Title" xml:space="preserve">
+    <value>提示</value>
+  </data>
+  <data name="Appearance_Notice.Message" xml:space="preserve">
+    <value>主题、动画和材质设置会立即生效（部分平台可能需要重启）。</value>
+  </data>
+
+  <data name="General_StartupTitle.Text" xml:space="preserve">
+    <value>启动与窗口</value>
+  </data>
+  <data name="General_AutoStart.Header" xml:space="preserve">
+    <value>开机自动启动</value>
+  </data>
+  <data name="General_AutoStart.OnContent" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="General_AutoStart.OffContent" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="General_AutoStartUnsupported.Text" xml:space="preserve">
+    <value>当前平台不支持开机自动启动</value>
+  </data>
+  <data name="General_MinimizeToTray.Header" xml:space="preserve">
+    <value>最小化到系统托盘</value>
+  </data>
+  <data name="General_MinimizeToTray.OnContent" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="General_MinimizeToTray.OffContent" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="General_TrayUnsupported.Text" xml:space="preserve">
+    <value>当前平台暂未集成系统托盘支持</value>
+  </data>
+  <data name="General_LanguageTitle.Text" xml:space="preserve">
+    <value>语言与地区</value>
+  </data>
+  <data name="General_LanguageLabel.Text" xml:space="preserve">
+    <value>选择界面语言</value>
+  </data>
+  <data name="General_LanguageSystem.Content" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="General_LanguageZhCn.Content" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="General_LanguageEn.Content" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="General_LanguageUnsupported.Text" xml:space="preserve">
+    <value>当前平台不支持语言覆盖</value>
+  </data>
+  <data name="General_LanguageRestartHint.Text" xml:space="preserve">
+    <value>部分设置在重新启动应用后生效</value>
+  </data>
+  <data name="General_MaintenanceTitle.Text" xml:space="preserve">
+    <value>维护</value>
+  </data>
+  <data name="General_ClearCacheTitle.Text" xml:space="preserve">
+    <value>清理本地缓存</value>
+  </data>
+  <data name="General_ClearCacheDescription.Text" xml:space="preserve">
+    <value>将删除本地缓存目录下的所有文件</value>
+  </data>
+  <data name="General_ClearCacheAction.Content" xml:space="preserve">
+    <value>清理</value>
+  </data>
+
+  <data name="DataStorage_PrivacyTitle.Text" xml:space="preserve">
+    <value>隐私</value>
+  </data>
+  <data name="DataStorage_SaveLocalHistory.Header" xml:space="preserve">
+    <value>保存本地历史</value>
+  </data>
+  <data name="DataStorage_SaveLocalHistory.OnContent" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="DataStorage_SaveLocalHistory.OffContent" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="DataStorage_HistoryRetentionLabel.Text" xml:space="preserve">
+    <value>历史保留天数</value>
+  </data>
+  <data name="DataStorage_RememberRecentProjects.Header" xml:space="preserve">
+    <value>记住最近项目路径</value>
+  </data>
+  <data name="DataStorage_RememberRecentProjects.OnContent" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="DataStorage_RememberRecentProjects.OffContent" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="DataStorage_CacheTitle.Text" xml:space="preserve">
+    <value>缓存</value>
+  </data>
+  <data name="DataStorage_CacheRetentionLabel.Text" xml:space="preserve">
+    <value>缓存保留天数</value>
+  </data>
+  <data name="DataStorage_ClearCache.Content" xml:space="preserve">
+    <value>清理缓存</value>
+  </data>
+  <data name="DataStorage_OpenCacheFolder.Content" xml:space="preserve">
+    <value>打开缓存目录</value>
+  </data>
+  <data name="DataStorage_ExportTitle.Text" xml:space="preserve">
+    <value>导出</value>
+  </data>
+  <data name="DataStorage_ExportDescription.Text" xml:space="preserve">
+    <value>导出会话（当前会话/当前消息列表）与诊断包到 exports 目录</value>
+  </data>
+  <data name="DataStorage_ExportMarkdown.Content" xml:space="preserve">
+    <value>导出会话（Markdown）</value>
+  </data>
+  <data name="DataStorage_ExportJson.Content" xml:space="preserve">
+    <value>导出会话（JSON）</value>
+  </data>
+  <data name="DataStorage_ExportDiagnostics.Content" xml:space="preserve">
+    <value>导出诊断包（ZIP）</value>
+  </data>
+  <data name="DataStorage_OpenExports.Content" xml:space="preserve">
+    <value>打开导出目录</value>
+  </data>
+  <data name="DataStorage_ResetTitle.Text" xml:space="preserve">
+    <value>重置</value>
+  </data>
+  <data name="DataStorage_ResetDefaults.Content" xml:space="preserve">
+    <value>恢复默认设置</value>
+  </data>
+  <data name="DataStorage_ClearAllData.Content" xml:space="preserve">
+    <value>清空所有本地数据</value>
+  </data>
+  <data name="DataStorage_ResetWarning.Text" xml:space="preserve">
+    <value>清空本地数据会删除配置、日志、缓存等文件。此操作不可撤销。</value>
+  </data>
+
+  <data name="Diagnostics_EnvironmentTitle.Text" xml:space="preserve">
+    <value>运行环境</value>
+  </data>
+  <data name="Diagnostics_AppVersionLabel.Text" xml:space="preserve">
+    <value>应用版本：</value>
+  </data>
+  <data name="Diagnostics_ProtocolVersionLabel.Text" xml:space="preserve">
+    <value>协议版本：</value>
+  </data>
+  <data name="Diagnostics_LogsTitle.Text" xml:space="preserve">
+    <value>日志</value>
+  </data>
+  <data name="Diagnostics_LogsFolderLabel.Text" xml:space="preserve">
+    <value>日志目录：</value>
+  </data>
+  <data name="Diagnostics_LatestLogLabel.Text" xml:space="preserve">
+    <value>最新日志文件：</value>
+  </data>
+  <data name="Diagnostics_OpenLogs.Content" xml:space="preserve">
+    <value>打开日志目录</value>
+  </data>
+  <data name="Diagnostics_CopyLogSnippet.Content" xml:space="preserve">
+    <value>复制最近日志片段</value>
+  </data>
+  <data name="Diagnostics_RefreshLogs.Content" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Diagnostics_ConnectionTitle.Text" xml:space="preserve">
+    <value>连接诊断</value>
+  </data>
+  <data name="Diagnostics_ConnectionStatusLabel.Text" xml:space="preserve">
+    <value>当前状态：</value>
+  </data>
+  <data name="Diagnostics_AgentLabel.Text" xml:space="preserve">
+    <value>Agent：</value>
+  </data>
+  <data name="Diagnostics_SessionLabel.Text" xml:space="preserve">
+    <value>会话：</value>
+  </data>
+  <data name="Diagnostics_BundleTitle.Text" xml:space="preserve">
+    <value>诊断包</value>
+  </data>
+  <data name="Diagnostics_BundleDescription.Text" xml:space="preserve">
+    <value>生成 ZIP 包，包含配置（不含密钥）、日志与环境快照。</value>
+  </data>
+  <data name="Diagnostics_CreateBundle.Content" xml:space="preserve">
+    <value>生成诊断包（ZIP）</value>
+  </data>
+
+  <data name="Shortcuts_ConflictInfo.Title" xml:space="preserve">
+    <value>快捷键冲突</value>
+  </data>
+  <data name="Shortcuts_InvalidInfo.Title" xml:space="preserve">
+    <value>快捷键格式无效</value>
+  </data>
+  <data name="Shortcuts_InvalidInfo.Message" xml:space="preserve">
+    <value>请输入如 Ctrl+K、Ctrl+Shift+N 的格式。</value>
+  </data>
+  <data name="Shortcuts_CustomTitle.Text" xml:space="preserve">
+    <value>自定义</value>
+  </data>
+  <data name="Shortcuts_GestureInput.PlaceholderText" xml:space="preserve">
+    <value>例如：Ctrl+K</value>
+  </data>
+  <data name="Shortcuts_RestoreSingle.Content" xml:space="preserve">
+    <value>恢复</value>
+  </data>
+  <data name="Shortcuts_RestoreAll.Content" xml:space="preserve">
+    <value>全部恢复默认</value>
+  </data>
+
+  <data name="About_AppInfoTitle.Text" xml:space="preserve">
+    <value>应用信息</value>
+  </data>
+  <data name="About_VersionLabel.Text" xml:space="preserve">
+    <value>版本：</value>
+  </data>
+  <data name="About_ProtocolLabel.Text" xml:space="preserve">
+    <value>协议版本：</value>
+  </data>
+  <data name="About_SupportTitle.Text" xml:space="preserve">
+    <value>支持</value>
+  </data>
+  <data name="About_OpenAppData.Content" xml:space="preserve">
+    <value>打开应用数据目录</value>
+  </data>
+  <data name="About_OpenReleaseNotes.Content" xml:space="preserve">
+    <value>打开更新日志</value>
+  </data>
+  <data name="About_OpenPrivacyPolicy.Content" xml:space="preserve">
+    <value>打开隐私政策</value>
+  </data>
+  <data name="About_CopyVersionInfo.Content" xml:space="preserve">
+    <value>复制版本信息</value>
+  </data>
+  <data name="About_DocsFolderLabel.Text" xml:space="preserve">
+    <value>文档目录：</value>
+  </data>
+  <data name="About_DocsHint.Text" xml:space="preserve">
+    <value>将 release-notes.md 与 privacy-policy.md 放入该目录后即可一键打开。</value>
+  </data>
+
+  <data name="Conn_Title.Text" xml:space="preserve">
+    <value>连接与服务配置</value>
+  </data>
+  <data name="Conn_ActiveSessionTitle.Text" xml:space="preserve">
+    <value>活动会话连接</value>
+  </data>
+  <data name="Conn_TransportLabel.Text" xml:space="preserve">
+    <value>传输协议</value>
+  </data>
+  <data name="Conn_TransportStdio.Content" xml:space="preserve">
+    <value>Stdio (本地)</value>
+  </data>
+  <data name="Conn_TransportWebSocket.Content" xml:space="preserve">
+    <value>WebSocket</value>
+  </data>
+  <data name="Conn_TransportHttpSse.Content" xml:space="preserve">
+    <value>HTTP SSE</value>
+  </data>
+  <data name="Conn_StdioCommand.Header" xml:space="preserve">
+    <value>执行命令</value>
+  </data>
+  <data name="Conn_StdioCommand.PlaceholderText" xml:space="preserve">
+    <value>例如: python, node</value>
+  </data>
+  <data name="Conn_StdioArgs.Header" xml:space="preserve">
+    <value>参数</value>
+  </data>
+  <data name="Conn_StdioArgs.PlaceholderText" xml:space="preserve">
+    <value>例如: server.py</value>
+  </data>
+  <data name="Conn_RemoteUrl.Header" xml:space="preserve">
+    <value>服务器地址</value>
+  </data>
+  <data name="Conn_RemoteUrl.PlaceholderText" xml:space="preserve">
+    <value>ws://localhost:8080</value>
+  </data>
+  <data name="Conn_ConnectButton.Content" xml:space="preserve">
+    <value>连接到服务器</value>
+  </data>
+  <data name="Conn_ErrorInfo.Title" xml:space="preserve">
+    <value>连接失败</value>
+  </data>
+  <data name="Conn_SuccessInfo.Title" xml:space="preserve">
+    <value>连接成功</value>
+  </data>
+  <data name="Conn_SuccessInfo.Message" xml:space="preserve">
+    <value>已建立会话，可以开始对话。</value>
+  </data>
+  <data name="Conn_GoToChat.Content" xml:space="preserve">
+    <value>进入对话</value>
+  </data>
+  <data name="Conn_PresetsTitle.Text" xml:space="preserve">
+    <value>预设服务器</value>
+  </data>
+  <data name="Conn_PresetsAdd.Text" xml:space="preserve">
+    <value>新建</value>
+  </data>
+  <data name="Conn_PresetEdit.ToolTipService.ToolTip" xml:space="preserve">
+    <value>编辑</value>
+  </data>
+  <data name="Conn_PresetDelete.ToolTipService.ToolTip" xml:space="preserve">
+    <value>删除</value>
+  </data>
+
+  <data name="Acp_OverviewTitle.Text" xml:space="preserve">
+    <value>当前连接状态</value>
+  </data>
+  <data name="Acp_ConnectionToggle.Header" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="Acp_ConnectionToggle.OnContent" xml:space="preserve">
+    <value>开</value>
+  </data>
+  <data name="Acp_ConnectionToggle.OffContent" xml:space="preserve">
+    <value>关</value>
+  </data>
+  <data name="Acp_TransportLabel.Text" xml:space="preserve">
+    <value>传输协议</value>
+  </data>
+  <data name="Acp_EndpointLabel.Text" xml:space="preserve">
+    <value>端点</value>
+  </data>
+  <data name="Acp_ProfilesTitle.Text" xml:space="preserve">
+    <value>我的 Agent</value>
+  </data>
+  <data name="Acp_ProfilesRefresh.Content" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Acp_ProfilesAdd.Content" xml:space="preserve">
+    <value>新建</value>
+  </data>
+  <data name="Acp_ProfileMore.ToolTipService.ToolTip" xml:space="preserve">
+    <value>更多</value>
+  </data>
+  <data name="Acp_ProfileConnect.Text" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="Acp_ProfileEdit.Text" xml:space="preserve">
+    <value>编辑</value>
+  </data>
+  <data name="Acp_ProfileDelete.Text" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Acp_DiagnosticsTitle.Text" xml:space="preserve">
+    <value>诊断</value>
+  </data>
+  <data name="Acp_DiagnosticsSubtitle.Text" xml:space="preserve">
+    <value>连接相关信息</value>
+  </data>
+  <data name="Acp_DiagnosticsAgentLabel.Text" xml:space="preserve">
+    <value>Agent</value>
+  </data>
+  <data name="Acp_DiagnosticsVersionLabel.Text" xml:space="preserve">
+    <value>版本</value>
+  </data>
+
+  <data name="Start_Title.Text" xml:space="preserve">
+    <value>Salmon Egg</value>
+  </data>
+  <data name="Start_Title.AutomationProperties.Name" xml:space="preserve">
+    <value>Salmon Egg 欢迎标题</value>
+  </data>
+  <data name="Start_Quick1.AutomationProperties.Name" xml:space="preserve">
+    <value>智能推荐入口 1</value>
+  </data>
+  <data name="Start_Quick2.AutomationProperties.Name" xml:space="preserve">
+    <value>智能推荐入口 2</value>
+  </data>
+  <data name="Start_Quick3.AutomationProperties.Name" xml:space="preserve">
+    <value>智能推荐入口 3</value>
+  </data>
+  <data name="Start_Quick1Title.Text" xml:space="preserve">
+    <value>智能推荐 1</value>
+  </data>
+  <data name="Start_Quick1Subtitle.Text" xml:space="preserve">
+    <value>占位符</value>
+  </data>
+  <data name="Start_Quick2Title.Text" xml:space="preserve">
+    <value>智能推荐 2</value>
+  </data>
+  <data name="Start_Quick2Subtitle.Text" xml:space="preserve">
+    <value>占位符</value>
+  </data>
+  <data name="Start_Quick3Title.Text" xml:space="preserve">
+    <value>智能推荐 3</value>
+  </data>
+  <data name="Start_Quick3Subtitle.Text" xml:space="preserve">
+    <value>占位符</value>
+  </data>
+</root>

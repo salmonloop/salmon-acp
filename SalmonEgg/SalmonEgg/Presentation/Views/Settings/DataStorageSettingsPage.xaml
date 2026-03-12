@@ -21,20 +21,21 @@
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="28">
             <StackPanel Spacing="12">
-                <TextBlock Text="隐私" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="DataStorage_PrivacyTitle" Text="隐私" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel Spacing="12">
-                        <ToggleSwitch Header="保存本地历史"
+                        <ToggleSwitch x:Uid="DataStorage_SaveLocalHistory"
+                                      Header="保存本地历史"
                                       IsOn="{x:Bind ViewModel.Preferences.SaveLocalHistory, Mode=TwoWay}"
                                       OnContent="开启"
                                       OffContent="关闭" />
 
                         <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <TextBlock Text="历史保留天数" VerticalAlignment="Center" />
+                            <TextBlock x:Uid="DataStorage_HistoryRetentionLabel" Text="历史保留天数" VerticalAlignment="Center" />
                             <NumberBox Value="{x:Bind ViewModel.Preferences.HistoryRetentionDays, Mode=TwoWay}"
                                        Minimum="1"
                                        Maximum="365"
@@ -43,7 +44,8 @@
                                        Width="140" />
                         </StackPanel>
 
-                        <ToggleSwitch Header="记住最近项目路径"
+                        <ToggleSwitch x:Uid="DataStorage_RememberRecentProjects"
+                                      Header="记住最近项目路径"
                                       IsOn="{x:Bind ViewModel.Preferences.RememberRecentProjectPaths, Mode=TwoWay}"
                                       OnContent="开启"
                                       OffContent="关闭" />
@@ -52,7 +54,7 @@
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="缓存" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="DataStorage_CacheTitle" Text="缓存" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -60,7 +62,7 @@
                         Padding="16">
                     <StackPanel Spacing="12">
                         <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <TextBlock Text="缓存保留天数" VerticalAlignment="Center" />
+                            <TextBlock x:Uid="DataStorage_CacheRetentionLabel" Text="缓存保留天数" VerticalAlignment="Center" />
                             <NumberBox Value="{x:Bind ViewModel.Preferences.CacheRetentionDays, Mode=TwoWay}"
                                        Minimum="1"
                                        Maximum="60"
@@ -70,10 +72,12 @@
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="清理缓存"
+                            <Button x:Uid="DataStorage_ClearCache"
+                                    Content="清理缓存"
                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                     Click="OnClearCacheClick" />
-                            <Button Content="打开缓存目录"
+                            <Button x:Uid="DataStorage_OpenCacheFolder"
+                                    Content="打开缓存目录"
                                     Command="{x:Bind ViewModel.OpenCacheFolderCommand}" />
                         </StackPanel>
                     </StackPanel>
@@ -81,28 +85,28 @@
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="导出" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="DataStorage_ExportTitle" Text="导出" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel Spacing="12">
-                        <TextBlock Text="导出会话（当前会话/当前消息列表）与诊断包到 exports 目录" Opacity="0.7" TextWrapping="Wrap"/>
+                        <TextBlock x:Uid="DataStorage_ExportDescription" Text="导出会话（当前会话/当前消息列表）与诊断包到 exports 目录" Opacity="0.7" TextWrapping="Wrap"/>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="导出会话（Markdown）" Command="{x:Bind ViewModel.ExportCurrentSessionMarkdownCommand}" />
-                            <Button Content="导出会话（JSON）" Command="{x:Bind ViewModel.ExportCurrentSessionJsonCommand}" />
+                            <Button x:Uid="DataStorage_ExportMarkdown" Content="导出会话（Markdown）" Command="{x:Bind ViewModel.ExportCurrentSessionMarkdownCommand}" />
+                            <Button x:Uid="DataStorage_ExportJson" Content="导出会话（JSON）" Command="{x:Bind ViewModel.ExportCurrentSessionJsonCommand}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="导出诊断包（ZIP）" Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}" />
-                            <Button Content="打开导出目录" Command="{x:Bind ViewModel.OpenExportsFolderCommand}" />
+                            <Button x:Uid="DataStorage_ExportDiagnostics" Content="导出诊断包（ZIP）" Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}" />
+                            <Button x:Uid="DataStorage_OpenExports" Content="打开导出目录" Command="{x:Bind ViewModel.OpenExportsFolderCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="重置" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="DataStorage_ResetTitle" Text="重置" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -110,13 +114,15 @@
                         Padding="16">
                     <StackPanel Spacing="12">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="恢复默认设置"
+                            <Button x:Uid="DataStorage_ResetDefaults"
+                                    Content="恢复默认设置"
                                     Click="OnResetPreferencesClick" />
-                            <Button Content="清空所有本地数据"
+                            <Button x:Uid="DataStorage_ClearAllData"
+                                    Content="清空所有本地数据"
                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                     Click="OnClearAllLocalDataClick" />
                         </StackPanel>
-                        <TextBlock Text="清空本地数据会删除配置、日志、缓存等文件。此操作不可撤销。"
+                        <TextBlock x:Uid="DataStorage_ResetWarning" Text="清空本地数据会删除配置、日志、缓存等文件。此操作不可撤销。"
                                    FontSize="12"
                                    Opacity="0.7"
                                    TextWrapping="Wrap" />

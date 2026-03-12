@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="SettingsNav_General.Content" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="SettingsNav_Appearance.Content" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="SettingsNav_AgentAcp.Content" xml:space="preserve">
+    <value>Agent (ACP)</value>
+  </data>
+  <data name="SettingsNav_DataStorage.Content" xml:space="preserve">
+    <value>Data &amp; Storage</value>
+  </data>
+  <data name="SettingsNav_Shortcuts.Content" xml:space="preserve">
+    <value>Shortcuts</value>
+  </data>
+  <data name="SettingsNav_Diagnostics.Content" xml:space="preserve">
+    <value>Diagnostics &amp; Logs</value>
+  </data>
+  <data name="SettingsNav_About.Content" xml:space="preserve">
+    <value>About</value>
+  </data>
+
+  <data name="Appearance_ThemeTitle.Text" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="Appearance_ThemeDescription.Text" xml:space="preserve">
+    <value>Choose your preferred app theme.</value>
+  </data>
+  <data name="Appearance_ThemeSystem.Content" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="Appearance_ThemeLight.Content" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="Appearance_ThemeDark.Content" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="Appearance_MotionTitle.Text" xml:space="preserve">
+    <value>Interaction</value>
+  </data>
+  <data name="Appearance_MotionToggleTitle.Text" xml:space="preserve">
+    <value>Page transitions</value>
+  </data>
+  <data name="Appearance_MotionToggleDescription.Text" xml:space="preserve">
+    <value>When enabled, page transitions use smooth animations.</value>
+  </data>
+  <data name="Appearance_MotionToggle.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="Appearance_MotionToggle.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Appearance_BackdropTitle.Text" xml:space="preserve">
+    <value>Backdrop</value>
+  </data>
+  <data name="Appearance_BackdropDescription.Text" xml:space="preserve">
+    <value>Choose window backdrop (may fall back on older systems).</value>
+  </data>
+  <data name="Appearance_BackdropSystem.Content" xml:space="preserve">
+    <value>Automatic (recommended)</value>
+  </data>
+  <data name="Appearance_BackdropSolid.Content" xml:space="preserve">
+    <value>Solid</value>
+  </data>
+  <data name="Appearance_Notice.Title" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="Appearance_Notice.Message" xml:space="preserve">
+    <value>Theme, animation, and backdrop take effect immediately (some platforms may require restart).</value>
+  </data>
+
+  <data name="General_StartupTitle.Text" xml:space="preserve">
+    <value>Startup and window</value>
+  </data>
+  <data name="General_AutoStart.Header" xml:space="preserve">
+    <value>Launch on startup</value>
+  </data>
+  <data name="General_AutoStart.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="General_AutoStart.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="General_AutoStartUnsupported.Text" xml:space="preserve">
+    <value>Not supported on this platform.</value>
+  </data>
+  <data name="General_MinimizeToTray.Header" xml:space="preserve">
+    <value>Minimize to tray</value>
+  </data>
+  <data name="General_MinimizeToTray.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="General_MinimizeToTray.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="General_TrayUnsupported.Text" xml:space="preserve">
+    <value>System tray is not available on this platform.</value>
+  </data>
+  <data name="General_LanguageTitle.Text" xml:space="preserve">
+    <value>Language and region</value>
+  </data>
+  <data name="General_LanguageLabel.Text" xml:space="preserve">
+    <value>UI language</value>
+  </data>
+  <data name="General_LanguageSystem.Content" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="General_LanguageZhCn.Content" xml:space="preserve">
+    <value>Simplified Chinese</value>
+  </data>
+  <data name="General_LanguageEn.Content" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="General_LanguageUnsupported.Text" xml:space="preserve">
+    <value>Language override is not supported on this platform.</value>
+  </data>
+  <data name="General_LanguageRestartHint.Text" xml:space="preserve">
+    <value>Some settings take effect after restarting the app.</value>
+  </data>
+  <data name="General_MaintenanceTitle.Text" xml:space="preserve">
+    <value>Maintenance</value>
+  </data>
+  <data name="General_ClearCacheTitle.Text" xml:space="preserve">
+    <value>Clear local cache</value>
+  </data>
+  <data name="General_ClearCacheDescription.Text" xml:space="preserve">
+    <value>Deletes all files in the local cache folder.</value>
+  </data>
+  <data name="General_ClearCacheAction.Content" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+
+  <data name="DataStorage_PrivacyTitle.Text" xml:space="preserve">
+    <value>Privacy</value>
+  </data>
+  <data name="DataStorage_SaveLocalHistory.Header" xml:space="preserve">
+    <value>Save local history</value>
+  </data>
+  <data name="DataStorage_SaveLocalHistory.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="DataStorage_SaveLocalHistory.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="DataStorage_HistoryRetentionLabel.Text" xml:space="preserve">
+    <value>History retention (days)</value>
+  </data>
+  <data name="DataStorage_RememberRecentProjects.Header" xml:space="preserve">
+    <value>Remember recent project paths</value>
+  </data>
+  <data name="DataStorage_RememberRecentProjects.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="DataStorage_RememberRecentProjects.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="DataStorage_CacheTitle.Text" xml:space="preserve">
+    <value>Cache</value>
+  </data>
+  <data name="DataStorage_CacheRetentionLabel.Text" xml:space="preserve">
+    <value>Cache retention (days)</value>
+  </data>
+  <data name="DataStorage_ClearCache.Content" xml:space="preserve">
+    <value>Clear cache</value>
+  </data>
+  <data name="DataStorage_OpenCacheFolder.Content" xml:space="preserve">
+    <value>Open cache folder</value>
+  </data>
+  <data name="DataStorage_ExportTitle.Text" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="DataStorage_ExportDescription.Text" xml:space="preserve">
+    <value>Export sessions (current session/messages) and diagnostics to the exports folder.</value>
+  </data>
+  <data name="DataStorage_ExportMarkdown.Content" xml:space="preserve">
+    <value>Export session (Markdown)</value>
+  </data>
+  <data name="DataStorage_ExportJson.Content" xml:space="preserve">
+    <value>Export session (JSON)</value>
+  </data>
+  <data name="DataStorage_ExportDiagnostics.Content" xml:space="preserve">
+    <value>Export diagnostics (ZIP)</value>
+  </data>
+  <data name="DataStorage_OpenExports.Content" xml:space="preserve">
+    <value>Open exports folder</value>
+  </data>
+  <data name="DataStorage_ResetTitle.Text" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="DataStorage_ResetDefaults.Content" xml:space="preserve">
+    <value>Restore defaults</value>
+  </data>
+  <data name="DataStorage_ClearAllData.Content" xml:space="preserve">
+    <value>Clear all local data</value>
+  </data>
+  <data name="DataStorage_ResetWarning.Text" xml:space="preserve">
+    <value>Clearing local data removes configs, logs, caches, etc. This cannot be undone.</value>
+  </data>
+
+  <data name="Diagnostics_EnvironmentTitle.Text" xml:space="preserve">
+    <value>Environment</value>
+  </data>
+  <data name="Diagnostics_AppVersionLabel.Text" xml:space="preserve">
+    <value>App version:</value>
+  </data>
+  <data name="Diagnostics_ProtocolVersionLabel.Text" xml:space="preserve">
+    <value>Protocol version:</value>
+  </data>
+  <data name="Diagnostics_LogsTitle.Text" xml:space="preserve">
+    <value>Logs</value>
+  </data>
+  <data name="Diagnostics_LogsFolderLabel.Text" xml:space="preserve">
+    <value>Logs folder:</value>
+  </data>
+  <data name="Diagnostics_LatestLogLabel.Text" xml:space="preserve">
+    <value>Latest log file:</value>
+  </data>
+  <data name="Diagnostics_OpenLogs.Content" xml:space="preserve">
+    <value>Open logs folder</value>
+  </data>
+  <data name="Diagnostics_CopyLogSnippet.Content" xml:space="preserve">
+    <value>Copy recent log snippet</value>
+  </data>
+  <data name="Diagnostics_RefreshLogs.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Diagnostics_ConnectionTitle.Text" xml:space="preserve">
+    <value>Connection diagnostics</value>
+  </data>
+  <data name="Diagnostics_ConnectionStatusLabel.Text" xml:space="preserve">
+    <value>Status:</value>
+  </data>
+  <data name="Diagnostics_AgentLabel.Text" xml:space="preserve">
+    <value>Agent:</value>
+  </data>
+  <data name="Diagnostics_SessionLabel.Text" xml:space="preserve">
+    <value>Session:</value>
+  </data>
+  <data name="Diagnostics_BundleTitle.Text" xml:space="preserve">
+    <value>Diagnostics bundle</value>
+  </data>
+  <data name="Diagnostics_BundleDescription.Text" xml:space="preserve">
+    <value>Generate a ZIP with configuration (no secrets), logs, and environment snapshot.</value>
+  </data>
+  <data name="Diagnostics_CreateBundle.Content" xml:space="preserve">
+    <value>Generate diagnostics (ZIP)</value>
+  </data>
+
+  <data name="Shortcuts_ConflictInfo.Title" xml:space="preserve">
+    <value>Shortcut conflicts</value>
+  </data>
+  <data name="Shortcuts_InvalidInfo.Title" xml:space="preserve">
+    <value>Invalid shortcut format</value>
+  </data>
+  <data name="Shortcuts_InvalidInfo.Message" xml:space="preserve">
+    <value>Enter formats like Ctrl+K or Ctrl+Shift+N.</value>
+  </data>
+  <data name="Shortcuts_CustomTitle.Text" xml:space="preserve">
+    <value>Customize</value>
+  </data>
+  <data name="Shortcuts_GestureInput.PlaceholderText" xml:space="preserve">
+    <value>e.g. Ctrl+K</value>
+  </data>
+  <data name="Shortcuts_RestoreSingle.Content" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Shortcuts_RestoreAll.Content" xml:space="preserve">
+    <value>Restore all defaults</value>
+  </data>
+
+  <data name="About_AppInfoTitle.Text" xml:space="preserve">
+    <value>App info</value>
+  </data>
+  <data name="About_VersionLabel.Text" xml:space="preserve">
+    <value>Version:</value>
+  </data>
+  <data name="About_ProtocolLabel.Text" xml:space="preserve">
+    <value>Protocol version:</value>
+  </data>
+  <data name="About_SupportTitle.Text" xml:space="preserve">
+    <value>Support</value>
+  </data>
+  <data name="About_OpenAppData.Content" xml:space="preserve">
+    <value>Open app data folder</value>
+  </data>
+  <data name="About_OpenReleaseNotes.Content" xml:space="preserve">
+    <value>Open release notes</value>
+  </data>
+  <data name="About_OpenPrivacyPolicy.Content" xml:space="preserve">
+    <value>Open privacy policy</value>
+  </data>
+  <data name="About_CopyVersionInfo.Content" xml:space="preserve">
+    <value>Copy version info</value>
+  </data>
+  <data name="About_DocsFolderLabel.Text" xml:space="preserve">
+    <value>Docs folder:</value>
+  </data>
+  <data name="About_DocsHint.Text" xml:space="preserve">
+    <value>Place release-notes.md and privacy-policy.md here to open them.</value>
+  </data>
+
+  <data name="Conn_Title.Text" xml:space="preserve">
+    <value>Connection and services</value>
+  </data>
+  <data name="Conn_ActiveSessionTitle.Text" xml:space="preserve">
+    <value>Active session connection</value>
+  </data>
+  <data name="Conn_TransportLabel.Text" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="Conn_TransportStdio.Content" xml:space="preserve">
+    <value>Stdio (local)</value>
+  </data>
+  <data name="Conn_TransportWebSocket.Content" xml:space="preserve">
+    <value>WebSocket</value>
+  </data>
+  <data name="Conn_TransportHttpSse.Content" xml:space="preserve">
+    <value>HTTP SSE</value>
+  </data>
+  <data name="Conn_StdioCommand.Header" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="Conn_StdioCommand.PlaceholderText" xml:space="preserve">
+    <value>e.g. python, node</value>
+  </data>
+  <data name="Conn_StdioArgs.Header" xml:space="preserve">
+    <value>Arguments</value>
+  </data>
+  <data name="Conn_StdioArgs.PlaceholderText" xml:space="preserve">
+    <value>e.g. server.py</value>
+  </data>
+  <data name="Conn_RemoteUrl.Header" xml:space="preserve">
+    <value>Server URL</value>
+  </data>
+  <data name="Conn_RemoteUrl.PlaceholderText" xml:space="preserve">
+    <value>ws://localhost:8080</value>
+  </data>
+  <data name="Conn_ConnectButton.Content" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Conn_ErrorInfo.Title" xml:space="preserve">
+    <value>Connection failed</value>
+  </data>
+  <data name="Conn_SuccessInfo.Title" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="Conn_SuccessInfo.Message" xml:space="preserve">
+    <value>Session established. You can start chatting.</value>
+  </data>
+  <data name="Conn_GoToChat.Content" xml:space="preserve">
+    <value>Enter chat</value>
+  </data>
+  <data name="Conn_PresetsTitle.Text" xml:space="preserve">
+    <value>Server presets</value>
+  </data>
+  <data name="Conn_PresetsAdd.Text" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="Conn_PresetEdit.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Conn_PresetDelete.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+
+  <data name="Acp_OverviewTitle.Text" xml:space="preserve">
+    <value>Current connection</value>
+  </data>
+  <data name="Acp_ConnectionToggle.Header" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="Acp_ConnectionToggle.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="Acp_ConnectionToggle.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Acp_TransportLabel.Text" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="Acp_EndpointLabel.Text" xml:space="preserve">
+    <value>Endpoint</value>
+  </data>
+  <data name="Acp_ProfilesTitle.Text" xml:space="preserve">
+    <value>My agents</value>
+  </data>
+  <data name="Acp_ProfilesRefresh.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Acp_ProfilesAdd.Content" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="Acp_ProfileMore.ToolTipService.ToolTip" xml:space="preserve">
+    <value>More</value>
+  </data>
+  <data name="Acp_ProfileConnect.Text" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Acp_ProfileEdit.Text" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Acp_ProfileDelete.Text" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Acp_DiagnosticsTitle.Text" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="Acp_DiagnosticsSubtitle.Text" xml:space="preserve">
+    <value>Connection details</value>
+  </data>
+  <data name="Acp_DiagnosticsAgentLabel.Text" xml:space="preserve">
+    <value>Agent</value>
+  </data>
+  <data name="Acp_DiagnosticsVersionLabel.Text" xml:space="preserve">
+    <value>Version</value>
+  </data>
+
+  <data name="Start_Title.Text" xml:space="preserve">
+    <value>Salmon Egg</value>
+  </data>
+  <data name="Start_Title.AutomationProperties.Name" xml:space="preserve">
+    <value>Salmon Egg welcome title</value>
+  </data>
+  <data name="Start_Quick1.AutomationProperties.Name" xml:space="preserve">
+    <value>Quick entry 1</value>
+  </data>
+  <data name="Start_Quick2.AutomationProperties.Name" xml:space="preserve">
+    <value>Quick entry 2</value>
+  </data>
+  <data name="Start_Quick3.AutomationProperties.Name" xml:space="preserve">
+    <value>Quick entry 3</value>
+  </data>
+  <data name="Start_Quick1Title.Text" xml:space="preserve">
+    <value>Quick pick 1</value>
+  </data>
+  <data name="Start_Quick1Subtitle.Text" xml:space="preserve">
+    <value>Placeholder</value>
+  </data>
+  <data name="Start_Quick2Title.Text" xml:space="preserve">
+    <value>Quick pick 2</value>
+  </data>
+  <data name="Start_Quick2Subtitle.Text" xml:space="preserve">
+    <value>Placeholder</value>
+  </data>
+  <data name="Start_Quick3Title.Text" xml:space="preserve">
+    <value>Quick pick 3</value>
+  </data>
+  <data name="Start_Quick3Subtitle.Text" xml:space="preserve">
+    <value>Placeholder</value>
+  </data>
+</root>

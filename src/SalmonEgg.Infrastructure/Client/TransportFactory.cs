@@ -107,11 +107,8 @@ public class TransportFactory : ITransportFactory
 
        _logger?.Information("创建 WebSocket 传输：Url={Url}", url);
 
-       // TODO: WebSocketTransport 需要实现 Domain.Interfaces.Transport.ITransport
-       // 当前实现使用 Infrastructure.Network.ITransport，需要重构或创建适配器
-       throw new NotImplementedException("WebSocket 传输需要重构 WebSocketTransport 类以支持 Domain.Interfaces.Transport.ITransport");
-       // var transport = new WebSocketTransport(url.Trim(), _logger);
-       // return transport;
+       var inner = new SalmonEgg.Infrastructure.Network.WebSocketTransport(_logger);
+       return new NetworkTransportAdapter(inner, url.Trim());
    }
 
    /// <summary>
@@ -134,10 +131,7 @@ public class TransportFactory : ITransportFactory
 
        _logger?.Information("创建 HTTP SSE 传输：Url={Url}", url);
 
-       // TODO: HttpSseTransport 需要实现 Domain.Interfaces.Transport.ITransport
-       // 当前实现使用 Infrastructure.Network.ITransport，需要重构或创建适配器
-       throw new NotImplementedException("HTTP SSE 传输需要重构 HttpSseTransport 类以支持 Domain.Interfaces.Transport.ITransport");
-       // var transport = new HttpSseTransport(url.Trim(), _logger);
-       // return transport;
+       var inner = new SalmonEgg.Infrastructure.Network.HttpSseTransport(_logger);
+       return new NetworkTransportAdapter(inner, url.Trim());
    }
 }

@@ -186,8 +186,14 @@ public partial class AppPreferencesViewModel : ObservableObject
     partial void OnMinimizeToTrayChanged(bool value) => ScheduleSave();
     partial void OnLanguageChanged(string value)
     {
+        if (_suppressSave)
+        {
+            return;
+        }
+
         ScheduleSave();
         _ = _languageService.ApplyLanguageOverrideAsync(value);
+        App.ReloadMainShell();
     }
     partial void OnLastSelectedServerIdChanged(string? value) => ScheduleSave();
     partial void OnSaveLocalHistoryChanged(bool value) => ScheduleSave();

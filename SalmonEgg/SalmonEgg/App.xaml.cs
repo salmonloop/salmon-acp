@@ -1,4 +1,5 @@
 using System;
+using Microsoft.UI.Xaml.Controls;
 using Uno.Resizetizer;
 using SalmonEgg.Infrastructure.Storage;
 
@@ -23,6 +24,30 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             var dir = SalmonEggPaths.GetAppDataRootPath();
             Directory.CreateDirectory(dir);
             File.AppendAllText(Path.Combine(dir, "boot.log"), $"[{DateTime.Now:O}] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
+    }
+
+    internal static void ReloadMainShell()
+    {
+        try
+        {
+            var window = MainWindowInstance;
+            if (window?.DispatcherQueue == null)
+            {
+                return;
+            }
+
+            _ = window.DispatcherQueue.TryEnqueue(() =>
+            {
+                if (window.Content is Frame frame)
+                {
+                    frame.BackStack.Clear();
+                    frame.Navigate(typeof(MainPage));
+                }
+            });
         }
         catch
         {

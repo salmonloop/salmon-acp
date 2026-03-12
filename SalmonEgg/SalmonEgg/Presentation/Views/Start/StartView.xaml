@@ -30,6 +30,7 @@
               VerticalAlignment="Center"
               Margin="20,20,20,0">
             <TextBlock Text="Salmon Egg"
+                       x:Uid="Start_Title"
                        FontSize="56"
                        FontWeight="SemiBold"
                        HorizontalAlignment="Center"
@@ -45,40 +46,43 @@
               ColumnSpacing="12"
               ColumnDefinitions="*,*,*">
             <Button Grid.Column="0"
+                    x:Uid="Start_Quick1"
                     Style="{StaticResource QuickEntryCardButtonStyle}"
                     IsEnabled="False"
                     AutomationProperties.Name="智能推荐入口 1">
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <SymbolIcon Symbol="Home" />
                     <StackPanel>
-                        <TextBlock Text="智能推荐 1" FontWeight="SemiBold"/>
-                        <TextBlock Text="占位符" Opacity="0.7" FontSize="12"/>
+                        <TextBlock x:Uid="Start_Quick1Title" Text="智能推荐 1" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="Start_Quick1Subtitle" Text="占位符" Opacity="0.7" FontSize="12"/>
                     </StackPanel>
                 </StackPanel>
             </Button>
 
             <Button Grid.Column="1"
+                    x:Uid="Start_Quick2"
                     Style="{StaticResource QuickEntryCardButtonStyle}"
                     IsEnabled="False"
                     AutomationProperties.Name="智能推荐入口 2">
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <SymbolIcon Symbol="Bullets" />
                     <StackPanel>
-                        <TextBlock Text="智能推荐 2" FontWeight="SemiBold"/>
-                        <TextBlock Text="占位符" Opacity="0.7" FontSize="12"/>
+                        <TextBlock x:Uid="Start_Quick2Title" Text="智能推荐 2" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="Start_Quick2Subtitle" Text="占位符" Opacity="0.7" FontSize="12"/>
                     </StackPanel>
                 </StackPanel>
             </Button>
 
             <Button Grid.Column="2"
+                    x:Uid="Start_Quick3"
                     Style="{StaticResource QuickEntryCardButtonStyle}"
                     IsEnabled="False"
                     AutomationProperties.Name="智能推荐入口 3">
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <SymbolIcon Symbol="Document" />
                     <StackPanel>
-                        <TextBlock Text="智能推荐 3" FontWeight="SemiBold"/>
-                        <TextBlock Text="占位符" Opacity="0.7" FontSize="12"/>
+                        <TextBlock x:Uid="Start_Quick3Title" Text="智能推荐 3" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="Start_Quick3Subtitle" Text="占位符" Opacity="0.7" FontSize="12"/>
                     </StackPanel>
                 </StackPanel>
             </Button>

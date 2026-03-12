@@ -24,11 +24,11 @@
         <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="32">
-                <TextBlock Text="连接与服务配置" FontSize="28" FontWeight="Bold" Margin="0,0,0,12"/>
+                <TextBlock x:Uid="Conn_Title" Text="连接与服务配置" FontSize="28" FontWeight="Bold" Margin="0,0,0,12"/>
 
             <!-- 1. 当前活动连接配置 -->
             <StackPanel Spacing="16">
-                <TextBlock Text="活动会话连接" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="Conn_ActiveSessionTitle" Text="活动会话连接" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
 
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
@@ -38,15 +38,18 @@
                     <StackPanel Spacing="20">
                         <!-- 传输类型选择 -->
                         <StackPanel Spacing="8">
-                            <TextBlock Text="传输协议" FontWeight="Medium"/>
+                            <TextBlock x:Uid="Conn_TransportLabel" Text="传输协议" FontWeight="Medium"/>
                             <StackPanel Orientation="Horizontal" Spacing="24">
-                                <RadioButton Content="Stdio (本地)"
+                                <RadioButton x:Uid="Conn_TransportStdio"
+                                             Content="Stdio (本地)"
                                              IsChecked="{x:Bind ChatViewModel.TransportConfig.IsStdio, Mode=OneWay}"
                                              Click="OnTransportTypeChanged" CommandParameter="Stdio"/>
-                                <RadioButton Content="WebSocket"
+                                <RadioButton x:Uid="Conn_TransportWebSocket"
+                                             Content="WebSocket"
                                              IsChecked="{x:Bind ChatViewModel.TransportConfig.IsWebSocket, Mode=OneWay}"
                                              Click="OnTransportTypeChanged" CommandParameter="WebSocket"/>
-                                <RadioButton Content="HTTP SSE"
+                                <RadioButton x:Uid="Conn_TransportHttpSse"
+                                             Content="HTTP SSE"
                                              IsChecked="{x:Bind ChatViewModel.TransportConfig.IsHttpSse, Mode=OneWay}"
                                              Click="OnTransportTypeChanged" CommandParameter="HttpSse"/>
                             </StackPanel>
@@ -54,35 +57,41 @@
 
                         <!-- Stdio 配置项 -->
                         <StackPanel Spacing="12" Visibility="{x:Bind ChatViewModel.TransportConfig.IsStdio, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBox Header="执行命令"
+                            <TextBox x:Uid="Conn_StdioCommand"
+                                     Header="执行命令"
                                      PlaceholderText="例如: python, node"
                                      Text="{x:Bind ChatViewModel.TransportConfig.StdioCommand, Mode=TwoWay}"/>
-                            <TextBox Header="参数"
+                            <TextBox x:Uid="Conn_StdioArgs"
+                                     Header="参数"
                                      PlaceholderText="例如: server.py"
                                      Text="{x:Bind ChatViewModel.TransportConfig.StdioArgs, Mode=TwoWay}"/>
                         </StackPanel>
 
                         <!-- 远程 URL 配置项 -->
                         <StackPanel Spacing="12" Visibility="{x:Bind ChatViewModel.TransportConfig.IsStdio, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}">
-                            <TextBox Header="服务器地址"
+                            <TextBox x:Uid="Conn_RemoteUrl"
+                                     Header="服务器地址"
                                      PlaceholderText="ws://localhost:8080"
                                      Text="{x:Bind ChatViewModel.TransportConfig.RemoteUrl, Mode=TwoWay}"/>
                         </StackPanel>
 
-                        <Button Content="连接到服务器"
+                        <Button x:Uid="Conn_ConnectButton"
+                                Content="连接到服务器"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Padding="20,8"
                                 Command="{x:Bind ChatViewModel.ApplyTransportConfigCommand}"
                                 IsEnabled="{x:Bind ChatViewModel.IsConnecting, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"/>
 
                         <!-- 连接状态反馈 -->
-                        <InfoBar IsOpen="{x:Bind ChatViewModel.HasConnectionError, Mode=OneWay}"
+                        <InfoBar x:Uid="Conn_ErrorInfo"
+                                 IsOpen="{x:Bind ChatViewModel.HasConnectionError, Mode=OneWay}"
                                  Severity="Error"
                                  Title="连接失败"
                                  Message="{x:Bind ChatViewModel.ConnectionErrorMessage, Mode=OneWay}"
                                  IsClosable="True"/>
 
-                        <InfoBar IsOpen="{x:Bind ChatViewModel.IsSessionActive, Mode=OneWay}"
+                        <InfoBar x:Uid="Conn_SuccessInfo"
+                                 IsOpen="{x:Bind ChatViewModel.IsSessionActive, Mode=OneWay}"
                                  Severity="Success"
                                  Title="连接成功"
                                  Message="已建立会话，可以开始对话。"
@@ -91,6 +100,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="12"
                                     Visibility="{x:Bind ChatViewModel.IsSessionActive, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Button Content="进入对话"
+                                    x:Uid="Conn_GoToChat"
                                     Click="OnGoToChatClick"
                                     Style="{StaticResource AccentButtonStyle}"
                                     Padding="20,8"/>
@@ -105,12 +115,12 @@
             <!-- 2. 服务器配置管理 -->
             <StackPanel Spacing="16">
                 <Grid>
-                    <TextBlock Text="预设服务器" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}" VerticalAlignment="Center"/>
+                    <TextBlock x:Uid="Conn_PresetsTitle" Text="预设服务器" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}" VerticalAlignment="Center"/>
                     <Button HorizontalAlignment="Right"
                             Command="{x:Bind ViewModel.AddConfigurationCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE710;" FontSize="14"/>
-                            <TextBlock Text="新建"/>
+                            <TextBlock x:Uid="Conn_PresetsAdd" Text="新建"/>
                         </StackPanel>
                     </Button>
                 </Grid>
@@ -139,12 +149,14 @@
                                             Style="{StaticResource SubtleButtonStyle}"
                                             Tag="{x:Bind}"
                                             Click="EditConfiguration_Click"
+                                            x:Uid="Conn_PresetEdit"
                                             ToolTipService.ToolTip="编辑"/>
                                     <Button Content="&#xE74D;" FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                             Style="{StaticResource SubtleButtonStyle}"
                                             Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                             Tag="{x:Bind}"
                                             Click="DeleteConfiguration_Click"
+                                            x:Uid="Conn_PresetDelete"
                                             ToolTipService.ToolTip="删除"/>
                                 </StackPanel>
                             </Grid>

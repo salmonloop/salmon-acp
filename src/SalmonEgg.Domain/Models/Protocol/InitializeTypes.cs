@@ -1,13 +1,9 @@
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using SalmonEgg.Domain.Models.Session;
 
 namespace SalmonEgg.Domain.Models.Protocol
 {
-    // TODO: 实现 _meta 字段支持 (ACP 协议可扩展性特性)
-    // https://agentclientprotocol.com/protocol/extensibility
-
     /// <summary>
     /// Initialize 方法的请求参数。
     /// 用于客户端向 Agent 发起初始化请求。
@@ -31,6 +27,12 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// </summary>
         [JsonPropertyName("clientCapabilities")]
         public ClientCapabilities ClientCapabilities { get; set; } = new ClientCapabilities();
+
+        /// <summary>
+        /// 扩展字段（_meta），用于协议可扩展性。
+        /// </summary>
+        [JsonPropertyName("_meta")]
+        public Dictionary<string, object?>? Meta { get; set; }
 
         /// <summary>
         /// 创建新的 InitializeParams 实例。
@@ -198,6 +200,12 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// </summary>
         [JsonPropertyName("authMethods")]
         public List<AuthMethodDefinition>? AuthMethods { get; set; }
+
+        /// <summary>
+        /// 扩展字段（_meta），用于协议可扩展性。
+        /// </summary>
+        [JsonPropertyName("_meta")]
+        public Dictionary<string, object?>? Meta { get; set; }
 
         /// <summary>
         /// 创建新的 InitializeResponse 实例。

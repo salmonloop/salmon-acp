@@ -16,7 +16,7 @@
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="28">
             <StackPanel Spacing="12">
-                <TextBlock Text="运行环境" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="Diagnostics_EnvironmentTitle" Text="运行环境" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -25,65 +25,65 @@
                     <StackPanel Spacing="8">
                         <TextBlock Text="{x:Bind ViewModel.OsDescription, Mode=OneWay}" />
                         <TextBlock Text="{x:Bind ViewModel.FrameworkDescription, Mode=OneWay}" Opacity="0.7"/>
-                        <TextBlock Text="应用版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Uid="Diagnostics_AppVersionLabel" Text="应用版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
                         <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}" Opacity="0.7"/>
-                        <TextBlock Text="协议版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Uid="Diagnostics_ProtocolVersionLabel" Text="协议版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
                         <TextBlock Text="{x:Bind ViewModel.ProtocolVersion, Mode=OneWay}" Opacity="0.7"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="日志" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="Diagnostics_LogsTitle" Text="日志" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel Spacing="12">
-                        <TextBlock Text="日志目录：" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="Diagnostics_LogsFolderLabel" Text="日志目录：" FontWeight="SemiBold"/>
                         <TextBlock Text="{x:Bind ViewModel.LogsDirectoryPath, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap"/>
-                        <TextBlock Text="最新日志文件：" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="Diagnostics_LatestLogLabel" Text="最新日志文件：" FontWeight="SemiBold"/>
                         <TextBlock Text="{x:Bind ViewModel.LatestLogFilePath, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap"/>
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="打开日志目录" Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
-                            <Button Content="复制最近日志片段" Command="{x:Bind ViewModel.CopyRecentLogSnippetCommand}" />
-                            <Button Content="刷新" Command="{x:Bind ViewModel.RefreshLatestLogFileCommand}" />
+                            <Button x:Uid="Diagnostics_OpenLogs" Content="打开日志目录" Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+                            <Button x:Uid="Diagnostics_CopyLogSnippet" Content="复制最近日志片段" Command="{x:Bind ViewModel.CopyRecentLogSnippetCommand}" />
+                            <Button x:Uid="Diagnostics_RefreshLogs" Content="刷新" Command="{x:Bind ViewModel.RefreshLatestLogFileCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="连接诊断" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="Diagnostics_ConnectionTitle" Text="连接诊断" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="当前状态：" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="Diagnostics_ConnectionStatusLabel" Text="当前状态：" FontWeight="SemiBold"/>
                         <TextBlock Text="{x:Bind ViewModel.Chat.IsConnected, Mode=OneWay}" Opacity="0.7"/>
-                        <TextBlock Text="Agent：" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Uid="Diagnostics_AgentLabel" Text="Agent：" FontWeight="SemiBold" Margin="0,8,0,0"/>
                         <TextBlock Text="{x:Bind ViewModel.Chat.AgentName, Mode=OneWay}" Opacity="0.7"/>
                         <TextBlock Text="{x:Bind ViewModel.Chat.AgentVersion, Mode=OneWay}" Opacity="0.7"/>
-                        <TextBlock Text="会话：" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Uid="Diagnostics_SessionLabel" Text="会话：" FontWeight="SemiBold" Margin="0,8,0,0"/>
                         <TextBlock Text="{x:Bind ViewModel.Chat.CurrentSessionId, Mode=OneWay}" Opacity="0.7"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="诊断包" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="Diagnostics_BundleTitle" Text="诊断包" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel Spacing="12">
-                        <TextBlock Text="生成 ZIP 包，包含配置（不含密钥）、日志与环境快照。" Opacity="0.7" TextWrapping="Wrap"/>
-                        <Button Content="生成诊断包（ZIP）" Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}" />
+                        <TextBlock x:Uid="Diagnostics_BundleDescription" Text="生成 ZIP 包，包含配置（不含密钥）、日志与环境快照。" Opacity="0.7" TextWrapping="Wrap"/>
+                        <Button x:Uid="Diagnostics_CreateBundle" Content="生成诊断包（ZIP）" Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}" />
                     </StackPanel>
                 </Border>
             </StackPanel>

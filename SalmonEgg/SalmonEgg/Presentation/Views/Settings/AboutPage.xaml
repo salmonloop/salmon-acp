@@ -16,7 +16,7 @@
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="24">
             <StackPanel Spacing="12">
-                <TextBlock Text="应用信息" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="About_AppInfoTitle" Text="应用信息" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -24,31 +24,31 @@
                         Padding="16">
                     <StackPanel Spacing="8">
                         <TextBlock Text="{x:Bind ViewModel.AppName, Mode=OneWay}" FontWeight="SemiBold" FontSize="16"/>
-                        <TextBlock Text="版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Uid="About_VersionLabel" Text="版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
                         <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}" Opacity="0.7"/>
-                        <TextBlock Text="协议版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Uid="About_ProtocolLabel" Text="协议版本：" FontWeight="SemiBold" Margin="0,8,0,0"/>
                         <TextBlock Text="{x:Bind ViewModel.ProtocolVersion, Mode=OneWay}" Opacity="0.7"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
             <StackPanel Spacing="12">
-                <TextBlock Text="支持" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <TextBlock x:Uid="About_SupportTitle" Text="支持" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
                 <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel Spacing="12">
-                        <Button Content="打开应用数据目录" Command="{x:Bind ViewModel.OpenAppDataFolderCommand}" />
+                        <Button x:Uid="About_OpenAppData" Content="打开应用数据目录" Command="{x:Bind ViewModel.OpenAppDataFolderCommand}" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="打开更新日志" Command="{x:Bind ViewModel.OpenReleaseNotesCommand}" />
-                            <Button Content="打开隐私政策" Command="{x:Bind ViewModel.OpenPrivacyPolicyCommand}" />
-                            <Button Content="复制版本信息" Command="{x:Bind ViewModel.CopyVersionInfoCommand}" />
+                            <Button x:Uid="About_OpenReleaseNotes" Content="打开更新日志" Command="{x:Bind ViewModel.OpenReleaseNotesCommand}" />
+                            <Button x:Uid="About_OpenPrivacyPolicy" Content="打开隐私政策" Command="{x:Bind ViewModel.OpenPrivacyPolicyCommand}" />
+                            <Button x:Uid="About_CopyVersionInfo" Content="复制版本信息" Command="{x:Bind ViewModel.CopyVersionInfoCommand}" />
                         </StackPanel>
-                        <TextBlock Text="文档目录：" FontWeight="SemiBold"/>
+                        <TextBlock x:Uid="About_DocsFolderLabel" Text="文档目录：" FontWeight="SemiBold"/>
                         <TextBlock Text="{x:Bind ViewModel.DocsRootPath, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap"/>
-                        <TextBlock Text="将 release-notes.md 与 privacy-policy.md 放入该目录后即可一键打开。"
+                        <TextBlock x:Uid="About_DocsHint" Text="将 release-notes.md 与 privacy-policy.md 放入该目录后即可一键打开。"
                                    Opacity="0.7"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
