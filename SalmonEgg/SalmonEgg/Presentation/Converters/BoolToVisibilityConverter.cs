@@ -23,7 +23,14 @@ namespace SalmonEgg.Presentation.Converters
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)
         {
-            throw new NotImplementedException();
+            if (value is Visibility visibility)
+            {
+                var result = visibility == Visibility.Visible;
+                var invert = parameter?.ToString() == "Invert";
+                return invert ? !result : result;
+            }
+
+            return false;
         }
     }
 }

@@ -26,6 +26,9 @@ using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Views;
 using SalmonEgg.Presentation.Views.Chat;
 using SalmonEgg.Presentation.Views.Start;
+#if WINDOWS
+using SalmonEgg.Platforms.Windows;
+#endif
 
 namespace SalmonEgg;
 
@@ -49,6 +52,10 @@ public sealed partial class MainPage : Page
     private bool _suppressNavSelectionChanged;
     private long _navSelectionRequestId;
     private readonly ShellPanePolicy _panePolicy = new();
+#if WINDOWS
+    private TrayIconManager? _trayIcon;
+    private bool _allowClose;
+#endif
 #if WINDOWS
     private AppWindowTitleBar? _appWindowTitleBar;
 #endif
@@ -100,6 +107,10 @@ public sealed partial class MainPage : Page
     private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
     {
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
+#if WINDOWS
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+#endif
     }
 
     private void ConfigureNavigationView()
@@ -196,6 +207,13 @@ public sealed partial class MainPage : Page
         {
             ApplyBackdrop();
         }
+
+#if WINDOWS
+        if (e.PropertyName == nameof(Preferences.MinimizeToTray))
+        {
+            UpdateTrayState();
+        }
+#endif
     }
 
     private void ApplyTheme()
@@ -679,6 +697,9 @@ public sealed partial class MainPage : Page
         ConfigureTitleBar();
         UpdateNavPaneToggleUi();
         NavVM.RebuildTree();
+#if WINDOWS
+        InitializeTray();
+#endif
     }
 
     private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
@@ -910,6 +931,105 @@ public sealed partial class MainPage : Page
 #endif
     }
 
+#if WINDOWS
+    private void InitializeTray()
+    {
+        UpdateTrayState();
+
+        var window = App.MainWindowInstance;
+        if (window?.AppWindow != null)
+        {
+            window.AppWindow.Closing -= OnAppWindowClosing;
+            window.AppWindow.Closing += OnAppWindowClosing;
+        }
+    }
+
+    private void UpdateTrayState()
+    {
+        if (!Preferences.IsMinimizeToTraySupported)
+        {
+            DisposeTray();
+            return;
+        }
+
+        if (!Preferences.MinimizeToTray)
+        {
+            DisposeTray();
+            ShowMainWindow();
+            return;
+        }
+
+        EnsureTrayIcon();
+    }
+
+    private void EnsureTrayIcon()
+    {
+        if (_trayIcon != null)
+        {
+            return;
+        }
+
+        var window = App.MainWindowInstance;
+        if (window == null)
+        {
+            return;
+        }
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _trayIcon = new TrayIconManager(hwnd, "Salmon Egg", ShowMainWindow, ExitFromTray);
+    }
+
+    private void DisposeTray()
+    {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+    }
+
+    private void ShowMainWindow()
+    {
+        var window = App.MainWindowInstance;
+        if (window == null)
+        {
+            return;
+        }
+
+        try
+        {
+            window.AppWindow?.Show();
+        }
+        catch
+        {
+        }
+    }
+
+    private void ExitFromTray()
+    {
+        _allowClose = true;
+        DisposeTray();
+        App.MainWindowInstance?.Close();
+    }
+
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_allowClose)
+        {
+            return;
+        }
+
+        if (!Preferences.MinimizeToTray)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        sender.Hide();
+    }
+#endif
 #if WINDOWS
     private void OnMainWindowActivated(object sender, WindowActivatedEventArgs e)
     {

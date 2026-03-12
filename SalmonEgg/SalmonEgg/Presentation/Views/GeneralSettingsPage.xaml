@@ -4,12 +4,17 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:SalmonEgg.Presentation.Views"
     xmlns:controls="using:SalmonEgg.Controls"
+    xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:settings="using:SalmonEgg.Presentation.ViewModels.Settings"
     mc:Ignorable="d"
     Background="Transparent"
     AllowDrop="False">
+
+    <local:SettingsPageBase.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </local:SettingsPageBase.Resources>
 
     <ScrollViewer Padding="0"
                   HorizontalScrollBarVisibility="Disabled">
@@ -28,15 +33,25 @@
                     <StackPanel Spacing="16">
                         <ToggleSwitch Header="开机自动启动"
                                       IsOn="{x:Bind ViewModel.Preferences.LaunchOnStartup, Mode=TwoWay}"
+                                      IsEnabled="{x:Bind ViewModel.Preferences.IsLaunchOnStartupSupported, Mode=OneWay}"
                                       OnContent="开启"
                                       OffContent="关闭"/>
+                        <TextBlock Text="当前平台不支持开机自动启动"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind ViewModel.Preferences.IsLaunchOnStartupSupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
 
                         <MenuFlyoutSeparator Margin="-16,0" Visibility="Visible"/>
 
                         <ToggleSwitch Header="最小化到系统托盘"
                                       IsOn="{x:Bind ViewModel.Preferences.MinimizeToTray, Mode=TwoWay}"
+                                      IsEnabled="{x:Bind ViewModel.Preferences.IsMinimizeToTraySupported, Mode=OneWay}"
                                       OnContent="开启"
                                       OffContent="关闭"/>
+                        <TextBlock Text="当前平台暂未集成系统托盘支持"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind ViewModel.Preferences.IsMinimizeToTraySupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -54,11 +69,16 @@
                         <TextBlock Text="选择界面语言" FontWeight="Medium" Margin="0,0,0,4"/>
                         <ComboBox Width="240"
                                   SelectedValue="{x:Bind ViewModel.Preferences.Language, Mode=TwoWay}"
-                                  SelectedValuePath="Tag">
+                                  SelectedValuePath="Tag"
+                                  IsEnabled="{x:Bind ViewModel.Preferences.IsLanguageOverrideSupported, Mode=OneWay}">
                             <ComboBoxItem Content="跟随系统" Tag="System" />
                             <ComboBoxItem Content="简体中文" Tag="zh-CN" />
                             <ComboBoxItem Content="English" Tag="en-US" />
                         </ComboBox>
+                        <TextBlock Text="当前平台不支持语言覆盖"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind ViewModel.Preferences.IsLanguageOverrideSupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
                         <TextBlock Text="部分设置在重新启动应用后生效"
                                    FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"

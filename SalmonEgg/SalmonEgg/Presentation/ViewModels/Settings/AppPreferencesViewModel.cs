@@ -16,6 +16,9 @@ namespace SalmonEgg.Presentation.ViewModels.Settings;
 public partial class AppPreferencesViewModel : ObservableObject
 {
     private readonly IAppSettingsService _appSettingsService;
+    private readonly IAppStartupService _startupService;
+    private readonly IAppLanguageService _languageService;
+    private readonly IPlatformCapabilityService _capabilities;
     private readonly ILogger<AppPreferencesViewModel> _logger;
     private readonly SynchronizationContext _syncContext;
     private CancellationTokenSource? _saveCts;
@@ -63,9 +66,23 @@ public partial class AppPreferencesViewModel : ObservableObject
 
     public ObservableCollection<KeyBindingPairViewModel> KeyBindings { get; } = new();
 
-    public AppPreferencesViewModel(IAppSettingsService appSettingsService, ILogger<AppPreferencesViewModel> logger)
+    public bool IsLaunchOnStartupSupported => _capabilities.SupportsLaunchOnStartup;
+
+    public bool IsMinimizeToTraySupported => _capabilities.SupportsTray;
+
+    public bool IsLanguageOverrideSupported => _capabilities.SupportsLanguageOverride;
+
+    public AppPreferencesViewModel(
+        IAppSettingsService appSettingsService,
+        IAppStartupService startupService,
+        IAppLanguageService languageService,
+        IPlatformCapabilityService capabilities,
+        ILogger<AppPreferencesViewModel> logger)
     {
         _appSettingsService = appSettingsService ?? throw new ArgumentNullException(nameof(appSettingsService));
+        _startupService = startupService ?? throw new ArgumentNullException(nameof(startupService));
+        _languageService = languageService ?? throw new ArgumentNullException(nameof(languageService));
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
         KeyBindings.CollectionChanged += OnKeyBindingsChanged;
@@ -79,13 +96,28 @@ public partial class AppPreferencesViewModel : ObservableObject
         {
             _suppressSave = true;
             var settings = await _appSettingsService.LoadAsync();
+            var launchOnStartup = settings.LaunchOnStartup;
+
+            try
+            {
+                var state = await _startupService.GetLaunchOnStartupAsync().ConfigureAwait(false);
+                if (state.HasValue)
+                {
+                    launchOnStartup = state.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to query launch-on-startup state");
+            }
+
             _syncContext.Post(_ =>
             {
                 Theme = settings.Theme;
                 IsAnimationEnabled = settings.IsAnimationEnabled;
                 UiMotion.Current.IsAnimationEnabled = settings.IsAnimationEnabled;
                 Backdrop = settings.Backdrop;
-                LaunchOnStartup = settings.LaunchOnStartup;
+                LaunchOnStartup = launchOnStartup;
                 MinimizeToTray = settings.MinimizeToTray;
                 Language = settings.Language;
                 LastSelectedServerId = settings.LastSelectedServerId;
@@ -126,6 +158,8 @@ public partial class AppPreferencesViewModel : ObservableObject
                     KeyBindings.Add(pair);
                 }
             }, null);
+
+            _ = _languageService.ApplyLanguageOverrideAsync(settings.Language);
         }
         catch (Exception ex)
         {
@@ -144,9 +178,17 @@ public partial class AppPreferencesViewModel : ObservableObject
         ScheduleSave();
     }
     partial void OnBackdropChanged(string value) => ScheduleSave();
-    partial void OnLaunchOnStartupChanged(bool value) => ScheduleSave();
+    partial void OnLaunchOnStartupChanged(bool value)
+    {
+        ScheduleSave();
+        _ = ApplyLaunchOnStartupAsync(value);
+    }
     partial void OnMinimizeToTrayChanged(bool value) => ScheduleSave();
-    partial void OnLanguageChanged(string value) => ScheduleSave();
+    partial void OnLanguageChanged(string value)
+    {
+        ScheduleSave();
+        _ = _languageService.ApplyLanguageOverrideAsync(value);
+    }
     partial void OnLastSelectedServerIdChanged(string? value) => ScheduleSave();
     partial void OnSaveLocalHistoryChanged(bool value) => ScheduleSave();
     partial void OnHistoryRetentionDaysChanged(int value) => ScheduleSave();
@@ -302,5 +344,26 @@ public partial class AppPreferencesViewModel : ObservableObject
                 _logger.LogError(ex, "Failed to save app settings");
             }
         }, token);
+    }
+
+    private async Task ApplyLaunchOnStartupAsync(bool enabled)
+    {
+        if (!_startupService.IsSupported)
+        {
+            return;
+        }
+
+        try
+        {
+            var ok = await _startupService.SetLaunchOnStartupAsync(enabled).ConfigureAwait(false);
+            if (!ok)
+            {
+                _logger.LogWarning("LaunchOnStartup request failed or was denied.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to apply launch-on-startup setting");
+        }
     }
 }
