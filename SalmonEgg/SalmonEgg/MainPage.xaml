@@ -10,6 +10,7 @@
     xmlns:vm="using:SalmonEgg.Presentation.ViewModels"
     xmlns:nav="using:SalmonEgg.Presentation.ViewModels.Navigation"
     xmlns:navModels="using:SalmonEgg.Presentation.Models.Navigation"
+    xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:navViews="using:SalmonEgg.Presentation.Views.Navigation"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     mc:Ignorable="d"
@@ -314,7 +315,8 @@
         </Style>
 
         <DataTemplate x:Key="StartNavTemplate" x:DataType="nav:StartNavItemViewModel">
-            <NavigationViewItem Content="{x:Bind Title, Mode=OneWay}">
+            <NavigationViewItem Content="{x:Bind Title, Mode=OneWay}"
+                                ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Home" />
                 </NavigationViewItem.Icon>
@@ -328,7 +330,8 @@
                                 IsTabStop="False"
                                 MinHeight="{StaticResource NavSectionHeaderMinHeight}"
                                 HorizontalContentAlignment="Stretch"
-                                Padding="0">
+                                Padding="0"
+                                ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Resources>
                     <StaticResource x:Key="NavigationViewItemBackground" ResourceKey="SubtleFillColorTransparentBrush" />
                     <StaticResource x:Key="NavigationViewItemBackgroundPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
@@ -396,7 +399,8 @@
                                 IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
                                 HorizontalContentAlignment="Stretch"
                                 Style="{StaticResource ProjectNavItemStyle}"
-                                SelectsOnInvoked="False">
+                                SelectsOnInvoked="False"
+                                ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Folder" />
                 </NavigationViewItem.Icon>
@@ -431,7 +435,8 @@
         </DataTemplate>
 
         <DataTemplate x:Key="SessionNavTemplate" x:DataType="nav:SessionNavItemViewModel">
-            <NavigationViewItem SelectsOnInvoked="True">
+            <NavigationViewItem SelectsOnInvoked="True"
+                                ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Comment" />
                 </NavigationViewItem.Icon>
@@ -468,7 +473,8 @@
 
         <DataTemplate x:Key="MoreNavTemplate" x:DataType="nav:MoreSessionsNavItemViewModel">
             <NavigationViewItem Content="{x:Bind Title, Mode=OneWay}"
-                                SelectsOnInvoked="False">
+                                SelectsOnInvoked="False"
+                                ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="More" />
                 </NavigationViewItem.Icon>

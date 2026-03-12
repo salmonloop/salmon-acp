@@ -18,6 +18,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using SalmonEgg.Application.Common.Shell;
 using SalmonEgg.Domain.Models.Session;
+using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -32,6 +33,7 @@ public sealed partial class MainPage : Page
 {
     private const double DefaultCompactPaneLength = 72;
     private const double DefaultOpenPaneLength = 240;
+    private const double NavPaneAnimationDurationMs = 180;
     private const double RightPanelMinWidth = 240;
     private const double RightPanelMaxWidth = 520;
     private const double RightPanelAnimationOffset = 16;
@@ -41,6 +43,8 @@ public sealed partial class MainPage : Page
     private string? _activeRightPanel;
     private double _rightPanelLastWidth = 320;
     private Storyboard? _rightPanelStoryboard;
+    private Storyboard? _navPaneStoryboard;
+    private bool _navPaneAnimating;
     private string _activePrimaryNavKey = MainNavItemKeys.Start;
     private bool _suppressNavSelectionChanged;
     private long _navSelectionRequestId;
@@ -251,7 +255,7 @@ public sealed partial class MainPage : Page
     private void UpdateNavigationTransitions()
     {
         // 根据全局设置动态开启或关闭 Frame 的过渡动画
-        if (Preferences.IsAnimationEnabled)
+        if (UiMotion.Current.IsAnimationEnabled)
         {
             ContentFrame.ContentTransitions = new TransitionCollection
             {
@@ -271,7 +275,7 @@ public sealed partial class MainPage : Page
     private void NavigateTo(Type pageType)
     {
 #if WINDOWS
-        var transition = Preferences.IsAnimationEnabled
+        var transition = UiMotion.Current.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
         ContentFrame.Navigate(pageType, null, transition);
@@ -283,7 +287,7 @@ public sealed partial class MainPage : Page
     private void NavigateTo(Type pageType, object? parameter)
     {
 #if WINDOWS
-        var transition = Preferences.IsAnimationEnabled
+        var transition = UiMotion.Current.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
         ContentFrame.Navigate(pageType, parameter, transition);
@@ -421,7 +425,7 @@ public sealed partial class MainPage : Page
         var targetWidth = Math.Clamp(baseWidth, RightPanelMinWidth, RightPanelMaxWidth);
         _rightPanelLastWidth = targetWidth;
 
-        if (Preferences.IsAnimationEnabled)
+        if (UiMotion.Current.IsAnimationEnabled)
         {
             RightPanelColumn.Visibility = Visibility.Visible;
             RightPanelColumn.Width = 0;
@@ -465,7 +469,7 @@ public sealed partial class MainPage : Page
         }
 
         _activeRightPanel = null;
-        if (Preferences.IsAnimationEnabled)
+        if (UiMotion.Current.IsAnimationEnabled)
         {
             var fromWidth = RightPanelColumn.Width;
             if (double.IsNaN(fromWidth) || fromWidth <= 0)
@@ -705,18 +709,28 @@ public sealed partial class MainPage : Page
 
         MainNavView.CompactPaneLength = DefaultCompactPaneLength;
         MainNavView.OpenPaneLength = DefaultOpenPaneLength;
-        MainNavView.IsPaneOpen = _panePolicy.Toggle(MainNavView.IsPaneOpen);
-        UpdateNavPaneToggleUi();
+        var targetOpen = _panePolicy.Toggle(MainNavView.IsPaneOpen);
+
+        if (!UiMotion.Current.IsAnimationEnabled || MainNavView.DisplayMode == NavigationViewDisplayMode.Minimal)
+        {
+            MainNavView.IsPaneOpen = targetOpen;
+            UpdateNavPaneToggleUi(targetOpen);
+            return;
+        }
+
+        AnimateNavPane(targetOpen);
+        UpdateNavPaneToggleUi(targetOpen);
     }
 
-    private void UpdateNavPaneToggleUi()
+    private void UpdateNavPaneToggleUi(bool? isOpenOverride = null)
     {
         if (MainNavView == null || TitleBarToggleLeftNavButton == null)
         {
             return;
         }
 
-        ToolTipService.SetToolTip(TitleBarToggleLeftNavButton, MainNavView.IsPaneOpen ? "折叠左侧边栏" : "展开左侧边栏");
+        var isOpen = isOpenOverride ?? MainNavView.IsPaneOpen;
+        ToolTipService.SetToolTip(TitleBarToggleLeftNavButton, isOpen ? "折叠左侧边栏" : "展开左侧边栏");
     }
 
     private void UpdateBackButtonState()
@@ -770,6 +784,67 @@ public sealed partial class MainPage : Page
     private void OnMainNavPaneClosed(NavigationView sender, object args)
     {
         UpdateNavPaneToggleUi();
+    }
+
+    private void AnimateNavPane(bool targetOpen)
+    {
+        if (MainNavView == null)
+        {
+            return;
+        }
+
+        if (_navPaneAnimating)
+        {
+            _navPaneStoryboard?.Stop();
+            _navPaneAnimating = false;
+        }
+
+        var from = targetOpen ? DefaultCompactPaneLength : MainNavView.OpenPaneLength;
+        var to = targetOpen ? DefaultOpenPaneLength : DefaultCompactPaneLength;
+
+        if (targetOpen)
+        {
+            MainNavView.IsPaneOpen = true;
+        }
+
+        MainNavView.OpenPaneLength = from;
+
+        var duration = TimeSpan.FromMilliseconds(NavPaneAnimationDurationMs);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var widthAnimation = new DoubleAnimation
+        {
+            From = from,
+            To = to,
+            Duration = duration,
+            EasingFunction = easing,
+            EnableDependentAnimation = true
+        };
+
+        Storyboard.SetTarget(widthAnimation, MainNavView);
+        Storyboard.SetTargetProperty(widthAnimation, "OpenPaneLength");
+
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(widthAnimation);
+        storyboard.Completed += (_, _) =>
+        {
+            _navPaneAnimating = false;
+            if (!targetOpen)
+            {
+                MainNavView.IsPaneOpen = false;
+                MainNavView.OpenPaneLength = DefaultOpenPaneLength;
+            }
+            else
+            {
+                MainNavView.OpenPaneLength = DefaultOpenPaneLength;
+            }
+            UpdateNavPaneToggleUi();
+            _navPaneStoryboard = null;
+        };
+
+        _navPaneAnimating = true;
+        _navPaneStoryboard = storyboard;
+        storyboard.Begin();
     }
 
     private void OnMainNavPaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)

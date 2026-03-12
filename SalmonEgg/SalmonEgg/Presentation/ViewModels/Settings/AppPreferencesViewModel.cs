@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Models;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
 
@@ -82,6 +83,7 @@ public partial class AppPreferencesViewModel : ObservableObject
             {
                 Theme = settings.Theme;
                 IsAnimationEnabled = settings.IsAnimationEnabled;
+                UiMotion.Current.IsAnimationEnabled = settings.IsAnimationEnabled;
                 Backdrop = settings.Backdrop;
                 LaunchOnStartup = settings.LaunchOnStartup;
                 MinimizeToTray = settings.MinimizeToTray;
@@ -136,7 +138,11 @@ public partial class AppPreferencesViewModel : ObservableObject
     }
 
     partial void OnThemeChanged(string value) => ScheduleSave();
-    partial void OnIsAnimationEnabledChanged(bool value) => ScheduleSave();
+    partial void OnIsAnimationEnabledChanged(bool value)
+    {
+        UiMotion.Current.IsAnimationEnabled = value;
+        ScheduleSave();
+    }
     partial void OnBackdropChanged(string value) => ScheduleSave();
     partial void OnLaunchOnStartupChanged(bool value) => ScheduleSave();
     partial void OnMinimizeToTrayChanged(bool value) => ScheduleSave();
