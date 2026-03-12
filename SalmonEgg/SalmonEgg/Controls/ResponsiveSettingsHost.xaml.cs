@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -22,6 +23,13 @@ public sealed partial class ResponsiveSettingsHost : UserControl
             typeof(ResponsiveSettingsHost),
             new PropertyMetadata(780d, OnMaxContentWidthChanged));
 
+    public static readonly DependencyProperty MinGutterProperty =
+        DependencyProperty.Register(
+            nameof(MinGutter),
+            typeof(double),
+            typeof(ResponsiveSettingsHost),
+            new PropertyMetadata(24d, OnMaxContentWidthChanged));
+
     public object? Child
     {
         get => GetValue(ChildProperty);
@@ -32,6 +40,12 @@ public sealed partial class ResponsiveSettingsHost : UserControl
     {
         get => (double)GetValue(MaxContentWidthProperty);
         set => SetValue(MaxContentWidthProperty, value);
+    }
+
+    public double MinGutter
+    {
+        get => (double)GetValue(MinGutterProperty);
+        set => SetValue(MinGutterProperty, value);
     }
 
     public ResponsiveSettingsHost()
@@ -71,11 +85,14 @@ public sealed partial class ResponsiveSettingsHost : UserControl
             return;
         }
 
-        if (availableWidth > max && !_isWide)
+        var minGutter = Math.Max(0, MinGutter);
+        var wideThreshold = max + (minGutter * 2);
+
+        if (availableWidth >= wideThreshold && !_isWide)
         {
             SetWide(max);
         }
-        else if (availableWidth <= max && _isWide)
+        else if (availableWidth < wideThreshold && _isWide)
         {
             SetNarrow();
         }

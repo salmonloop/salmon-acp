@@ -2178,7 +2178,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private string? GetActiveSessionCwdOrDefault()
+    private string GetActiveSessionCwdOrDefault()
     {
         try
         {
@@ -2202,7 +2202,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch
         {
-            return null;
+            return string.Empty;
         }
     }
 

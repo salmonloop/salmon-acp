@@ -174,7 +174,7 @@
                               PlaceholderText="选择 ACP">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="domain:ServerConfiguration">
-                                <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                <TextBlock Text="{x:Bind Name, Mode=OneTime}"
                                            TextTrimming="CharacterEllipsis"
                                            MaxLines="1"
                                            VerticalAlignment="Center"/>
@@ -186,7 +186,7 @@
 
             <!-- 消息列表 -->
             <controls:ResponsiveContentHost Grid.Row="1"
-                                            MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneWay}">
+                                            MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}">
                 <controls:ResponsiveContentHost.Child>
                     <ListView x:Name="MessagesList"
                               ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}"
@@ -195,7 +195,7 @@
                               SelectionMode="None"
                               HorizontalAlignment="Stretch"
                               MinWidth="0"
-                              ItemContainerTransitions="{x:Bind models:UiMotion.Current.ListItemTransitions, Mode=OneWay}">
+                              ItemContainerTransitions="{x:Bind models:UiMotion.Current.ListItemTransitions, Mode=OneTime}">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -209,7 +209,7 @@
 
             <!-- 输入区域（可复用控件，包含模式选择与后续扩展位） -->
             <controls:ResponsiveContentHost Grid.Row="2"
-                                            MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneWay}">
+                                            MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}">
                 <controls:ResponsiveContentHost.Child>
                     <controls:ChatInputArea ViewModel="{x:Bind ViewModel, Mode=OneWay}"
                                             SubmitCommand="{x:Bind ViewModel.SendPromptCommand}"

@@ -139,9 +139,21 @@ namespace SalmonEgg.Infrastructure.Tests.Services.Security
                 // 检查是否使用跨平台的分隔符检查
                 var normalizedForCheck = normalized.Replace('\\', '/');
 
+                var hasTraversalSegment =
+                    normalizedForCheck.Contains("/../", StringComparison.Ordinal) ||
+                    normalizedForCheck.EndsWith("/..", StringComparison.Ordinal) ||
+                    normalizedForCheck.Contains("\\..\\", StringComparison.Ordinal) ||
+                    normalizedForCheck.EndsWith("\\..", StringComparison.Ordinal);
+
+                var hasDotSegment =
+                    normalizedForCheck.Contains("/./", StringComparison.Ordinal) ||
+                    normalizedForCheck.EndsWith("/.", StringComparison.Ordinal) ||
+                    normalizedForCheck.Contains("\\.\\", StringComparison.Ordinal) ||
+                    normalizedForCheck.EndsWith("\\.", StringComparison.Ordinal);
+
                 return System.IO.Path.IsPathRooted(normalized)
-                    && !normalizedForCheck.Contains("..")
-                    && !normalizedForCheck.Contains("/.");
+                    && !hasTraversalSegment
+                    && !hasDotSegment;
             }
             catch
             {

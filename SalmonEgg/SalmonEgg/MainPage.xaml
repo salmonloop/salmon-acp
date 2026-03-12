@@ -683,7 +683,7 @@
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="MainNavView.PaneDisplayMode" Value="LeftCompact" />
-                        <Setter Target="MainNavView.IsPaneOpen" Value="True" />
+                        <Setter Target="MainNavView.IsPaneOpen" Value="False" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
                         <Setter Target="TopSearchBox.Width" Value="280" />
                         <Setter Target="ChatNavRoot.IsExpanded" Value="False" />

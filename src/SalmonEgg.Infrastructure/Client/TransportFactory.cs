@@ -42,7 +42,7 @@ public class TransportFactory : ITransportFactory
        string? args = null,
        string? url = null)
    {
-       _logger?.Information("正在创建传输实例：{TransportType}", transportType);
+       _logger.Information("正在创建传输实例：{TransportType}", transportType);
 
        return transportType switch
        {
@@ -59,7 +59,7 @@ public class TransportFactory : ITransportFactory
    /// <returns>默认的 <see cref="ITransport"/> 实例</returns>
    public SalmonEgg.Domain.Interfaces.Transport.ITransport CreateDefaultTransport()
    {
-       _logger?.Information("创建默认传输实例：Stdio");
+       _logger.Information("创建默认传输实例：Stdio");
        // 默认使用 Stdio 传输，参数为空的命令
        return new StdioTransport("agent-command", Array.Empty<string>(), System.Text.Encoding.UTF8);
    }
@@ -78,7 +78,7 @@ public class TransportFactory : ITransportFactory
            throw new ArgumentException("Stdio 传输必须指定命令", nameof(command));
        }
 
-       _logger?.Information("创建 Stdio 传输：Command={Command}, Args={Args}", command, args);
+       _logger.Information("创建 Stdio 传输：Command={Command}, Args={Args}", command, args);
 
        var argsArray = string.IsNullOrWhiteSpace(args)
            ? Array.Empty<string>()
@@ -105,9 +105,10 @@ public class TransportFactory : ITransportFactory
            throw new ArgumentException($"无效的 WebSocket URL: {url}", nameof(url));
        }
 
-       _logger?.Information("创建 WebSocket 传输：Url={Url}", url);
+       _logger.Information("创建 WebSocket 传输：Url={Url}", url);
 
-       var inner = new SalmonEgg.Infrastructure.Network.WebSocketTransport(_logger);
+       var logger = _logger;
+       var inner = new SalmonEgg.Infrastructure.Network.WebSocketTransport(logger);
        return new NetworkTransportAdapter(inner, url.Trim());
    }
 
@@ -129,9 +130,10 @@ public class TransportFactory : ITransportFactory
            throw new ArgumentException($"无效的 HTTP SSE URL: {url}", nameof(url));
        }
 
-       _logger?.Information("创建 HTTP SSE 传输：Url={Url}", url);
+       _logger.Information("创建 HTTP SSE 传输：Url={Url}", url);
 
-       var inner = new SalmonEgg.Infrastructure.Network.HttpSseTransport(_logger);
+       var logger = _logger;
+       var inner = new SalmonEgg.Infrastructure.Network.HttpSseTransport(logger);
        return new NetworkTransportAdapter(inner, url.Trim());
    }
 }

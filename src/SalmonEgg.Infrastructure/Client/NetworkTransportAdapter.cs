@@ -2,14 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using DomainTransport = SalmonEgg.Domain.Interfaces.Transport.ITransport;
 using SalmonEgg.Domain.Interfaces.Transport;
+using NetworkTransport = SalmonEgg.Infrastructure.Network.ITransport;
 using SalmonEgg.Infrastructure.Network;
 
 namespace SalmonEgg.Infrastructure.Client;
 
-public sealed class NetworkTransportAdapter : ITransport, IDisposable
+public sealed class NetworkTransportAdapter : DomainTransport, IDisposable
 {
-    private readonly Network.ITransport _inner;
+    private readonly NetworkTransport _inner;
     private readonly string _url;
     private readonly List<IDisposable> _subscriptions = new();
     private bool _isConnected;
@@ -21,7 +23,7 @@ public sealed class NetworkTransportAdapter : ITransport, IDisposable
 
     public bool IsConnected => _isConnected;
 
-    public NetworkTransportAdapter(Network.ITransport inner, string url)
+    public NetworkTransportAdapter(NetworkTransport inner, string url)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _url = string.IsNullOrWhiteSpace(url) ? throw new ArgumentException("URL cannot be empty", nameof(url)) : url.Trim();

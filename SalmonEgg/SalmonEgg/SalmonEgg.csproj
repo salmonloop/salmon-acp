@@ -53,6 +53,9 @@
     -->
     <UnoFeatures>
     </UnoFeatures>
+
+    <!-- Suppress MVVM Toolkit AOT warning until partial properties are enabled in this codebase -->
+    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-desktop'">

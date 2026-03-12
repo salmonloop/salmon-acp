@@ -243,6 +243,13 @@ namespace SalmonEgg.Infrastructure.Network
                 // 序列化消息
                 string json = _protocolService.SerializeMessage(message);
 
+                if (_transport == null)
+                {
+                    var error = "Transport not initialized";
+                    _logger.Warning("Attempt to send message without transport");
+                    return SendResult.Failure(error);
+                }
+
                 // 发送消息
                 await _transport.SendAsync(json, ct);
 
@@ -269,7 +276,7 @@ namespace SalmonEgg.Infrastructure.Network
         /// <summary>
         /// 验证服务器配置
         /// </summary>
-        private string ValidateConfiguration(ServerConfiguration config)
+        private string? ValidateConfiguration(ServerConfiguration config)
         {
             if (string.IsNullOrWhiteSpace(config.ServerUrl))
             {
@@ -502,7 +509,7 @@ namespace SalmonEgg.Infrastructure.Network
         /// <summary>
         /// 更新连接状态
         /// </summary>
-        private void UpdateConnectionState(ConnectionStatus status, string serverUrl, string errorMessage = null, int retryCount = 0)
+        private void UpdateConnectionState(ConnectionStatus status, string serverUrl, string? errorMessage = null, int retryCount = 0)
         {
             var state = new ConnectionState
             {
@@ -530,6 +537,10 @@ namespace SalmonEgg.Infrastructure.Network
             };
 
             var json = _protocolService.SerializeMessage(initMessage);
+            if (_transport == null)
+            {
+                throw new InvalidOperationException("Transport not initialized");
+            }
             await _transport.SendAsync(json, ct);
 
             _logger.Information("Initialize message sent successfully to server: {MessageId}", initMessage.Id);
@@ -581,7 +592,7 @@ namespace SalmonEgg.Infrastructure.Network
         /// <summary>
         /// 心跳定时器触发事件处理
         /// </summary>
-        private async void OnHeartbeatTimerElapsed(object sender, ElapsedEventArgs e)
+        private async void OnHeartbeatTimerElapsed(object? sender, ElapsedEventArgs e)
         {
             try
             {

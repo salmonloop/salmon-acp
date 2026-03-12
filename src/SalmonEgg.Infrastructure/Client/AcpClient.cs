@@ -430,8 +430,13 @@ namespace SalmonEgg.Infrastructure.Client
         /// <summary>
         /// 响应权限请求。
         /// </summary>
-        public async Task<bool> RespondToPermissionRequestAsync(object messageId, string outcome, string? optionId = null)
+        public async Task<bool> RespondToPermissionRequestAsync(object? messageId, string outcome, string? optionId = null)
         {
+            if (messageId == null)
+            {
+                return false;
+            }
+
             return await TrySendPermissionOutcomeResponseAsync(messageId, outcome, optionId).ConfigureAwait(false);
         }
 
@@ -443,10 +448,16 @@ namespace SalmonEgg.Infrastructure.Client
             return await TrySendFileSystemResponseAsync(messageId, success, content, message).ConfigureAwait(false);
         }
 
-        private async Task<bool> TrySendPermissionOutcomeResponseAsync(object messageId, string outcome, string? optionId)
+        private async Task<bool> TrySendPermissionOutcomeResponseAsync(object? messageId, string outcome, string? optionId)
         {
+            if (messageId == null)
+            {
+                return false;
+            }
+
             // Only respond once per inbound request id.
-            if (!_pendingInboundRequestMethods.TryRemove(messageId?.ToString() ?? string.Empty, out _))
+            var idStr = messageId.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(idStr) || !_pendingInboundRequestMethods.TryRemove(idStr, out _))
             {
                 return false;
             }
@@ -695,10 +706,15 @@ namespace SalmonEgg.Infrastructure.Client
             }
         }
 
-        private void ScheduleInboundRequestTimeout(object messageId, TimeSpan timeout, string defaultKind)
+        private void ScheduleInboundRequestTimeout(object? messageId, TimeSpan timeout, string defaultKind)
         {
             _ = Task.Run(async () =>
             {
+                if (messageId == null)
+                {
+                    return;
+                }
+
                 try
                 {
                     await Task.Delay(timeout).ConfigureAwait(false);
@@ -788,9 +804,15 @@ namespace SalmonEgg.Infrastructure.Client
                 {
                     foreach (var option in optionsProp.EnumerateArray())
                     {
-                        var optionId = option.TryGetProperty("optionId", out var id) ? id.GetString() : "";
-                        var name = option.TryGetProperty("name", out var n) ? n.GetString() : "";
-                        var kind = option.TryGetProperty("kind", out var k) ? k.GetString() : "";
+                        var optionId = option.TryGetProperty("optionId", out var id)
+                            ? id.GetString() ?? string.Empty
+                            : string.Empty;
+                        var name = option.TryGetProperty("name", out var n)
+                            ? n.GetString() ?? string.Empty
+                            : string.Empty;
+                        var kind = option.TryGetProperty("kind", out var k)
+                            ? k.GetString() ?? string.Empty
+                            : string.Empty;
                         optionsList.Add(new SalmonEgg.Domain.Services.Security.PermissionOption(optionId, name, kind));
                     }
                 }

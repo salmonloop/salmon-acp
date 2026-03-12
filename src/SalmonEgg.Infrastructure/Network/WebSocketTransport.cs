@@ -156,25 +156,34 @@ namespace SalmonEgg.Infrastructure.Network
         /// </summary>
         private void SubscribeToWebSocketEvents()
         {
+            var client = _client ?? throw new InvalidOperationException("WebSocket client is not initialized.");
+
             // Handle incoming messages
-            _client.MessageReceived.Subscribe(msg =>
+            client.MessageReceived.Subscribe(msg =>
             {
                 if (msg.MessageType == System.Net.WebSockets.WebSocketMessageType.Text)
                 {
-                    _logger.Debug("Received message: {Message}", msg.Text);
-                    _messagesSubject.OnNext(msg.Text);
+                    var text = msg.Text;
+                    if (string.IsNullOrEmpty(text))
+                    {
+                        _logger.Debug("Received empty WebSocket message");
+                        return;
+                    }
+
+                    _logger.Debug("Received message: {Message}", text);
+                    _messagesSubject.OnNext(text);
                 }
             });
 
             // Handle reconnection events
-            _client.ReconnectionHappened.Subscribe(info =>
+            client.ReconnectionHappened.Subscribe(info =>
             {
                 _logger.Information("WebSocket reconnection happened: {Type}", info.Type);
                 _stateSubject.OnNext(TransportState.Connected);
             });
 
             // Handle disconnection events
-            _client.DisconnectionHappened.Subscribe(info =>
+            client.DisconnectionHappened.Subscribe(info =>
             {
                 _logger.Warning("WebSocket disconnection happened: {Type}, {CloseStatus}",
                     info.Type, info.CloseStatus);

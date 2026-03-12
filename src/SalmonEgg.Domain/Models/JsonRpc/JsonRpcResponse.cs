@@ -14,7 +14,7 @@ namespace SalmonEgg.Domain.Models.JsonRpc
         /// 必须与请求消息中的 id 值相同。
         /// </summary>
         [JsonPropertyName("id")]
-        public object Id { get; set; } = string.Empty;
+        public object? Id { get; set; }
 
         /// <summary>
         /// 方法调用的结果。
@@ -44,7 +44,7 @@ namespace SalmonEgg.Domain.Models.JsonRpc
         /// </summary>
         /// <param name="id">对应的请求 ID</param>
         /// <param name="result">响应结果</param>
-        public JsonRpcResponse(object id, JsonElement? result)
+        public JsonRpcResponse(object? id, JsonElement? result)
         {
             Id = id;
             Result = result;
@@ -56,7 +56,7 @@ namespace SalmonEgg.Domain.Models.JsonRpc
         /// </summary>
         /// <param name="id">对应的请求 ID</param>
         /// <param name="error">错误信息</param>
-        public JsonRpcResponse(object id, JsonRpcError error)
+        public JsonRpcResponse(object? id, JsonRpcError error)
         {
             Id = id;
             Result = null;

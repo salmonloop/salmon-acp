@@ -116,4 +116,54 @@ public sealed class InitializeTypesTests
         Assert.That(parsed.RootElement.TryGetProperty("sessionCapabilities", out var sessionCaps), Is.True);
         Assert.That(sessionCaps.TryGetProperty("list", out _), Is.True);
     }
+
+    [Test]
+    public void InitializeParams_Meta_Should_Serialize_With_UnderscoreMeta()
+    {
+        // Given: InitializeParams with _meta
+        var initializeParams = new InitializeParams
+        {
+            Meta = new Dictionary<string, object?>
+            {
+                ["foo"] = "bar",
+                ["count"] = 3,
+                ["nullValue"] = null
+            }
+        };
+
+        // When: Serialize to JSON
+        var json = JsonSerializer.Serialize(initializeParams);
+        var parsed = JsonDocument.Parse(json);
+
+        // Then: _meta should be present and correctly typed
+        Assert.That(parsed.RootElement.TryGetProperty("_meta", out var meta), Is.True);
+        Assert.That(meta.GetProperty("foo").ValueKind, Is.EqualTo(JsonValueKind.String));
+        Assert.That(meta.GetProperty("count").ValueKind, Is.EqualTo(JsonValueKind.Number));
+        Assert.That(meta.GetProperty("nullValue").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public void InitializeResponse_Meta_Should_Deserialize_Correctly()
+    {
+        // Given: JSON with _meta
+        var json = """
+                   {
+                     "protocolVersion": 1,
+                     "agentInfo": { "name": "agent", "version": "1.0.0" },
+                     "agentCapabilities": {},
+                     "_meta": { "source": "unit-test", "flag": true }
+                   }
+                   """;
+
+        // When: Deserialize from JSON
+        var response = JsonSerializer.Deserialize<InitializeResponse>(json);
+
+        // Then: _meta should be present with JsonElement values
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Meta, Is.Not.Null);
+        Assert.That(response.Meta!.ContainsKey("source"), Is.True);
+        Assert.That(response.Meta["source"], Is.TypeOf<JsonElement>());
+        Assert.That(((JsonElement)response.Meta["source"]!).GetString(), Is.EqualTo("unit-test"));
+        Assert.That(((JsonElement)response.Meta["flag"]!).ValueKind, Is.EqualTo(JsonValueKind.True));
+    }
 }

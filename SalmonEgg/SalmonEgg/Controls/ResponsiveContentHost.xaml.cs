@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SalmonEgg.Presentation.Models;
@@ -23,6 +24,13 @@ public sealed partial class ResponsiveContentHost : UserControl
             typeof(ResponsiveContentHost),
             new PropertyMetadata(UiLayout.ContentMaxWidth, OnMaxContentWidthChanged));
 
+    public static readonly DependencyProperty MinGutterProperty =
+        DependencyProperty.Register(
+            nameof(MinGutter),
+            typeof(double),
+            typeof(ResponsiveContentHost),
+            new PropertyMetadata(24d, OnMaxContentWidthChanged));
+
     public object? Child
     {
         get => GetValue(ChildProperty);
@@ -33,6 +41,12 @@ public sealed partial class ResponsiveContentHost : UserControl
     {
         get => (double)GetValue(MaxContentWidthProperty);
         set => SetValue(MaxContentWidthProperty, value);
+    }
+
+    public double MinGutter
+    {
+        get => (double)GetValue(MinGutterProperty);
+        set => SetValue(MinGutterProperty, value);
     }
 
     public ResponsiveContentHost()
@@ -67,11 +81,14 @@ public sealed partial class ResponsiveContentHost : UserControl
             return;
         }
 
-        if (availableWidth > max && !_isWide)
+        var minGutter = Math.Max(0, MinGutter);
+        var wideThreshold = max + (minGutter * 2);
+
+        if (availableWidth >= wideThreshold && !_isWide)
         {
             SetWide(max);
         }
-        else if (availableWidth <= max && _isWide)
+        else if (availableWidth < wideThreshold && _isWide)
         {
             SetNarrow();
         }

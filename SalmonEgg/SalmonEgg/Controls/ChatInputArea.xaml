@@ -16,7 +16,7 @@
 
     <Border Padding="20,0,20,20"
             Background="Transparent">
-        <Grid MaxWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneWay}">
+        <Grid MaxWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}">
             <Grid RowDefinitions="Auto,Auto,Auto">
                 <!-- Slash commands menu -->
                 <Border Grid.Row="0"
@@ -140,7 +140,7 @@
                             Padding="12,0"
                             CornerRadius="8"
                             ToolTipService.ToolTip="“娶她”功能占位"
-                            Visibility="{x:Bind models:UiFeatures.MarryHerEnabled, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            Visibility="{x:Bind models:UiFeatures.MarryHerEnabled, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"/>
                 </StackPanel>
             </Grid>
         </Grid>

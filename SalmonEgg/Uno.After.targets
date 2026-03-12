@@ -9,4 +9,5 @@
       OR $(TargetFrameworks.Contains('net8.0-browserwasm'))">
     <TargetFrameworks>$(SalmonEggAllTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
+
 </Project>
