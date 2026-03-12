@@ -186,7 +186,8 @@
             <controls:ResponsiveContentHost Grid.Row="1"
                                             MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneWay}">
                 <controls:ResponsiveContentHost.Child>
-                    <ListView ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}"
+                    <ListView x:Name="MessagesList"
+                              ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}"
                               ItemTemplate="{StaticResource MessageTemplate}"
                               Padding="20"
                               SelectionMode="None"

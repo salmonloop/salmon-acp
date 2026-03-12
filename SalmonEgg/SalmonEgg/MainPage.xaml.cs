@@ -34,10 +34,13 @@ public sealed partial class MainPage : Page
     private const double DefaultOpenPaneLength = 240;
     private const double RightPanelMinWidth = 240;
     private const double RightPanelMaxWidth = 520;
+    private const double RightPanelAnimationOffset = 16;
     private bool _isResizingRightPanel;
     private double _rightPanelResizeStartX;
     private double _rightPanelResizeStartWidth;
     private string? _activeRightPanel;
+    private double _rightPanelLastWidth = 320;
+    private Storyboard? _rightPanelStoryboard;
     private string _activePrimaryNavKey = MainNavItemKeys.Start;
     private bool _suppressNavSelectionChanged;
     private long _navSelectionRequestId;
@@ -408,9 +411,37 @@ public sealed partial class MainPage : Page
         }
 
         _activeRightPanel = key;
-        RightPanelColumn.Visibility = Visibility.Visible;
-        var baseWidth = double.IsNaN(RightPanelColumn.Width) || RightPanelColumn.Width <= 0 ? 320 : RightPanelColumn.Width;
-        RightPanelColumn.Width = Math.Clamp(baseWidth, RightPanelMinWidth, RightPanelMaxWidth);
+        if (RightPanelColumnDefinition is not null)
+        {
+            RightPanelColumnDefinition.Width = GridLength.Auto;
+        }
+        var baseWidth = double.IsNaN(RightPanelColumn.Width) || RightPanelColumn.Width <= 0
+            ? _rightPanelLastWidth
+            : RightPanelColumn.Width;
+        var targetWidth = Math.Clamp(baseWidth, RightPanelMinWidth, RightPanelMaxWidth);
+        _rightPanelLastWidth = targetWidth;
+
+        if (Preferences.IsAnimationEnabled)
+        {
+            RightPanelColumn.Visibility = Visibility.Visible;
+            RightPanelColumn.Width = 0;
+            RightPanelColumn.Opacity = 0;
+            if (RightPanelTranslate is not null)
+            {
+                RightPanelTranslate.X = RightPanelAnimationOffset;
+            }
+            AnimateRightPanel(open: true, fromWidth: 0, toWidth: targetWidth);
+        }
+        else
+        {
+            RightPanelColumn.Visibility = Visibility.Visible;
+            RightPanelColumn.Width = targetWidth;
+            RightPanelColumn.Opacity = 1;
+            if (RightPanelTranslate is not null)
+            {
+                RightPanelTranslate.X = 0;
+            }
+        }
 
         RightPanelTitle.Text = key switch
         {
@@ -434,7 +465,34 @@ public sealed partial class MainPage : Page
         }
 
         _activeRightPanel = null;
-        RightPanelColumn.Visibility = Visibility.Collapsed;
+        if (Preferences.IsAnimationEnabled)
+        {
+            var fromWidth = RightPanelColumn.Width;
+            if (double.IsNaN(fromWidth) || fromWidth <= 0)
+            {
+                fromWidth = RightPanelColumn.ActualWidth;
+            }
+            if (fromWidth <= 0)
+            {
+                fromWidth = _rightPanelLastWidth;
+            }
+            _rightPanelLastWidth = Math.Clamp(fromWidth, RightPanelMinWidth, RightPanelMaxWidth);
+            AnimateRightPanel(open: false, fromWidth: fromWidth, toWidth: 0);
+        }
+        else
+        {
+            RightPanelColumn.Visibility = Visibility.Collapsed;
+            if (RightPanelColumnDefinition is not null)
+            {
+                RightPanelColumnDefinition.Width = new GridLength(0);
+            }
+            RightPanelColumn.Width = 0;
+            RightPanelColumn.Opacity = 1;
+            if (RightPanelTranslate is not null)
+            {
+                RightPanelTranslate.X = 0;
+            }
+        }
 
         DiffPanel.Visibility = Visibility.Collapsed;
         TodoPanel.Visibility = Visibility.Collapsed;
@@ -445,8 +503,27 @@ public sealed partial class MainPage : Page
 
     private void UpdateRightPanelAvailability(bool isChat)
     {
-        DiffPanelButton.IsEnabled = isChat;
-        TodoPanelButton.IsEnabled = isChat;
+        var visibility = isChat ? Visibility.Visible : Visibility.Collapsed;
+        DiffPanelButton.Visibility = visibility;
+        TodoPanelButton.Visibility = visibility;
+
+        if (RightPanelColumnDefinition is not null)
+        {
+            if (!isChat)
+            {
+                RightPanelColumnDefinition.Width = new GridLength(0);
+                if (RightPanelColumn is not null)
+                {
+                    RightPanelColumn.Visibility = Visibility.Collapsed;
+                    RightPanelColumn.Width = 0;
+                    RightPanelColumn.Opacity = 1;
+                    if (RightPanelTranslate is not null)
+                    {
+                        RightPanelTranslate.X = 0;
+                    }
+                }
+            }
+        }
 
         if (!isChat)
         {
@@ -490,7 +567,85 @@ public sealed partial class MainPage : Page
         }
 
         RightPanelColumn.Width = newWidth;
+        _rightPanelLastWidth = newWidth;
         e.Handled = true;
+    }
+
+    private void AnimateRightPanel(bool open, double fromWidth, double toWidth)
+    {
+        if (RightPanelColumn is null)
+        {
+            return;
+        }
+
+        _rightPanelStoryboard?.Stop();
+
+        var duration = TimeSpan.FromMilliseconds(180);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var widthAnimation = new DoubleAnimation
+        {
+            From = fromWidth,
+            To = toWidth,
+            Duration = duration,
+            EasingFunction = easing,
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(widthAnimation, RightPanelColumn);
+        Storyboard.SetTargetProperty(widthAnimation, "Width");
+
+        var opacityAnimation = new DoubleAnimation
+        {
+            From = open ? 0 : 1,
+            To = open ? 1 : 0,
+            Duration = duration,
+            EasingFunction = easing
+        };
+        Storyboard.SetTarget(opacityAnimation, RightPanelColumn);
+        Storyboard.SetTargetProperty(opacityAnimation, "Opacity");
+
+        var translateAnimation = new DoubleAnimation
+        {
+            From = open ? RightPanelAnimationOffset : 0,
+            To = open ? 0 : RightPanelAnimationOffset,
+            Duration = duration,
+            EasingFunction = easing
+        };
+        if (RightPanelTranslate is not null)
+        {
+            Storyboard.SetTarget(translateAnimation, RightPanelTranslate);
+            Storyboard.SetTargetProperty(translateAnimation, "X");
+        }
+
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(widthAnimation);
+        storyboard.Children.Add(opacityAnimation);
+        if (RightPanelTranslate is not null)
+        {
+            storyboard.Children.Add(translateAnimation);
+        }
+
+        storyboard.Completed += (_, _) =>
+        {
+            if (!open)
+            {
+                RightPanelColumn.Visibility = Visibility.Collapsed;
+                if (RightPanelColumnDefinition is not null)
+                {
+                    RightPanelColumnDefinition.Width = new GridLength(0);
+                }
+                RightPanelColumn.Width = 0;
+                RightPanelColumn.Opacity = 1;
+                if (RightPanelTranslate is not null)
+                {
+                    RightPanelTranslate.X = 0;
+                }
+            }
+            _rightPanelStoryboard = null;
+        };
+
+        _rightPanelStoryboard = storyboard;
+        storyboard.Begin();
     }
 
     private void OnRightPanelResizerPointerReleased(object sender, PointerRoutedEventArgs e)

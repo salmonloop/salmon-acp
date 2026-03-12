@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -11,6 +12,9 @@ namespace SalmonEgg.Presentation.Views.Chat
     {
         public ChatViewModel ViewModel { get; }
         private readonly IShellNavigationService _shellNavigation;
+        private bool _isViewLoaded;
+        private bool _isTrackingMessages;
+        private bool _pendingInitialScroll = true;
 
         public ChatView()
         {
@@ -21,10 +25,14 @@ namespace SalmonEgg.Presentation.Views.Chat
             this.InitializeComponent();
 
             Loaded += OnLoaded;
+            Unloaded += OnUnloaded;
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            _isViewLoaded = true;
+            EnsureMessageTracking();
+            RequestInitialScroll();
             try
             {
                 // Restore may already be running from the singleton VM; calling again is safe.
@@ -34,6 +42,74 @@ namespace SalmonEgg.Presentation.Views.Chat
             catch
             {
             }
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            _isViewLoaded = false;
+            if (_isTrackingMessages)
+            {
+                ViewModel.MessageHistory.CollectionChanged -= OnMessageHistoryChanged;
+                ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+                _isTrackingMessages = false;
+            }
+        }
+
+        private void EnsureMessageTracking()
+        {
+            if (_isTrackingMessages)
+            {
+                return;
+            }
+
+            ViewModel.MessageHistory.CollectionChanged += OnMessageHistoryChanged;
+            ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _isTrackingMessages = true;
+        }
+
+        private void OnMessageHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (!_isViewLoaded)
+            {
+                return;
+            }
+
+            if (_pendingInitialScroll)
+            {
+                RequestInitialScroll();
+            }
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId) ||
+                e.PropertyName == nameof(ChatViewModel.IsSessionActive))
+            {
+                _pendingInitialScroll = true;
+                RequestInitialScroll();
+            }
+        }
+
+        private void RequestInitialScroll()
+        {
+            if (!_pendingInitialScroll || MessagesList is null)
+            {
+                return;
+            }
+
+            if (ViewModel.MessageHistory.Count == 0)
+            {
+                return;
+            }
+
+            _pendingInitialScroll = false;
+
+            _ = DispatcherQueue.TryEnqueue(() =>
+            {
+                MessagesList.UpdateLayout();
+                var last = ViewModel.MessageHistory[^1];
+                MessagesList.ScrollIntoView(last);
+            });
         }
 
         private void OnSessionNameClick(object sender, RoutedEventArgs e)
