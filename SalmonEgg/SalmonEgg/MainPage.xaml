@@ -513,7 +513,6 @@
 
         <DataTemplate x:Key="StartNavTemplate" x:DataType="nav:StartNavItemViewModel">
             <NavigationViewItem Content="{x:Bind Title, Mode=OneWay}"
-                                Tag="{x:Bind navModels:NavItemTag.Start}"
                                 ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Home" />
@@ -530,8 +529,11 @@
                                 Style="{StaticResource SessionsHeaderNavItemStyle}"
                                 SelectsOnInvoked="False"
                                 Tag="{x:Bind navModels:NavItemTag.SessionsHeader}"
-                                Icon="{x:Bind CompactIcon, Mode=OneWay}"
                                 ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Add"
+                                Visibility="{x:Bind IsPaneClosed, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                </NavigationViewItem.Icon>
                 <NavigationViewItem.Resources>
                     <StaticResource x:Key="NavigationViewItemForeground" ResourceKey="TextFillColorSecondaryBrush" />
                     <StaticResource x:Key="NavigationViewItemForegroundPointerOver" ResourceKey="TextFillColorSecondaryBrush" />
@@ -584,7 +586,6 @@
                                 HorizontalContentAlignment="Stretch"
                                 Style="{StaticResource ProjectNavItemStyle}"
                                 SelectsOnInvoked="False"
-                                Tag="{x:Bind navModels:NavItemTag.Project(ProjectId)}"
                                 ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Folder" />
@@ -992,12 +993,6 @@
                              SelectedItem="{x:Bind NavVM.SelectedItem, Mode=TwoWay}"
                              SelectionChanged="OnMainNavSelectionChanged"
                              ItemInvoked="OnMainNavItemInvoked"
-                             PointerPressed="OnMainNavPointerPressed"
-                             PointerReleased="OnMainNavPointerReleased"
-                             PointerCaptureLost="OnMainNavPointerCaptureLost"
-                             SizeChanged="OnMainNavSizeChanged"
-                             DisplayModeChanged="OnMainNavDisplayModeChanged"
-                             PaneOpening="OnMainNavPaneOpening"
                              PaneOpened="OnMainNavPaneOpened"
                              PaneClosed="OnMainNavPaneClosed"
                              PaneClosing="OnMainNavPaneClosing">

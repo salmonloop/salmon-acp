@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.UI.Xaml.Controls;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Presentation.Services;
@@ -30,7 +29,6 @@ public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewMode
     public IAsyncRelayCommand AddProjectCommand { get; }
 
     private bool _isPaneOpen = true;
-    private IconElement? _compactIcon;
 
     public bool IsPaneOpen
     {
@@ -40,28 +38,15 @@ public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewMode
             if (SetProperty(ref _isPaneOpen, value))
             {
                 OnPropertyChanged(nameof(IsPaneClosed));
-                UpdateCompactIcon();
             }
         }
     }
 
     public bool IsPaneClosed => !IsPaneOpen;
 
-    public IconElement? CompactIcon
-    {
-        get => _compactIcon;
-        private set => SetProperty(ref _compactIcon, value);
-    }
-
     public SessionsHeaderNavItemViewModel(IAsyncRelayCommand addProjectCommand)
     {
         AddProjectCommand = addProjectCommand;
-        UpdateCompactIcon();
-    }
-
-    private void UpdateCompactIcon()
-    {
-        CompactIcon = IsPaneClosed ? new SymbolIcon(Symbol.Add) : null;
     }
 }
 

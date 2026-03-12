@@ -51,7 +51,6 @@ public sealed partial class MainPage : Page
     private string _activePrimaryNavKey = MainNavItemKeys.Start;
     private bool _suppressNavSelectionChanged;
     private long _navSelectionRequestId;
-    private object? _lastNonHeaderSelection;
     private readonly ShellPanePolicy _panePolicy = new();
 #if WINDOWS
     private TrayIconManager? _trayIcon;
@@ -344,25 +343,20 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        App.BootLog($"MainNav SelectionChanged: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen} selectedType={args.SelectedItem?.GetType().Name ?? "null"} settings={args.IsSettingsSelected}");
-
         if (args.IsSettingsSelected)
         {
-            _lastNonHeaderSelection = MainNavView?.SettingsItem;
             NavigateToSettingsSubPage("General");
             return;
         }
 
         if (args.SelectedItem is StartNavItemViewModel)
         {
-            _lastNonHeaderSelection = args.SelectedItem;
             EnsureStartContent();
             return;
         }
 
         if (args.SelectedItem is SessionNavItemViewModel session && !session.IsPlaceholder)
         {
-            _lastNonHeaderSelection = args.SelectedItem;
             EnsureChatContent();
 
             var projectId = session.ProjectId;
@@ -418,70 +412,16 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void OnMainNavPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is NavigationView nav)
-        {
-            var tag = FindNavItemTag(e.OriginalSource as DependencyObject);
-            App.BootLog($"MainNav PointerPressed: display={nav.DisplayMode} paneOpen={nav.IsPaneOpen} tag={tag ?? "<null>"}");
-        }
-
-#if __SKIA__
-        if (e.OriginalSource is DependencyObject source)
-        {
-            var navItem = FindAncestor<NavigationViewItem>(source);
-            if (navItem?.Tag is string tag && TryHandleNavItemTag(tag))
-            {
-                App.BootLog($"MainNav PointerPressed handled via Tag: {tag}");
-                e.Handled = true;
-            }
-        }
-#endif
-    }
-
-    private void OnMainNavPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is NavigationView nav)
-        {
-            var tag = FindNavItemTag(e.OriginalSource as DependencyObject);
-            App.BootLog($"MainNav PointerReleased: display={nav.DisplayMode} paneOpen={nav.IsPaneOpen} tag={tag ?? "<null>"}");
-        }
-    }
-
-    private void OnMainNavPointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is NavigationView nav)
-        {
-            App.BootLog($"MainNav PointerCaptureLost: display={nav.DisplayMode} paneOpen={nav.IsPaneOpen}");
-        }
-    }
-
-    private void OnMainNavDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
-    {
-        App.BootLog($"MainNav DisplayModeChanged: mode={sender.DisplayMode} paneDisplay={sender.PaneDisplayMode} paneOpen={sender.IsPaneOpen}");
-    }
-
-    private void OnMainNavSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (sender is NavigationView nav)
-        {
-            App.BootLog($"MainNav SizeChanged: width={e.NewSize.Width:0.##} height={e.NewSize.Height:0.##} display={nav.DisplayMode} paneDisplay={nav.PaneDisplayMode} paneOpen={nav.IsPaneOpen}");
-        }
-    }
-
     private bool TryHandleNavItemTag(string tag)
     {
         if (string.Equals(tag, NavItemTag.SessionsHeader, StringComparison.Ordinal))
         {
-            App.BootLog("MainNav SessionsHeader invoked via Tag");
             if (!NavVM.SessionsHeaderItem.IsPaneOpen)
             {
-                App.BootLog("MainNav SessionsHeader: executing AddProjectCommand");
                 _ = NavVM.SessionsHeaderItem.AddProjectCommand.ExecuteAsync(null);
             }
             else
             {
-                App.BootLog("MainNav SessionsHeader: skipped AddProjectCommand because pane is open");
             }
 
             return true;
@@ -489,28 +429,11 @@ public sealed partial class MainPage : Page
 
         if (NavItemTag.TryParseMore(tag, out var moreProjectId))
         {
-            App.BootLog($"MainNav More invoked via Tag: {moreProjectId}");
             _ = NavVM.ShowAllSessionsForProjectAsync(moreProjectId);
             return true;
         }
 
         return false;
-    }
-
-    private static T? FindAncestor<T>(DependencyObject source) where T : DependencyObject
-    {
-        DependencyObject? current = source;
-        while (current != null)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return default;
     }
 
     private static object? ResolveInvokedItem(NavigationViewItemInvokedEventArgs args)
@@ -525,63 +448,7 @@ public sealed partial class MainPage : Page
             return element.DataContext;
         }
 
-        if (args.InvokedItem is FrameworkElement invokedElement)
-        {
-            FrameworkElement? current = invokedElement;
-            while (current != null)
-            {
-                if (current is NavigationViewItem navItem && navItem.DataContext != null)
-                {
-                    return navItem.DataContext;
-                }
-
-                current = VisualTreeHelper.GetParent(current) as FrameworkElement;
-            }
-        }
-
         return args.InvokedItem;
-    }
-
-    private static string? FindNavItemTag(DependencyObject? source)
-    {
-        if (source == null)
-        {
-            return null;
-        }
-
-        var navItem = FindAncestor<NavigationViewItem>(source);
-        return navItem?.Tag?.ToString();
-    }
-
-    private void HookWindowWidthStateLogging()
-    {
-        if (LayoutRoot == null)
-        {
-            return;
-        }
-
-        var groups = VisualStateManager.GetVisualStateGroups(LayoutRoot);
-        foreach (var group in groups)
-        {
-            if (group?.Name == "WindowWidthStates")
-            {
-                group.CurrentStateChanged += (_, args) =>
-                {
-                    App.BootLog($"WindowWidthStates: {args?.NewState?.Name ?? "<null>"}");
-                    LogNavState("WindowWidthStatesChanged");
-                };
-            }
-        }
-    }
-
-    private void LogNavState(string reason)
-    {
-        if (MainNavView == null)
-        {
-            return;
-        }
-
-        App.BootLog($"NavState[{reason}]: display={MainNavView.DisplayMode} paneDisplay={MainNavView.PaneDisplayMode} paneOpen={MainNavView.IsPaneOpen} compact={MainNavView.CompactPaneLength} open={MainNavView.OpenPaneLength} width={MainNavView.ActualWidth:0.##}");
     }
 
 
@@ -920,8 +787,6 @@ public sealed partial class MainPage : Page
         UpdateNavPaneToggleUi();
         SyncSessionsHeaderPaneState(MainNavView?.IsPaneOpen ?? true);
         NavVM.RebuildTree();
-        HookWindowWidthStateLogging();
-        LogNavState("MainPageLoaded");
 #if WINDOWS
         InitializeTray();
 #endif
@@ -1025,19 +890,12 @@ public sealed partial class MainPage : Page
 
     private void OnMainNavPaneOpened(NavigationView sender, object args)
     {
-        App.BootLog($"MainNav PaneOpened: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen}");
         UpdateNavPaneToggleUi();
         SyncSessionsHeaderPaneState(sender.IsPaneOpen);
     }
 
-    private void OnMainNavPaneOpening(NavigationView sender, object args)
-    {
-        App.BootLog($"MainNav PaneOpening: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen}");
-    }
-
     private void OnMainNavPaneClosed(NavigationView sender, object args)
     {
-        App.BootLog($"MainNav PaneClosed: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen}");
         UpdateNavPaneToggleUi();
         SyncSessionsHeaderPaneState(sender.IsPaneOpen);
     }
@@ -1049,7 +907,6 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        App.BootLog($"MainNav SyncSessionsHeaderPaneState: isOpen={isOpen}");
         NavVM.SessionsHeaderItem.IsPaneOpen = isOpen;
     }
 
@@ -1117,7 +974,6 @@ public sealed partial class MainPage : Page
     private void OnMainNavPaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)
     {
         var isMinimal = sender.DisplayMode == NavigationViewDisplayMode.Minimal;
-        App.BootLog($"MainNav PaneClosing: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen} minimal={isMinimal}");
         if (_panePolicy.ShouldCancelClosing(isMinimalMode: isMinimal))
         {
             args.Cancel = true;
