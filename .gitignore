@@ -149,6 +149,6 @@ DerivedData/
 # WebAssembly
 wwwroot/
 
-.AGENTS.md
-.CLAUDE.md
-.GEMINI.md
+AGENTS.md
+CLAUDE.md
+GEMINI.md
