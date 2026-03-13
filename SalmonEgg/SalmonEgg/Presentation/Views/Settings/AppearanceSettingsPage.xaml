@@ -7,9 +7,14 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:settings="using:SalmonEgg.Presentation.ViewModels.Settings"
+    xmlns:converters="using:SalmonEgg.Presentation.Converters"
     mc:Ignorable="d"
     Background="Transparent"
     AllowDrop="False">
+
+    <views:SettingsPageBase.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </views:SettingsPageBase.Resources>
 
     <ScrollViewer Padding="0"
                   HorizontalScrollBarVisibility="Disabled">
@@ -92,6 +97,43 @@
                             <ComboBoxItem Content="Acrylic" Tag="Acrylic" />
                             <ComboBoxItem x:Uid="Appearance_BackdropSolid" Content="纯色" Tag="Solid" />
                         </ComboBox>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <TextBlock Text="自定义背景" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+
+                <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="16">
+                    <StackPanel Spacing="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="启用自定义背景颜色" FontWeight="Medium"/>
+                                <TextBlock Text="使用自定义颜色替代系统背景"
+                                           FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsOn="{x:Bind Preferences.UseCustomBackground, Mode=TwoWay}"
+                                          OnContent="已开启"
+                                          OffContent="已禁用"
+                                          MinWidth="0"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <StackPanel Spacing="8" Visibility="{x:Bind Preferences.UseCustomBackground, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="背景颜色" FontSize="14"/>
+                            <TextBlock Text="(即将推出更多颜色选项)" Opacity="0.6"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>

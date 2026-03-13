@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Uno.WinUI.Lottie" />
   </ItemGroup>
 
   <ItemGroup>

@@ -64,7 +64,7 @@
                         <Grid Grid.Column="0">
                             <!-- Ghost completion overlay -->
                             <TextBlock IsHitTestVisible="False"
-                                       Margin="12,10,12,10"
+                                       Margin="14,12,14,12"
                                        TextWrapping="Wrap"
                                        Opacity="0.65"
                                        Visibility="{x:Bind ViewModel.ShowSlashCommands, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -77,8 +77,8 @@
                                      Text="{x:Bind ViewModel.CurrentPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                      AcceptsReturn="True"
                                      TextWrapping="Wrap"
-                                     MinHeight="44"
-                                     MaxHeight="120"
+                                     MinHeight="64"
+                                     MaxHeight="160"
                                      IsEnabled="{x:Bind ViewModel.IsInputEnabled, Mode=OneWay}"
                                      KeyboardAcceleratorPlacementMode="Hidden"
                                      KeyDown="OnInputKeyDown">
@@ -115,31 +115,51 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="2"
-                            Orientation="Horizontal"
-                            Spacing="8"
                             Margin="0,10,0,0">
-                    <ComboBox Width="140"
-                              FontSize="12"
-                              MinWidth="0"
-                              ItemsSource="{x:Bind ViewModel.AvailableModes, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
-                              PlaceholderText="选择模式">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:SessionModeViewModel">
-                                <TextBlock Text="{x:Bind ModeName, Mode=OneWay}"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxLines="1"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <ComboBox Grid.Column="0"
+                                  Width="140"
+                                  FontSize="12"
+                                  MinWidth="0"
+                                  ItemsSource="{x:Bind ViewModel.AvailableModes, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
+                                  PlaceholderText="选择模式">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SessionModeViewModel">
+                                    <TextBlock Text="{x:Bind ModeName, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxLines="1"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
-                    <!-- “娶她”功能占位：后续启用时复用同一输入区域组件 -->
+                        <ComboBox Grid.Column="2"
+                                  Width="140"
+                                  FontSize="12"
+                                  MinWidth="0"
+                                  Visibility="{x:Bind ViewModel.ShowThinkingLevelSelector, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                  ItemsSource="{x:Bind ViewModel.AvailableThinkingLevels, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedThinkingLevel, Mode=TwoWay}"
+                                  PlaceholderText="思考深度">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ThinkingLevelViewModel">
+                                    <TextBlock Text="{x:Bind LevelName, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxLines="1"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+
+                    <!-- "娶她"功能占位：后续启用时复用同一输入区域组件 -->
                     <Button Content="娶她"
                             FontSize="12"
                             MinHeight="28"
                             Padding="12,0"
                             CornerRadius="8"
-                            ToolTipService.ToolTip="“娶她”功能占位"
+                            ToolTipService.ToolTip="娶她功能占位"
+                            HorizontalAlignment="Left"
+                            Margin="0,8,0,0"
                             Visibility="{x:Bind models:UiFeatures.MarryHerEnabled, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"/>
                 </StackPanel>
             </Grid>

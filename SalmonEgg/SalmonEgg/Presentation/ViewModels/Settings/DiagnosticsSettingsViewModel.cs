@@ -10,16 +10,21 @@ using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
 
-public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
+public sealed partial class DiagnosticsSettingsViewModel : ObservableObject, IDisposable
 {
     private readonly IAppDataService _paths;
     private readonly IDiagnosticsBundleService _bundle;
+    private readonly ILogStreamService _logStreamService;
     private readonly IPlatformShellService _shell;
+    private readonly IUiDispatcher _uiDispatcher;
     private readonly ILogger<DiagnosticsSettingsViewModel> _logger;
+    private IDisposable? _logStreamSubscription;
+    private string _lastReadLogContent = string.Empty;
 
     public ChatViewModel Chat { get; }
 
@@ -38,20 +43,107 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     [ObservableProperty]
     private string? _latestLogFilePath;
 
+    [ObservableProperty]
+    private string _logViewerContent = string.Empty;
+
+    [ObservableProperty]
+    private bool _isLogStreamingEnabled;
+
+    [ObservableProperty]
+    private bool _autoScrollToBottom = true;
+
     public DiagnosticsSettingsViewModel(
         ChatViewModel chatViewModel,
         IAppDataService paths,
         IDiagnosticsBundleService bundle,
+        ILogStreamService logStreamService,
         IPlatformShellService shell,
+        IUiDispatcher uiDispatcher,
         ILogger<DiagnosticsSettingsViewModel> logger)
     {
         Chat = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _bundle = bundle ?? throw new ArgumentNullException(nameof(bundle));
+        _logStreamService = logStreamService ?? throw new ArgumentNullException(nameof(logStreamService));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         RefreshLatestLogFile();
+    }
+
+    [RelayCommand]
+    private void ToggleLogStreaming()
+    {
+        if (IsLogStreamingEnabled)
+        {
+            StopLogStreaming();
+        }
+        else
+        {
+            StartLogStreaming();
+        }
+    }
+
+    private void StartLogStreaming()
+    {
+        if (string.IsNullOrWhiteSpace(LatestLogFilePath))
+        {
+            RefreshLatestLogFile();
+            if (string.IsNullOrWhiteSpace(LatestLogFilePath))
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            var latestPath = LatestLogFilePath!;
+            _lastReadLogContent = File.ReadAllText(latestPath);
+            LogViewerContent = _lastReadLogContent;
+
+            _logStreamSubscription = _logStreamService.StartWatching(latestPath, OnLogContentChanged);
+            IsLogStreamingEnabled = _logStreamSubscription != null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start log streaming");
+        }
+    }
+
+    private void StopLogStreaming()
+    {
+        _logStreamSubscription?.Dispose();
+        _logStreamSubscription = null;
+        IsLogStreamingEnabled = false;
+    }
+
+    private void OnLogContentChanged(string newContent)
+    {
+        try
+        {
+            if (newContent == _lastReadLogContent)
+            {
+                return;
+            }
+
+            _lastReadLogContent = newContent;
+            _ = _uiDispatcher.TryEnqueue(() =>
+            {
+                LogViewerContent = newContent;
+            });
+        }
+        catch
+        {
+            // Ignore
+        }
+    }
+
+    [RelayCommand]
+    private void ClearLogViewer()
+    {
+        LogViewerContent = string.Empty;
+        _lastReadLogContent = string.Empty;
     }
 
     [RelayCommand]
@@ -143,6 +235,11 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
         }
 
         return text.Substring(text.Length - maxChars, maxChars);
+    }
+
+    public void Dispose()
+    {
+        StopLogStreaming();
     }
 }
 

@@ -34,6 +34,14 @@ public partial class AppPreferencesViewModel : ObservableObject
     private string _backdrop = "System";
 
     [ObservableProperty]
+    private bool _useCustomBackground;
+
+    [ObservableProperty]
+    private string _customBackgroundColor = "Default";
+
+    public bool IsDefaultBackgroundColor => CustomBackgroundColor == "Default";
+
+    [ObservableProperty]
     private bool _launchOnStartup;
 
     [ObservableProperty]
@@ -120,6 +128,8 @@ public partial class AppPreferencesViewModel : ObservableObject
                 UiMotion.Current.IsAnimationEnabled = true;
                 App.ApplyReducedMotion(false);
                 Backdrop = settings.Backdrop;
+                UseCustomBackground = settings.UseCustomBackground;
+                CustomBackgroundColor = settings.CustomBackgroundColor;
                 LaunchOnStartup = launchOnStartup;
                 MinimizeToTray = settings.MinimizeToTray;
                 Language = settings.Language;
@@ -194,6 +204,8 @@ public partial class AppPreferencesViewModel : ObservableObject
         ScheduleSave();
     }
     partial void OnBackdropChanged(string value) => ScheduleSave();
+    partial void OnUseCustomBackgroundChanged(bool value) => ScheduleSave();
+    partial void OnCustomBackgroundColorChanged(string value) => ScheduleSave();
     partial void OnLaunchOnStartupChanged(bool value)
     {
         ScheduleSave();
@@ -221,6 +233,17 @@ public partial class AppPreferencesViewModel : ObservableObject
     private void OnProjectsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         ScheduleSave();
+    }
+
+    public void RemoveProject(string projectId)
+    {
+        var project = Projects.FirstOrDefault(p => string.Equals(p.ProjectId, projectId, StringComparison.Ordinal));
+        if (project != null)
+        {
+            Projects.Remove(project);
+            _logger.LogInformation("项目已删除: {ProjectId}", projectId);
+            ScheduleSave();
+        }
     }
 
     private void OnKeyBindingsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -292,6 +315,8 @@ public partial class AppPreferencesViewModel : ObservableObject
             Theme = "System";
             IsAnimationEnabled = true;
             Backdrop = "System";
+            UseCustomBackground = false;
+            CustomBackgroundColor = "Default";
             LaunchOnStartup = false;
             MinimizeToTray = true;
             Language = "System";
@@ -332,6 +357,8 @@ public partial class AppPreferencesViewModel : ObservableObject
                     Theme = Theme,
                     IsAnimationEnabled = IsAnimationEnabled,
                     Backdrop = Backdrop,
+                    UseCustomBackground = UseCustomBackground,
+                    CustomBackgroundColor = CustomBackgroundColor,
                     LaunchOnStartup = LaunchOnStartup,
                     MinimizeToTray = MinimizeToTray,
                     Language = Language,

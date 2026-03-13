@@ -26,6 +26,16 @@ public sealed class AppSettings
     /// </summary>
     public string Backdrop { get; set; } = "System";
 
+    /// <summary>
+    /// Whether to use custom background color.
+    /// </summary>
+    public bool UseCustomBackground { get; set; }
+
+    /// <summary>
+    /// Custom background color: "Default", "Ocean", "Forest", "Sunset", "Night".
+    /// </summary>
+    public string CustomBackgroundColor { get; set; } = "Default";
+
     // Data & Storage / Privacy
     public bool SaveLocalHistory { get; set; } = true;
 

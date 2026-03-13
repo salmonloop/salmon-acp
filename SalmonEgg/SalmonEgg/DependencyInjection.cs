@@ -132,6 +132,7 @@ public static class DependencyInjection
 
         // Diagnostics & platform shell
         services.AddSingleton<IDiagnosticsBundleService, SalmonEgg.Infrastructure.Services.DiagnosticsBundleService>();
+        services.AddSingleton<ILogStreamService, SalmonEgg.Infrastructure.Services.LogStreamService>();
         services.AddSingleton<IPlatformShellService, SalmonEgg.Infrastructure.Services.PlatformShellService>();
 
         }
@@ -189,6 +190,12 @@ public static class DependencyInjection
 
         // Main shell navigation (Start + Projects -> Sessions tree)
         services.AddSingleton<MainNavigationViewModel>();
+
+        // 全局搜索功能
+        services.AddSingleton<GlobalSearchViewModel>();
+
+        // UI dispatcher
+        services.AddSingleton<IUiDispatcher, UiDispatcher>();
 
         // Start page orchestrator (Start creates session and submits)
         services.AddSingleton<StartViewModel>();

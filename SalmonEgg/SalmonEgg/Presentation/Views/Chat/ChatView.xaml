@@ -71,6 +71,13 @@
                         Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1">
+                    <Border.ContextFlyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="删除此消息"
+                                            Click="OnDeleteMessageClick"
+                                            Tag="{x:Bind}"/>
+                        </MenuFlyout>
+                    </Border.ContextFlyout>
                     <StackPanel>
                         <!-- 只有当有标题时显示 (例如工具调用) -->
                         <TextBlock Text="{x:Bind Title, Mode=OneWay}"
@@ -81,6 +88,7 @@
 
                         <TextBlock Text="{x:Bind TextContent, Mode=OneWay}"
                                    TextWrapping="Wrap"
+                                   IsTextSelectionEnabled="True"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                    Visibility="{x:Bind HasTextContent, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
@@ -205,6 +213,24 @@
                     </ListView>
                 </controls:ResponsiveContentHost.Child>
             </controls:ResponsiveContentHost>
+
+            <!-- Agent 思考状态指示器 -->
+            <Border Grid.Row="1"
+                    VerticalAlignment="Bottom"
+                    HorizontalAlignment="Left"
+                    Margin="20,0,20,16"
+                    Padding="12,8"
+                    Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                    CornerRadius="8"
+                    Visibility="{x:Bind ViewModel.IsThinking, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing IsActive="True" Width="16" Height="16"/>
+                    <TextBlock Text="正在思考..."
+                               FontSize="13"
+                               Opacity="0.8"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
 
             <!-- 输入区域（可复用控件，包含模式选择与后续扩展位） -->
             <controls:ResponsiveContentHost Grid.Row="2"

@@ -211,5 +211,13 @@ namespace SalmonEgg.Presentation.Views.Chat
         {
             _shellNavigation.NavigateToSettings("General");
         }
+
+        private void OnDeleteMessageClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuFlyoutItem menuItem && menuItem.Tag is ChatMessageViewModel message)
+            {
+                ViewModel.DeleteMessageCommand.Execute(message);
+            }
+        }
     }
 }

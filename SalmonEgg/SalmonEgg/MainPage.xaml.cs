@@ -20,6 +20,8 @@ using SalmonEgg.Application.Common.Shell;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Models.Navigation;
+using SalmonEgg.Presentation.Services;
+using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -69,6 +71,7 @@ public sealed partial class MainPage : Page
 
     public AppPreferencesViewModel Preferences { get; }
     public MainNavigationViewModel NavVM { get; }
+    public GlobalSearchViewModel SearchVM { get; }
     private readonly ChatViewModel _chatViewModel;
     public ChatViewModel ChatVM => _chatViewModel;
 
@@ -79,6 +82,7 @@ public sealed partial class MainPage : Page
         Preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
         NavVM = App.ServiceProvider.GetRequiredService<MainNavigationViewModel>();
         _chatViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
+        SearchVM = App.ServiceProvider.GetRequiredService<GlobalSearchViewModel>();
 
         this.InitializeComponent();
         BootLogDebug("MainPage: InitializeComponent done");
@@ -935,6 +939,49 @@ public sealed partial class MainPage : Page
     private void OnToggleLeftNavClick(object sender, RoutedEventArgs e)
     {
         ToggleNavPane();
+    }
+
+    private void OnSearchBoxTextChanged(object sender, TextChangedEventArgs e)
+    {
+        // 搜索框文本变化时，同步到 SearchVM
+        if (SearchVM != null && sender is Microsoft.UI.Xaml.Controls.TextBox textBox)
+        {
+            SearchVM.Query = textBox.Text;
+        }
+    }
+
+    private void OnSearchBoxGotFocus(object sender, RoutedEventArgs e)
+    {
+        // 搜索框获得焦点时，显示搜索面板
+        if (SearchVM != null)
+        {
+            SearchVM.OpenSearchPanelCommand.Execute(null);
+        }
+    }
+
+    private void OnSearchPanelPopupClosed(object sender, object e)
+    {
+        // 搜索面板关闭时，清空搜索结果
+        if (SearchVM != null)
+        {
+            SearchVM.CloseSearchPanelCommand.Execute(null);
+        }
+    }
+
+    private void OnSearchResultItemClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.Button button && button.Tag is SalmonEgg.Presentation.Models.Search.SearchResultItem item)
+        {
+            SearchVM?.SelectResultCommand.Execute(item);
+        }
+    }
+
+    private void OnSearchHistoryItemClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.Button button && button.Tag is string query)
+        {
+            SearchVM?.UseHistoryItemCommand.Execute(query);
+        }
     }
 
     private void ToggleNavPane()

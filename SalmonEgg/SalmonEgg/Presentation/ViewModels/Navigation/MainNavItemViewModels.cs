@@ -5,6 +5,7 @@ using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
+using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.ViewModels.Navigation;
 
@@ -22,7 +23,10 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
 
     public IAsyncRelayCommand CreateSessionCommand { get; }
 
+    public IAsyncRelayCommand DeleteProjectCommand { get; }
+
     private bool _isExpanded = true;
+    private readonly AppPreferencesViewModel _preferences;
 
     public bool IsExpanded
     {
@@ -30,13 +34,21 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
         set => SetProperty(ref _isExpanded, value);
     }
 
-    public ProjectNavItemViewModel(ProjectDefinition project, bool isSystemProject, Func<string, Task> createSessionAsync)
+    public ProjectNavItemViewModel(ProjectDefinition project, bool isSystemProject, Func<string, Task> createSessionAsync, AppPreferencesViewModel preferences)
     {
         ProjectId = project.ProjectId;
         Title = project.Name;
         RootPath = project.RootPath;
         IsSystemProject = isSystemProject;
+        _preferences = preferences;
         CreateSessionCommand = new AsyncRelayCommand(() => createSessionAsync(ProjectId));
+        DeleteProjectCommand = new AsyncRelayCommand(DeleteProjectAsync, () => !isSystemProject);
+    }
+
+    private Task DeleteProjectAsync()
+    {
+        _preferences.RemoveProject(ProjectId);
+        return Task.CompletedTask;
     }
 }
 
@@ -67,6 +79,8 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
 
     public IAsyncRelayCommand RenameCommand { get; }
 
+    public IAsyncRelayCommand ArchiveCommand { get; }
+
     public SessionNavItemViewModel(
         string sessionId,
         string projectId,
@@ -85,10 +99,30 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         IsPlaceholder = isPlaceholder;
 
         RenameCommand = new AsyncRelayCommand(RenameAsync, CanRename);
+        ArchiveCommand = new AsyncRelayCommand(ArchiveAsync, CanArchive);
     }
 
     private bool CanRename()
         => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
+
+    private bool CanArchive()
+        => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
+
+    private async Task ArchiveAsync()
+    {
+        var confirmed = await _ui.ConfirmAsync(
+            title: "归档会话",
+            message: $"确定要归档会话 \"{Title}\" 吗？",
+            primaryButtonText: "归档",
+            closeButtonText: "取消").ConfigureAwait(true);
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _chatViewModel.ArchiveConversation(SessionId);
+    }
 
     private async Task RenameAsync()
     {

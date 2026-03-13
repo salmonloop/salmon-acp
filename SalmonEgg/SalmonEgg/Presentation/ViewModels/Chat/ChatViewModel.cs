@@ -161,6 +161,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private SessionModeViewModel? _selectedMode;
 
+    // Thinking Level
+    [ObservableProperty]
+    private ObservableCollection<ThinkingLevelViewModel> _availableThinkingLevels = new();
+
+    [ObservableProperty]
+    private ThinkingLevelViewModel? _selectedThinkingLevel;
+
     public ObservableCollection<ServerConfiguration> AcpProfileList => _acpProfiles.Profiles;
 
     [ObservableProperty]
@@ -173,7 +180,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _showConfigOptionsPanel;
 
+    [ObservableProperty]
+    private bool _showThinkingLevelSelector;
+
     private string? _modeConfigId;
+    private string? _thoughtLevelConfigId;
 
     // Slash commands
     [ObservableProperty]
@@ -250,6 +261,50 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         // Start restoring local conversation list immediately so the sidebar can show it ASAP.
         _ = RestoreConversationsAsync();
+
+        // Sync Thinking Levels from ACP ConfigOptions (category: "thought_level")
+        SyncThinkingLevelsFromConfigOptions();
+    }
+
+    private void SyncThinkingLevelsFromConfigOptions()
+    {
+        var thoughtLevelOption = ConfigOptions.FirstOrDefault(o =>
+            string.Equals(o.Category, "thought_level", StringComparison.OrdinalIgnoreCase));
+
+        if (thoughtLevelOption == null || thoughtLevelOption.Options.Count == 0)
+        {
+            // No config option from Agent - hide the thinking level selector
+            // This follows ACP spec: if Agent doesn't provide thought_level category, don't show it
+            AvailableThinkingLevels.Clear();
+            ShowThinkingLevelSelector = false;
+            _thoughtLevelConfigId = null;
+            return;
+        }
+
+        // Store the config option ID for later use when setting values
+        _thoughtLevelConfigId = thoughtLevelOption.Id;
+
+        // Populate from Agent's configOptions
+        AvailableThinkingLevels.Clear();
+        foreach (var opt in thoughtLevelOption.Options)
+        {
+            AvailableThinkingLevels.Add(new ThinkingLevelViewModel
+            {
+                LevelId = opt.Value,
+                LevelName = opt.Name,
+                Description = opt.Description ?? string.Empty
+            });
+        }
+
+        ShowThinkingLevelSelector = AvailableThinkingLevels.Count > 0;
+
+        var current = thoughtLevelOption.SelectedOption?.Value ?? thoughtLevelOption.TextValue;
+        if (!string.IsNullOrWhiteSpace(current) && AvailableThinkingLevels.Count > 0)
+        {
+            SelectedThinkingLevel = AvailableThinkingLevels.FirstOrDefault(l => l.LevelId == current) 
+                ?? SelectedThinkingLevel 
+                ?? AvailableThinkingLevels[0];
+        }
     }
 
     private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -296,6 +351,54 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         // Fire-and-forget; errors are surfaced via the existing ConnectionErrorMessage/Logger paths.
         _ = ConnectToAcpProfileCommand.ExecuteAsync(value);
+    }
+
+    partial void OnSelectedThinkingLevelChanged(ThinkingLevelViewModel? value)
+    {
+        // Send the thinking level change to the Agent via session/set_config_option
+        if (value == null || string.IsNullOrWhiteSpace(_thoughtLevelConfigId) || string.IsNullOrWhiteSpace(_currentRemoteSessionId))
+        {
+            return;
+        }
+
+        // Fire-and-forget; errors are logged but not shown to user for config changes
+        _ = SetThinkingLevelAsync(value.LevelId);
+    }
+
+    private async Task SetThinkingLevelAsync(string levelId)
+    {
+        try
+        {
+            if (_chatService == null)
+                return;
+            if (string.IsNullOrWhiteSpace(_thoughtLevelConfigId))
+                return;
+
+            var setParams = new SessionSetConfigOptionParams(
+                _currentRemoteSessionId!,
+                _thoughtLevelConfigId,
+                levelId);
+
+            var response = await _chatService.SetSessionConfigOptionAsync(setParams);
+
+            // Update ConfigOptions with the new state from the Agent
+            if (response.ConfigOptions != null)
+            {
+                ConfigOptions.Clear();
+                foreach (var option in response.ConfigOptions)
+                {
+                    ConfigOptions.Add(ConfigOptionViewModel.CreateFromAcp(option));
+                }
+                SyncModesFromConfigOptions();
+                SyncThinkingLevelsFromConfigOptions();
+            }
+
+            Logger.LogInformation("Thinking level changed to: {LevelId}", levelId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to set thinking level");
+        }
     }
 
     partial void OnCurrentSessionIdChanged(string? value)
@@ -1198,6 +1301,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     _activeAgentTextStreamMessage = null;
                     AddToolCallToHistory(toolCallUpdate);
                 }
+                else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
+                {
+                    IsThinking = true;
+                    UpdateToolCallStatus(toolCallStatusUpdate);
+                }
                 else if (e.Update is PlanUpdate planUpdate)
                 {
                     _activeAgentTextStreamMessage = null;
@@ -1756,6 +1864,45 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         AppendToTranscript(message);
     }
 
+    private void UpdateToolCallStatus(ToolCallStatusUpdate toolCallStatusUpdate)
+    {
+        if (string.IsNullOrEmpty(toolCallStatusUpdate.ToolCallId))
+        {
+            return;
+        }
+
+        var toolCallId = toolCallStatusUpdate.ToolCallId;
+        var status = toolCallStatusUpdate.Status;
+        var content = toolCallStatusUpdate.Content;
+
+        var existingMessage = MessageHistory.FirstOrDefault(m =>
+            m.ToolCallId == toolCallId && m.ContentType == "tool_call");
+
+        if (existingMessage != null)
+        {
+            if (status.HasValue)
+            {
+                existingMessage.ToolCallStatus = status;
+            }
+
+            if (content != null && content.Count > 0)
+            {
+                foreach (var item in content)
+                {
+                    if (item is Domain.Models.Tool.ContentToolCallContent contentItem)
+                    {
+                        if (contentItem.Content is TextContentBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
+                        {
+                            existingMessage.TextContent = string.IsNullOrEmpty(existingMessage.TextContent)
+                                ? textBlock.Text
+                                : existingMessage.TextContent + textBlock.Text;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private void UpdatePlan(PlanUpdate planUpdate)
     {
         ShowPlanPanel = true;
@@ -1786,8 +1933,37 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             binding.ShowPlanPanel = ShowPlanPanel;
             binding.PlanTitle = CurrentPlanTitle;
             binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
         }
+        ScheduleConversationSave();
+    }
+
+    public void ArchiveConversation(string conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        // 从会话管理器中移除
+        _sessionManager.RemoveSession(conversationId);
+
+        // 从 ConversationBindings 中移除
+        _conversationBindings.Remove(conversationId);
+
+        // 如果当前会话是被归档的会话，清除当前会话状态
+        if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
+        {
+            CurrentSessionId = null;
+            IsSessionActive = false;
+            MessageHistory.Clear();
+            CurrentPlan.Clear();
+        }
+
+        // 保存更新后的会话列表
+        ScheduleConversationSave();
+
+        // 触发会话列表更新事件
+        OnPropertyChanged(nameof(GetKnownConversationIds));
     }
 
     private void OnModeChanged(CurrentModeUpdate modeChange)
@@ -2456,6 +2632,25 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    [RelayCommand]
+    private void DeleteMessage(ChatMessageViewModel? message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        MessageHistory.Remove(message);
+
+        var binding = TryGetConversationBinding(CurrentSessionId);
+        if (binding != null)
+        {
+            binding.Transcript.Remove(message);
+            binding.LastUpdatedAt = DateTime.UtcNow;
+            ScheduleConversationSave();
+        }
+    }
+
     partial void OnCurrentPromptChanged(string value)
     {
         SendPromptCommand.NotifyCanExecuteChanged();
@@ -2630,4 +2825,19 @@ public partial class FileSystemRequestViewModel : ObservableObject
 
         await OnRespond(success, success ? ResponseContent : null, success ? null : "Operation failed");
     }
+}
+
+/// <summary>
+/// Thinking Level ViewModel
+/// </summary>
+public partial class ThinkingLevelViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private string _levelId = string.Empty;
+
+    [ObservableProperty]
+    private string _levelName = string.Empty;
+
+    [ObservableProperty]
+    private string _description = string.Empty;
 }

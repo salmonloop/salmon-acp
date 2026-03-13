@@ -368,7 +368,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         foreach (var (project, isSystem) in projects)
         {
-            var projectVm = new ProjectNavItemViewModel(project, isSystem, PrepareStartForProjectAsync)
+            var projectVm = new ProjectNavItemViewModel(project, isSystem, PrepareStartForProjectAsync, _preferences)
             {
                 IsExpanded = true
             };
@@ -422,7 +422,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             Name = "未归类",
             RootPath = string.Empty
         };
-        var vm = new ProjectNavItemViewModel(project, isSystemProject: true, PrepareStartForProjectAsync) { IsExpanded = true };
+        var vm = new ProjectNavItemViewModel(project, isSystemProject: true, PrepareStartForProjectAsync, _preferences) { IsExpanded = true };
         _projectIndex[vm.ProjectId] = vm;
         return vm;
     }
