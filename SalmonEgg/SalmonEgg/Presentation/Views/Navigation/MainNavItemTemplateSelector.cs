@@ -8,6 +8,7 @@ public sealed class MainNavItemTemplateSelector : DataTemplateSelector
 {
     public DataTemplate? StartTemplate { get; set; }
     public DataTemplate? HeaderTemplate { get; set; }
+    public DataTemplate? CompactAddTemplate { get; set; }
     public DataTemplate? ProjectTemplate { get; set; }
     public DataTemplate? SessionTemplate { get; set; }
     public DataTemplate? MoreTemplate { get; set; }
@@ -18,6 +19,7 @@ public sealed class MainNavItemTemplateSelector : DataTemplateSelector
         {
             StartNavItemViewModel => StartTemplate!,
             SessionsHeaderNavItemViewModel => HeaderTemplate!,
+            SessionsCompactAddNavItemViewModel => CompactAddTemplate!,
             ProjectNavItemViewModel => ProjectTemplate!,
             SessionNavItemViewModel => SessionTemplate!,
             MoreSessionsNavItemViewModel => MoreTemplate!,
@@ -28,4 +30,3 @@ public sealed class MainNavItemTemplateSelector : DataTemplateSelector
     protected override DataTemplate SelectTemplateCore(object item, DependencyObject container)
         => SelectTemplateCore(item);
 }
-

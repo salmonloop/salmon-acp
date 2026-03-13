@@ -92,6 +92,9 @@
     <!-- Ensure 'dotnet run' launches the WinUI 3 apphost (which bootstraps Windows App SDK), not the DLL. -->
     <UseAppHost>true</UseAppHost>
 
+    <!-- Prefer in-proc XamlCompiler to avoid net472 XamlCompiler.exe instability -->
+    <UseXamlCompilerExecutable>false</UseXamlCompilerExecutable>
+
     <!-- Prevent pulling in the WPF/WinForms host stack on the WinUI 3 target. -->
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
@@ -100,6 +103,7 @@
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
     <WindowsAppSdkUndockedRegFreeWinRTInitialize>false</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">

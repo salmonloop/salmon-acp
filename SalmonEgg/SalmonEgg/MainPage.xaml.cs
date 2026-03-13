@@ -63,17 +63,18 @@ public sealed partial class MainPage : Page
     public AppPreferencesViewModel Preferences { get; }
     public MainNavigationViewModel NavVM { get; }
     private readonly ChatViewModel _chatViewModel;
+    public ChatViewModel ChatVM => _chatViewModel;
 
     public MainPage()
     {
-        App.BootLog("MainPage: ctor start");
+        BootLogDebug("MainPage: ctor start");
         // 1. 在初始化组件前获取 ViewModel，确保 x:Bind 绑定正常
         Preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
         NavVM = App.ServiceProvider.GetRequiredService<MainNavigationViewModel>();
         _chatViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
 
         this.InitializeComponent();
-        App.BootLog("MainPage: InitializeComponent done");
+        BootLogDebug("MainPage: InitializeComponent done");
 
         Loaded += OnMainPageLoaded;
         Unloaded += OnMainPageUnloaded;
@@ -89,24 +90,33 @@ public sealed partial class MainPage : Page
 
         // 2. 监听全局设置变化（如动画开关、主题、背景材质）
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
+        _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
 
         // 3. 初始化主题与动画状态
         ApplyTheme();
         ApplyBackdrop();
         UpdateNavigationTransitions();
-        App.BootLog("MainPage: transitions updated");
+        BootLogDebug("MainPage: transitions updated");
 
         ConfigureNavigationView();
 
         // 4. 启动后默认进入开始界面
         NavVM.SelectStart();
         NavigateToStart();
-        App.BootLog("MainPage: navigated to StartView");
+        BootLogDebug("MainPage: navigated to StartView");
+    }
+
+    private static void BootLogDebug(string message)
+    {
+#if DEBUG
+        App.BootLog(message);
+#endif
     }
 
     private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
     {
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
+        _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
 #if WINDOWS
         _trayIcon?.Dispose();
         _trayIcon = null;
@@ -376,7 +386,7 @@ public sealed partial class MainPage : Page
         var containerDcType = (args.InvokedItemContainer as FrameworkElement)?.DataContext?.GetType().Name ?? "null";
         var invokedDcType = (args.InvokedItem as FrameworkElement)?.DataContext?.GetType().Name ?? "null";
         var tagText = (args.InvokedItemContainer as NavigationViewItem)?.Tag?.ToString() ?? "<null>";
-        App.BootLog($"MainNav ItemInvoked: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen} raw={rawInvokedType} container={containerType} containerDC={containerDcType} invokedDC={invokedDcType} tag={tagText}");
+        BootLogDebug($"MainNav ItemInvoked: display={sender.DisplayMode} paneOpen={sender.IsPaneOpen} raw={rawInvokedType} container={containerType} containerDC={containerDcType} invokedDC={invokedDcType} tag={tagText}");
 
         if (args.InvokedItemContainer is NavigationViewItem navItem
             && navItem.Tag is string tag)
@@ -388,18 +398,18 @@ public sealed partial class MainPage : Page
         }
 
         var invoked = ResolveInvokedItem(args);
-        App.BootLog($"MainNav ItemInvoked: resolved={invoked?.GetType().Name ?? "null"}");
+        BootLogDebug($"MainNav ItemInvoked: resolved={invoked?.GetType().Name ?? "null"}");
         if (invoked is SessionsHeaderNavItemViewModel header)
         {
-            App.BootLog($"MainNav SessionsHeader invoked (paneOpen={header.IsPaneOpen})");
+            BootLogDebug($"MainNav SessionsHeader invoked (paneOpen={header.IsPaneOpen})");
             if (!header.IsPaneOpen)
             {
-                App.BootLog("MainNav SessionsHeader: executing AddProjectCommand");
+                BootLogDebug("MainNav SessionsHeader: executing AddProjectCommand");
                 _ = header.AddProjectCommand.ExecuteAsync(null);
             }
             else
             {
-                App.BootLog("MainNav SessionsHeader: skipped AddProjectCommand because pane is open");
+                BootLogDebug("MainNav SessionsHeader: skipped AddProjectCommand because pane is open");
             }
 
             return;
@@ -554,12 +564,7 @@ public sealed partial class MainPage : Page
             }
         }
 
-        RightPanelTitle.Text = key switch
-        {
-            "Diff" => "Diff",
-            "Todo" => "Todo",
-            _ => "Panel"
-        };
+        UpdateRightPanelTitle();
 
         DiffPanel.Visibility = key == "Diff" ? Visibility.Visible : Visibility.Collapsed;
         TodoPanel.Visibility = key == "Todo" ? Visibility.Visible : Visibility.Collapsed;
@@ -610,6 +615,27 @@ public sealed partial class MainPage : Page
 
         DiffPanelButton.IsChecked = false;
         TodoPanelButton.IsChecked = false;
+    }
+
+    private void UpdateRightPanelTitle()
+    {
+        if (RightPanelTitle is null)
+        {
+            return;
+        }
+
+        RightPanelTitle.Text = _activeRightPanel switch
+        {
+            "Diff" => "Diff",
+            "Todo" => ResolveTodoPanelTitle(),
+            _ => "Panel"
+        };
+    }
+
+    private string ResolveTodoPanelTitle()
+    {
+        var title = _chatViewModel.CurrentPlanTitle?.Trim();
+        return string.IsNullOrWhiteSpace(title) ? "Todo" : title;
     }
 
     private void UpdateRightPanelAvailability(bool isChat)
@@ -900,14 +926,27 @@ public sealed partial class MainPage : Page
         SyncSessionsHeaderPaneState(sender.IsPaneOpen);
     }
 
-    private void SyncSessionsHeaderPaneState(bool isOpen)
+    private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (NavVM?.SessionsHeaderItem == null)
+        if (_activeRightPanel != "Todo")
         {
             return;
         }
 
-        NavVM.SessionsHeaderItem.IsPaneOpen = isOpen;
+        if (e.PropertyName == nameof(ChatViewModel.CurrentPlanTitle))
+        {
+            UpdateRightPanelTitle();
+        }
+    }
+
+    private void SyncSessionsHeaderPaneState(bool isOpen)
+    {
+        if (NavVM == null)
+        {
+            return;
+        }
+
+        NavVM.SetPaneOpen(isOpen);
     }
 
     private void AnimateNavPane(bool targetOpen)
@@ -1166,6 +1205,7 @@ public sealed partial class MainPage
     {
         base.OnNavigatedFrom(e);
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
+        _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
 
         Loaded -= OnMainPageLoaded;
         Unloaded -= OnMainPageUnloaded;

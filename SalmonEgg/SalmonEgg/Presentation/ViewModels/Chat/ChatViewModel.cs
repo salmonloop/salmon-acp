@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.ComponentModel;
 using System.Threading;
@@ -71,6 +72,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         public List<ChatMessageViewModel> Transcript { get; } = new();
         public List<PlanEntryViewModel> Plan { get; } = new();
         public bool ShowPlanPanel { get; set; }
+        public string? PlanTitle { get; set; }
     }
 
     [ObservableProperty]
@@ -143,6 +145,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     // so expose a stable property for UI bindings.
     public bool CanSendPromptUi => CanSendPrompt();
 
+    public bool HasPlanEntries => CurrentPlan.Count > 0;
+
+    public bool ShouldShowPlanList => ShowPlanPanel && HasPlanEntries;
+
+    public bool ShouldShowPlanEmpty => !ShowPlanPanel || !HasPlanEntries;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
     private bool _isConnected;
@@ -190,6 +198,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private bool _showPlanPanel;
 
     [ObservableProperty]
+    private string? _currentPlanTitle;
+
+    [ObservableProperty]
     private bool _showPermissionDialog;
 
     [ObservableProperty]
@@ -233,6 +244,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         // 订阅事件
         SubscribeToEvents();
+        CurrentPlan.CollectionChanged += OnCurrentPlanCollectionChanged;
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
 
@@ -305,6 +317,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         else
         {
             _currentRemoteSessionId = null;
+            CurrentPlanTitle = null;
+            ShowPlanPanel = false;
+            CurrentPlan.Clear();
         }
 
         if (IsEditingSessionName)
@@ -355,6 +370,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             CurrentPlan.Add(entry);
         }
         ShowPlanPanel = binding.ShowPlanPanel;
+        CurrentPlanTitle = binding.PlanTitle;
     }
 
     public async Task RestoreConversationsAsync()
@@ -1732,6 +1748,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         ShowPlanPanel = true;
         CurrentPlan.Clear();
+        CurrentPlanTitle = string.IsNullOrWhiteSpace(planUpdate.Title) ? null : planUpdate.Title.Trim();
 
         if (planUpdate.Entries != null)
         {
@@ -1755,6 +1772,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 binding.Plan.Add(item);
             }
             binding.ShowPlanPanel = ShowPlanPanel;
+            binding.PlanTitle = CurrentPlanTitle;
             binding.LastUpdatedAt = DateTime.UtcNow;
             ScheduleConversationSave();
         }
@@ -2377,6 +2395,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         MessageHistory.Clear();
         CurrentPlan.Clear();
         ShowPlanPanel = false;
+        CurrentPlanTitle = null;
 
         var binding = TryGetConversationBinding(CurrentSessionId);
         if (binding != null)
@@ -2384,6 +2403,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             binding.Transcript.Clear();
             binding.Plan.Clear();
             binding.ShowPlanPanel = false;
+            binding.PlanTitle = null;
             binding.LastUpdatedAt = DateTime.UtcNow;
             ScheduleConversationSave();
         }
@@ -2407,6 +2427,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             IsSessionActive = false;
             MessageHistory.Clear();
             CurrentPlan.Clear();
+            CurrentPlanTitle = null;
             AvailableModes.Clear();
             SelectedMode = null;
             AgentName = null;
@@ -2455,6 +2476,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanSendPromptUi));
     }
 
+    partial void OnShowPlanPanelChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShouldShowPlanList));
+        OnPropertyChanged(nameof(ShouldShowPlanEmpty));
+    }
+
+    private void OnCurrentPlanCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasPlanEntries));
+        OnPropertyChanged(nameof(ShouldShowPlanList));
+        OnPropertyChanged(nameof(ShouldShowPlanEmpty));
+    }
+
     public void Dispose()
     {
         Dispose(true);
@@ -2472,6 +2506,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
                if (disposing)
                {
+                   CurrentPlan.CollectionChanged -= OnCurrentPlanCollectionChanged;
                    _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
                    _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
 

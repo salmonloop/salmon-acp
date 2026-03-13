@@ -7,13 +7,6 @@ namespace SalmonEgg.Presentation.ViewModels.Navigation;
 public abstract partial class MainNavItemViewModel : ObservableObject
 {
     public ObservableCollection<MainNavItemViewModel> Children { get; } = new();
-}
-
-public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewModel
-{
-    public string Title { get; } = "会话";
-
-    public IAsyncRelayCommand AddProjectCommand { get; }
 
     private bool _isPaneOpen = true;
 
@@ -30,8 +23,25 @@ public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewMode
     }
 
     public bool IsPaneClosed => !IsPaneOpen;
+}
+
+public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewModel
+{
+    public string Title { get; } = "会话";
+
+    public IAsyncRelayCommand AddProjectCommand { get; }
 
     public SessionsHeaderNavItemViewModel(IAsyncRelayCommand addProjectCommand)
+    {
+        AddProjectCommand = addProjectCommand;
+    }
+}
+
+public sealed partial class SessionsCompactAddNavItemViewModel : MainNavItemViewModel
+{
+    public IAsyncRelayCommand AddProjectCommand { get; }
+
+    public SessionsCompactAddNavItemViewModel(IAsyncRelayCommand addProjectCommand)
     {
         AddProjectCommand = addProjectCommand;
     }
