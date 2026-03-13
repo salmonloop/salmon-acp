@@ -45,7 +45,7 @@ namespace SalmonEgg.Application.UseCases
         /// </summary>
         /// <param name="configId">服务器配置 ID</param>
         /// <returns>操作结果</returns>
-        public async Task<Result> ExecuteAsync(string configId)
+        public async Task<Result> ExecuteAsync(string? configId)
         {
             try
             {
@@ -56,14 +56,15 @@ namespace SalmonEgg.Application.UseCases
                     return Result.Failure("配置 ID 不能为空");
                 }
 
-                _logger.Information("开始连接到服务器，配置 ID: {ConfigId}", configId);
+                var configIdValue = configId!;
+                _logger.Information("开始连接到服务器，配置 ID: {ConfigId}", configIdValue);
 
                 // 1. 加载配置 (Requirement 5.1)
-                var config = await _configService.LoadConfigurationAsync(configId);
+                var config = await _configService.LoadConfigurationAsync(configIdValue);
                 if (config == null)
                 {
-                    _logger.Warning("连接失败：未找到配置 ID {ConfigId}", configId);
-                    return Result.Failure($"未找到配置 ID: {configId}");
+                    _logger.Warning("连接失败：未找到配置 ID {ConfigId}", configIdValue);
+                    return Result.Failure($"未找到配置 ID: {configIdValue}");
                 }
 
                 _logger.Debug("成功加载配置: {ConfigName} ({ServerUrl})", config.Name, config.ServerUrl);

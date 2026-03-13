@@ -30,7 +30,7 @@ namespace SalmonEgg.Application.Services
             _connectionManager.ConnectionStateChanges.Subscribe(state => { _currentState = state; });
         }
 
-        public async Task<Result> ConnectAsync(string configId) =>
+        public async Task<Result> ConnectAsync(string? configId) =>
             await _connectUseCase.ExecuteAsync(configId);
 
         public async Task DisconnectAsync() =>

@@ -53,7 +53,7 @@ namespace SalmonEgg.Application.Tests.UseCases
             // Arrange
             _mockConfigService
                 .Setup(x => x.LoadConfigurationAsync(It.IsAny<string>()))
-                .ReturnsAsync((ServerConfiguration)null);
+                .ReturnsAsync((ServerConfiguration?)null);
 
             // Act
             var result = await _useCase.ExecuteAsync("non-existent-id");

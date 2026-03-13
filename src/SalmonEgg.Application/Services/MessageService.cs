@@ -50,7 +50,7 @@ namespace SalmonEgg.Application.Services
         /// <param name="method">方法名</param>
         /// <param name="parameters">请求参数</param>
         /// <returns>包含响应消息的操作结果</returns>
-        public async Task<Result<AcpMessage>> SendRequestAsync(string method, object parameters)
+        public async Task<Result<AcpMessage>> SendRequestAsync(string? method, object? parameters)
         {
             _logger.Debug("MessageService: 调用 SendMessageUseCase，方法: {Method}", method);
             

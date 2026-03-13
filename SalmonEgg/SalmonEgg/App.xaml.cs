@@ -1,5 +1,10 @@
 using System;
+using System.Linq;
 using Microsoft.UI.Xaml.Controls;
+#if HAS_UNO
+using Uno.UI;
+#endif
+using SalmonEgg.Presentation.Models;
 using Uno.Resizetizer;
 using SalmonEgg.Infrastructure.Storage;
 
@@ -13,6 +18,11 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     public static IServiceProvider ServiceProvider { get; private set; } = null!;
 
     public static Microsoft.UI.Xaml.Window? MainWindowInstance => (Current as App)?.MainWindow;
+    private static readonly Uri ReducedMotionDictionarySource = new("ms-appx:///Styles/ReducedMotion.xaml");
+    private static Microsoft.UI.Xaml.ResourceDictionary? _reducedMotionDictionary;
+#if HAS_UNO
+    private static TimeSpan? _defaultThemeAnimationDuration;
+#endif
 
     private readonly SalmonEgg.Domain.Services.IAppSettingsService? _appSettingsService;
     private readonly SalmonEgg.Domain.Services.IAppMaintenanceService? _maintenanceService;
@@ -48,6 +58,52 @@ public partial class App : global::Microsoft.UI.Xaml.Application
                     frame.Navigate(typeof(MainPage));
                 }
             });
+        }
+        catch
+        {
+        }
+    }
+
+    internal static void ApplyReducedMotion(bool reducedMotionEnabled)
+    {
+        try
+        {
+            if (Current?.Resources is not Microsoft.UI.Xaml.ResourceDictionary resources)
+            {
+                return;
+            }
+
+#if HAS_UNO
+            try
+            {
+                _defaultThemeAnimationDuration ??= FeatureConfiguration.ThemeAnimation.DefaultThemeAnimationDuration;
+                FeatureConfiguration.ThemeAnimation.DefaultThemeAnimationDuration = reducedMotionEnabled
+                    ? TimeSpan.Zero
+                    : _defaultThemeAnimationDuration.Value;
+            }
+            catch
+            {
+            }
+#endif
+
+            var dictionaries = resources.MergedDictionaries;
+            var existing = dictionaries.FirstOrDefault(d => d.Source == ReducedMotionDictionarySource);
+
+            if (reducedMotionEnabled)
+            {
+                if (existing == null)
+                {
+                    _reducedMotionDictionary ??= new Microsoft.UI.Xaml.ResourceDictionary
+                    {
+                        Source = ReducedMotionDictionarySource
+                    };
+                    dictionaries.Add(_reducedMotionDictionary);
+                }
+            }
+            else if (existing != null)
+            {
+                dictionaries.Remove(existing);
+            }
         }
         catch
         {
@@ -107,7 +163,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     protected Microsoft.UI.Xaml.Window? MainWindow { get; private set; }
 
-    protected override void OnLaunched(global::Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(global::Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         BootLog("OnLaunched: start");
         MainWindow = new Microsoft.UI.Xaml.Window();
@@ -145,6 +201,20 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             MainWindow.Content = rootFrame;
             rootFrame.NavigationFailed += OnNavigationFailed;
             BootLog("OnLaunched: root frame created");
+        }
+
+        try
+        {
+            if (_appSettingsService != null)
+            {
+                var settings = await _appSettingsService.LoadAsync();
+                UiMotion.Current.IsAnimationEnabled = settings.IsAnimationEnabled;
+                ApplyReducedMotion(!settings.IsAnimationEnabled);
+            }
+        }
+        catch
+        {
+            BootLog("OnLaunched: failed to load settings for motion");
         }
 
         if (rootFrame.Content == null)

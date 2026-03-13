@@ -65,7 +65,7 @@ namespace SalmonEgg.Application.Tests.Services
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() =>
                 new ConnectionService(
-                    null,
+                    null!,
                     _disconnectUseCase,
                     _mockConnectionManager.Object));
         }
@@ -77,7 +77,7 @@ namespace SalmonEgg.Application.Tests.Services
             Assert.Throws<ArgumentNullException>(() =>
                 new ConnectionService(
                     _connectUseCase,
-                    null,
+                    null!,
                     _mockConnectionManager.Object));
         }
 
@@ -89,7 +89,7 @@ namespace SalmonEgg.Application.Tests.Services
                 new ConnectionService(
                     _connectUseCase,
                     _disconnectUseCase,
-                    null));
+                    null!));
         }
 
         [Fact]
@@ -152,7 +152,7 @@ namespace SalmonEgg.Application.Tests.Services
             var configId = "invalid-config-id";
             _mockConfigService
                 .Setup(x => x.LoadConfigurationAsync(configId))
-                .ReturnsAsync((ServerConfiguration)null);
+                .ReturnsAsync((ServerConfiguration?)null);
 
             // Act
             var result = await _service.ConnectAsync(configId);

@@ -61,7 +61,7 @@ namespace SalmonEgg.Application.Tests.Services
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() =>
                 new MessageService(
-                    null,
+                    null!,
                     _mockConnectionManager.Object,
                     _mockLogger.Object));
         }
@@ -73,7 +73,7 @@ namespace SalmonEgg.Application.Tests.Services
             Assert.Throws<ArgumentNullException>(() =>
                 new MessageService(
                     _sendMessageUseCase,
-                    null,
+                    null!,
                     _mockLogger.Object));
         }
 
@@ -85,7 +85,7 @@ namespace SalmonEgg.Application.Tests.Services
                 new MessageService(
                     _sendMessageUseCase,
                     _mockConnectionManager.Object,
-                    null));
+                    null!));
         }
 
         [Fact]
@@ -201,7 +201,7 @@ namespace SalmonEgg.Application.Tests.Services
         public async Task Notifications_ShouldFilterNotificationMessages()
         {
             // Arrange
-            AcpMessage receivedNotification = null;
+            AcpMessage? receivedNotification = null;
             _service.Notifications.Subscribe(msg => receivedNotification = msg);
 
             var notification = new AcpMessage
@@ -218,8 +218,8 @@ namespace SalmonEgg.Application.Tests.Services
 
             // Assert
             Assert.NotNull(receivedNotification);
-            Assert.Equal("notification", receivedNotification.Type);
-            Assert.Equal("server.notification", receivedNotification.Method);
+            Assert.Equal("notification", receivedNotification!.Type);
+            Assert.Equal("server.notification", receivedNotification!.Method);
         }
 
         [Fact]
@@ -389,7 +389,7 @@ namespace SalmonEgg.Application.Tests.Services
         public async Task Notifications_ShouldHandleNotificationsWithParams()
         {
             // Arrange
-            AcpMessage receivedNotification = null;
+            AcpMessage? receivedNotification = null;
             _service.Notifications.Subscribe(msg => receivedNotification = msg);
 
             var notification = new AcpMessage
@@ -406,8 +406,8 @@ namespace SalmonEgg.Application.Tests.Services
 
             // Assert
             Assert.NotNull(receivedNotification);
-            Assert.Equal("notification", receivedNotification.Type);
-            Assert.Equal("data.updated", receivedNotification.Method);
+            Assert.Equal("notification", receivedNotification!.Type);
+            Assert.Equal("data.updated", receivedNotification!.Method);
             Assert.NotNull(receivedNotification.Params);
         }
     }

@@ -56,12 +56,18 @@
                                        FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap"/>
+                            <TextBlock Text="未实现"
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Opacity="0.7"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
                         <ToggleSwitch Grid.Column="1"
                                       IsOn="{x:Bind Preferences.IsAnimationEnabled, Mode=TwoWay}"
                                       x:Uid="Appearance_MotionToggle"
                                       OnContent="已开启"
                                       OffContent="已禁用"
+                                      IsEnabled="False"
                                       MinWidth="0"
                                       VerticalAlignment="Center"/>
                     </Grid>

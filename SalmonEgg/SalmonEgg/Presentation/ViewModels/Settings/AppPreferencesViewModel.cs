@@ -97,6 +97,7 @@ public partial class AppPreferencesViewModel : ObservableObject
             _suppressSave = true;
             var settings = await _appSettingsService.LoadAsync();
             var launchOnStartup = settings.LaunchOnStartup;
+            var shouldPersistAnimation = !settings.IsAnimationEnabled;
 
             try
             {
@@ -114,8 +115,10 @@ public partial class AppPreferencesViewModel : ObservableObject
             _syncContext.Post(_ =>
             {
                 Theme = settings.Theme;
-                IsAnimationEnabled = settings.IsAnimationEnabled;
-                UiMotion.Current.IsAnimationEnabled = settings.IsAnimationEnabled;
+                // Default to enabled and mark "disable" as not yet supported in UI.
+                IsAnimationEnabled = true;
+                UiMotion.Current.IsAnimationEnabled = true;
+                App.ApplyReducedMotion(false);
                 Backdrop = settings.Backdrop;
                 LaunchOnStartup = launchOnStartup;
                 MinimizeToTray = settings.MinimizeToTray;
@@ -157,6 +160,12 @@ public partial class AppPreferencesViewModel : ObservableObject
                     pair.PropertyChanged += OnKeyBindingPairPropertyChanged;
                     KeyBindings.Add(pair);
                 }
+
+                if (shouldPersistAnimation)
+                {
+                    _suppressSave = false;
+                    ScheduleSave();
+                }
             }, null);
 
             _ = _languageService.ApplyLanguageOverrideAsync(settings.Language);
@@ -175,6 +184,13 @@ public partial class AppPreferencesViewModel : ObservableObject
     partial void OnIsAnimationEnabledChanged(bool value)
     {
         UiMotion.Current.IsAnimationEnabled = value;
+        App.ApplyReducedMotion(!value);
+
+        if (_suppressSave)
+        {
+            return;
+        }
+
         ScheduleSave();
     }
     partial void OnBackdropChanged(string value) => ScheduleSave();

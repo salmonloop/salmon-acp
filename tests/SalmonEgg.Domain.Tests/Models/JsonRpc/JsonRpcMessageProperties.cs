@@ -93,18 +93,19 @@ namespace SalmonEgg.Domain.Tests.Models.JsonRpc
             Assert.That(AreIdsEqual(deserialized.Id, request.Id), Is.True);
             Assert.That(deserialized.Method, Is.EqualTo(request.Method));
 
-            if (request.Params.HasValue)
-                   {
-                       Assert.That(deserialized.Params.HasValue, Is.True);
-                       // 比较 JSON 值的原始文本，而不是创建时的原始文本
-                       var deserializedParamsJson = deserialized.Params.Value.GetRawText();
-                       var expectedParamsJson = JsonSerializer.Serialize(request.Params.Value, new JsonSerializerOptions { WriteIndented = false });
-                       Assert.That(deserializedParamsJson, Is.EqualTo(expectedParamsJson), $"Params JSON mismatch. Expected: {expectedParamsJson}, Actual: {deserializedParamsJson}");
-                   }
-                   else
-                   {
-                       Assert.That(deserialized.Params.HasValue, Is.False);
-                   }
+            if (request.Params is JsonElement requestParams)
+            {
+                Assert.That(deserialized!.Params.HasValue, Is.True);
+                var deserializedParams = deserialized!.Params!.Value;
+                // 比较 JSON 值的原始文本，而不是创建时的原始文本
+                var deserializedParamsJson = deserializedParams.GetRawText();
+                var expectedParamsJson = JsonSerializer.Serialize(requestParams, new JsonSerializerOptions { WriteIndented = false });
+                Assert.That(deserializedParamsJson, Is.EqualTo(expectedParamsJson), $"Params JSON mismatch. Expected: {expectedParamsJson}, Actual: {deserializedParamsJson}");
+            }
+            else
+            {
+                Assert.That(deserialized!.Params.HasValue, Is.False);
+            }
         }
 
         /// <summary>
@@ -128,8 +129,11 @@ namespace SalmonEgg.Domain.Tests.Models.JsonRpc
             Assert.That(deserialized.Result.HasValue, Is.True);
             Assert.That(deserialized.Error, Is.Null);
             // 比较 JSON 值的原始文本
-            var deserializedResultJson = deserialized.Result.Value.GetRawText();
-            var expectedResultJson = JsonSerializer.Serialize(response.Result.Value, new JsonSerializerOptions { WriteIndented = false });
+            Assert.That(response.Result.HasValue, Is.True);
+            var deserializedResult = deserialized.Result!.Value;
+            var expectedResult = response.Result!.Value;
+            var deserializedResultJson = deserializedResult.GetRawText();
+            var expectedResultJson = JsonSerializer.Serialize(expectedResult, new JsonSerializerOptions { WriteIndented = false });
             Assert.That(deserializedResultJson, Is.EqualTo(expectedResultJson), $"Result JSON mismatch. Expected: {expectedResultJson}, Actual: {deserializedResultJson}");
         }
 
@@ -154,7 +158,8 @@ namespace SalmonEgg.Domain.Tests.Models.JsonRpc
             Assert.That(AreIdsEqual(deserialized.Id, response.Id), Is.True);
             Assert.That(deserialized.Result.HasValue, Is.False);
             Assert.That(deserialized.Error, Is.Not.Null);
-            Assert.That(deserialized.Error!.Code, Is.EqualTo(response.Error.Code));
+            Assert.That(response.Error, Is.Not.Null);
+            Assert.That(deserialized.Error!.Code, Is.EqualTo(response.Error!.Code));
             Assert.That(deserialized.Error.Message, Is.EqualTo(response.Error.Message));
         }
 
@@ -180,16 +185,18 @@ namespace SalmonEgg.Domain.Tests.Models.JsonRpc
             Assert.That(deserialized!.JsonRpc, Is.EqualTo("2.0"));
             Assert.That(deserialized.Method, Is.EqualTo(notification.Method));
 
-            if (notification.Params.HasValue)
+            if (notification.Params is JsonElement notificationParams)
             {
+                Assert.That(deserialized!.Params.HasValue, Is.True);
+                var deserializedParams = deserialized!.Params!.Value;
                 // 比较 JSON 值的原始文本
-                var deserializedParamsJson = deserialized.Params.Value.GetRawText();
-                var expectedParamsJson = JsonSerializer.Serialize(notification.Params.Value, new JsonSerializerOptions { WriteIndented = false });
+                var deserializedParamsJson = deserializedParams.GetRawText();
+                var expectedParamsJson = JsonSerializer.Serialize(notificationParams, new JsonSerializerOptions { WriteIndented = false });
                 Assert.That(deserializedParamsJson, Is.EqualTo(expectedParamsJson), $"Params JSON mismatch. Expected: {expectedParamsJson}, Actual: {deserializedParamsJson}");
             }
             else
             {
-                Assert.That(deserialized.Params.HasValue, Is.False);
+                Assert.That(deserialized!.Params.HasValue, Is.False);
             }
         }
 

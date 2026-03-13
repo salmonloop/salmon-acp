@@ -77,7 +77,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() =>
-                new DisconnectUseCase(null, _mockLogger.Object));
+                new DisconnectUseCase(null!, _mockLogger.Object));
         }
 
         [Fact]
@@ -85,7 +85,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() =>
-                new DisconnectUseCase(_mockConnectionManager.Object, null));
+                new DisconnectUseCase(_mockConnectionManager.Object, null!));
         }
     }
 }

@@ -98,7 +98,7 @@
     <Grid>
         <!-- 未激活会话状态：空状态设计 -->
         <Grid Visibility="{x:Bind ViewModel.IsSessionActive, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-              Transitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}">
+              Transitions="{x:Bind Motion.PageTransitions, Mode=OneWay}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="24">
                 <Viewbox Width="80" Height="80" Opacity="0.2">
                     <SymbolIcon Symbol="Message" Foreground="{ThemeResource AccentBrush}"/>
@@ -125,7 +125,7 @@
 
         <!-- 已激活会话状态：对话界面 -->
         <Grid RowDefinitions="Auto,*,Auto"
-              Transitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}"
+              Transitions="{x:Bind Motion.PageTransitions, Mode=OneWay}"
               Visibility="{x:Bind ViewModel.IsSessionActive, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
 
             <!-- 顶部状态条 -->

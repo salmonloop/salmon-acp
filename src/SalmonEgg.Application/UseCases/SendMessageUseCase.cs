@@ -38,7 +38,7 @@ namespace SalmonEgg.Application.UseCases
         /// <param name="method">方法名</param>
         /// <param name="parameters">参数对象</param>
         /// <returns>包含响应消息的操作结果</returns>
-        public async Task<Result<AcpMessage>> ExecuteAsync(string method, object parameters)
+        public async Task<Result<AcpMessage>> ExecuteAsync(string? method, object? parameters)
         {
             return await ExecuteAsync(method, parameters, DefaultTimeoutSeconds);
         }
@@ -50,7 +50,7 @@ namespace SalmonEgg.Application.UseCases
         /// <param name="parameters">参数对象</param>
         /// <param name="timeoutSeconds">超时时间（秒）</param>
         /// <returns>包含响应消息的操作结果</returns>
-        public async Task<Result<AcpMessage>> ExecuteAsync(string method, object parameters, int timeoutSeconds)
+        public async Task<Result<AcpMessage>> ExecuteAsync(string? method, object? parameters, int timeoutSeconds)
         {
             try
             {
@@ -67,7 +67,8 @@ namespace SalmonEgg.Application.UseCases
                     return Result<AcpMessage>.Failure("超时时间必须大于 0");
                 }
 
-                _logger.Information("开始发送消息，方法: {Method}", method);
+                var methodValue = method!;
+                _logger.Information("开始发送消息，方法: {Method}", methodValue);
 
                 // 2. 检查连接状态 (Requirement 3.1)
                 var currentState = await _connectionManager.ConnectionStateChanges
@@ -87,7 +88,7 @@ namespace SalmonEgg.Application.UseCases
                 {
                     Id = Guid.NewGuid().ToString(),
                     Type = "request",
-                    Method = method,
+                    Method = methodValue,
                     Params = parameters != null 
                         ? System.Text.Json.JsonSerializer.SerializeToElement(parameters) 
                         : (System.Text.Json.JsonElement?)null,
@@ -130,7 +131,7 @@ namespace SalmonEgg.Application.UseCases
                     // 6. 记录日志 (Requirement 6.1)
                     _logger.Information(
                         "成功接收响应，消息 ID: {MessageId}, 方法: {Method}",
-                        response.Id, method);
+                        response.Id, methodValue);
 
                     return Result<AcpMessage>.Success(response);
                 }
@@ -138,7 +139,7 @@ namespace SalmonEgg.Application.UseCases
                 {
                     _logger.Error(
                         "等待响应超时 ({Timeout} 秒)，消息 ID: {MessageId}, 方法: {Method}",
-                        timeoutSeconds, message.Id, method);
+                        timeoutSeconds, message.Id, methodValue);
                     
                     return Result<AcpMessage>.Failure(
                         $"请求超时（{timeoutSeconds} 秒）：未收到服务器响应");

@@ -51,6 +51,8 @@ public sealed partial class MainPage : Page
     private string _activePrimaryNavKey = MainNavItemKeys.Start;
     private bool _suppressNavSelectionChanged;
     private long _navSelectionRequestId;
+    private bool _isMotionSubscribed;
+    private bool _isNavItemsSubscribed;
     private readonly ShellPanePolicy _panePolicy = new();
 #if WINDOWS
     private TrayIconManager? _trayIcon;
@@ -99,6 +101,8 @@ public sealed partial class MainPage : Page
         BootLogDebug("MainPage: transitions updated");
 
         ConfigureNavigationView();
+        SubscribeMotion();
+        SubscribeNavItems();
 
         // 4. 启动后默认进入开始界面
         NavVM.SelectStart();
@@ -115,6 +119,8 @@ public sealed partial class MainPage : Page
 
     private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
     {
+        UnsubscribeNavItems();
+        UnsubscribeMotion();
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
 #if WINDOWS
@@ -228,6 +234,7 @@ public sealed partial class MainPage : Page
         if (e.PropertyName == nameof(Preferences.IsAnimationEnabled))
         {
             UpdateNavigationTransitions();
+            ApplyNavItemTransitionsDeferred();
         }
 
         if (e.PropertyName == nameof(Preferences.Theme))
@@ -322,28 +329,114 @@ public sealed partial class MainPage : Page
         }
     }
 
+    private void SubscribeMotion()
+    {
+        if (_isMotionSubscribed)
+        {
+            return;
+        }
+
+        UiMotion.Current.PropertyChanged += OnUiMotionPropertyChanged;
+        _isMotionSubscribed = true;
+    }
+
+    private void UnsubscribeMotion()
+    {
+        if (!_isMotionSubscribed)
+        {
+            return;
+        }
+
+        UiMotion.Current.PropertyChanged -= OnUiMotionPropertyChanged;
+        _isMotionSubscribed = false;
+    }
+
+    private void OnUiMotionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(UiMotion.NavItemTransitions))
+        {
+            ApplyNavItemTransitionsDeferred();
+        }
+    }
+
+    private void SubscribeNavItems()
+    {
+        if (_isNavItemsSubscribed)
+        {
+            return;
+        }
+
+        NavVM.Items.CollectionChanged += OnNavItemsChanged;
+        _isNavItemsSubscribed = true;
+    }
+
+    private void UnsubscribeNavItems()
+    {
+        if (!_isNavItemsSubscribed)
+        {
+            return;
+        }
+
+        NavVM.Items.CollectionChanged -= OnNavItemsChanged;
+        _isNavItemsSubscribed = false;
+    }
+
+    private void OnNavItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ApplyNavItemTransitionsDeferred();
+    }
+
+    private void ApplyNavItemTransitionsDeferred()
+    {
+        _ = DispatcherQueue.TryEnqueue(ApplyNavItemTransitions);
+    }
+
+    private void ApplyNavItemTransitions()
+    {
+        if (MainNavView == null)
+        {
+            return;
+        }
+
+        var transitions = UiMotion.Current.NavItemTransitions;
+        foreach (var item in FindVisualChildren<NavigationViewItem>(MainNavView))
+        {
+            item.ContentTransitions = transitions;
+        }
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T typed)
+            {
+                yield return typed;
+            }
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
     private void NavigateTo(Type pageType)
     {
-#if WINDOWS
         var transition = UiMotion.Current.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
         ContentFrame.Navigate(pageType, null, transition);
-#else
-        ContentFrame.Navigate(pageType);
-#endif
     }
 
     private void NavigateTo(Type pageType, object? parameter)
     {
-#if WINDOWS
         var transition = UiMotion.Current.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
         ContentFrame.Navigate(pageType, parameter, transition);
-#else
-        ContentFrame.Navigate(pageType, parameter);
-#endif
     }
 
     private void OnMainNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -813,6 +906,7 @@ public sealed partial class MainPage : Page
         UpdateNavPaneToggleUi();
         SyncSessionsHeaderPaneState(MainNavView?.IsPaneOpen ?? true);
         NavVM.RebuildTree();
+        ApplyNavItemTransitionsDeferred();
 #if WINDOWS
         InitializeTray();
 #endif

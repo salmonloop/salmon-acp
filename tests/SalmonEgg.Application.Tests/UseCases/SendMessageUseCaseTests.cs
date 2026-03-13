@@ -135,7 +135,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         public async Task ExecuteAsync_WhenResponseContainsError_ShouldReturnFailure()
         {
             // Arrange
-            string messageId = null;
+            string? messageId = null;
             
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
@@ -152,9 +152,10 @@ namespace SalmonEgg.Application.Tests.UseCases
             await Task.Delay(100);
 
             // 发送错误响应
+            Assert.NotNull(messageId);
             _incomingMessagesSubject.OnNext(new AcpMessage
             {
-                Id = messageId,
+                Id = messageId!,
                 Type = "response",
                 Error = new AcpError
                 {
@@ -176,7 +177,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         public async Task ExecuteAsync_WithValidRequestAndSuccessfulResponse_ShouldReturnSuccess()
         {
             // Arrange
-            string messageId = null;
+            string? messageId = null;
             var parameters = new { name = "test", value = 123 };
             
             _mockConnectionManager
@@ -194,10 +195,11 @@ namespace SalmonEgg.Application.Tests.UseCases
             await Task.Delay(100);
 
             // 发送成功响应
+            Assert.NotNull(messageId);
             var responseResult = JsonSerializer.SerializeToElement(new { status = "ok", data = "test data" });
             _incomingMessagesSubject.OnNext(new AcpMessage
             {
-                Id = messageId,
+                Id = messageId!,
                 Type = "response",
                 Result = responseResult
             });
@@ -216,7 +218,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         public async Task ExecuteAsync_ShouldCreateMessageWithCorrectProperties()
         {
             // Arrange
-            AcpMessage capturedMessage = null;
+            AcpMessage? capturedMessage = null;
             var parameters = new { name = "test", value = 123 };
             
             _mockConnectionManager
@@ -246,7 +248,7 @@ namespace SalmonEgg.Application.Tests.UseCases
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(capturedMessage);
-            Assert.NotNull(capturedMessage.Id);
+            Assert.NotNull(capturedMessage!.Id);
             Assert.NotEmpty(capturedMessage.Id);
             Assert.Equal("request", capturedMessage.Type);
             Assert.Equal("test.method", capturedMessage.Method);
@@ -259,7 +261,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         public async Task ExecuteAsync_WithNullParameters_ShouldCreateMessageWithNullParams()
         {
             // Arrange
-            AcpMessage capturedMessage = null;
+            AcpMessage? capturedMessage = null;
             
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
@@ -288,14 +290,14 @@ namespace SalmonEgg.Application.Tests.UseCases
             // Assert
             Assert.True(result.IsSuccess);
             Assert.NotNull(capturedMessage);
-            Assert.Null(capturedMessage.Params);
+            Assert.Null(capturedMessage!.Params);
         }
 
         [Fact]
         public async Task ExecuteAsync_ShouldVerifyConnectionManagerCalls()
         {
             // Arrange
-            string messageId = null;
+            string? messageId = null;
             
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))

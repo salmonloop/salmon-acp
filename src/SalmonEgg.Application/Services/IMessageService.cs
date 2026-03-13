@@ -17,7 +17,7 @@ namespace SalmonEgg.Application.Services
         /// <param name="method">方法名</param>
         /// <param name="parameters">请求参数</param>
         /// <returns>包含响应消息的操作结果</returns>
-        Task<Result<AcpMessage>> SendRequestAsync(string method, object parameters);
+        Task<Result<AcpMessage>> SendRequestAsync(string? method, object? parameters);
 
         /// <summary>
         /// 获取通知消息的可观察流

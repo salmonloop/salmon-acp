@@ -13,6 +13,7 @@ namespace SalmonEgg.Presentation.Views.Chat
     public sealed partial class ChatView : Page
     {
         public ChatViewModel ViewModel { get; }
+        public UiMotion Motion => UiMotion.Current;
         private readonly IShellNavigationService _shellNavigation;
         private bool _isViewLoaded;
         private bool _isTrackingMessages;

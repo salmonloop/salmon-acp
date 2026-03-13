@@ -25,7 +25,7 @@
     </Page.Resources>
 
     <Grid RowDefinitions="*,Auto,Auto"
-          Transitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}">
+          Transitions="{x:Bind Motion.PageTransitions, Mode=OneWay}">
         <Grid Grid.Row="0"
               VerticalAlignment="Center"
               Margin="20,20,20,0">

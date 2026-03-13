@@ -519,7 +519,8 @@
                              PaneClosing="OnMainNavPaneClosing">
                 <NavigationView.Content>
                     <Frame x:Name="ContentFrame"
-                           Background="Transparent" />
+                           Background="Transparent"
+                           ContentTransitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}" />
                 </NavigationView.Content>
             </NavigationView>
 
