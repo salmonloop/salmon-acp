@@ -366,6 +366,11 @@ namespace SalmonEgg.Presentation.Views.Chat
             TerminalRowDefinition.Height = new GridLength(height);
         }
 
+        private void OnTerminalSplitterDragDelta(object sender, DragDeltaEventArgs e)
+        {
+            OnTerminalThumbDragDelta(sender, e);
+        }
+
         private void OnTerminalThumbDragCompleted(object sender, DragCompletedEventArgs e)
         {
             if (TerminalRowDefinition == null)

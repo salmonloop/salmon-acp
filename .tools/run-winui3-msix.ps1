@@ -175,7 +175,7 @@ $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
 $env:DOTNET_NOLOGO = '1'
 
 $project = Join-Path $repoRoot 'SalmonEgg\SalmonEgg\SalmonEgg.csproj'
-$tfm = 'net10.0-windows10.0.22621.0'
+$tfm = 'net10.0-windows10.0.26100.0'
 $profile = 'Properties/PublishProfiles/win-msix-x64.pubxml'
 $msixOutDir = Join-Path $repoRoot 'artifacts\msix'
 
@@ -202,7 +202,7 @@ if (-not $msix) {
 }
 
 $isAdmin = Test-IsAdmin
-$certSubject = 'O=SalmonEgg'
+$certSubject = 'CN=SalmonEgg'
 $cert = Get-OrCreateDevCert -Subject $certSubject
 $signTool = Get-SignToolPath
 
@@ -286,3 +286,4 @@ $aumid = "$($pkg.PackageFamilyName)!$appId"
 Write-Host "Launching: $aumid"
 # Use a single '\' after AppsFolder. If the argument is malformed, Explorer often falls back to opening Documents.
 Start-Process -FilePath "explorer.exe" -ArgumentList "shell:AppsFolder\$aumid"
+

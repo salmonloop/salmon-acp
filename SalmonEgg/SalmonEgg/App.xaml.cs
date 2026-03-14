@@ -9,7 +9,6 @@ using Microsoft.UI.Xaml.Controls;
 using Uno.UI;
 #endif
 using SalmonEgg.Presentation.Models;
-using Uno.Resizetizer;
 using SalmonEgg.Infrastructure.Storage;
 
 namespace SalmonEgg;
@@ -219,7 +218,9 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         // Applies the generated icon.ico (from Assets/Icons/icon.svg) to the native window (Desktop/Windows).
         try
         {
+#if HAS_UNO
             MainWindow.SetWindowIcon();
+#endif
             BootLog("OnLaunched: window icon set");
         }
         catch (Exception ex)

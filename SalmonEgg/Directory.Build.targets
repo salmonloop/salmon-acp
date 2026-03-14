@@ -1,10 +1,32 @@
 <Project>
-  <Target Name="ForceInProcXamlCompilerForWinUI"
-          BeforeTargets="MarkupCompilePass1"
-          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0' AND '$(MSBuildRuntimeType)' == 'Core'">
-    <PropertyGroup>
-      <!-- Prefer in-proc XAML compiler under dotnet build to avoid XamlCompiler.exe failures. -->
-      <UseXamlCompilerExecutable>false</UseXamlCompilerExecutable>
-    </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <MarkupCompilePass1DependsOn>StripUnoXamlReferencesForWinUI;$(MarkupCompilePass1DependsOn)</MarkupCompilePass1DependsOn>
+  </PropertyGroup>
+
+  <Target Name="StripUnoXamlReferencesForWinUI"
+          AfterTargets="ResolveAssemblyReferences"
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <ItemGroup>
+      <_UnoXamlReferencePath Include="@(ReferencePath)"
+                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ReferencePath.FileName)', '^(?i)Uno\\.UI(\\.|$)'))" />
+      <_FilteredReferencePath Include="@(ReferencePath)"
+                              Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(ReferencePath.FileName)', '^(?i)Uno\\.UI(\\.|$)'))" />
+      <ReferencePath Remove="@(ReferencePath)" />
+      <ReferencePath Include="@(_FilteredReferencePath)" />
+      <ReferenceAssemblies Remove="@(_UnoXamlReferencePath)" />
+    </ItemGroup>
   </Target>
+
+  <Target Name="AddWinUIWinmdReferences"
+          BeforeTargets="MarkupCompilePass1"
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <ItemGroup>
+      <ReferenceAssemblyPaths Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\"
+                              Condition="Exists('$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\')" />
+    </ItemGroup>
+  </Target>
+
+
 </Project>
+

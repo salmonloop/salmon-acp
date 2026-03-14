@@ -10,10 +10,11 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="Serilog.Extensions.Logging" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.22621.0'">
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.26100.0'">
     <PackageReference Include="Uno.WinUI.Lottie" />
   </ItemGroup>
 
@@ -37,7 +38,7 @@
     <EnableDefaultPriItems>false</EnableDefaultPriItems>
 
     <SalmonEggTargetFrameworks>net10.0-browserwasm;net10.0-desktop</SalmonEggTargetFrameworks>
-    <SalmonEggTargetFrameworks Condition="'$(MSBuildRuntimeType)' != 'Core' OR '$(EnableWinUIBuild)' == 'true'">net10.0-browserwasm;net10.0-desktop;net10.0-windows10.0.22621.0</SalmonEggTargetFrameworks>
+    <SalmonEggTargetFrameworks Condition="'$(MSBuildRuntimeType)' != 'Core' OR '$(EnableWinUIBuild)' == 'true'">net10.0-browserwasm;net10.0-desktop;net10.0-windows10.0.26100.0</SalmonEggTargetFrameworks>
     <SalmonEggAndroidTargetFrameworks Condition="
         '$(EnableMobileTargets)' == 'true'
         AND (
@@ -91,9 +92,9 @@
     <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
     <UseWinUI>true</UseWinUI>
-    <TargetPlatformVersion>10.0.22621.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
     <!-- Keep runtime compatibility wide while targeting an installed Windows SDK toolset -->
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <WindowsPackageType>MSIX</WindowsPackageType>
@@ -103,16 +104,18 @@
 
     <!-- dotnet build (MSBuild Core) does not always populate WindowsSdkPath for the WinUI XamlCompiler -->
     <WindowsSdkPath Condition="'$(WindowsSdkPath)' == ''">$([System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)'))\Windows Kits\10\</WindowsSdkPath>
-    <WindowsSdkVersion Condition="'$(WindowsSdkVersion)' == ''">10.0.22621.0</WindowsSdkVersion>
+    <WindowsSdkVersion Condition="'$(WindowsSdkVersion)' == ''">10.0.26100.0</WindowsSdkVersion>
 
     <!-- Ensure 'dotnet run' launches the WinUI 3 apphost (which bootstraps Windows App SDK), not the DLL. -->
     <UseAppHost>true</UseAppHost>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <AppendRuntimeIdentifierToIntermediateOutputPath>false</AppendRuntimeIdentifierToIntermediateOutputPath>
 
     <!-- Prefer in-proc XAML compiler to keep Core builds stable. -->
-    <UseXamlCompilerExecutable Condition="'$(MSBuildRuntimeType)' == 'Core'">false</UseXamlCompilerExecutable>
-    <UseXamlCompilerExecutable Condition="'$(MSBuildRuntimeType)' != 'Core'">false</UseXamlCompilerExecutable>
+
+
     <!-- Keep XBF outputs in the intermediate folder so MSBuild can package them. -->
-    <GenXbfPath>$(IntermediateOutputPath)</GenXbfPath>
+
 
     <!-- Prevent pulling in the WPF/WinForms host stack on the WinUI 3 target. -->
     <UseWPF>false</UseWPF>
@@ -121,32 +124,40 @@
     <!-- Bundle Windows App SDK runtime to avoid class-not-registered crashes when the runtime isn't installed. -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
+    <!-- WinUI target should not pull Uno.UI packages; Windows uses WinUI 3 directly. -->
+    <DisableImplicitUnoPackages>true</DisableImplicitUnoPackages>
+
+
+
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0' AND '$(MSBuildRuntimeType)' == 'Core'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0' AND '$(MSBuildRuntimeType)' == 'Core'">
     <PackageReference Include="System.Security.Permissions" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
   </ItemGroup>
   <!-- WinUI target uses Microsoft.UI.Xaml; do not inject Uno assemblies into XamlCompiler references. -->
 
 
   <!-- Ensure each target has the appropriate entry point -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
     <Compile Remove="Platforms/Desktop/Program.cs" />
   </ItemGroup>
   <Target Name="RemoveUnoGlobalUsingsForWinUI"
           BeforeTargets="GenerateGlobalUsings"
-          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
     <ItemGroup>
       <Using Remove="Uno.UI" />
     </ItemGroup>
   </Target>
-  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.22621.0'">
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.26100.0'">
     <Compile Remove="Platforms/Windows/**/*.cs" />
   </ItemGroup>
 
   <Target Name="ResolveWinUI3Toolchain"
           BeforeTargets="GetVCInstallPath"
-          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
     <Message Importance="High" Text="Resolving WinUI 3 build toolchain..." />
 
     <PropertyGroup>
@@ -200,7 +211,7 @@
   <Target Name="RemoveUnoReferencesForWinUI"
           DependsOnTargets="ResolveReferences"
           BeforeTargets="MarkupCompilePass1;MarkupCompilePass2"
-          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0' AND '$(DisableWinUIReferenceFilter)' != 'true'">
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0' AND '$(DisableWinUIReferenceFilter)' != 'true'">
     <!-- Prevent Uno.UI assemblies from participating in WinUI XAML compilation to avoid type duplication. -->
     <ItemGroup>
       <_UnoUiReferencePath Include="@(ReferencePath)"
@@ -211,7 +222,7 @@
 
   <Target Name="AddWinSdkXamlReferences"
           BeforeTargets="MarkupCompilePass1;MarkupCompilePass2"
-          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0' AND '$(MSBuildRuntimeType)' == 'Core'">
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0' AND '$(MSBuildRuntimeType)' == 'Core'">
     <!-- Feed WinUI/Windows metadata to the XAML compiler without adding them as compile references. -->
     <PropertyGroup>
       <_WinSdkVersionForXaml Condition="'$(WindowsSdkVersion)' != ''">$(WindowsSdkVersion)</_WinSdkVersionForXaml>
@@ -236,10 +247,16 @@
       <_WinSdkFoundationContractDir>@(_WinSdkFoundationContractDirLines)</_WinSdkFoundationContractDir>
     </PropertyGroup>
     <ItemGroup>
-      <XamlReferencesToCompile Include="$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0.18362\Microsoft.UI.winmd"
-                               Condition="Exists('$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0.18362\Microsoft.UI.winmd')" />
-      <XamlReferencesToCompile Include="$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0\Microsoft.UI.Xaml.winmd"
-                               Condition="Exists('$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0\Microsoft.UI.Xaml.winmd')" />
+      <XamlReferencesToCompile Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd"
+                               Condition="Exists('$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd')" />
+      <XamlReferencesToCompile Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Text.winmd"
+                               Condition="Exists('$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Text.winmd')" />
+      <XamlReferencesToCompile Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\lib\net6.0-windows10.0.17763.0\Microsoft.WinUI.dll"
+                               Condition="Exists('$(PkgMicrosoft_WindowsAppSDK_WinUI)\lib\net6.0-windows10.0.17763.0\Microsoft.WinUI.dll')" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk\1.7.260208005\lib\uap10.0.18362\Microsoft.UI.winmd"
+                               Condition="Exists('$(NuGetPackageRoot)microsoft.windowsappsdk\1.7.260208005\lib\uap10.0.18362\Microsoft.UI.winmd')" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk\1.7.260208005\lib\uap10.0.17763\Microsoft.UI.winmd"
+                               Condition="Exists('$(NuGetPackageRoot)microsoft.windowsappsdk\1.7.260208005\lib\uap10.0.17763\Microsoft.UI.winmd')" />
       <XamlReferencesToCompile Include="$(_WinSdkUnionMetadataDir)\Windows.winmd"
                                Condition="Exists('$(_WinSdkUnionMetadataDir)\\Windows.winmd')" />
       <XamlReferencesToCompile Include="$(_WinSdkReferencesDir)\Windows.Foundation.UniversalApiContract\**\*.winmd"
@@ -260,3 +277,4 @@
   </Target>
 
 </Project>
+
