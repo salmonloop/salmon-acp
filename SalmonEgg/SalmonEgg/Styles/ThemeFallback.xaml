@@ -3,82 +3,39 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- Baseline fallbacks so ThemeResource lookups succeed even before WinUI resources are injected. -->
+    <!-- These are kept for non-Windows platforms where XamlControlsResources might not be available. -->
     <Color x:Key="SystemAltHighColor">#FFFFFF</Color>
     <Color x:Key="SystemAccentColor">#005FB8</Color>
-    <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="#F7F7F7" />
-    <SolidColorBrush x:Key="AcrylicBackgroundFillColorDefaultBrush" Color="#F2F2F2" />
-    <SolidColorBrush x:Key="AppBackdropBrush" Color="#F2F2F2" />
-    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#000000" />
-    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#5C5C5C" />
-    <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#E5E5E5" />
-    <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#CCCCCC" />
-    <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#EFEFEF" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
-    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#F7F7F7" />
+    
+    <!-- Baseline fallbrushes that the app expects. Linking them to system resources. -->
+    <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColor}" />
+    <SolidColorBrush x:Key="AppBackdropBrush" Color="{ThemeResource SystemAltHighColor}" Opacity="0" /> <!-- Fallback -->
     <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
 
-    <!-- 兼容性资源定义：确保在所有平台上都有回退项 -->
+    <!-- Polyfill brushes for non-Windows or standard keys used as custom ones -->
+    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{ThemeResource SystemBaseHighColor}" />
+    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{ThemeResource SystemBaseMediumColor}" />
+    <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="{ThemeResource SystemControlBackgroundBaseLowBrush}" />
+    <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="{ThemeResource SystemControlBackgroundBaseMediumBrush}" />
+    <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{ThemeResource SystemControlForegroundBaseLowBrush}" />
+    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{ThemeResource SystemControlBackgroundAltHighBrush}" />
+    
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Default">
-            <Color x:Key="SystemAltHighColor">#FFFFFF</Color>
-            <Color x:Key="SystemAccentColor">#005FB8</Color>
-            <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="#F7F7F7" />
-            <SolidColorBrush x:Key="AcrylicBackgroundFillColorDefaultBrush" Color="#F2F2F2" />
-            <SolidColorBrush x:Key="AppBackdropBrush" Color="#F2F2F2" />
-            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#000000" />
-            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#E5E5E5" />
-            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#CCCCCC" />
-            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#EFEFEF" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
-            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#5C5C5C" />
-            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#F7F7F7" />
-            <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="AppBackdropBrush" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
+            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColor}" />
         </ResourceDictionary>
-        <!-- Solid fallback brushes to avoid WinUI startup failfast on some systems. -->
         <ResourceDictionary x:Key="Light">
-            <Color x:Key="SystemAltHighColor">#FFFFFF</Color>
-            <Color x:Key="SystemAccentColor">#005FB8</Color>
-            <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="#F7F7F7" />
-            <SolidColorBrush x:Key="AcrylicBackgroundFillColorDefaultBrush" Color="#F2F2F2" />
-            <SolidColorBrush x:Key="AppBackdropBrush" Color="#F2F2F2" />
-            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#000000" />
-            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#E5E5E5" />
-            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#CCCCCC" />
-            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#EFEFEF" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#005FB8" />
-            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#5C5C5C" />
-            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#F7F7F7" />
-            <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="AppBackdropBrush" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
+            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColor}" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-            <Color x:Key="SystemAltHighColor">#000000</Color>
-            <Color x:Key="SystemAccentColor">#60CDFF</Color>
-            <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="#1F1F1F" />
-            <SolidColorBrush x:Key="AcrylicBackgroundFillColorDefaultBrush" Color="#1F1F1F" />
-            <SolidColorBrush x:Key="AppBackdropBrush" Color="#1F1F1F" />
-            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#333333" />
-            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#444444" />
-            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#222222" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#60CDFF" />
-            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#C7C7C7" />
-            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#1F1F1F" />
-            <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
+            <StaticResource x:Key="AppBackdropBrush" ResourceKey="LayerOnAcrylicFillColorDefaultBrush" />
+            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColor}" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
-            <Color x:Key="SystemAltHighColor">#FFFFFF</Color>
-            <Color x:Key="SystemAccentColor">#FFFFFF</Color>
-            <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="#000000" />
-            <SolidColorBrush x:Key="AcrylicBackgroundFillColorDefaultBrush" Color="#000000" />
-            <SolidColorBrush x:Key="AppBackdropBrush" Color="#000000" />
-            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#000000" />
-            <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#000000" />
-            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#000000" />
-            <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="AppBackdropBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemColorHotlightColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

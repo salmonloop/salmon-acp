@@ -188,15 +188,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     {
         BootLog("OnLaunched: start");
 
-        try
-        {
-            Resources.MergedDictionaries.Insert(0, new XamlControlsResources());
-            BootLog("OnLaunched: XamlControlsResources loaded");
-        }
-        catch (Exception ex)
-        {
-            BootLog("OnLaunched: failed to add XamlControlsResources: " + ex);
-        }
+        // XamlControlsResources is now added declaratively in App.xaml to ensure availability during early parsing.
 
         MainWindow = new Microsoft.UI.Xaml.Window();
         BootLog("OnLaunched: window created");

@@ -6,8 +6,29 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <controls:XamlControlsResources />
                 <ResourceDictionary Source="ms-appx:///Styles/ThemeFallback.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- 
+                 WinUI 3 (WindowsAppSDK) Bug Fix:
+                 WinUI 3 fails to recursively find ThemeResource lookups if they are
+                 defined inside ThemeDictionaries of a *merged* dictionary (ThemeFallback.xaml)
+                 and looked up too early (e.g. in MainPage initialization).
+                 By moving just the problematic keys directly to the root of App.xaml's
+                 ResourceDictionary, we guarantee they are present at parse time on Windows.
+            -->
+            <!-- AppBackdropBrush must be Transparent to let the native Windows Mica/Acrylic material show through -->
+            <SolidColorBrush x:Key="AppBackdropBrush" Color="Transparent" />
+            
+            <!-- Cards and Dividers missing in modern WinUI3 generic.xaml but used by our cross-platform views -->
+            <!-- We route these legacy/custom names to actual modern WinUI3 theme resources -->
+            <SolidColorBrush x:Key="LayerOnAcrylicFillColorDefaultBrush" Color="{ThemeResource LayerFillColorDefault}" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="{ThemeResource DividerStrokeColorDefault}" />
+            
+            <!-- Fallback text/accent for places where ThemeFallback was missed by WinUI3 -->
+            <SolidColorBrush x:Key="SystemControlBackgroundBaseMediumLowBrush" Color="{ThemeResource LayerFillColorDefault}" />
+            <SolidColorBrush x:Key="SystemControlForegroundOnAccentBrush" Color="{ThemeResource TextOnAccentFillColorPrimary}" />
 
             <!-- Settings layout (Win11-like): fixed content column on wide windows, fluid on narrow ones -->
             <x:Double x:Key="SettingsContentMaxWidth">780</x:Double>
