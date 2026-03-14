@@ -58,9 +58,13 @@
                                 HorizontalContentAlignment="Stretch"
                                 Padding="0"
                                 SelectsOnInvoked="False"
-                                IsTabStop="False"
-                                AllowFocusOnInteraction="False"
-                                Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                Tag="{x:Bind navModels:NavItemTag.SessionsHeader}"
+                                ToolTipService.ToolTip="添加项目">
+                
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Add" Visibility="{x:Bind IsPaneClosed, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </NavigationViewItem.Icon>
+
                 <NavigationViewItem.Resources>
                     <StaticResource x:Key="NavigationViewItemBackgroundPointerOver" ResourceKey="NavigationViewItemBackground" />
                     <StaticResource x:Key="NavigationViewItemBackgroundPressed" ResourceKey="NavigationViewItemBackground" />
@@ -70,9 +74,11 @@
                     <StaticResource x:Key="NavigationViewItemForegroundSelected" ResourceKey="NavigationViewItemForeground" />
                 </NavigationViewItem.Resources>
 
+                <!-- When pane is open, show the header content -->
                 <NavigationViewItem.Content>
                     <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="8">
+                          ColumnSpacing="8"
+                          Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBlock Text="{x:Bind Title, Mode=OneWay}"
                                    Style="{StaticResource NavigationViewItemHeaderTextStyle}"
                                    Foreground="{ThemeResource NavigationViewItemHeaderForeground}"
@@ -97,16 +103,6 @@
                         </Button>
                     </Grid>
                 </NavigationViewItem.Content>
-            </NavigationViewItem>
-        </DataTemplate>
-
-        <DataTemplate x:Key="SessionsCompactAddTemplate" x:DataType="nav:SessionsCompactAddNavItemViewModel">
-            <NavigationViewItem SelectsOnInvoked="False"
-                                Tag="{x:Bind navModels:NavItemTag.SessionsHeader}"
-                                Visibility="{x:Bind IsPaneClosed, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Add" />
-                </NavigationViewItem.Icon>
             </NavigationViewItem>
         </DataTemplate>
 
@@ -200,7 +196,6 @@
         <navViews:MainNavItemTemplateSelector x:Key="MainNavItemTemplateSelector"
                                               StartTemplate="{StaticResource StartNavTemplate}"
                                               HeaderTemplate="{StaticResource SessionsHeaderTemplate}"
-                                              CompactAddTemplate="{StaticResource SessionsCompactAddTemplate}"
                                               ProjectTemplate="{StaticResource ProjectNavTemplate}"
                                               SessionTemplate="{StaticResource SessionNavTemplate}"
                                               MoreTemplate="{StaticResource MoreNavTemplate}" />

@@ -36,13 +36,3 @@ public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewMode
         AddProjectCommand = addProjectCommand;
     }
 }
-
-public sealed partial class SessionsCompactAddNavItemViewModel : MainNavItemViewModel
-{
-    public IAsyncRelayCommand AddProjectCommand { get; }
-
-    public SessionsCompactAddNavItemViewModel(IAsyncRelayCommand addProjectCommand)
-    {
-        AddProjectCommand = addProjectCommand;
-    }
-}
