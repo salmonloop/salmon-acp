@@ -155,10 +155,11 @@
 
                 <NavigationViewItem.Content>
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                        <ProgressRing Width="14"
-                                      Height="14"
-                                      IsActive="{x:Bind IsPlaceholder, Mode=OneWay}"
-                                      Visibility="{x:Bind IsPlaceholder, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <ProgressBar Width="20"
+                                     Height="4"
+                                     IsIndeterminate="True"
+                                     VerticalAlignment="Center"
+                                     Visibility="{x:Bind IsPlaceholder, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
                         <TextBlock Grid.Column="1"
                                    Text="{x:Bind Title, Mode=OneWay}"
@@ -390,7 +391,6 @@
                         <Setter Target="MainNavView.IsPaneOpen" Value="True" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
                         <Setter Target="TopSearchBox.Width" Value="340" />
-                        <Setter Target="ChatNavRoot.IsExpanded" Value="True" />
                     </VisualState.Setters>
                 </VisualState>
 
@@ -404,7 +404,6 @@
                         <Setter Target="MainNavView.IsPaneOpen" Value="False" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
                         <Setter Target="TopSearchBox.Width" Value="280" />
-                        <Setter Target="ChatNavRoot.IsExpanded" Value="False" />
                     </VisualState.Setters>
                 </VisualState>
 
@@ -417,7 +416,6 @@
                         <Setter Target="MainNavView.PaneDisplayMode" Value="LeftMinimal" />
                         <Setter Target="MainNavView.IsPaneOpen" Value="False" />
                         <Setter Target="TopSearchBox.Visibility" Value="Collapsed" />
-                        <Setter Target="ChatNavRoot.IsExpanded" Value="False" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>

@@ -33,6 +33,7 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
 
     private readonly List<string> _searchHistory = new();
     private CancellationTokenSource? _searchCts;
+    private int _searchVersion;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasQuery))]
@@ -87,20 +88,27 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
             return;
         }
 
+        var version = Interlocked.Increment(ref _searchVersion);
         _searchCts = new CancellationTokenSource();
-        _ = SearchAsync(value, _searchCts.Token);
+        _ = SearchAsync(value, version, _searchCts.Token);
     }
 
-    private async Task SearchAsync(string query, CancellationToken token)
+    private async Task SearchAsync(string query, int version, CancellationToken token)
     {
         try
         {
+            await Task.Delay(150, token);
+            if (token.IsCancellationRequested || version != _searchVersion)
+            {
+                return;
+            }
+
             var normalizedQuery = query.Trim().ToLowerInvariant();
             var groups = new List<SearchResultGroup>();
 
             // 1. 搜索会话（当前页面相关性最高）
             var sessionGroup = await SearchSessionsAsync(normalizedQuery);
-            if (token.IsCancellationRequested)
+            if (token.IsCancellationRequested || version != _searchVersion)
             {
                 return;
             }
@@ -111,6 +119,10 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
 
             // 2. 搜索项目
             var projectGroup = SearchProjects(normalizedQuery);
+            if (token.IsCancellationRequested || version != _searchVersion)
+            {
+                return;
+            }
             if (projectGroup.Items.Count > 0)
             {
                 groups.Add(projectGroup);
@@ -118,6 +130,10 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
 
             // 3. 搜索设置
             var settingsGroup = SearchSettings(normalizedQuery);
+            if (token.IsCancellationRequested || version != _searchVersion)
+            {
+                return;
+            }
             if (settingsGroup.Items.Count > 0)
             {
                 groups.Add(settingsGroup);
@@ -125,12 +141,16 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
 
             // 4. 搜索命令
             var commandsGroup = SearchCommands(normalizedQuery);
+            if (token.IsCancellationRequested || version != _searchVersion)
+            {
+                return;
+            }
             if (commandsGroup.Items.Count > 0)
             {
                 groups.Add(commandsGroup);
             }
 
-            if (token.IsCancellationRequested || !string.Equals(Query, query, StringComparison.Ordinal))
+            if (token.IsCancellationRequested || version != _searchVersion || !string.Equals(Query, query, StringComparison.Ordinal))
             {
                 return;
             }

@@ -97,7 +97,11 @@
         <Grid Grid.RowSpan="3"
               Background="#40000000"
               Visibility="{x:Bind ViewModel.IsStarting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-            <ProgressRing IsActive="True" Width="48" Height="48"/>
+            <ProgressBar IsIndeterminate="True"
+                         Width="120"
+                         Height="4"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"/>
         </Grid>
     </Grid>
 </Page>

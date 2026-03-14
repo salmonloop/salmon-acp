@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
+using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml.Controls;
-#if HAS_UNO
+#if HAS_UNO && !WINDOWS
 using Uno.UI;
 #endif
 using SalmonEgg.Presentation.Models;
@@ -20,7 +22,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     public static Microsoft.UI.Xaml.Window? MainWindowInstance => (Current as App)?.MainWindow;
     private static readonly Uri ReducedMotionDictionarySource = new("ms-appx:///Styles/ReducedMotion.xaml");
     private static Microsoft.UI.Xaml.ResourceDictionary? _reducedMotionDictionary;
-#if HAS_UNO
+#if HAS_UNO && !WINDOWS
     private static TimeSpan? _defaultThemeAnimationDuration;
 #endif
 
@@ -29,6 +31,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     internal static void BootLog(string message)
     {
+#if DEBUG
         try
         {
             var dir = SalmonEggPaths.GetAppDataRootPath();
@@ -38,6 +41,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         catch
         {
         }
+#endif
     }
 
     internal static void ReloadMainShell()
@@ -55,7 +59,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
                 if (window.Content is Frame frame)
                 {
                     frame.BackStack.Clear();
-                    frame.Navigate(typeof(MainPage));
+                    frame.Content = new MainPage();
                 }
             });
         }
@@ -73,7 +77,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
                 return;
             }
 
-#if HAS_UNO
+#if HAS_UNO && !WINDOWS
             try
             {
                 _defaultThemeAnimationDuration ??= FeatureConfiguration.ThemeAnimation.DefaultThemeAnimationDuration;
@@ -112,6 +116,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     public App()
     {
+        BootLog("App: ctor start");
         var services = new global::Microsoft.Extensions.DependencyInjection.ServiceCollection();
         services.AddSalmonEgg();
         ServiceProvider = services.BuildServiceProvider();
@@ -120,7 +125,17 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         _appSettingsService = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppSettingsService>();
         _maintenanceService = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppMaintenanceService>();
 
-        this.InitializeComponent();
+        BootLog("App: before InitializeComponent");
+        try
+        {
+            this.InitializeComponent();
+            BootLog("App: InitializeComponent done");
+        }
+        catch (Exception ex)
+        {
+            BootLog("App: InitializeComponent failed: " + ex);
+            throw;
+        }
 
 #if __SKIA__
         // Skia uses the same WinUI resource keys, but a few template defaults (e.g., negative margins used for pixel
@@ -128,6 +143,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         TryAddSkiaThemeOverrides();
 #endif
 
+#if DEBUG
         this.UnhandledException += (_, e) =>
         {
             BootLog("App.UnhandledException: " + e.Exception);
@@ -142,6 +158,10 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             BootLog("TaskScheduler.UnobservedTaskException: " + e.Exception);
             e.SetObserved();
         };
+        BootLog("App: exception handlers attached");
+
+        AppDomain.CurrentDomain.FirstChanceException += OnFirstChanceException;
+#endif
     }
 
 #if __SKIA__
@@ -166,30 +186,21 @@ public partial class App : global::Microsoft.UI.Xaml.Application
     protected override async void OnLaunched(global::Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         BootLog("OnLaunched: start");
+
+        try
+        {
+            Resources.MergedDictionaries.Insert(0, new XamlControlsResources());
+            BootLog("OnLaunched: XamlControlsResources loaded");
+        }
+        catch (Exception ex)
+        {
+            BootLog("OnLaunched: failed to add XamlControlsResources: " + ex);
+        }
+
         MainWindow = new Microsoft.UI.Xaml.Window();
         BootLog("OnLaunched: window created");
 
-#if WINDOWS
-        // Native WinUI 3 backdrop. Mica is Windows 11+; fall back to Desktop Acrylic on Windows 10.
-        // Avoid hard-failing at startup on older Windows builds.
-        try
-        {
-            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
-            {
-                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
-                BootLog("OnLaunched: MicaBackdrop set");
-            }
-            else if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
-            {
-                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
-                BootLog("OnLaunched: DesktopAcrylicBackdrop set");
-            }
-        }
-        catch
-        {
-            BootLog("OnLaunched: backdrop set failed");
-        }
-#endif
+        ApplyPlatformBackdrops(MainWindow);
 
 #if DEBUG
         // MainWindow.UseStudio(); // Requires Uno Studio configuration
@@ -201,6 +212,27 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             MainWindow.Content = rootFrame;
             rootFrame.NavigationFailed += OnNavigationFailed;
             BootLog("OnLaunched: root frame created");
+        }
+
+        // Applies the generated icon.ico (from Assets/Icons/icon.svg) to the native window (Desktop/Windows).
+        try
+        {
+            MainWindow.SetWindowIcon();
+            BootLog("OnLaunched: window icon set");
+        }
+        catch (Exception ex)
+        {
+            BootLog("OnLaunched: window icon set failed: " + ex);
+        }
+
+        try
+        {
+            MainWindow.Activate();
+            BootLog("OnLaunched: window activated");
+        }
+        catch (Exception ex)
+        {
+            BootLog("OnLaunched: window activate failed: " + ex);
         }
 
         try
@@ -217,10 +249,21 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             BootLog("OnLaunched: failed to load settings for motion");
         }
 
+#if DEBUG
+        LogMissingResourceKeys();
+#endif
+
         if (rootFrame.Content == null)
         {
-            rootFrame.Navigate(typeof(MainPage), args.Arguments);
-            BootLog("OnLaunched: navigated to MainPage");
+            try
+            {
+                rootFrame.Content = new MainPage();
+                BootLog("OnLaunched: MainPage attached to root frame");
+            }
+            catch (Exception ex)
+            {
+                BootLog("OnLaunched: create MainPage failed! " + ex);
+            }
         }
 
         // Best-effort cache cleanup based on retention settings.
@@ -245,11 +288,49 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         {
         }
 
-        // Applies the generated icon.ico (from Assets/Icons/icon.svg) to the native window (Desktop/Windows).
-        MainWindow.SetWindowIcon();
-        MainWindow.Activate();
-        BootLog("OnLaunched: window activated");
+
     }
+
+#if DEBUG
+    private void LogMissingResourceKeys()
+    {
+        try
+        {
+            var keys = new[]
+            {
+                "SystemAltHighColor",
+                "SystemAccentColor",
+                "TextFillColorPrimaryBrush",
+                "ControlFillColorSecondaryBrush",
+                "ControlFillColorTertiaryBrush",
+                "DividerStrokeColorDefaultBrush"
+            };
+
+            foreach (var key in keys)
+            {
+                if (!Resources.TryGetValue(key, out _))
+                {
+                    BootLog($"App: missing resource key '{key}'");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            BootLog("App: resource check failed: " + ex);
+        }
+    }
+
+    private static void OnFirstChanceException(object? sender, FirstChanceExceptionEventArgs e)
+    {
+        if (e.Exception is COMException comEx && comEx.HResult == unchecked((int)0x8007007A))
+        {
+            var stack = new System.Diagnostics.StackTrace(1, true).ToString();
+            BootLog("FirstChance COMException 0x8007007A: " + comEx + Environment.NewLine + stack);
+        }
+    }
+#endif
+
+    partial void ApplyPlatformBackdrops(Microsoft.UI.Xaml.Window window);
 
     void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
     {
@@ -288,8 +369,8 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             builder.AddFilter("Windows", LogLevel.Warning);
             builder.AddFilter("Microsoft", LogLevel.Warning);
         });
+#if HAS_UNO && !WINDOWS
         global::Uno.Extensions.LogExtensionPoint.AmbientLoggerFactory = factory;
-#if HAS_UNO
         global::Uno.UI.Adapter.Microsoft.Extensions.Logging.LoggingAdapter.Initialize();
 #endif
     }

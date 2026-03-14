@@ -42,6 +42,25 @@ function Get-SignToolPath {
     throw "signtool.exe not found. Install Windows 10/11 SDK (includes Signing Tools)."
 }
 
+function Get-MSBuildPath {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path $vswhere)) {
+        throw "vswhere.exe not found. Install Visual Studio 2022 or Build Tools 2022 with MSBuild."
+    }
+
+    $vsInstall = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+    if (-not $vsInstall) {
+        throw "MSBuild not found. Install Visual Studio 2022 or Build Tools 2022 with MSBuild."
+    }
+
+    $msbuild = Join-Path $vsInstall 'MSBuild\Current\Bin\MSBuild.exe'
+    if (-not (Test-Path $msbuild)) {
+        throw "MSBuild.exe not found at '$msbuild'."
+    }
+
+    return $msbuild
+}
+
 function Get-CertificateFromStore {
     param(
         [Parameter(Mandatory = $true)] [string] $Subject,
@@ -163,9 +182,10 @@ $msixOutDir = Join-Path $repoRoot 'artifacts\msix'
 Write-Host "Publishing MSIX ($Configuration, $tfm)..."
 New-Item -ItemType Directory -Force -Path $msixOutDir | Out-Null
 
-dotnet publish $project -c $Configuration -f $tfm -p:PublishProfile=$profile -v:m | Out-Host
+$msbuild = Get-MSBuildPath
+& $msbuild $project /t:Publish /p:Configuration=$Configuration /p:TargetFramework=$tfm /p:PublishProfile=$profile /v:m | Out-Host
 if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed with exit code $LASTEXITCODE"
+    throw "MSBuild publish failed with exit code $LASTEXITCODE"
 }
 
 $msix = Get-ChildItem -Path $msixOutDir -Recurse -Filter *.msix -File -ErrorAction SilentlyContinue |

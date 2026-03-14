@@ -224,7 +224,10 @@
                     CornerRadius="8"
                     Visibility="{x:Bind ViewModel.IsThinking, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ProgressRing IsActive="True" Width="16" Height="16"/>
+                    <ProgressBar IsIndeterminate="True"
+                                 Width="32"
+                                 Height="3"
+                                 VerticalAlignment="Center"/>
                     <TextBlock Text="正在思考..."
                                FontSize="13"
                                Opacity="0.8"
@@ -246,7 +249,11 @@
             <Grid Grid.RowSpan="3"
                   Background="#40000000"
                   Visibility="{x:Bind ViewModel.IsConnecting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                <ProgressRing IsActive="True" Width="48" Height="48"/>
+                <ProgressBar IsIndeterminate="True"
+                             Width="120"
+                             Height="4"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"/>
             </Grid>
         </Grid>
     </Grid>

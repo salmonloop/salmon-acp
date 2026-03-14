@@ -1330,22 +1330,30 @@ public sealed partial class MainPage : Page
             TitleBarBackButton.IsEnabled = ContentFrame.CanGoBack;
         }
 
-        var appWindow = window.AppWindow;
-        if (appWindow?.TitleBar == null)
+        try
         {
+            var appWindow = window.AppWindow;
+            if (appWindow?.TitleBar == null)
+            {
+                return;
+            }
+
+            _appWindowTitleBar = appWindow.TitleBar;
+            _appWindowTitleBar.ExtendsContentIntoTitleBar = true;
+            _appWindowTitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+            _appWindowTitleBar.BackgroundColor = Colors.Transparent;
+            _appWindowTitleBar.InactiveBackgroundColor = Colors.Transparent;
+            // Keep normal caption buttons transparent so they blend with our title bar,
+            // but preserve system hover/pressed visuals (including the Close button red state).
+            _appWindowTitleBar.ButtonBackgroundColor = Colors.Transparent;
+            _appWindowTitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+            UpdateTitleBarInsets();
+        }
+        catch (Exception ex)
+        {
+            App.BootLog("ConfigureTitleBar: failed to init AppWindowTitleBar. " + ex);
             return;
         }
-
-        _appWindowTitleBar = appWindow.TitleBar;
-        _appWindowTitleBar.ExtendsContentIntoTitleBar = true;
-        _appWindowTitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
-        _appWindowTitleBar.BackgroundColor = Colors.Transparent;
-        _appWindowTitleBar.InactiveBackgroundColor = Colors.Transparent;
-        // Keep normal caption buttons transparent so they blend with our title bar,
-        // but preserve system hover/pressed visuals (including the Close button red state).
-        _appWindowTitleBar.ButtonBackgroundColor = Colors.Transparent;
-        _appWindowTitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        UpdateTitleBarInsets();
 
         // Windows App SDK (current pinned version) does not expose LayoutMetricsChanged/IsVisibleChanged here.
         // We refresh insets on common window lifecycle events instead.
@@ -1450,7 +1458,14 @@ public sealed partial class MainPage : Page
         }
 
         args.Cancel = true;
-        sender.Hide();
+        try
+        {
+            sender.Hide();
+        }
+        catch (Exception ex)
+        {
+            App.BootLog("OnAppWindowClosing: Hide failed. " + ex);
+        }
     }
 #endif
 #if WINDOWS
@@ -1470,12 +1485,18 @@ public sealed partial class MainPage : Page
         {
             return;
         }
-
-        // Keep interactive content out of the system caption button area.
-        AppTitleBarContent.Padding = new Thickness(_appWindowTitleBar.LeftInset, 0, _appWindowTitleBar.RightInset, 0);
-        if (_appWindowTitleBar.Height > 0)
+        try
         {
-            AppTitleBar.Height = _appWindowTitleBar.Height;
+            // Keep interactive content out of the system caption button area.
+            AppTitleBarContent.Padding = new Thickness(_appWindowTitleBar.LeftInset, 0, _appWindowTitleBar.RightInset, 0);
+            if (_appWindowTitleBar.Height > 0)
+            {
+                AppTitleBar.Height = _appWindowTitleBar.Height;
+            }
+        }
+        catch (Exception ex)
+        {
+            App.BootLog("UpdateTitleBarInsets: failed. " + ex);
         }
     }
 #endif

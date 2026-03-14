@@ -4,32 +4,10 @@
              xmlns:controls="using:Microsoft.UI.Xaml.Controls">
 
     <Application.Resources>
-            <ResourceDictionary>
-                <ResourceDictionary.MergedDictionaries>
-                    <!-- WinUI 3 default control resources (provides TextFillColorPrimaryBrush, etc.) -->
-                    <controls:XamlControlsResources />
-                </ResourceDictionary.MergedDictionaries>
-
-            <!-- 兼容性资源定义：确保在所有平台上都有回退项 -->
-            <ResourceDictionary.ThemeDictionaries>
-                <!--
-                  Card/surface fill that still lets the window backdrop (Mica/DesktopAcrylic/AppBackdropBrush) show through.
-                  Using AcrylicBrush keeps the "material" feel instead of a flat solid fill.
-                -->
-                <ResourceDictionary x:Key="Light">
-                    <AcrylicBrush x:Key="LayerOnAcrylicFillColorDefaultBrush"
-                                  TintColor="#FFFFFF"
-                                  TintOpacity="0.55"
-                                  FallbackColor="#F7F7F7" />
-                </ResourceDictionary>
-                <ResourceDictionary x:Key="Dark">
-                    <AcrylicBrush x:Key="LayerOnAcrylicFillColorDefaultBrush"
-                                  TintColor="#1F1F1F"
-                                  TintOpacity="0.45"
-                                  FallbackColor="#1F1F1F" />
-                </ResourceDictionary>
-            </ResourceDictionary.ThemeDictionaries>
-            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColor}" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///Styles/ThemeFallback.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
             <!-- Settings layout (Win11-like): fixed content column on wide windows, fluid on narrow ones -->
             <x:Double x:Key="SettingsContentMaxWidth">780</x:Double>
@@ -216,11 +194,7 @@
                 </Setter>
             </Style>
 
-            <!-- App backdrop (Mica-like) fallback usable across platforms -->
-            <AcrylicBrush x:Key="AppBackdropBrush"
-                          TintColor="{ThemeResource SystemAltHighColor}"
-                          TintOpacity="0.85"
-                          FallbackColor="{ThemeResource SystemAltHighColor}" />
+            <!-- App backdrop fallback now defined in ThemeDictionaries above. -->
 
         </ResourceDictionary>
     </Application.Resources>
