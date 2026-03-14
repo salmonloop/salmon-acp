@@ -98,6 +98,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private bool _isConversationListLoading = true;
+    [ObservableProperty]
+    private int _conversationListVersion;
 
     [ObservableProperty]
     private string _currentSessionDisplayName = string.Empty;
@@ -570,6 +572,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
 
             IsConversationListLoading = false;
+            NotifyConversationListChanged();
         }, null);
     }
 
@@ -782,6 +785,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
 
         ScheduleConversationSave();
+        NotifyConversationListChanged();
     }
 
     public void DeleteConversation(string conversationId)
@@ -1935,6 +1939,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             binding.LastUpdatedAt = DateTime.UtcNow;
         }
         ScheduleConversationSave();
+        NotifyConversationListChanged();
     }
 
     public void ArchiveConversation(string conversationId)
@@ -1963,6 +1968,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         ScheduleConversationSave();
 
         // 触发会话列表更新事件
+        NotifyConversationListChanged();
+    }
+
+    private void NotifyConversationListChanged()
+    {
+        ConversationListVersion++;
         OnPropertyChanged(nameof(GetKnownConversationIds));
     }
 

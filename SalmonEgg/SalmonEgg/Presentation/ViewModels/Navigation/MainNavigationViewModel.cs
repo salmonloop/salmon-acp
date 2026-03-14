@@ -122,7 +122,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ChatViewModel.IsConversationListLoading))
+        if (e.PropertyName == nameof(ChatViewModel.IsConversationListLoading)
+            || e.PropertyName == nameof(ChatViewModel.ConversationListVersion))
         {
             RebuildTree();
         }
