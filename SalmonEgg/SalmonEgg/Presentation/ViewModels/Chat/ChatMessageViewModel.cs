@@ -21,6 +21,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private bool _isOutgoing;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsThinkingPlaceholder))]
         private string _contentType = string.Empty;
 
         [ObservableProperty]
@@ -49,13 +50,17 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private string? _toolCallId;
 
         [ObservableProperty]
-        private ToolCallKind? _toolCallKind;
+        [NotifyPropertyChangedFor(nameof(ToolCallKindDisplayName))]
+        private Domain.Models.Tool.ToolCallKind? _toolCallKind;
 
         [ObservableProperty]
-        private ToolCallStatus? _toolCallStatus;
+        [NotifyPropertyChangedFor(nameof(ToolCallStatusDisplayName))]
+        private Domain.Models.Tool.ToolCallStatus? _toolCallStatus;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasToolCallJson))]
         private string? _toolCallJson;
+
 
         // 计划条目
        [ObservableProperty]
@@ -205,6 +210,19 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
            };
        }
 
+        public static ChatMessageViewModel CreateThinkingPlaceholder(string id)
+        {
+            return new ChatMessageViewModel
+            {
+                Id = id,
+                IsOutgoing = false,
+                ContentType = "thinking",
+                Title = "思考中",
+                TextContent = string.Empty,
+                Timestamp = DateTime.Now
+            };
+        }
+
         public bool HasTitle => !string.IsNullOrEmpty(Title);
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
        public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
@@ -214,6 +232,31 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
        public bool HasModeChange => !string.IsNullOrEmpty(ModeId);
        public bool HasResourceContent => ResourceViewModel?.IsResourceContent == true;
        public bool HasResourceLink => ResourceViewModel?.IsResourceLink == true;
+
+       public bool IsThinkingPlaceholder => string.Equals(ContentType, "thinking", StringComparison.Ordinal);
+
+       public string ToolCallStatusDisplayName => ToolCallStatus switch
+       {
+           Domain.Models.Tool.ToolCallStatus.Pending => "待处理",
+           Domain.Models.Tool.ToolCallStatus.InProgress => "进行中",
+           Domain.Models.Tool.ToolCallStatus.Completed => "已完成",
+           Domain.Models.Tool.ToolCallStatus.Failed => "失败",
+           _ => "未知"
+       };
+
+       public string ToolCallKindDisplayName => ToolCallKind switch
+       {
+           Domain.Models.Tool.ToolCallKind.Read => "读取",
+           Domain.Models.Tool.ToolCallKind.Edit => "编辑",
+           Domain.Models.Tool.ToolCallKind.Delete => "删除",
+           Domain.Models.Tool.ToolCallKind.Move => "移动",
+           Domain.Models.Tool.ToolCallKind.Search => "搜索",
+           Domain.Models.Tool.ToolCallKind.Execute => "执行",
+           Domain.Models.Tool.ToolCallKind.Think => "思考",
+           _ => "工具"
+       };
+
+       public bool HasToolCallJson => !string.IsNullOrWhiteSpace(ToolCallJson);
     }
 
     /// <summary>

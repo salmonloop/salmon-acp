@@ -19,6 +19,8 @@ namespace SalmonEgg.Presentation.Views.Chat
         private bool _isTrackingMessages;
         private bool _pendingInitialScroll = true;
         private bool _isMotionSubscribed;
+        private bool _autoScroll = true;
+        private ScrollViewer? _scrollViewer;
 
         public ChatView()
         {
@@ -124,6 +126,63 @@ namespace SalmonEgg.Presentation.Views.Chat
             if (_pendingInitialScroll)
             {
                 RequestInitialScroll();
+                return;
+            }
+
+            if (_autoScroll)
+            {
+                RequestScrollToBottom();
+            }
+        }
+
+        private void OnMessagesListLoaded(object sender, RoutedEventArgs e)
+        {
+            _scrollViewer = FindScrollViewer(MessagesList);
+            if (_scrollViewer != null)
+            {
+                _scrollViewer.ViewChanged += ScrollViewer_ViewChanged;
+            }
+        }
+
+        private void ScrollViewer_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+        {
+            if (_scrollViewer == null) return;
+
+            // If user is at the bottom, enable auto-scroll.
+            // Otherwise, if they scrolled up, disable it.
+            var verticalOffset = _scrollViewer.VerticalOffset;
+            var maxOffset = _scrollViewer.ScrollableHeight;
+
+            // Use a small threshold (10px) to account for precision issues.
+            _autoScroll = verticalOffset >= maxOffset - 10;
+        }
+
+        private static ScrollViewer? FindScrollViewer(DependencyObject element)
+        {
+            if (element is ScrollViewer sv) return sv;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+            {
+                var child = VisualTreeHelper.GetChild(element, i);
+                var result = FindScrollViewer(child);
+                if (result != null) return result;
+            }
+
+            return null;
+        }
+
+        private void RequestScrollToBottom()
+        {
+            if (_scrollViewer != null)
+            {
+                _scrollViewer.ChangeView(null, _scrollViewer.ScrollableHeight, null);
+                return;
+            }
+
+            // Fallback: use internal ScrollIntoView if ScrollViewer is not found yet.
+            if (MessagesList != null && ViewModel.MessageHistory.Count > 0)
+            {
+                MessagesList.ScrollIntoView(ViewModel.MessageHistory.Last());
             }
         }
 

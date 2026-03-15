@@ -49,6 +49,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _transientNotificationCts;
     private string? _currentRemoteSessionId;
     private ChatMessageViewModel? _activeAgentTextStreamMessage;
+    private ChatMessageViewModel? _activeThinkingMessage;
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
 
     // Local conversation binding: ConversationId (stable for sidebar/UI) -> active remote session id (per ACP) + transcript.
@@ -1190,12 +1191,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 if (e.Update is AgentMessageUpdate messageUpdate && messageUpdate.Content != null)
                 {
                     IsThinking = false;
+                    ClearThinkingPlaceholder();
                     HandleAgentContentChunk(messageUpdate.Content);
                 }
                 else if (e.Update is AgentThoughtUpdate)
                 {
-                    // Agents may stream thought chunks. We don't render them, but can use them as a "thinking" signal.
+                    // Agents may stream thought chunks. Surface a placeholder that will be replaced by the next reply.
                     IsThinking = true;
+                    EnsureThinkingPlaceholder();
                 }
                 else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
                 {
@@ -1206,7 +1209,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 {
                     IsThinking = true;
                     _activeAgentTextStreamMessage = null;
-                    AddToolCallToHistory(toolCallUpdate);
+                    
+                    var message = CreateToolCallMessage(toolCallUpdate);
+                    if (_activeThinkingMessage != null)
+                    {
+                        ReplaceThinkingPlaceholder(message);
+                    }
+                    else
+                    {
+                        AppendToTranscript(message);
+                    }
+                }
+                else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
+                {
+                    IsThinking = true;
+                    UpdateToolCallStatus(toolCallStatusUpdate);
                 }
                 else if (e.Update is PlanUpdate planUpdate)
                 {
@@ -1719,6 +1736,118 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void EnsureThinkingPlaceholder()
+    {
+        if (_activeThinkingMessage != null)
+        {
+            return;
+        }
+
+        var placeholder = ChatMessageViewModel.CreateThinkingPlaceholder(Guid.NewGuid().ToString());
+        _activeThinkingMessage = placeholder;
+        AppendToTranscript(placeholder);
+    }
+
+    private void ClearThinkingPlaceholder()
+    {
+        if (_activeThinkingMessage == null)
+        {
+            return;
+        }
+
+        RemoveMessageFromTranscript(_activeThinkingMessage);
+        _activeThinkingMessage = null;
+    }
+
+    private void ReplaceThinkingPlaceholder(ChatMessageViewModel replacement)
+    {
+        if (_activeThinkingMessage == null)
+        {
+            AppendToTranscript(replacement);
+            return;
+        }
+
+        ReplaceMessageInTranscript(_activeThinkingMessage, replacement);
+        _activeThinkingMessage = null;
+    }
+
+    private void RemoveMessageFromTranscript(ChatMessageViewModel message)
+    {
+        MessageHistory.Remove(message);
+        var binding = TryGetConversationBinding(CurrentSessionId);
+        if (binding != null)
+        {
+            binding.Transcript.Remove(message);
+            binding.LastUpdatedAt = DateTime.UtcNow;
+            ScheduleConversationSave();
+        }
+    }
+
+    private void ReplaceMessageInTranscript(ChatMessageViewModel oldMessage, ChatMessageViewModel newMessage)
+    {
+        var index = MessageHistory.IndexOf(oldMessage);
+        if (index >= 0)
+        {
+            MessageHistory[index] = newMessage;
+        }
+        else
+        {
+            MessageHistory.Add(newMessage);
+        }
+
+        var binding = TryGetConversationBinding(CurrentSessionId);
+        if (binding != null)
+        {
+            var transcriptIndex = binding.Transcript.IndexOf(oldMessage);
+            if (transcriptIndex >= 0)
+            {
+                binding.Transcript[transcriptIndex] = newMessage;
+            }
+            else
+            {
+                binding.Transcript.Add(newMessage);
+            }
+            binding.LastUpdatedAt = DateTime.UtcNow;
+            ScheduleConversationSave();
+        }
+    }
+
+    private ChatMessageViewModel CreateMessageFromContent(ContentBlock content, bool isOutgoing)
+    {
+        var id = Guid.NewGuid().ToString();
+        switch (content)
+        {
+            case TextContentBlock text:
+                return ChatMessageViewModel.CreateFromTextContent(id, content, isOutgoing);
+            case ImageContentBlock image:
+                return ChatMessageViewModel.CreateFromImageContent(id, content, isOutgoing);
+            case AudioContentBlock audio:
+                return ChatMessageViewModel.CreateFromAudioContent(id, content, isOutgoing);
+            case ResourceContentBlock resourceContent:
+                return ChatMessageViewModel.CreateFromResourceContent(id, resourceContent, isOutgoing);
+            case ResourceLinkContentBlock resourceLink:
+                return ChatMessageViewModel.CreateFromResourceLink(id, resourceLink, isOutgoing);
+            default:
+                return ChatMessageViewModel.CreateFromTextContent(id, content, isOutgoing);
+        }
+    }
+
+    private ChatMessageViewModel CreateToolCallMessage(ToolCallUpdate toolCall)
+    {
+        var rawInput = toolCall.RawInput?.GetRawText();
+        var rawOutput = toolCall.RawOutput?.GetRawText();
+        
+        return ChatMessageViewModel.CreateFromToolCall(
+            Guid.NewGuid().ToString(),
+            toolCall.ToolCallId,
+            rawInput,
+            rawOutput,
+            toolCall.Kind,
+            toolCall.Status,
+            toolCall.Title,
+            isOutgoing: false);
+    }
+
     private void AddMessageToHistory(ContentBlock content, bool isOutgoing)
     {
         var id = Guid.NewGuid().ToString();
@@ -1764,6 +1893,52 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             toolCall.Title,
             isOutgoing: false);
         AppendToTranscript(message);
+    }
+
+    private void UpdateToolCallStatus(ToolCallStatusUpdate toolCallStatusUpdate)
+    {
+        if (string.IsNullOrEmpty(toolCallStatusUpdate.ToolCallId))
+        {
+            return;
+        }
+
+        var toolCallId = toolCallStatusUpdate.ToolCallId;
+        var status = toolCallStatusUpdate.Status;
+        var content = toolCallStatusUpdate.Content;
+
+        var existingMessage = MessageHistory.FirstOrDefault(m =>
+            m.ToolCallId == toolCallId && m.ContentType == "tool_call");
+
+        if (existingMessage != null)
+        {
+            if (status.HasValue)
+            {
+                existingMessage.ToolCallStatus = status;
+            }
+
+            if (content != null && content.Count > 0)
+            {
+                foreach (var item in content)
+                {
+                    if (item is Domain.Models.Tool.ContentToolCallContent contentItem)
+                    {
+                        if (contentItem.Content is TextContentBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
+                        {
+                            existingMessage.TextContent = string.IsNullOrEmpty(existingMessage.TextContent)
+                                ? textBlock.Text
+                                : existingMessage.TextContent + textBlock.Text;
+                        }
+                    }
+                }
+            }
+
+            var binding = TryGetConversationBinding(CurrentSessionId);
+            if (binding != null)
+            {
+                binding.LastUpdatedAt = DateTime.UtcNow;
+                ScheduleConversationSave();
+            }
+        }
     }
 
     private void UpdatePlan(PlanUpdate planUpdate)
