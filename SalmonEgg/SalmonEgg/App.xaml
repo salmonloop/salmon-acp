@@ -18,15 +18,21 @@
                 -->
                 <ResourceDictionary x:Key="Light">
                     <AcrylicBrush x:Key="LayerOnAcrylicFillColorDefaultBrush"
-                                  TintColor="#FFFFFF"
+                                  TintColor="{ThemeResource SystemAltHighColor}"
                                   TintOpacity="0.55"
-                                  FallbackColor="#F7F7F7" />
+                                  FallbackColor="{ThemeResource SystemAltHighColor}" />
+                    <SolidColorBrush x:Key="AppOverlayScrimBrush"
+                                     Color="{ThemeResource SystemBaseHighColor}"
+                                     Opacity="0.25" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <AcrylicBrush x:Key="LayerOnAcrylicFillColorDefaultBrush"
-                                  TintColor="#1F1F1F"
+                                  TintColor="{ThemeResource SystemAltHighColor}"
                                   TintOpacity="0.45"
-                                  FallbackColor="#1F1F1F" />
+                                  FallbackColor="{ThemeResource SystemAltHighColor}" />
+                    <SolidColorBrush x:Key="AppOverlayScrimBrush"
+                                     Color="{ThemeResource SystemBaseLowColor}"
+                                     Opacity="0.25" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
             <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemAccentColor}" />
@@ -98,9 +104,9 @@
 
             <!-- Title bar buttons: keep UI consistent across pages + provide proper pointer/pressed feedback. -->
             <Style x:Key="TitleBarCommandButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="36" />
-                <Setter Property="Height" Value="36" />
-                <Setter Property="Padding" Value="8" />
+                <Setter Property="Width" Value="44" />
+                <Setter Property="Height" Value="44" />
+                <Setter Property="Padding" Value="10" />
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="1" />
@@ -153,9 +159,9 @@
             </Style>
 
             <Style x:Key="TitleBarToggleButtonStyle" TargetType="ToggleButton">
-                <Setter Property="Width" Value="36" />
-                <Setter Property="Height" Value="36" />
-                <Setter Property="Padding" Value="8" />
+                <Setter Property="Width" Value="44" />
+                <Setter Property="Height" Value="44" />
+                <Setter Property="Padding" Value="10" />
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="1" />

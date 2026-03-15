@@ -298,11 +298,6 @@ public sealed partial class ChatInputArea : UserControl
         args.Handled = true;
     }
 
-    private void OnSendClick(object sender, RoutedEventArgs e)
-    {
-        TrySendPrompt();
-    }
-
     private void OnInputTextCompositionStarted(object sender, TextCompositionStartedEventArgs e)
     {
         _isImeComposing = true;

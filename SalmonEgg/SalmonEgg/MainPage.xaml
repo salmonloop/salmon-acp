@@ -32,6 +32,10 @@
         <x:Double x:Key="NavSectionHeaderMinHeight">32</x:Double>
         <x:Double x:Key="NavSectionHeaderActionButtonSize">24</x:Double>
 <x:Double x:Key="NavProjectActionButtonSize">24</x:Double>
+        <x:Double x:Key="SearchBoxMinWidthWide">220</x:Double>
+        <x:Double x:Key="SearchBoxMaxWidthWide">360</x:Double>
+        <x:Double x:Key="SearchBoxMinWidthMedium">180</x:Double>
+        <x:Double x:Key="SearchBoxMaxWidthMedium">300</x:Double>
 
 
 
@@ -58,9 +62,7 @@
             <NavigationViewItem MinHeight="{StaticResource NavSectionHeaderMinHeight}"
                                 HorizontalContentAlignment="Stretch"
                                 Padding="0"
-                                SelectsOnInvoked="False"
-                                IsTabStop="False"
-                                AllowFocusOnInteraction="False">
+                                SelectsOnInvoked="False">
                 <!-- Use Icon slot for Compact mode visibility and perfect alignment -->
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Add" 
@@ -89,7 +91,6 @@
                                 BorderThickness="0"
                                 ToolTipService.ToolTip="添加项目"
                                 Command="{x:Bind AddProjectCommand}"
-                                IsTabStop="False"
                                 AutomationProperties.Name="添加项目">
                             <FontIcon Glyph="&#xE710;"
                                       FontFamily="{ThemeResource SymbolThemeFontFamily}"
@@ -378,7 +379,8 @@
                         <Setter Target="MainNavView.PaneDisplayMode" Value="Left" />
                         <Setter Target="MainNavView.IsPaneOpen" Value="True" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
-                        <Setter Target="TopSearchBox.Width" Value="340" />
+                        <Setter Target="TopSearchBox.MinWidth" Value="{StaticResource SearchBoxMinWidthWide}" />
+                        <Setter Target="TopSearchBox.MaxWidth" Value="{StaticResource SearchBoxMaxWidthWide}" />
                         <Setter Target="ChatNavRoot.IsExpanded" Value="True" />
                     </VisualState.Setters>
                 </VisualState>
@@ -392,7 +394,8 @@
                         <Setter Target="MainNavView.PaneDisplayMode" Value="LeftCompact" />
                         <Setter Target="MainNavView.IsPaneOpen" Value="False" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
-                        <Setter Target="TopSearchBox.Width" Value="280" />
+                        <Setter Target="TopSearchBox.MinWidth" Value="{StaticResource SearchBoxMinWidthMedium}" />
+                        <Setter Target="TopSearchBox.MaxWidth" Value="{StaticResource SearchBoxMaxWidthMedium}" />
                         <Setter Target="ChatNavRoot.IsExpanded" Value="False" />
                     </VisualState.Setters>
                 </VisualState>
@@ -446,22 +449,23 @@
                     <Button x:Name="TitleBarBackButton"
                             Style="{StaticResource TitleBarCommandButtonStyle}"
                             ToolTipService.ToolTip="返回"
+                            AutomationProperties.Name="返回"
                             Click="OnTitleBarBackClick">
                         <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE72B;"/>
                     </Button>
                     <Button x:Name="TitleBarToggleLeftNavButton"
                             Style="{StaticResource TitleBarCommandButtonStyle}"
                             ToolTipService.ToolTip="折叠左侧边栏"
+                            AutomationProperties.Name="切换侧边栏"
                             Click="OnToggleLeftNavClick">
                         <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE700;"/>
                     </Button>
                     </StackPanel>
 
                     <TextBox x:Name="TopSearchBox"
+                             x:Uid="TopSearchBox"
                              Grid.Column="1"
-                             Width="340"
                              Height="32"
-                             PlaceholderText="搜索"
                              Text="{x:Bind SearchVM.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              CornerRadius="8"
                              HorizontalAlignment="Center"
@@ -469,14 +473,14 @@
                              GotFocus="OnSearchBoxGotFocus"
                              LostFocus="OnSearchBoxLostFocus">
                         <FlyoutBase.AttachedFlyout>
-                            <Flyout Placement="BottomEdgeAlignedLeft" 
-                                    AllowFocusOnInteraction="False"
+                            <Flyout Placement="BottomEdgeAlignedLeft"
                                     ShowMode="Transient">
                                 <Flyout.FlyoutPresenterStyle>
                                     <Style TargetType="FlyoutPresenter">
                                         <Setter Property="Padding" Value="0" />
-                                        <Setter Property="MinWidth" Value="420" />
-                                        <Setter Property="MaxWidth" Value="420" />
+                                        <!-- Binding required: FlyoutPresenterStyle does not support x:Bind ElementName. -->
+                                        <Setter Property="MinWidth" Value="{Binding ElementName=TopSearchBox, Path=ActualWidth}" />
+                                        <Setter Property="MaxWidth" Value="{Binding ElementName=TopSearchBox, Path=ActualWidth}" />
                                         <Setter Property="CornerRadius" Value="8" />
                                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                         <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
@@ -489,8 +493,11 @@
                                     <!-- 搜索结果列表 -->
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="400" HorizontalAlignment="Stretch">
                                         <StackPanel HorizontalAlignment="Stretch">
-                                            <ItemsControl ItemsSource="{x:Bind SearchVM.ResultGroups, Mode=OneWay}" HorizontalAlignment="Stretch">
-                                                <ItemsControl.ItemTemplate>
+                                            <muxc:ItemsRepeater ItemsSource="{x:Bind SearchVM.ResultGroups, Mode=OneWay}" HorizontalAlignment="Stretch">
+                                                <muxc:ItemsRepeater.Layout>
+                                                    <muxc:StackLayout Spacing="8" />
+                                                </muxc:ItemsRepeater.Layout>
+                                                <muxc:ItemsRepeater.ItemTemplate>
                                                     <DataTemplate x:DataType="searchModels:SearchResultGroup">
                                                         <StackPanel HorizontalAlignment="Stretch">
                                                             <!-- 分组标题 -->
@@ -501,8 +508,11 @@
                                                                        Margin="16,12,16,4" />
 
                                                             <!-- 分组项目 -->
-                                                            <ItemsControl ItemsSource="{x:Bind Items}" HorizontalAlignment="Stretch">
-                                                                <ItemsControl.ItemTemplate>
+                                                            <muxc:ItemsRepeater ItemsSource="{x:Bind Items}" HorizontalAlignment="Stretch">
+                                                                <muxc:ItemsRepeater.Layout>
+                                                                    <muxc:StackLayout Spacing="2" />
+                                                                </muxc:ItemsRepeater.Layout>
+                                                                <muxc:ItemsRepeater.ItemTemplate>
                                                                     <DataTemplate x:DataType="searchModels:SearchResultItem">
                                                                         <Button HorizontalAlignment="Stretch"
                                                                                 HorizontalContentAlignment="Stretch"
@@ -510,7 +520,7 @@
                                                                                 Margin="4,2"
                                                                                 Click="OnSearchResultItemClick"
                                                                                 Tag="{x:Bind}"
-                                                                                AllowFocusOnInteraction="False">
+                                                                                AutomationProperties.Name="{x:Bind Title}">
                                                                             <Button.Style>
                                                                                 <Style TargetType="Button">
                                                                                     <Setter Property="Background" Value="Transparent" />
@@ -541,24 +551,27 @@
                                                                             </Grid>
                                                                         </Button>
                                                                     </DataTemplate>
-                                                                </ItemsControl.ItemTemplate>
-                                                            </ItemsControl>
+                                                                </muxc:ItemsRepeater.ItemTemplate>
+                                                            </muxc:ItemsRepeater>
                                                         </StackPanel>
                                                     </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                                </muxc:ItemsRepeater.ItemTemplate>
+                                            </muxc:ItemsRepeater>
 
                                             <!-- 最近搜索建议 -->
                                             <StackPanel Visibility="{x:Bind SearchVM.ShowSuggestions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                                         Margin="0,0,0,8"
                                                         HorizontalAlignment="Stretch">
-                                                <TextBlock Text="最近搜索"
+                                                <TextBlock x:Uid="SearchPanelRecentTitle"
                                                            FontSize="12"
                                                            FontWeight="SemiBold"
                                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                            Margin="16,12,16,4" />
-                                                <ItemsControl ItemsSource="{x:Bind SearchVM.RecentSearches, Mode=OneWay}" HorizontalAlignment="Stretch">
-                                                    <ItemsControl.ItemTemplate>
+                                                <muxc:ItemsRepeater ItemsSource="{x:Bind SearchVM.RecentSearches, Mode=OneWay}" HorizontalAlignment="Stretch">
+                                                    <muxc:ItemsRepeater.Layout>
+                                                        <muxc:StackLayout Spacing="2" />
+                                                    </muxc:ItemsRepeater.Layout>
+                                                    <muxc:ItemsRepeater.ItemTemplate>
                                                         <DataTemplate x:DataType="x:String">
                                                             <Button Content="{x:Bind}"
                                                                     Padding="12,8"
@@ -566,8 +579,7 @@
                                                                     HorizontalAlignment="Stretch"
                                                                     HorizontalContentAlignment="Left"
                                                                     Click="OnSearchHistoryItemClick"
-                                                                    Tag="{x:Bind}"
-                                                                    AllowFocusOnInteraction="False">
+                                                                    Tag="{x:Bind}">
                                                                 <Button.Style>
                                                                     <Style TargetType="Button">
                                                                         <Setter Property="Background" Value="Transparent" />
@@ -577,14 +589,14 @@
                                                                 </Button.Style>
                                                             </Button>
                                                         </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
+                                                    </muxc:ItemsRepeater.ItemTemplate>
+                                                </muxc:ItemsRepeater>
                                             </StackPanel>
                                         </StackPanel>
                                     </ScrollViewer>
 
                                     <!-- 无结果提示 -->
-                                    <TextBlock Text="无搜索结果"
+                                    <TextBlock x:Uid="SearchPanelEmptyText"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Margin="0,40"
@@ -603,6 +615,7 @@
                                       Tag="Diff"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       ToolTipService.ToolTip="Diff"
+                                      AutomationProperties.Name="Diff 面板"
                                       Click="OnRightPanelButtonClick">
                             <!-- SymbolIcon.Symbol must be a valid WinUI Symbol enum value -->
                             <SymbolIcon Symbol="Preview" />
@@ -611,6 +624,7 @@
                                       Tag="Todo"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       ToolTipService.ToolTip="Todo"
+                                      AutomationProperties.Name="Todo 面板"
                                       Click="OnRightPanelButtonClick">
                             <SymbolIcon Symbol="Bullets" />
                         </ToggleButton>

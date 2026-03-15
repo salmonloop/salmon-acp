@@ -38,6 +38,18 @@
   <data name="Appearance_ThemeTitle.Text" xml:space="preserve">
     <value>Theme</value>
   </data>
+  <data name="TopSearchBox.PlaceholderText" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="TopSearchBox.AutomationProperties.Name" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="SearchPanelRecentTitle.Text" xml:space="preserve">
+    <value>Recent searches</value>
+  </data>
+  <data name="SearchPanelEmptyText.Text" xml:space="preserve">
+    <value>No results</value>
+  </data>
   <data name="Appearance_ThemeDescription.Text" xml:space="preserve">
     <value>Choose your preferred app theme.</value>
   </data>

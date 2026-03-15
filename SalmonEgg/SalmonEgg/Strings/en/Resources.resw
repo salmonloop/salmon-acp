@@ -120,4 +120,16 @@
   <data name="ApplicationName" xml:space="preserve">
     <value>SalmonEgg-en</value>
   </data>
+  <data name="TopSearchBox.PlaceholderText" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="TopSearchBox.AutomationProperties.Name" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="SearchPanelRecentTitle.Text" xml:space="preserve">
+    <value>Recent searches</value>
+  </data>
+  <data name="SearchPanelEmptyText.Text" xml:space="preserve">
+    <value>No results</value>
+  </data>
 </root>

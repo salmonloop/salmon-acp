@@ -49,7 +49,6 @@ public sealed partial class AgentProfileEditorPage : SettingsPageBase
             // Returning to this page should not keep any old input.
             ViewModel.LoadBlankConfiguration();
             PageTitle = "新建";
-            BindAdvancedFields();
             UpdateBreadcrumb();
             return;
         }
@@ -67,14 +66,12 @@ public sealed partial class AgentProfileEditorPage : SettingsPageBase
                 ViewModel.LoadBlankConfiguration();
             }
 
-            BindAdvancedFields();
             UpdateBreadcrumb();
             return;
         }
 
         PageTitle = "新建";
         ViewModel.LoadBlankConfiguration();
-        BindAdvancedFields();
         UpdateBreadcrumb();
     }
 
@@ -84,40 +81,6 @@ public sealed partial class AgentProfileEditorPage : SettingsPageBase
             SettingsBreadcrumbItem.Link("设置", "General"),
             SettingsBreadcrumbItem.Link("Agent (ACP)", "AgentAcp"),
             SettingsBreadcrumbItem.Current(PageTitle));
-    }
-
-    private void BindAdvancedFields()
-    {
-        TokenBox.Password = ViewModel.Token ?? string.Empty;
-        ApiKeyBox.Password = ViewModel.ApiKey ?? string.Empty;
-        HeartbeatBox.Value = ViewModel.HeartbeatInterval;
-        TimeoutBox.Value = ViewModel.ConnectionTimeout;
-    }
-
-    private void OnTokenPasswordChanged(object sender, RoutedEventArgs e)
-    {
-        ViewModel.Token = TokenBox.Password;
-    }
-
-    private void OnApiKeyPasswordChanged(object sender, RoutedEventArgs e)
-    {
-        ViewModel.ApiKey = ApiKeyBox.Password;
-    }
-
-    private void OnHeartbeatValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
-    {
-        if (!double.IsNaN(sender.Value))
-        {
-            ViewModel.HeartbeatInterval = (int)sender.Value;
-        }
-    }
-
-    private void OnTimeoutValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
-    {
-        if (!double.IsNaN(sender.Value))
-        {
-            ViewModel.ConnectionTimeout = (int)sender.Value;
-        }
     }
 
     private void OnBackClick(object sender, RoutedEventArgs e)

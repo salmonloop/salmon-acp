@@ -463,4 +463,16 @@
   <data name="Start_Quick3Subtitle.Text" xml:space="preserve">
     <value>占位符</value>
   </data>
+  <data name="TopSearchBox.PlaceholderText" xml:space="preserve">
+    <value>搜索</value>
+  </data>
+  <data name="TopSearchBox.AutomationProperties.Name" xml:space="preserve">
+    <value>搜索</value>
+  </data>
+  <data name="SearchPanelRecentTitle.Text" xml:space="preserve">
+    <value>最近搜索</value>
+  </data>
+  <data name="SearchPanelEmptyText.Text" xml:space="preserve">
+    <value>无搜索结果</value>
+  </data>
 </root>

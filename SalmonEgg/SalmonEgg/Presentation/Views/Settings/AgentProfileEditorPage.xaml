@@ -85,11 +85,11 @@
                                 <PasswordBox x:Name="TokenBox"
                                              Header="Token（可选）"
                                              HorizontalAlignment="Stretch"
-                                             PasswordChanged="OnTokenPasswordChanged"/>
+                                             Password="{x:Bind ViewModel.Token, Mode=TwoWay}"/>
                                 <PasswordBox x:Name="ApiKeyBox"
                                              Header="API Key（可选）"
                                              HorizontalAlignment="Stretch"
-                                             PasswordChanged="OnApiKeyPasswordChanged"/>
+                                             Password="{x:Bind ViewModel.ApiKey, Mode=TwoWay}"/>
 
                                 <TextBlock Text="代理" FontWeight="SemiBold" Margin="0,8,0,0"/>
                                 <ToggleSwitch Header="启用代理"
@@ -108,14 +108,14 @@
                                            Minimum="5"
                                            Maximum="300"
                                            SpinButtonPlacementMode="Inline"
-                                           ValueChanged="OnHeartbeatValueChanged"/>
+                                           Value="{x:Bind ViewModel.HeartbeatInterval, Mode=TwoWay}"/>
                                 <NumberBox x:Name="TimeoutBox"
                                            Header="连接超时（秒）"
                                            HorizontalAlignment="Stretch"
                                            Minimum="5"
                                            Maximum="60"
                                            SpinButtonPlacementMode="Inline"
-                                           ValueChanged="OnTimeoutValueChanged"/>
+                                           Value="{x:Bind ViewModel.ConnectionTimeout, Mode=TwoWay}"/>
                             </StackPanel>
                         </Expander>
                     </Border>

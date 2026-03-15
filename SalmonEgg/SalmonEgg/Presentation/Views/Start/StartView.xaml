@@ -95,7 +95,7 @@
 
         <!-- 启动/连接遮罩 -->
         <Grid Grid.RowSpan="3"
-              Background="#40000000"
+              Background="{ThemeResource AppOverlayScrimBrush}"
               Visibility="{x:Bind ViewModel.IsStarting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
             <ProgressRing IsActive="True" Width="48" Height="48"/>
         </Grid>
