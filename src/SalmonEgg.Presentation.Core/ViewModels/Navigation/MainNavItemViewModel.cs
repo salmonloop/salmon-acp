@@ -18,11 +18,16 @@ public abstract partial class MainNavItemViewModel : ObservableObject
             if (SetProperty(ref _isPaneOpen, value))
             {
                 OnPropertyChanged(nameof(IsPaneClosed));
+                OnPaneStateChanged();
             }
         }
     }
 
     public bool IsPaneClosed => !IsPaneOpen;
+
+    protected virtual void OnPaneStateChanged()
+    {
+    }
 }
 
 public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewModel
@@ -31,18 +36,18 @@ public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewMode
 
     public IAsyncRelayCommand AddProjectCommand { get; }
 
+    public bool ShowHeaderLabel => IsPaneOpen;
+
+    public bool ShowCompactButton => IsPaneClosed;
+
     public SessionsHeaderNavItemViewModel(IAsyncRelayCommand addProjectCommand)
     {
         AddProjectCommand = addProjectCommand;
     }
-}
 
-public sealed partial class SessionsCompactAddNavItemViewModel : MainNavItemViewModel
-{
-    public IAsyncRelayCommand AddProjectCommand { get; }
-
-    public SessionsCompactAddNavItemViewModel(IAsyncRelayCommand addProjectCommand)
+    protected override void OnPaneStateChanged()
     {
-        AddProjectCommand = addProjectCommand;
+        OnPropertyChanged(nameof(ShowHeaderLabel));
+        OnPropertyChanged(nameof(ShowCompactButton));
     }
 }

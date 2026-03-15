@@ -40,7 +40,6 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     public StartNavItemViewModel StartItem { get; }
     public SessionsHeaderNavItemViewModel SessionsHeaderItem { get; }
-    public SessionsCompactAddNavItemViewModel SessionsCompactAddItem { get; }
 
     private object? _selectedItem;
 
@@ -72,11 +71,9 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         StartItem = new StartNavItemViewModel();
         SessionsHeaderItem = new SessionsHeaderNavItemViewModel(AddProjectCommand);
-        SessionsCompactAddItem = new SessionsCompactAddNavItemViewModel(AddProjectCommand);
 
         Items.Add(StartItem);
         Items.Add(SessionsHeaderItem);
-        Items.Add(SessionsCompactAddItem);
 
         // Show a lightweight placeholder until conversations are restored.
         var placeholderProject = CreateUnclassifiedProject();
@@ -283,7 +280,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 _projectIndex.Clear();
 
                 // Remove in reverse to avoid index shifts and keep fixed items stable.
-                while (Items.Count > 3)
+                while (Items.Count > 2)
                 {
                     Items.RemoveAt(Items.Count - 1);
                 }

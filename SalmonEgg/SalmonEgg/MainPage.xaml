@@ -60,8 +60,7 @@
                                 Padding="0"
                                 SelectsOnInvoked="False"
                                 IsTabStop="False"
-                                AllowFocusOnInteraction="False"
-                                Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                AllowFocusOnInteraction="False">
                 <NavigationViewItem.Resources>
                     <StaticResource x:Key="NavigationViewItemBackgroundPointerOver" ResourceKey="NavigationViewItemBackground" />
                     <StaticResource x:Key="NavigationViewItemBackgroundPressed" ResourceKey="NavigationViewItemBackground" />
@@ -72,44 +71,62 @@
                 </NavigationViewItem.Resources>
 
                 <NavigationViewItem.Content>
-                    <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="8">
-                        <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                                   Style="{StaticResource NavigationViewItemHeaderTextStyle}"
-                                   Foreground="{ThemeResource NavigationViewItemHeaderForeground}"
-                                   VerticalAlignment="Center"/>
-                        <Button Grid.Column="1"
-                                Width="{StaticResource NavSectionHeaderActionButtonSize}"
-                                Height="{StaticResource NavSectionHeaderActionButtonSize}"
-                                MinWidth="{StaticResource NavSectionHeaderActionButtonSize}"
-                                MinHeight="{StaticResource NavSectionHeaderActionButtonSize}"
-                                Padding="0"
-                                HorizontalAlignment="Right"
-                                CornerRadius="{ThemeResource ControlCornerRadius}"
-                                Background="{ThemeResource SubtleFillColorTransparentBrush}"
-                                BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
-                                BorderThickness="0"
-                                ToolTipService.ToolTip="添加项目"
-                                Command="{x:Bind AddProjectCommand}"
-                                AutomationProperties.Name="添加项目">
-                            <FontIcon Glyph="&#xE710;"
-                                      FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                      FontSize="14" />
-                        </Button>
+                    <Grid>
+                        <!-- Expanded layout -->
+                        <Grid ColumnDefinitions="*,Auto"
+                              ColumnSpacing="8"
+                              Visibility="{x:Bind ShowHeaderLabel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                       Style="{StaticResource NavigationViewItemHeaderTextStyle}"
+                                       Foreground="{ThemeResource NavigationViewItemHeaderForeground}"
+                                       VerticalAlignment="Center"/>
+                            <Button Grid.Column="1"
+                                    Width="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    Height="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    MinWidth="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    MinHeight="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    Padding="0"
+                                    HorizontalAlignment="Right"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                                    Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                                    BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
+                                    BorderThickness="0"
+                                    ToolTipService.ToolTip="添加项目"
+                                    Command="{x:Bind AddProjectCommand}"
+                                    IsTabStop="False"
+                                    AutomationProperties.Name="添加项目">
+                                <FontIcon Glyph="&#xE710;"
+                                          FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                          FontSize="14" />
+                            </Button>
+                        </Grid>
+
+                        <!-- Compact layout -->
+                        <Grid HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Visibility="{x:Bind ShowCompactButton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Button Width="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    Height="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    MinWidth="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    MinHeight="{StaticResource NavSectionHeaderActionButtonSize}"
+                                    Padding="0"
+                                    HorizontalAlignment="Center"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                                    Background="{ThemeResource SubtleFillColorTransparentBrush}"
+                                    BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
+                                    BorderThickness="0"
+                                    ToolTipService.ToolTip="添加项目"
+                                    Command="{x:Bind AddProjectCommand}"
+                                    IsTabStop="False"
+                                    AutomationProperties.Name="添加项目">
+                                <SymbolIcon Symbol="Add" />
+                            </Button>
+                        </Grid>
                     </Grid>
                 </NavigationViewItem.Content>
             </NavigationViewItem>
         </DataTemplate>
 
-        <DataTemplate x:Key="SessionsCompactAddTemplate" x:DataType="nav:SessionsCompactAddNavItemViewModel">
-            <NavigationViewItem SelectsOnInvoked="False"
-                                Tag="{x:Bind navModels:NavItemTag.SessionsHeader}"
-                                Visibility="{x:Bind IsPaneClosed, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Add" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-        </DataTemplate>
 
 
 
@@ -199,7 +216,6 @@
         <navViews:MainNavItemTemplateSelector x:Key="MainNavItemTemplateSelector"
                                               StartTemplate="{StaticResource StartNavTemplate}"
                                               HeaderTemplate="{StaticResource SessionsHeaderTemplate}"
-                                              CompactAddTemplate="{StaticResource SessionsCompactAddTemplate}"
                                               ProjectTemplate="{StaticResource ProjectNavTemplate}"
                                               SessionTemplate="{StaticResource SessionNavTemplate}"
                                               MoreTemplate="{StaticResource MoreNavTemplate}" />

@@ -29,22 +29,20 @@ public sealed class NavItemViewModelTests
     }
 
     [Fact]
-    public void SessionsHeader_Exposes_Title_And_Command()
+    public void SessionsHeader_Tracks_PaneState_For_Display()
     {
         var command = new AsyncRelayCommand(() => Task.CompletedTask);
         var header = new SessionsHeaderNavItemViewModel(command);
+        var changed = new System.Collections.Generic.List<string>();
 
-        Assert.Equal("会话", header.Title);
-        Assert.Same(command, header.AddProjectCommand);
-    }
+        header.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
 
-    [Fact]
-    public void SessionsCompactAdd_Exposes_Command()
-    {
-        var command = new AsyncRelayCommand(() => Task.CompletedTask);
-        var compactAdd = new SessionsCompactAddNavItemViewModel(command);
+        header.IsPaneOpen = false;
 
-        Assert.Same(command, compactAdd.AddProjectCommand);
+        Assert.False(header.ShowHeaderLabel);
+        Assert.True(header.ShowCompactButton);
+        Assert.Contains(nameof(SessionsHeaderNavItemViewModel.ShowHeaderLabel), changed);
+        Assert.Contains(nameof(SessionsHeaderNavItemViewModel.ShowCompactButton), changed);
     }
 
     private sealed class DummyNavItem : MainNavItemViewModel
