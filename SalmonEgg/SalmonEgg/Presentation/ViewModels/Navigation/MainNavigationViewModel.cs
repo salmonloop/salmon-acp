@@ -125,6 +125,19 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             RebuildTree();
         }
+        else if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId))
+        {
+            // Sync selection when the current session changes externally (e.g. archiving)
+            var sessionId = _chatViewModel.CurrentSessionId;
+            if (string.IsNullOrWhiteSpace(sessionId))
+            {
+                SelectStart();
+            }
+            else
+            {
+                SelectSession(sessionId);
+            }
+        }
     }
 
     public void SelectStart()
@@ -347,6 +360,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 foreach (var id in toRemove) _projectVms.Remove(id);
 
                 NormalizeSelectionAfterRebuild();
+                NormalizeSelection();
             }
             catch (Exception ex)
             {
@@ -437,10 +451,36 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             childIndex++;
         }
 
-        // Remove orphans
         while (projectVm.Children.Count > childIndex)
         {
             projectVm.Children.RemoveAt(projectVm.Children.Count - 1);
+        }
+
+        NormalizeSelection();
+    }
+
+    private void NormalizeSelection()
+    {
+        var current = SelectedItem;
+        if (current == null || ReferenceEquals(current, StartItem) || ReferenceEquals(current, SessionsHeaderItem))
+        {
+            return;
+        }
+
+        if (current is SessionNavItemViewModel sessionItem)
+        {
+            if (!_sessionIndex.ContainsKey(sessionItem.SessionId))
+            {
+                // The selected session is no longer in the tree (e.g. archived)
+                SelectStart();
+            }
+        }
+        else if (current is ProjectNavItemViewModel projectItem)
+        {
+            if (!_projectIndex.ContainsKey(projectItem.ProjectId))
+            {
+                SelectStart();
+            }
         }
     }
 
