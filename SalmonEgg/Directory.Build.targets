@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <MarkupCompilePass1DependsOn>StripUnoXamlReferencesForWinUI;$(MarkupCompilePass1DependsOn)</MarkupCompilePass1DependsOn>
+  </PropertyGroup>
+
+  <Target Name="StripUnoXamlReferencesForWinUI"
+          AfterTargets="ResolveAssemblyReferences"
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <ItemGroup>
+      <_UnoXamlReferencePath Include="@(ReferencePath)"
+                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ReferencePath.FileName)', '^(?i)Uno\\.UI(\\.|$)'))" />
+      <_FilteredReferencePath Include="@(ReferencePath)"
+                              Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(ReferencePath.FileName)', '^(?i)Uno\\.UI(\\.|$)'))" />
+      <ReferencePath Remove="@(ReferencePath)" />
+      <ReferencePath Include="@(_FilteredReferencePath)" />
+      <ReferenceAssemblies Remove="@(_UnoXamlReferencePath)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="AddWinUIWinmdReferences"
+          BeforeTargets="MarkupCompilePass1"
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">
+    <ItemGroup>
+      <ReferenceAssemblyPaths Include="$(PkgMicrosoft_WindowsAppSDK)\metadata\"
+                              Condition="Exists('$(PkgMicrosoft_WindowsAppSDK)\metadata\')" />
+    </ItemGroup>
+  </Target>
+
+</Project>

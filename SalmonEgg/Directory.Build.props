@@ -1,5 +1,10 @@
 <Project>
   <PropertyGroup>
+    <!-- Ensure WinUI builds resolve the intended Windows SDK toolset. -->
+    <WindowsSdkVersion Condition="'$(WindowsSdkVersion)' == ''">10.0.26100.0</WindowsSdkVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
