@@ -23,6 +23,7 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:InverseBoolConverter x:Key="InverseBoolToVisibilityConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:PlanStatusToColorConverter x:Key="PlanStatusToColorConverter" />
         <x:Double x:Key="NavCompactPaneLength">72</x:Double>
         <x:Double x:Key="NavOpenPaneLength">300</x:Double>
@@ -172,11 +173,10 @@
                 </NavigationViewItem.Content>
 
                 <NavigationViewItem.ContextFlyout>
-                    <MenuFlyout Closed="OnSessionNavFlyoutClosed"
-                                Tag="{x:Bind SessionId}">
+                    <MenuFlyout Closed="OnSessionNavFlyoutClosed">
                         <MenuFlyoutItem Text="归档…"
                                         Click="OnSessionArchiveMenuItemClick"
-                                        Tag="{x:Bind}"
+                                        CommandParameter="{x:Bind}"
                                         IsEnabled="{x:Bind IsPlaceholder, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}" />
                         <MenuFlyoutItem Text="重命名…"
                                         Command="{x:Bind RenameCommand}" />

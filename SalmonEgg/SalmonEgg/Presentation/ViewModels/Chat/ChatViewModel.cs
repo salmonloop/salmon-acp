@@ -477,8 +477,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private void NotifyConversationListChanged()
     {
-        ConversationListVersion++;
-        OnPropertyChanged(nameof(GetKnownConversationIds));
+        _syncContext.Post(_ =>
+        {
+            ConversationListVersion++;
+            OnPropertyChanged(nameof(GetKnownConversationIds));
+        }, null);
     }
 
     private static ConversationMessageSnapshot ToSnapshot(ChatMessageViewModel vm)
@@ -692,6 +695,42 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         ScheduleConversationSave();
     }
 
+    public void ArchiveConversation(string conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
+        {
+            _suppressSessionUpdatesToUi = true;
+            CurrentSessionId = null;
+            _currentRemoteSessionId = null;
+            IsSessionActive = false;
+            MessageHistory.Clear();
+            CurrentPlan.Clear();
+            ShowPlanPanel = false;
+            _suppressSessionUpdatesToUi = false;
+        }
+
+        _syncContext.Post(_ =>
+        {
+            try
+            {
+                _sessionManager.RemoveSession(conversationId);
+                _conversationBindings.Remove(conversationId);
+
+                ScheduleConversationSave();
+                NotifyConversationListChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "归档操作由于底层异常失败: {ConversationId}", conversationId);
+            }
+        }, null);
+    }
+
     public void DeleteConversation(string conversationId)
     {
         if (string.IsNullOrWhiteSpace(conversationId))
@@ -699,20 +738,33 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        _conversationBindings.Remove(conversationId);
-        _sessionManager.RemoveSession(conversationId);
-
         if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
         {
+            _suppressSessionUpdatesToUi = true;
             CurrentSessionId = null;
             _currentRemoteSessionId = null;
             IsSessionActive = false;
             MessageHistory.Clear();
             CurrentPlan.Clear();
             ShowPlanPanel = false;
+            _suppressSessionUpdatesToUi = false;
         }
 
-        ScheduleConversationSave();
+        _syncContext.Post(_ =>
+        {
+            try
+            {
+                _conversationBindings.Remove(conversationId);
+                _sessionManager.RemoveSession(conversationId);
+
+                ScheduleConversationSave();
+                NotifyConversationListChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "删除操作由于底层异常失败: {ConversationId}", conversationId);
+            }
+        }, null);
     }
 
     public string[] GetKnownConversationIds()

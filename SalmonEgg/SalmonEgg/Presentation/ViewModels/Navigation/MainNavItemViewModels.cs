@@ -66,6 +66,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
     public bool IsPlaceholder { get; }
 
     public IAsyncRelayCommand RenameCommand { get; }
+    public IAsyncRelayCommand ArchiveCommand { get; }
 
     public SessionNavItemViewModel(
         string sessionId,
@@ -85,10 +86,30 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         IsPlaceholder = isPlaceholder;
 
         RenameCommand = new AsyncRelayCommand(RenameAsync, CanRename);
+        ArchiveCommand = new AsyncRelayCommand(ArchiveAsync, CanArchive);
     }
 
     private bool CanRename()
         => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
+
+    private bool CanArchive()
+        => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
+
+    private async Task ArchiveAsync()
+    {
+        var confirmed = await _ui.ConfirmAsync(
+            title: "归档会话",
+            message: $"确定要归档会话 \"{Title}\" 吗？",
+            primaryButtonText: "归档",
+            closeButtonText: "取消").ConfigureAwait(true);
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _chatViewModel.ArchiveConversation(SessionId);
+    }
 
     private async Task RenameAsync()
     {

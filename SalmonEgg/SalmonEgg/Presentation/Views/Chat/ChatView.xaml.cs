@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using SalmonEgg.Presentation.Models;
+using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.Services;
 
@@ -17,7 +18,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         private readonly IShellNavigationService _shellNavigation;
         private bool _isViewLoaded;
         private bool _isTrackingMessages;
-        private bool _pendingInitialScroll = true;
+        private readonly InitialScrollGate _initialScrollGate = new();
         private bool _isMotionSubscribed;
         private bool _autoScroll = true;
         private ScrollViewer? _scrollViewer;
@@ -55,6 +56,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         {
             _isViewLoaded = false;
             UnsubscribeMotion();
+            _initialScrollGate.CancelInFlight();
             if (_isTrackingMessages)
             {
                 ViewModel.MessageHistory.CollectionChanged -= OnMessageHistoryChanged;
@@ -123,9 +125,8 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            if (_pendingInitialScroll)
+            if (RequestInitialScroll())
             {
-                RequestInitialScroll();
                 return;
             }
 
@@ -191,31 +192,47 @@ namespace SalmonEgg.Presentation.Views.Chat
             if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId) ||
                 e.PropertyName == nameof(ChatViewModel.IsSessionActive))
             {
-                _pendingInitialScroll = true;
+                _initialScrollGate.MarkPending();
                 RequestInitialScroll();
             }
         }
 
-        private void RequestInitialScroll()
+        private bool RequestInitialScroll()
         {
-            if (!_pendingInitialScroll || MessagesList is null)
+            if (MessagesList is null)
             {
-                return;
+                return false;
             }
 
-            if (ViewModel.MessageHistory.Count == 0)
+            if (!_initialScrollGate.TrySchedule(ViewModel.MessageHistory.Count))
             {
-                return;
+                return false;
             }
 
-            _pendingInitialScroll = false;
-
-            _ = DispatcherQueue.TryEnqueue(() =>
+            if (!DispatcherQueue.TryEnqueue(() =>
             {
+                if (!_isViewLoaded || MessagesList is null)
+                {
+                    _initialScrollGate.CancelInFlight();
+                    return;
+                }
+
+                var count = ViewModel.MessageHistory.Count;
+                if (!_initialScrollGate.TryComplete(count))
+                {
+                    return;
+                }
+
+                var last = ViewModel.MessageHistory[count - 1];
                 MessagesList.UpdateLayout();
-                var last = ViewModel.MessageHistory[^1];
                 MessagesList.ScrollIntoView(last);
-            });
+            }))
+            {
+                _initialScrollGate.CancelInFlight();
+                return false;
+            }
+
+            return true;
         }
 
         private void OnSessionNameClick(object sender, RoutedEventArgs e)

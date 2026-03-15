@@ -138,6 +138,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
+            SelectedItem = StartItem;
             return;
         }
 
@@ -277,16 +278,18 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             try
             {
+                var currentSelected = SelectedItem;
                 _sessionIndex.Clear();
                 _projectIndex.Clear();
 
-                // Keep first 3 items (Start + Header + Compact Add) stable to preserve SelectedItem references.
+                // Remove in reverse to avoid index shifts and keep fixed items stable.
                 while (Items.Count > 3)
                 {
-                    Items.RemoveAt(3);
+                    Items.RemoveAt(Items.Count - 1);
                 }
 
-                foreach (var project in BuildProjects())
+                var newProjects = BuildProjects();
+                foreach (var project in newProjects)
                 {
                     Items.Add(project);
                 }
@@ -295,31 +298,38 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to rebuild navigation tree");
+                _logger.LogWarning(ex, "导航树重建过程中发生异常，已拦截以防止闪退");
             }
         }, null);
     }
 
     private void NormalizeSelectionAfterRebuild()
     {
-        var currentSessionId = _chatViewModel.CurrentSessionId;
-        if (string.IsNullOrWhiteSpace(currentSessionId))
+        try
         {
-            if (SelectedItem is SessionNavItemViewModel)
+            var currentSessionId = _chatViewModel.CurrentSessionId;
+            if (string.IsNullOrWhiteSpace(currentSessionId))
+            {
+                if (SelectedItem is SessionNavItemViewModel)
+                {
+                    SelectedItem = StartItem;
+                }
+                return;
+            }
+
+            if (_sessionIndex.TryGetValue(currentSessionId, out var currentItem))
+            {
+                if (!ReferenceEquals(SelectedItem, currentItem))
+                {
+                    SelectedItem = currentItem;
+                }
+            }
+            else
             {
                 SelectedItem = StartItem;
             }
-            return;
         }
-
-        if (_sessionIndex.TryGetValue(currentSessionId, out var currentItem))
-        {
-            if (!ReferenceEquals(SelectedItem, currentItem))
-            {
-                SelectedItem = currentItem;
-            }
-        }
-        else if (SelectedItem is SessionNavItemViewModel)
+        catch
         {
             SelectedItem = StartItem;
         }

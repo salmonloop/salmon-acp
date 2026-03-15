@@ -61,6 +61,7 @@ public sealed partial class MainPage : Page
     private bool _isMotionSubscribed;
     private bool _isNavItemsSubscribed;
     private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
+    private string? _pendingArchiveSessionId;
     private readonly ShellPanePolicy _panePolicy = new();
 #if WINDOWS
     private TrayIconManager? _trayIcon;
@@ -531,7 +532,7 @@ public sealed partial class MainPage : Page
 
     private void OnSessionArchiveMenuItemClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuFlyoutItem item || item.Tag is not SessionNavItemViewModel session)
+        if (sender is not MenuFlyoutItem item || item.CommandParameter is not SessionNavItemViewModel session)
         {
             return;
         }
@@ -541,6 +542,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        _pendingArchiveSessionId = session.SessionId;
         _archiveOnFlyoutClosed.Request(session.SessionId, () =>
         {
             _ = DispatcherQueue.TryEnqueue(() => _ = session.ArchiveCommand.ExecuteAsync(null));
@@ -549,11 +551,13 @@ public sealed partial class MainPage : Page
 
     private void OnSessionNavFlyoutClosed(object sender, object e)
     {
-        if (sender is not MenuFlyout flyout || flyout.Tag is not string sessionId || string.IsNullOrWhiteSpace(sessionId))
+        if (string.IsNullOrWhiteSpace(_pendingArchiveSessionId))
         {
             return;
         }
 
+        var sessionId = _pendingArchiveSessionId;
+        _pendingArchiveSessionId = null;
         _archiveOnFlyoutClosed.TryConsume(sessionId);
     }
 
