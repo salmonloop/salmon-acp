@@ -122,7 +122,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ChatViewModel.IsConversationListLoading))
+        if (e.PropertyName == nameof(ChatViewModel.IsConversationListLoading)
+            || e.PropertyName == nameof(ChatViewModel.ConversationListVersion))
         {
             RebuildTree();
         }
@@ -289,6 +290,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 {
                     Items.Add(project);
                 }
+
+                NormalizeSelectionAfterRebuild();
             }
             catch (Exception ex)
             {
@@ -296,6 +299,32 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             }
         }, null);
     }
+
+    private void NormalizeSelectionAfterRebuild()
+    {
+        var currentSessionId = _chatViewModel.CurrentSessionId;
+        if (string.IsNullOrWhiteSpace(currentSessionId))
+        {
+            if (SelectedItem is SessionNavItemViewModel)
+            {
+                SelectedItem = StartItem;
+            }
+            return;
+        }
+
+        if (_sessionIndex.TryGetValue(currentSessionId, out var currentItem))
+        {
+            if (!ReferenceEquals(SelectedItem, currentItem))
+            {
+                SelectedItem = currentItem;
+            }
+        }
+        else if (SelectedItem is SessionNavItemViewModel)
+        {
+            SelectedItem = StartItem;
+        }
+    }
+
 
     private void RefreshRelativeTimes()
     {

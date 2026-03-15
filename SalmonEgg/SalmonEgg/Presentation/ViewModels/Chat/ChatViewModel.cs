@@ -100,6 +100,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private bool _isConversationListLoading = true;
 
     [ObservableProperty]
+    private int _conversationListVersion;
+
+    [ObservableProperty]
     private string _currentSessionDisplayName = string.Empty;
 
     [ObservableProperty]
@@ -467,7 +470,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
 
             IsConversationListLoading = false;
+            NotifyConversationListChanged();
         }, null);
+    }
+
+    private void NotifyConversationListChanged()
+    {
+        ConversationListVersion++;
+        OnPropertyChanged(nameof(GetKnownConversationIds));
     }
 
     private static ConversationMessageSnapshot ToSnapshot(ChatMessageViewModel vm)
