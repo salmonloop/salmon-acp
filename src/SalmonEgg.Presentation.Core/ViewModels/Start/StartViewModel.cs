@@ -77,7 +77,12 @@ public sealed partial class StartViewModel : ObservableObject
                 await _sessionManager.CreateSessionAsync(sessionId, cwd);
             }
 
-            await Chat.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true);
+            var switched = await Chat.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true);
+            if (!switched)
+            {
+                _logger.LogWarning("Start session failed: unable to switch to new session (SessionId={SessionId})", sessionId);
+                return;
+            }
 
             _shellNavigation.NavigateToChat();
             _nav.SelectSession(sessionId);
@@ -89,6 +94,12 @@ public sealed partial class StartViewModel : ObservableObject
 
             if (!Chat.IsConnected)
             {
+                if (Chat.IsConnecting || Chat.IsInitializing)
+                {
+                    _logger.LogInformation("Start session paused: connection is still in progress.");
+                    return;
+                }
+
                 _shellNavigation.NavigateToSettings("General");
                 Chat.ShowTransportConfigPanel = true;
                 return;
