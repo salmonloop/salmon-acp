@@ -172,7 +172,12 @@
                 </NavigationViewItem.Content>
 
                 <NavigationViewItem.ContextFlyout>
-                    <MenuFlyout>
+                    <MenuFlyout Closed="OnSessionNavFlyoutClosed"
+                                Tag="{x:Bind SessionId}">
+                        <MenuFlyoutItem Text="归档…"
+                                        Click="OnSessionArchiveMenuItemClick"
+                                        Tag="{x:Bind}"
+                                        IsEnabled="{x:Bind IsPlaceholder, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}" />
                         <MenuFlyoutItem Text="重命名…"
                                         Command="{x:Bind RenameCommand}" />
                     </MenuFlyout>

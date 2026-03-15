@@ -24,6 +24,7 @@ using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.Views;
 using SalmonEgg.Presentation.Views.Chat;
 using SalmonEgg.Presentation.Views.Start;
@@ -59,6 +60,7 @@ public sealed partial class MainPage : Page
     private long _navSelectionRequestId;
     private bool _isMotionSubscribed;
     private bool _isNavItemsSubscribed;
+    private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
     private readonly ShellPanePolicy _panePolicy = new();
 #if WINDOWS
     private TrayIconManager? _trayIcon;
@@ -525,6 +527,34 @@ public sealed partial class MainPage : Page
             _ = more.ShowMoreCommand.ExecuteAsync(null);
             return;
         }
+    }
+
+    private void OnSessionArchiveMenuItemClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem item || item.Tag is not SessionNavItemViewModel session)
+        {
+            return;
+        }
+
+        if (session.IsPlaceholder || string.IsNullOrWhiteSpace(session.SessionId))
+        {
+            return;
+        }
+
+        _archiveOnFlyoutClosed.Request(session.SessionId, () =>
+        {
+            _ = DispatcherQueue.TryEnqueue(() => _ = session.ArchiveCommand.ExecuteAsync(null));
+        });
+    }
+
+    private void OnSessionNavFlyoutClosed(object sender, object e)
+    {
+        if (sender is not MenuFlyout flyout || flyout.Tag is not string sessionId || string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        _archiveOnFlyoutClosed.TryConsume(sessionId);
     }
 
     private bool TryHandleNavItemTag(string tag)
