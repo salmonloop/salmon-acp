@@ -8,7 +8,6 @@
     }
   },
   "profiles": {
-    // This profile is first in order for dotnet run to pick it up by default
     "SalmonEgg (WebAssembly)": {
       "commandName": "Project",
       "dotnetRunMessages": true,
@@ -37,8 +36,17 @@
       "distributionName": "",
       "compatibleTargetFramework": "desktop"
     },
-    "SalmonEgg (MSIX Package)": {
-      "commandName": "MsixPackage"
+    "SalmonEgg (MSIX Script Run)": {
+      "commandName": "Executable",
+      "executablePath": "cmd.exe",
+      "commandLineArgs": "/c \"..\\\\..\\\\run.bat msix\"",
+      "workingDirectory": "..\\\\.."
+    },
+    "SalmonEgg (MSIX Script Debug Attach)": {
+      "commandName": "Executable",
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-NoLogo -NoProfile -ExecutionPolicy Bypass -File \"..\\\\..\\\\.tools\\\\debug-winui3-msix.ps1\" -Configuration Debug",
+      "workingDirectory": "..\\\\.."
     }
   }
 }

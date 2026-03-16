@@ -35,6 +35,7 @@ echo ERROR: MSVC C++ toolchain not installed.
 echo Install Visual Studio 2022 (or Build Tools 2022) workload "Desktop development with C++", and ensure "MSVC v143 - VS 2022 C++ x64/x86 build tools" is selected.
 exit /b 1
 
+:runapp
 :msix
 set "PWSH_EXE="
 for /f "usebackq delims=" %%I in (`where pwsh 2^>nul`) do (

@@ -95,6 +95,14 @@ run.bat
 > 工具链锁定：Windows SDK 10.0.26100.0，signtool 来自 SDK 10.0.22621.0。
 > Workload manifest：CI 固定 10.0.200-manifests.34a88a22；本地允许最新。
 
+#### Visual Studio 调试（推荐 / 官方）
+在 `SalmonEgg.sln` 中将 `SalmonEgg` 设为启动项目，然后在工具栏的启动配置下拉列表中选择目标平台对应的 Launch Profile 即可按 F5 调试：
+
+- **SalmonEgg (Desktop)** — Skia Desktop 跨平台渲染
+- **SalmonEgg (WebAssembly)** — 浏览器 WASM
+- **SalmonEgg (MSIX Script Run)** — WinUI 3 MSIX 打包运行
+- **SalmonEgg (MSIX Script Debug Attach)** — WinUI 3 MSIX 附加调试
+
 #### Windows MSIX（仅打包，不安装）
 ```bash
 build.bat msix
