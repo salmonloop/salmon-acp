@@ -39,7 +39,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private double _navCompactPaneLength = 72;
     private double _navOpenPaneLength = 300;
     private double _openPaneLength = 300;
-    private bool _isPaneOpen;
+    private bool _isPaneOpen = true; // Initialize to true to match children's default and Expanded mode
     private NavigationPaneDisplayMode _paneDisplayMode = NavigationPaneDisplayMode.Expanded;
     private bool _isNavPaneAnimating;
     private bool _isLeftNavResizerVisible;
@@ -223,6 +223,9 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         UpdateOpenPaneLength();
         UpdateLeftNavResizerVisibility();
+
+        // 确保启动时无论是 Expanded 还是被 UI 设置为 Compact，都能向所有的初始节点显式同步一次正确的状态
+        SetPaneOpen(_isPaneOpen);
     }
 
     public void SetPaneOpen(bool isOpen)
