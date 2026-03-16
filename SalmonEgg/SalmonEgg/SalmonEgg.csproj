@@ -37,8 +37,9 @@
     <!-- Avoid duplicate PRIResource items when we explicitly list them above -->
     <EnableDefaultPriItems>false</EnableDefaultPriItems>
 
-    <SalmonEggTargetFrameworks>net10.0-browserwasm;net10.0-desktop</SalmonEggTargetFrameworks>
-    <SalmonEggTargetFrameworks Condition="'$(MSBuildRuntimeType)' != 'Core' OR '$(EnableWinUIBuild)' == 'true'">net10.0-browserwasm;net10.0-desktop;net10.0-windows10.0.26100.0</SalmonEggTargetFrameworks>
+    <!-- Uno Hot Reload expects browserwasm not to be the first TFM (UNOB0010). -->
+    <SalmonEggTargetFrameworks>net10.0-desktop;net10.0-browserwasm</SalmonEggTargetFrameworks>
+    <SalmonEggTargetFrameworks Condition="'$(MSBuildRuntimeType)' != 'Core' OR '$(EnableWinUIBuild)' == 'true'">net10.0-desktop;net10.0-browserwasm;net10.0-windows10.0.26100.0</SalmonEggTargetFrameworks>
     <SalmonEggAndroidTargetFrameworks Condition="
         '$(EnableMobileTargets)' == 'true'
         AND (
