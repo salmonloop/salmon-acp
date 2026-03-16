@@ -38,18 +38,9 @@ function Get-SignToolPath {
         if ($preferred.Count -gt 0) {
             return ($preferred | Select-Object -First 1)
         }
-
-        $candidates += $versionDirs |
-            Sort-Object Name -Descending |
-            ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
-            Where-Object { Test-Path $_ }
     }
 
-    if ($candidates.Count -gt 0) {
-        return $candidates[0]
-    }
-
-    throw "signtool.exe not found. Install Windows 10/11 SDK (includes Signing Tools)."
+    throw "signtool.exe not found at Windows SDK 10.0.22621.0. Install that SDK version to keep the toolchain locked."
 }
 
 function Get-MSBuildPath {

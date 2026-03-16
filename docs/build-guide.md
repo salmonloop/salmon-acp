@@ -4,7 +4,7 @@
 
 ### 开发环境
 
-- **.NET 10.0 SDK** 或更高版本
+- **.NET 10.0 SDK**（推荐 10.0.200，允许 patch 前滚）
   - 下载地址：https://dotnet.microsoft.com/download/dotnet/10.0
   - 验证安装：`dotnet --version`
 
@@ -24,6 +24,8 @@
 - Visual Studio 2022 with:
   - .NET Desktop Development workload
   - Universal Windows Platform development workload (可选)
+  - Windows SDK 10.0.26100.0
+  - Windows SDK 10.0.22621.0（signtool）
 
 #### WebAssembly
 - 现代浏览器（Chrome、Firefox、Edge、Safari）
@@ -121,6 +123,9 @@ dotnet publish SalmonEgg/SalmonEgg/SalmonEgg.csproj \
 ```bash
 # 安装 Android 工作负载（首次需要）
 dotnet workload install android
+
+# CI 固定的 manifest 版本（本地可不必）
+# dotnet workload install android --version 10.0.200-manifests.34a88a22
 
 # 运行在 Android 模拟器
 dotnet run --project SalmonEgg/SalmonEgg/SalmonEgg.csproj \

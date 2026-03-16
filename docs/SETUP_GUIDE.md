@@ -23,7 +23,7 @@
 
 ### 可选软件（根据目标平台）
 
-- **Windows 开发**: Windows 10 1809+, UWP workload
+- **Windows 开发**: Windows 10 1809+, UWP workload，Windows SDK 10.0.26100.0
 - **Android 开发**: Android SDK (API Level 21+), Android Emulator
 - **iOS 开发**: macOS 12.0+, Xcode 14.0+
 - **WebAssembly**: 现代浏览器
@@ -252,6 +252,8 @@ dotnet test
 ```bash
 # 安装所需工作负载
 dotnet workload install android ios wasm-tools
+# CI 固定的 manifest 版本（本地可不必）
+# dotnet workload install android ios wasm-tools --version 10.0.200-manifests.34a88a22
 
 # 或者只安装需要的平台
 dotnet workload install wasm-tools  # 仅 WebAssembly

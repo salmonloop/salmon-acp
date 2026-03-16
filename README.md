@@ -53,7 +53,7 @@ SalmonEgg/
 ### 开发环境
 
 **所有平台通用**:
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) 或更高版本
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)（推荐 10.0.200，允许 patch 前滚）
 - [Visual Studio 2022](https://visualstudio.microsoft.com/) (17.12+) 或 [Visual Studio Code](https://code.visualstudio.com/)
 - [Uno Platform 模板](https://platform.uno/docs/articles/get-started.html)
 
@@ -62,6 +62,9 @@ SalmonEgg/
 - Visual Studio 2022 with:
   - .NET Desktop Development workload
   - Universal Windows Platform development workload
+  - Windows SDK 10.0.26100.0
+  - Windows SDK 10.0.22621.0（signtool）
+  - Workload manifests: CI 固定 10.0.200-manifests.34a88a22，本地允许最新
 
 **WebAssembly 开发**:
 - 现代浏览器（Chrome、Firefox、Edge、Safari）

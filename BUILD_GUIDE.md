@@ -31,6 +31,7 @@ run.bat desktop
 ### 1. 环境要求
 
 - **.NET SDK**: 10.0 或更高版本
+  - 推荐版本：10.0.200（允许 patch 前滚）
   - 下载地址: https://dotnet.microsoft.com/download/dotnet/10.0
   
 - **操作系统**:
@@ -45,7 +46,7 @@ run.bat desktop
 # 检查 .NET SDK 版本
 dotnet --version
 
-# 应该输出 10.0.x 或更高
+# 应该输出 10.0.2xx（推荐 10.0.200）
 ```
 
 ### 3. 克隆代码（如果还没有）
@@ -91,6 +92,8 @@ run.bat
 
 > 说明：Windows 原生 WinUI 3 目标使用 MSIX 方式安装/启动（避免 unpackaged WinUI3 在部分系统上启动即崩溃）。
 > 首次安装需要在“管理员 PowerShell”运行一次 `run.bat` 以将开发证书加入本机证书存储。
+> 工具链锁定：Windows SDK 10.0.26100.0，signtool 来自 SDK 10.0.22621.0。
+> Workload manifest：CI 固定 10.0.200-manifests.34a88a22；本地允许最新。
 
 #### Windows MSIX（仅打包，不安装）
 ```bash
