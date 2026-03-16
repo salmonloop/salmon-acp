@@ -48,7 +48,7 @@ namespace SalmonEgg.Infrastructure.Tests.Services.Security
     /// </summary>
     public class PathValidatorProperties
     {
-        private readonly PathValidator _validator = new PathValidator("/safe/directory");
+        private readonly PathValidator _validator = new("/safe/directory");
 
         /// <summary>
         /// 属性：路径遍历攻击防护
@@ -115,7 +115,7 @@ namespace SalmonEgg.Infrastructure.Tests.Services.Security
         public bool PathNormalization_PreservesSemantics(string pathSegment)
         {
             // 过滤掉无效字符和空字节
-            if (string.IsNullOrEmpty(pathSegment) || pathSegment.Contains("\0"))
+            if (string.IsNullOrEmpty(pathSegment) || pathSegment.Contains('\0'))
             {
                 return true;
             }

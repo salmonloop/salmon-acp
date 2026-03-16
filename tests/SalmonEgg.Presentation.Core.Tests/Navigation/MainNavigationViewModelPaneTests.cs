@@ -21,6 +21,29 @@ namespace SalmonEgg.Presentation.Core.Tests.Navigation;
 public sealed class MainNavigationViewModelPaneTests
 {
     [Fact]
+    public void PaneDisplayMode_PolicyClosesPane_WhenBecomingCompact()
+    {
+        var nav = CreateNav();
+
+        nav.IsPaneOpen = true;
+        nav.PaneDisplayMode = NavigationPaneDisplayMode.Compact;
+
+        Assert.False(nav.IsPaneOpen);
+    }
+
+    [Fact]
+    public void PaneDisplayMode_PolicyOpensPane_WhenBecomingExpanded()
+    {
+        var nav = CreateNav();
+
+        nav.PaneDisplayMode = NavigationPaneDisplayMode.Compact;
+        nav.IsPaneOpen = false;
+        nav.PaneDisplayMode = NavigationPaneDisplayMode.Expanded;
+
+        Assert.True(nav.IsPaneOpen);
+    }
+
+    [Fact]
     public void OpenPaneLength_UsesCompactLength_WhenPaneClosedInCompact()
     {
         var nav = CreateNav();

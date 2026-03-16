@@ -378,7 +378,6 @@
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="MainNavView.PaneDisplayMode" Value="Left" />
-                        <Setter Target="MainNavView.IsPaneOpen" Value="True" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
                         <Setter Target="TopSearchBox.MinWidth" Value="{StaticResource SearchBoxMinWidthWide}" />
                         <Setter Target="TopSearchBox.MaxWidth" Value="{StaticResource SearchBoxMaxWidthWide}" />
@@ -392,7 +391,6 @@
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="MainNavView.PaneDisplayMode" Value="LeftCompact" />
-                        <Setter Target="MainNavView.IsPaneOpen" Value="False" />
                         <Setter Target="TopSearchBox.Visibility" Value="Visible" />
                         <Setter Target="TopSearchBox.MinWidth" Value="{StaticResource SearchBoxMinWidthMedium}" />
                         <Setter Target="TopSearchBox.MaxWidth" Value="{StaticResource SearchBoxMaxWidthMedium}" />
@@ -406,7 +404,6 @@
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="MainNavView.PaneDisplayMode" Value="LeftMinimal" />
-                        <Setter Target="MainNavView.IsPaneOpen" Value="False" />
                         <Setter Target="TopSearchBox.Visibility" Value="Collapsed" />
                     </VisualState.Setters>
                 </VisualState>

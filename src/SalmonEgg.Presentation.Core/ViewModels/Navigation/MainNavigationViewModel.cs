@@ -102,10 +102,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             if (SetProperty(ref _isPaneOpen, value))
             {
-                SetPaneOpen(value);
-                LogPaneState("IsPaneOpenChanged");
-                UpdateOpenPaneLength();
-                UpdateLeftNavResizerVisibility();
+                OnIsPaneOpenChanged(value, "IsPaneOpenChanged");
             }
         }
     }
@@ -115,9 +112,16 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         get => _paneDisplayMode;
         set
         {
+            if (_paneDisplayMode == value)
+            {
+                return;
+            }
+
+            var previous = _paneDisplayMode;
             if (SetProperty(ref _paneDisplayMode, value))
             {
                 LogPaneState("PaneDisplayModeChanged");
+                ApplyPaneDisplayModePolicy(previous, value);
                 UpdateOpenPaneLength();
                 UpdateLeftNavResizerVisibility();
             }
@@ -141,6 +145,37 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         get => _isLeftNavResizerVisible;
         private set => SetProperty(ref _isLeftNavResizerVisible, value);
+    }
+
+    private void OnIsPaneOpenChanged(bool isOpen, string reason)
+    {
+        SetPaneOpen(isOpen);
+        LogPaneState(reason);
+        UpdateOpenPaneLength();
+        UpdateLeftNavResizerVisibility();
+    }
+
+    private void ApplyPaneDisplayModePolicy(NavigationPaneDisplayMode previous, NavigationPaneDisplayMode current)
+    {
+        // Ensure a single source of truth for pane state across platforms.
+        // Window-size visual states (View) drive PaneDisplayMode, while Core decides IsPaneOpen defaults.
+        var shouldBeOpen = current switch
+        {
+            NavigationPaneDisplayMode.Expanded => true,
+            _ => false
+        };
+
+        // Only adjust when the display mode actually changes; user toggles within a mode are preserved.
+        if (shouldBeOpen == _isPaneOpen)
+        {
+            return;
+        }
+
+        // Use the same side-effects as user-driven changes.
+        if (SetProperty(ref _isPaneOpen, shouldBeOpen, nameof(IsPaneOpen)))
+        {
+            OnIsPaneOpenChanged(shouldBeOpen, $"IsPaneOpenPolicy({previous}->{current})");
+        }
     }
 
     public IAsyncRelayCommand AddProjectCommand { get; }

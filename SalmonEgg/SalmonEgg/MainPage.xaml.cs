@@ -165,7 +165,6 @@ public sealed partial class MainPage : Page
             NavVM.NavOpenPaneLength = MainNavView.OpenPaneLength;
         }
 
-        NavVM.IsPaneOpen = MainNavView.IsPaneOpen;
         UpdateLeftNavResizerPosition();
     }
 
@@ -945,10 +944,6 @@ public sealed partial class MainPage : Page
     {
         ConfigureTitleBar();
         UpdateNavPaneToggleUi();
-        if (MainNavView != null)
-        {
-            NavVM.IsPaneOpen = MainNavView.IsPaneOpen;
-        }
         NavVM.RebuildTree();
         ApplyNavItemTransitionsDeferred();
 #if WINDOWS
@@ -1004,11 +999,12 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        var targetOpen = _panePolicy.Toggle(MainNavView.IsPaneOpen);
+        var currentOpen = NavVM.IsPaneOpen;
+        var targetOpen = _panePolicy.Toggle(currentOpen);
 
         if (!UiMotion.Current.IsAnimationEnabled || MainNavView.DisplayMode == NavigationViewDisplayMode.Minimal)
         {
-            MainNavView.IsPaneOpen = targetOpen;
+            NavVM.IsPaneOpen = targetOpen;
             UpdateNavPaneToggleUi(targetOpen);
             return;
         }
@@ -1024,7 +1020,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        var isOpen = isOpenOverride ?? MainNavView.IsPaneOpen;
+        var isOpen = isOpenOverride ?? NavVM.IsPaneOpen;
         ToolTipService.SetToolTip(TitleBarToggleLeftNavButton, isOpen ? "折叠左侧边栏" : "展开左侧边栏");
     }
 
@@ -1108,6 +1104,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        var navVm = NavVM;
         if (_navPaneAnimating)
         {
             _navPaneStoryboard?.Stop();
@@ -1116,12 +1113,12 @@ public sealed partial class MainPage : Page
 
         UpdateLeftNavResizerPosition();
 
-        var from = targetOpen ? NavVM.NavCompactPaneLength : MainNavView.OpenPaneLength;
-        var to = targetOpen ? NavVM.NavOpenPaneLength : NavVM.NavCompactPaneLength;
+        var from = targetOpen ? navVm.NavCompactPaneLength : MainNavView.OpenPaneLength;
+        var to = targetOpen ? navVm.NavOpenPaneLength : navVm.NavCompactPaneLength;
 
         if (targetOpen)
         {
-            MainNavView.IsPaneOpen = true;
+            navVm.IsPaneOpen = true;
         }
 
         MainNavView.OpenPaneLength = from;
@@ -1146,14 +1143,14 @@ public sealed partial class MainPage : Page
         storyboard.Completed += (_, _) =>
         {
             _navPaneAnimating = false;
-            NavVM.IsNavPaneAnimating = false;
+            navVm.IsNavPaneAnimating = false;
             if (!targetOpen)
             {
-                MainNavView.IsPaneOpen = false;
+                navVm.IsPaneOpen = false;
             }
             else
             {
-                MainNavView.OpenPaneLength = NavVM.NavOpenPaneLength;
+                MainNavView.OpenPaneLength = navVm.NavOpenPaneLength;
             }
             UpdateNavPaneToggleUi();
             UpdateLeftNavResizerPosition();
@@ -1161,7 +1158,7 @@ public sealed partial class MainPage : Page
         };
 
         _navPaneAnimating = true;
-        NavVM.IsNavPaneAnimating = true;
+        navVm.IsNavPaneAnimating = true;
         _navPaneStoryboard = storyboard;
         storyboard.Begin();
     }
@@ -1209,7 +1206,7 @@ public sealed partial class MainPage : Page
             return false;
         }
 
-        if (!MainNavView.IsPaneOpen)
+        if (!NavVM.IsPaneOpen)
         {
             return false;
         }
