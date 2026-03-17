@@ -64,7 +64,9 @@
                         <Grid Grid.Column="0">
                             <!-- Ghost completion overlay -->
                             <TextBlock IsHitTestVisible="False"
-                                       Margin="12,10,12,10"
+                                       Margin="{x:Bind InputBox.Padding, Mode=OneWay}"
+                                       FontFamily="{x:Bind InputBox.FontFamily, Mode=OneWay}"
+                                       FontSize="{x:Bind InputBox.FontSize, Mode=OneWay}"
                                        TextWrapping="Wrap"
                                        Opacity="0.65"
                                        Visibility="{x:Bind ViewModel.ShowSlashCommands, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -74,9 +76,9 @@
 
                             <TextBox x:Name="InputBox"
                                      x:Uid="ChatInputBox"
-                                     Text="{x:Bind ViewModel.CurrentPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                     AcceptsReturn="True"
-                                     TextWrapping="Wrap"
+                                      Text="{x:Bind ViewModel.CurrentPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      AcceptsReturn="True"
+                                      TextWrapping="Wrap"
                                      MinHeight="44"
                                      MaxHeight="120"
                                      IsEnabled="{x:Bind ViewModel.IsInputEnabled, Mode=OneWay}"
