@@ -88,6 +88,7 @@ public sealed class RightSidebarIntegrationTests
             new Mock<ILogger<AcpProfilesViewModel>>().Object);
             
         var conversationStore = new Mock<IConversationStore>();
+        var miniWindow = new Mock<IMiniWindowCoordinator>();
         var chatLogger = new Mock<ILogger<ChatViewModel>>();
         
         var chatVm = new Mock<ChatViewModel>(
@@ -97,8 +98,9 @@ public sealed class RightSidebarIntegrationTests
             acpProfiles.Object,
             sessionManager.Object,
             conversationStore.Object,
+            miniWindow.Object,
             chatLogger.Object,
-            null); // 8th arg is SynchronizationContext?
+            null); // syncContext
 
         var ui = new Mock<IUiInteractionService>();
         var shellNavigation = new Mock<IShellNavigationService>();

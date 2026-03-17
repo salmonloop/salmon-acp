@@ -5,4 +5,5 @@ public interface IPlatformCapabilityService
     bool SupportsLaunchOnStartup { get; }
     bool SupportsTray { get; }
     bool SupportsLanguageOverride { get; }
+    bool SupportsMiniWindow { get; }
 }

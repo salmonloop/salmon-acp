@@ -228,6 +228,9 @@ public static class DependencyInjection
 
         // UI runtime bridge (animations, shell reload)
         services.AddSingleton<IUiRuntimeService, UiRuntimeService>();
+
+        // Mini floating chat window coordinator (Windows-only feature; other targets no-op via capability).
+        services.AddSingleton<IMiniWindowCoordinator, MiniWindowCoordinator>();
     }
 
     private static string GetAppDataPath()

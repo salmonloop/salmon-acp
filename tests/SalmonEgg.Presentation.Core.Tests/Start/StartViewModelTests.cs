@@ -144,6 +144,7 @@ public sealed class StartViewModelTests
         var neverComplete = new TaskCompletionSource<ConversationDocument>();
         conversationStore.Setup(s => s.LoadAsync(CancellationToken.None)).Returns(neverComplete.Task);
 
+        var miniWindow = new Mock<IMiniWindowCoordinator>();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
         var originalContext = SynchronizationContext.Current;
@@ -157,6 +158,7 @@ public sealed class StartViewModelTests
                 profiles,
                 sessionManager,
                 conversationStore.Object,
+                miniWindow.Object,
                 vmLogger.Object);
         }
         finally

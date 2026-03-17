@@ -327,6 +327,14 @@
                                 Click="OnToggleLeftNavClick">
                             <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE700;"/>
                         </Button>
+                        <Button x:Name="TitleBarMiniWindowButton"
+                                Style="{StaticResource TitleBarCommandButtonStyle}"
+                                ToolTipService.ToolTip="小窗模式"
+                                AutomationProperties.Name="小窗模式"
+                                Visibility="{x:Bind Preferences.IsMiniWindowSupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                Command="{x:Bind ChatVM.OpenMiniWindowCommand}">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEE49;" FontSize="14" />
+                        </Button>
                     </StackPanel>
 
                     <TextBox x:Name="TopSearchBox"

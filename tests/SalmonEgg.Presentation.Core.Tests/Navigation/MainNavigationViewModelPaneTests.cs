@@ -263,6 +263,7 @@ public sealed class MainNavigationViewModelPaneTests
         var neverComplete = new TaskCompletionSource<ConversationDocument>();
         conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).Returns(neverComplete.Task);
 
+        var miniWindow = new Mock<IMiniWindowCoordinator>();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
         var originalContext = SynchronizationContext.Current;
@@ -276,6 +277,7 @@ public sealed class MainNavigationViewModelPaneTests
                 profiles,
                 sessionManager,
                 conversationStore.Object,
+                miniWindow.Object,
                 vmLogger.Object);
         }
         finally

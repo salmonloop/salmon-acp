@@ -20,6 +20,7 @@ using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.ViewModels.Chat;
@@ -36,6 +37,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private readonly AcpProfilesViewModel _acpProfiles;
     private readonly ISessionManager _sessionManager;
     private readonly IConversationStore _conversationStore;
+    private readonly IMiniWindowCoordinator _miniWindowCoordinator;
     private IChatService? _chatService;
     private readonly SynchronizationContext _syncContext;
     private bool _disposed;
@@ -51,6 +53,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private ChatMessageViewModel? _activeAgentTextStreamMessage;
     private ChatMessageViewModel? _activeThinkingMessage;
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
+    private bool _suppressMiniWindowSessionSync;
 
     // Local conversation binding: ConversationId (stable for sidebar/UI) -> active remote session id (per ACP) + transcript.
     private readonly Dictionary<string, ConversationBinding> _conversationBindings = new(StringComparer.Ordinal);
@@ -84,6 +87,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private string? _currentSessionId;
+
+    [ObservableProperty]
+    private ObservableCollection<MiniWindowConversationItemViewModel> _miniWindowSessions = new();
+
+    [ObservableProperty]
+    private MiniWindowConversationItemViewModel? _selectedMiniWindowSession;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
@@ -231,6 +240,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         AcpProfilesViewModel acpProfiles,
         ISessionManager sessionManager,
         IConversationStore conversationStore,
+        IMiniWindowCoordinator miniWindowCoordinator,
         ILogger<ChatViewModel> logger,
         SynchronizationContext? syncContext = null)
         : base(logger)
@@ -241,6 +251,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _acpProfiles = acpProfiles ?? throw new ArgumentNullException(nameof(acpProfiles));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _conversationStore = conversationStore ?? throw new ArgumentNullException(nameof(conversationStore));
+        _miniWindowCoordinator = miniWindowCoordinator ?? throw new ArgumentNullException(nameof(miniWindowCoordinator));
         _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 
         // 创建默认 ChatService 实例
@@ -255,6 +266,34 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         // Start restoring local conversation list immediately so the sidebar can show it ASAP.
         _ = RestoreConversationsAsync();
+    }
+
+    [RelayCommand]
+    private async Task OpenMiniWindowAsync()
+    {
+        try
+        {
+            await _miniWindowCoordinator.OpenMiniWindowAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "打开小窗失败");
+            ShowTransientNotificationToast("打开小窗失败。请尝试使用 MSIX Script Run（WinUI 3）启动，或查看日志。");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ReturnToMainWindowAsync()
+    {
+        try
+        {
+            await _miniWindowCoordinator.ReturnToMainWindowAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "返回主窗口失败");
+            ShowTransientNotificationToast("返回主窗口失败。");
+        }
     }
 
     private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -342,6 +381,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         // Persist "last active" selection.
         ScheduleConversationSave();
+
+        SyncMiniWindowSelectedSession();
+    }
+
+    partial void OnSelectedMiniWindowSessionChanged(MiniWindowConversationItemViewModel? value)
+    {
+        if (_suppressMiniWindowSessionSync || value == null)
+        {
+            return;
+        }
+
+        if (!string.Equals(CurrentSessionId, value.ConversationId, StringComparison.Ordinal))
+        {
+            CurrentSessionId = value.ConversationId;
+        }
     }
 
     private ConversationBinding GetOrCreateConversationBinding(string conversationId)
@@ -529,7 +583,56 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             ConversationListVersion++;
             OnPropertyChanged(nameof(GetKnownConversationIds));
+            RefreshMiniWindowSessions();
         }, null);
+    }
+
+    private void RefreshMiniWindowSessions()
+    {
+        try
+        {
+            MiniWindowSessions.Clear();
+            foreach (var conversationId in GetKnownConversationIds())
+            {
+                var displayName = ResolveSessionDisplayName(conversationId);
+                MiniWindowSessions.Add(new MiniWindowConversationItemViewModel(conversationId, displayName));
+            }
+
+            SyncMiniWindowSelectedSession();
+        }
+        catch
+        {
+            // Mini window list is best-effort and should never break the main chat experience.
+        }
+    }
+
+    private void SyncMiniWindowSelectedSession()
+    {
+        if (_suppressMiniWindowSessionSync)
+        {
+            return;
+        }
+
+        try
+        {
+            _suppressMiniWindowSessionSync = true;
+
+            if (string.IsNullOrWhiteSpace(CurrentSessionId))
+            {
+                SelectedMiniWindowSession = null;
+                return;
+            }
+
+            var match = MiniWindowSessions.FirstOrDefault(s => string.Equals(s.ConversationId, CurrentSessionId, StringComparison.Ordinal));
+            if (!ReferenceEquals(SelectedMiniWindowSession, match))
+            {
+                SelectedMiniWindowSession = match;
+            }
+        }
+        finally
+        {
+            _suppressMiniWindowSessionSync = false;
+        }
     }
 
     private static ConversationMessageSnapshot ToSnapshot(ChatMessageViewModel vm)

@@ -62,6 +62,7 @@ public class ChatViewModelTests
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
 
         var conversationStore = new Mock<IConversationStore>();
+        var miniWindow = new Mock<IMiniWindowCoordinator>();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
         var originalContext = SynchronizationContext.Current;
@@ -76,6 +77,7 @@ public class ChatViewModelTests
                 profiles,
                 sessionManager.Object,
                 conversationStore.Object,
+                miniWindow.Object,
                 vmLogger.Object,
                 syncContext);
         }

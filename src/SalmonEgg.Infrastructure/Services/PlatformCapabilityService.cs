@@ -11,4 +11,6 @@ public sealed class PlatformCapabilityService : IPlatformCapabilityService
     public bool SupportsTray => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
     public bool SupportsLanguageOverride => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+    public bool SupportsMiniWindow => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 }

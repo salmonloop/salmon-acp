@@ -73,6 +73,8 @@ public partial class AppPreferencesViewModel : ObservableObject
 
     public bool IsLanguageOverrideSupported => _capabilities.SupportsLanguageOverride;
 
+    public bool IsMiniWindowSupported => _capabilities.SupportsMiniWindow;
+
     public AppPreferencesViewModel(
         IAppSettingsService appSettingsService,
         IAppStartupService startupService,
