@@ -11,9 +11,11 @@ using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SerilogLogger = Serilog.ILogger;
+using Uno.Extensions.Reactive;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -23,6 +25,8 @@ public class ChatViewModelTests
 {
     private static ChatViewModel CreateViewModel(SynchronizationContext? syncContext = null)
     {
+        var chatStore = new Mock<IChatStore>();
+        chatStore.Setup(s => s.State).Returns(State.Value(new object(), () => ChatState.Empty));
         var transportFactory = new Mock<ITransportFactory>();
         var messageParser = new Mock<IMessageParser>();
         var messageValidator = new Mock<IMessageValidator>();
@@ -71,6 +75,7 @@ public class ChatViewModelTests
             SynchronizationContext.SetSynchronizationContext(syncContext ?? new SynchronizationContext());
 
             return new ChatViewModel(
+                chatStore.Object,
                 chatServiceFactory,
                 configService.Object,
                 preferences,
@@ -132,6 +137,87 @@ public class ChatViewModelTests
         await switchTask;
 
         Assert.Equal(sessionId, viewModel.CurrentSessionId);
+    }
+
+    [Fact]
+    public async Task Dispose_CancelsStoreSubscription_DoesNotUpdateAfterDispose()
+    {
+        // 1. Setup store with initial state
+        var initialState = ChatState.Empty with { IsThinking = false };
+        var chatStore = new Mock<IChatStore>();
+        var state = State.Value(this, () => initialState);
+        chatStore.Setup(s => s.State).Returns(state);
+
+        // 2. Create VM with queueing sync context
+        var syncContext = new QueueingSynchronizationContext();
+        var transportFactory = new Mock<ITransportFactory>();
+        var messageParser = new Mock<IMessageParser>();
+        var messageValidator = new Mock<IMessageValidator>();
+        var errorLogger = new Mock<IErrorLogger>();
+        var capabilityManager = new Mock<ICapabilityManager>();
+        var sessionManager = new Mock<ISessionManager>();
+        var serilog = new Mock<Serilog.ILogger>();
+
+        var chatServiceFactory = new ChatServiceFactory(
+            transportFactory.Object,
+            messageParser.Object,
+            messageValidator.Object,
+            errorLogger.Object,
+            capabilityManager.Object,
+            sessionManager.Object,
+            serilog.Object);
+
+        var configService = new Mock<IConfigurationService>();
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
+        var startupService = new Mock<IAppStartupService>();
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+
+        var preferences = new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            prefsLogger.Object);
+
+        var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
+        var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
+        var conversationStore = new Mock<IConversationStore>();
+        var miniWindow = new Mock<IMiniWindowCoordinator>();
+        var vmLogger = new Mock<ILogger<ChatViewModel>>();
+
+        var viewModel = new ChatViewModel(
+            chatStore.Object,
+            chatServiceFactory,
+            configService.Object,
+            preferences,
+            profiles,
+            sessionManager.Object,
+            conversationStore.Object,
+            miniWindow.Object,
+            vmLogger.Object,
+            syncContext);
+
+        // 3. Dispatch initial state update and verify projection
+        syncContext.RunAll();
+        Assert.False(viewModel.IsThinking);
+
+        // 4. Dispose the ViewModel
+        viewModel.Dispose();
+
+        // 5. Update store state (thinking = true)
+        // Note: In real MVUX, the ForEachAsync loop will stop due to CTS cancellation.
+        // For this test to be robust, we verify that after dispose, no further updates reach the UI properties.
+        var newState = initialState with { IsThinking = true };
+        await state.Update(s => newState, CancellationToken.None);
+
+        // 6. Flush sync context and verify thinking is still false
+        syncContext.RunAll();
+        Assert.False(viewModel.IsThinking);
     }
 
     private sealed class QueueingSynchronizationContext : SynchronizationContext

@@ -56,16 +56,11 @@ public sealed partial class ChatInputArea : UserControl
 
     public ChatInputArea()
     {
-        ViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
         InitializeComponent();
-        SubmitCommand ??= ViewModel.SendPromptCommand;
 #if WINDOWS
         InputBox.TextCompositionStarted += OnInputTextCompositionStarted;
         InputBox.TextCompositionEnded += OnInputTextCompositionEnded;
 #endif
-        AttachViewModel(ViewModel);
-        AttachSubmitCommand(SubmitCommand);
-        UpdateCanSubmitUi();
     }
 
     private static void OnViewModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

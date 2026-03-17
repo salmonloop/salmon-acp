@@ -6,14 +6,16 @@ using SalmonEgg.Presentation.ViewModels.Chat;
 using Microsoft.Extensions.Logging;
 using Xunit;
 using System.Threading;
+using System.Threading.Tasks;
 
-using System.Collections.ObjectModel;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Application.Services.Chat;
-using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
+using Uno.Extensions.Reactive;
+using SalmonEgg.Domain.Models.Conversation;
 
 namespace SalmonEgg.Presentation.Core.Tests.Navigation;
 
@@ -24,7 +26,7 @@ public sealed class RightSidebarIntegrationTests
     {
         var navState = new Mock<INavigationStateService>();
         var rightPanelService = new RightPanelService();
-        var nav = CreateNav(navState.Object, rightPanelService);
+        using var nav = CreateNav(navState.Object, rightPanelService);
 
         // Act
         rightPanelService.CurrentMode = RightPanelMode.Todo;
@@ -38,10 +40,10 @@ public sealed class RightSidebarIntegrationTests
     {
         var navState = new Mock<INavigationStateService>();
         var rightPanelService = new RightPanelService();
-        var nav = CreateNav(navState.Object, rightPanelService);
-        
+        using var nav = CreateNav(navState.Object, rightPanelService);
+
         bool notified = false;
-        nav.PropertyChanged += (s, e) => 
+        nav.PropertyChanged += (s, e) =>
         {
             if (e.PropertyName == nameof(nav.RightPanelMode))
                 notified = true;
@@ -56,64 +58,98 @@ public sealed class RightSidebarIntegrationTests
 
     private static MainNavigationViewModel CreateNav(INavigationStateService navState, IRightPanelService rightPanelService)
     {
-        var chatServiceFactoryMock = new Mock<ChatServiceFactory>(
-            new Mock<SalmonEgg.Domain.Interfaces.ITransportFactory>().Object,
-            new Mock<SalmonEgg.Domain.Interfaces.IMessageParser>().Object,
-            new Mock<SalmonEgg.Domain.Interfaces.IMessageValidator>().Object,
-            new Mock<SalmonEgg.Domain.Services.IErrorLogger>().Object,
-            new Mock<SalmonEgg.Domain.Services.ICapabilityManager>().Object,
-            new Mock<ISessionManager>().Object,
-            new Mock<Serilog.ILogger>().Object);
-        var configService = new Mock<IConfigurationService>();
-        var sessionManager = new Mock<ISessionManager>();
-        
-        var appSettings = new Mock<IAppSettingsService>();
-        var appStartup = new Mock<IAppStartupService>();
-        var appLanguage = new Mock<IAppLanguageService>();
-        var capabilities = new Mock<IPlatformCapabilityService>();
-        var uiRuntime = new Mock<IUiRuntimeService>();
-        var prefLogger = new Mock<ILogger<AppPreferencesViewModel>>();
-        
-        var preferences = new Mock<AppPreferencesViewModel>(
-            appSettings.Object,
-            appStartup.Object,
-            appLanguage.Object,
-            capabilities.Object,
-            uiRuntime.Object,
-            prefLogger.Object);
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var appSettings = new Mock<IAppSettingsService>();
+            appSettings.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
 
-        var acpProfiles = new Mock<AcpProfilesViewModel>(
-            configService.Object,
-            preferences.Object,
-            new Mock<ILogger<AcpProfilesViewModel>>().Object);
-            
-        var conversationStore = new Mock<IConversationStore>();
-        var miniWindow = new Mock<IMiniWindowCoordinator>();
-        var chatLogger = new Mock<ILogger<ChatViewModel>>();
-        
-        var chatVm = new Mock<ChatViewModel>(
-            chatServiceFactoryMock.Object,
-            configService.Object,
-            preferences.Object,
-            acpProfiles.Object,
-            sessionManager.Object,
-            conversationStore.Object,
-            miniWindow.Object,
-            chatLogger.Object,
-            null); // syncContext
+            var appStartup = new Mock<IAppStartupService>();
+            appStartup.Setup(s => s.GetLaunchOnStartupAsync()).ReturnsAsync((bool?)null);
 
-        var ui = new Mock<IUiInteractionService>();
-        var shellNavigation = new Mock<IShellNavigationService>();
-        var logger = new Mock<ILogger<MainNavigationViewModel>>();
+            var appLanguage = new Mock<IAppLanguageService>();
+            appLanguage.Setup(s => s.ApplyLanguageOverrideAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        return new MainNavigationViewModel(
-            chatVm.Object,
-            sessionManager.Object,
-            preferences.Object,
-            ui.Object,
-            shellNavigation.Object,
-            logger.Object,
-            navState,
-            rightPanelService);
+            var capabilities = new Mock<IPlatformCapabilityService>();
+            capabilities.SetupGet(s => s.SupportsLaunchOnStartup).Returns(false);
+            capabilities.SetupGet(s => s.SupportsTray).Returns(false);
+            capabilities.SetupGet(s => s.SupportsLanguageOverride).Returns(false);
+            capabilities.SetupGet(s => s.SupportsMiniWindow).Returns(false);
+
+            var uiRuntime = new Mock<IUiRuntimeService>();
+            var prefLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+
+            var preferences = new AppPreferencesViewModel(
+                appSettings.Object,
+                appStartup.Object,
+                appLanguage.Object,
+                capabilities.Object,
+                uiRuntime.Object,
+                prefLogger.Object);
+
+            var configService = new Mock<IConfigurationService>();
+            configService.Setup(s => s.ListConfigurationsAsync()).ReturnsAsync([]);
+
+            var acpProfilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
+            var acpProfiles = new AcpProfilesViewModel(configService.Object, preferences, acpProfilesLogger.Object);
+
+            var sessionManager = new Mock<ISessionManager>();
+            var transportFactory = new Mock<ITransportFactory>();
+            var messageParser = new Mock<IMessageParser>();
+            var messageValidator = new Mock<IMessageValidator>();
+            var errorLogger = new Mock<IErrorLogger>();
+            var capabilityManager = new Mock<ICapabilityManager>();
+            var serilog = new Mock<Serilog.ILogger>();
+
+            var chatServiceFactory = new ChatServiceFactory(
+                transportFactory.Object,
+                messageParser.Object,
+                messageValidator.Object,
+                errorLogger.Object,
+                capabilityManager.Object,
+                sessionManager.Object,
+                serilog.Object);
+
+            var state = State.Value(new object(), () => ChatState.Empty);
+            var chatStore = new ChatStore(state);
+
+            var conversationStore = new Mock<IConversationStore>();
+            conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ConversationDocument());
+
+            var miniWindow = new Mock<IMiniWindowCoordinator>();
+            var chatLogger = new Mock<ILogger<ChatViewModel>>();
+            var chatVm = new ChatViewModel(
+                chatStore,
+                chatServiceFactory,
+                configService.Object,
+                preferences,
+                acpProfiles,
+                sessionManager.Object,
+                conversationStore.Object,
+                miniWindow.Object,
+                chatLogger.Object,
+                syncContext);
+
+            var ui = new Mock<IUiInteractionService>();
+            var shellNavigation = new Mock<IShellNavigationService>();
+            var logger = new Mock<ILogger<MainNavigationViewModel>>();
+
+            return new MainNavigationViewModel(
+                chatVm,
+                sessionManager.Object,
+                preferences,
+                ui.Object,
+                shellNavigation.Object,
+                logger.Object,
+                navState,
+                rightPanelService);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
     }
 }

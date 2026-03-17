@@ -25,6 +25,8 @@ using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.ViewModels.Start;
 using SalmonEgg.Presentation.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
+using Uno.Extensions.Reactive;
 
 namespace SalmonEgg;
 
@@ -138,6 +140,10 @@ public static class DependencyInjection
 
     private static void RegisterApplicationServices(IServiceCollection services)
     {
+        // MVUX Chat Store
+        services.AddSingleton<IState<ChatState>>(sp => State.Value(sp, () => ChatState.Empty));
+        services.AddSingleton<IChatStore, ChatStore>();
+
         // 用例
         services.AddTransient<ConnectToServerUseCase>();
         services.AddTransient<DisconnectUseCase>();

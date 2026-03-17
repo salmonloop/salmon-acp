@@ -205,7 +205,7 @@ public partial class DataStorageSettingsViewModel : ObservableObject
     }
 }
 
-internal sealed record ExportMessage(
+internal sealed partial record ExportMessage(
     string Id,
     DateTimeOffset Timestamp,
     bool IsOutgoing,

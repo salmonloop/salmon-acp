@@ -8,6 +8,7 @@ using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -23,7 +24,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void PaneDisplayMode_PolicyClosesPane_WhenBecomingCompact()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.IsPaneOpen = true;
         nav.PaneDisplayMode = NavigationPaneDisplayMode.Compact;
@@ -34,7 +35,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void PaneDisplayMode_PolicyOpensPane_WhenBecomingExpanded()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.PaneDisplayMode = NavigationPaneDisplayMode.Compact;
         nav.IsPaneOpen = false;
@@ -46,41 +47,51 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void NavigationState_IsSharedAcrossViewModels()
     {
-        var navState = new NavigationStateService();
-        
-        // Mock dependencies for ViewModels
-        var sessionManager = new Mock<ISessionManager>();
-        var preferences = CreatePreferences();
-        var chatViewModel = CreateChatViewModel(new SynchronizationContext(), preferences, sessionManager.Object);
-        var ui = new Mock<IUiInteractionService>();
-        var shellNavigation = new Mock<IShellNavigationService>();
-        var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new NavigationStateService();
 
-        var navVm = new MainNavigationViewModel(
-            chatViewModel,
-            sessionManager.Object,
-            preferences,
-            ui.Object,
-            shellNavigation.Object,
-            navLogger.Object,
-            navState,
-            new Mock<IRightPanelService>().Object);
+            // Mock dependencies for ViewModels
+            var sessionManager = new Mock<ISessionManager>();
+            var preferences = CreatePreferences();
+            var chatViewModel = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+            var ui = new Mock<IUiInteractionService>();
+            var shellNavigation = new Mock<IShellNavigationService>();
+            var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
 
-        // Child ViewModel
-        var startItem = new StartNavItemViewModel(navState);
+            using var navVm = new MainNavigationViewModel(
+                chatViewModel,
+                sessionManager.Object,
+                preferences,
+                ui.Object,
+                shellNavigation.Object,
+                navLogger.Object,
+                navState,
+                new Mock<IRightPanelService>().Object);
 
-        // Act: Change state in parent
-        navVm.IsPaneOpen = true;
+            // Child ViewModel
+            var startItem = new StartNavItemViewModel(navState);
 
-        // Assert: Child reflects change
-        Assert.True(startItem.IsPaneOpen);
+            // Act: Change state in parent
+            navVm.IsPaneOpen = true;
 
-        // Act: Change state in child (simulated by service change)
-        navState.IsPaneOpen = false;
+            // Assert: Child reflects change
+            Assert.True(startItem.IsPaneOpen);
 
-        // Assert: Parent reflects change
-        Assert.False(navVm.IsPaneOpen);
-        Assert.False(navState.IsPaneOpen);
+            // Act: Change state in child (simulated by service change)
+            navState.IsPaneOpen = false;
+
+            // Assert: Parent reflects change
+            Assert.False(navVm.IsPaneOpen);
+            Assert.False(navState.IsPaneOpen);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
     }
 
     [Fact]
@@ -89,7 +100,7 @@ public sealed class MainNavigationViewModelPaneTests
         var navState = new NavigationStateService();
         var shellNavigation = new Mock<IShellNavigationService>();
         var item = new StartNavItemViewModel(navState);
-        
+
         bool isPaneOpenChangedCalled = false;
         item.PropertyChanged += (s, e) =>
         {
@@ -107,7 +118,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void OpenPaneLength_UsesCompactLength_WhenPaneClosedInCompact()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.NavCompactPaneLength = 80;
         nav.NavOpenPaneLength = 320;
@@ -120,7 +131,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void OpenPaneLength_UsesCompactLength_WhenPaneClosedInMinimal()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.NavCompactPaneLength = 96;
         nav.NavOpenPaneLength = 360;
@@ -133,7 +144,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void OpenPaneLength_UsesOpenLength_WhenPaneOpen()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.NavCompactPaneLength = 72;
         nav.NavOpenPaneLength = 400;
@@ -146,7 +157,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void OpenPaneLength_UsesOpenLength_WhenExpandedAndPaneClosed()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.NavCompactPaneLength = 72;
         nav.NavOpenPaneLength = 380;
@@ -159,7 +170,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void LeftNavResizerVisible_WhenPaneOpenAndExpanded()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.PaneDisplayMode = NavigationPaneDisplayMode.Expanded;
         nav.IsPaneOpen = true;
@@ -171,7 +182,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void LeftNavResizerHidden_WhenPaneClosed()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.PaneDisplayMode = NavigationPaneDisplayMode.Expanded;
         nav.IsPaneOpen = false;
@@ -183,7 +194,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void LeftNavResizerHidden_WhenCompact()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.PaneDisplayMode = NavigationPaneDisplayMode.Compact;
         nav.IsPaneOpen = true;
@@ -195,7 +206,7 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void LeftNavResizerHidden_WhenAnimating()
     {
-        var nav = CreateNav();
+        using var nav = CreateNav();
 
         nav.PaneDisplayMode = NavigationPaneDisplayMode.Expanded;
         nav.IsPaneOpen = true;
@@ -208,30 +219,36 @@ public sealed class MainNavigationViewModelPaneTests
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new SynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
 
-        var sessionManager = new Mock<ISessionManager>();
-        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
+        try
+        {
+            var sessionManager = new Mock<ISessionManager>();
+            sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+                .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences();
-        var chatViewModel = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+            var preferences = CreatePreferences();
+            var chatViewModel = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
 
-        SynchronizationContext.SetSynchronizationContext(originalContext);
+            var ui = new Mock<IUiInteractionService>();
+            var shellNavigation = new Mock<IShellNavigationService>();
+            var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
+            var navState = new NavigationStateService();
 
-        var ui = new Mock<IUiInteractionService>();
-        var shellNavigation = new Mock<IShellNavigationService>();
-        var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-        var navState = new NavigationStateService();
-
-        return new MainNavigationViewModel(
-            chatViewModel,
-            sessionManager.Object,
-            preferences,
-            ui.Object,
-            shellNavigation.Object,
-            navLogger.Object,
-            navState,
-            new Mock<IRightPanelService>().Object);
+            return new MainNavigationViewModel(
+                chatViewModel,
+                sessionManager.Object,
+                preferences,
+                ui.Object,
+                shellNavigation.Object,
+                navLogger.Object,
+                navState,
+                new Mock<IRightPanelService>().Object);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
     }
 
     private static ChatViewModel CreateChatViewModel(
@@ -239,6 +256,8 @@ public sealed class MainNavigationViewModelPaneTests
         AppPreferencesViewModel preferences,
         ISessionManager sessionManager)
     {
+        var chatStore = new Mock<IChatStore>();
+        chatStore.Setup(s => s.State).Returns(State.Value(new object(), () => ChatState.Empty));
         var transportFactory = new Mock<ITransportFactory>();
         var messageParser = new Mock<IMessageParser>();
         var messageValidator = new Mock<IMessageValidator>();
@@ -260,8 +279,7 @@ public sealed class MainNavigationViewModelPaneTests
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
 
         var conversationStore = new Mock<IConversationStore>();
-        var neverComplete = new TaskCompletionSource<ConversationDocument>();
-        conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).Returns(neverComplete.Task);
+        conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new ConversationDocument());
 
         var miniWindow = new Mock<IMiniWindowCoordinator>();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
@@ -271,6 +289,7 @@ public sealed class MainNavigationViewModelPaneTests
         try
         {
             return new ChatViewModel(
+                chatStore.Object,
                 chatServiceFactory,
                 configService.Object,
                 preferences,

@@ -14,6 +14,7 @@ using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Start;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SerilogLogger = Serilog.ILogger;
 using Xunit;
@@ -41,7 +42,7 @@ public sealed class StartViewModelTests
         var ui = new Mock<IUiInteractionService>();
         var shellNavigation = new Mock<IShellNavigationService>();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-        var nav = new MainNavigationViewModel(
+        using var nav = new MainNavigationViewModel(
             chatViewModel,
             sessionManager.Object,
             preferences,
@@ -89,7 +90,7 @@ public sealed class StartViewModelTests
         var ui = new Mock<IUiInteractionService>();
         var shellNavigation = new Mock<IShellNavigationService>();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-        var nav = new MainNavigationViewModel(
+        using var nav = new MainNavigationViewModel(
             chatViewModel,
             sessionManager.Object,
             preferences,
@@ -120,6 +121,8 @@ public sealed class StartViewModelTests
         AppPreferencesViewModel preferences,
         ISessionManager sessionManager)
     {
+        var chatStore = new Mock<IChatStore>();
+        chatStore.Setup(s => s.State).Returns(State.Value(new object(), () => ChatState.Empty));
         var transportFactory = new Mock<ITransportFactory>();
         var messageParser = new Mock<IMessageParser>();
         var messageValidator = new Mock<IMessageValidator>();
@@ -152,6 +155,7 @@ public sealed class StartViewModelTests
         try
         {
             return new ChatViewModel(
+                chatStore.Object,
                 chatServiceFactory,
                 configService.Object,
                 preferences,

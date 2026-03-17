@@ -1,5 +1,8 @@
 using System;
+using Uno.Extensions.Reactive;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
@@ -49,9 +52,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _conversationSaveCts;
     private CancellationTokenSource? _sendPromptCts;
     private CancellationTokenSource? _transientNotificationCts;
+    private CancellationTokenSource? _storeStateCts;
+    private IDisposable? _storeStateSubscription;
     private string? _currentRemoteSessionId;
-    private ChatMessageViewModel? _activeAgentTextStreamMessage;
-    private ChatMessageViewModel? _activeThinkingMessage;
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
     private bool _suppressMiniWindowSessionSync;
 
@@ -233,7 +236,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     public string? CurrentConnectionStatus { get; private set; }
 
+    private readonly IChatStore _chatStore;
+
     public ChatViewModel(
+        IChatStore chatStore,
         ChatServiceFactory chatServiceFactory,
         IConfigurationService configurationService,
         AppPreferencesViewModel preferences,
@@ -245,6 +251,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SynchronizationContext? syncContext = null)
         : base(logger)
     {
+        _chatStore = chatStore ?? throw new ArgumentNullException(nameof(chatStore));
         _chatServiceFactory = chatServiceFactory ?? throw new ArgumentNullException(nameof(chatServiceFactory));
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
@@ -253,6 +260,41 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _conversationStore = conversationStore ?? throw new ArgumentNullException(nameof(conversationStore));
         _miniWindowCoordinator = miniWindowCoordinator ?? throw new ArgumentNullException(nameof(miniWindowCoordinator));
         _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+
+        // Subscribe to Store state and sync properties as projections (SSOT -> UI projection).
+        _storeStateCts = new CancellationTokenSource();
+        var token = _storeStateCts.Token;
+
+        _chatStore.State.ForEach(async (state, ct) =>
+        {
+            if (state is null || token.IsCancellationRequested || ct.IsCancellationRequested || _disposed)
+            {
+                return;
+            }
+
+            try
+            {
+                await PostToUiAsync(() =>
+                {
+                    if (token.IsCancellationRequested || _disposed) return;
+
+                    IsPromptInFlight = state.IsPromptInFlight;
+                    IsThinking = state.IsThinking;
+                    IsConnected = state.ConnectionStatus == "Connected";
+                    CurrentConnectionStatus = state.ConnectionStatus;
+                    ConnectionErrorMessage = state.ConnectionError;
+                    SyncMessageHistory(state.Messages, state.IsThinking);
+                }).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
+            {
+                // Normal shutdown
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Chat store projection failed");
+            }
+        }, out _storeStateSubscription);
 
         // 创建默认 ChatService 实例
         // 延迟创建 ChatService，等待用户配置
@@ -333,6 +375,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     partial void OnSelectedAcpProfileChanged(ServerConfiguration? value)
     {
+        _ = _chatStore.Dispatch(new SelectProfileAction(value?.Id));
+
         if (_suppressAcpProfileConnect || value == null)
         {
             return;
@@ -351,6 +395,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     partial void OnCurrentSessionIdChanged(string? value)
     {
+        _ = _chatStore.Dispatch(new SelectConversationAction(value));
+
         // Keep the header name stable and decouple it from ACP sessionId.
         CurrentSessionDisplayName = ResolveSessionDisplayName(value);
 
@@ -423,7 +469,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private void RestoreConversation(ConversationBinding binding)
     {
         // Restore transcript (do not pull from the remote session; conversations are local).
-        _activeAgentTextStreamMessage = null;
         MessageHistory.Clear();
         foreach (var msg in binding.Transcript)
         {
@@ -633,6 +678,76 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             _suppressMiniWindowSessionSync = false;
         }
+    }
+
+    private void SyncMessageHistory(IImmutableList<ChatMessage>? messages, bool isThinking)
+    {
+        if (messages == null)
+        {
+            MessageHistory.Clear();
+            return;
+        }
+
+        // Simple sync: reconcile ViewModel collection with Store state
+        for (int i = 0; i < messages.Count; i++)
+        {
+            var message = messages[i];
+            if (i < MessageHistory.Count)
+            {
+                if (MessageHistory[i].Id != message.Id)
+                {
+                    // Re-sync from this point onwards if IDs drift
+                    while (MessageHistory.Count > i) MessageHistory.RemoveAt(i);
+                    MessageHistory.Add(MapToViewModel(message));
+                }
+                else
+                {
+                    // Same ID, update content if changed (e.g. streaming deltas)
+                    var vm = MessageHistory[i];
+                    var newContent = message.Parts?.OfType<TextPart>().LastOrDefault()?.Text ?? string.Empty;
+                    if (vm.TextContent != newContent)
+                    {
+                        vm.TextContent = newContent;
+                    }
+                }
+            }
+            else
+            {
+                MessageHistory.Add(MapToViewModel(message));
+            }
+        }
+
+        var expectedCount = messages.Count + (isThinking ? 1 : 0);
+        while (MessageHistory.Count > expectedCount)
+        {
+            MessageHistory.RemoveAt(MessageHistory.Count - 1);
+        }
+
+        if (isThinking)
+        {
+            if (MessageHistory.Count < expectedCount)
+            {
+                MessageHistory.Add(ChatMessageViewModel.CreateThinkingPlaceholder(Guid.NewGuid().ToString()));
+            }
+            else if (!MessageHistory[^1].IsThinkingPlaceholder)
+            {
+                MessageHistory.RemoveAt(MessageHistory.Count - 1);
+                MessageHistory.Add(ChatMessageViewModel.CreateThinkingPlaceholder(Guid.NewGuid().ToString()));
+            }
+        }
+    }
+
+    private ChatMessageViewModel MapToViewModel(ChatMessage message)
+    {
+        var content = message.Parts?.OfType<TextPart>().LastOrDefault()?.Text ?? string.Empty;
+        return new ChatMessageViewModel
+        {
+            Id = message.Id,
+            Timestamp = message.Timestamp.DateTime,
+            IsOutgoing = message.IsOutgoing,
+            ContentType = "text",
+            TextContent = content
+        };
     }
 
     private static ConversationMessageSnapshot ToSnapshot(ChatMessageViewModel vm)
@@ -1168,7 +1283,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                UpdateAgentInfo();
                Logger.LogInformation("ACP 协议初始化完成，Agent: {Name} v{Version}", AgentName, AgentVersion);
 
-               IsConnected = _chatService.IsConnected && _chatService.IsInitialized;
+               var isConnected = _chatService.IsConnected && _chatService.IsInitialized;
+               _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(isConnected));
                CacheAuthMethods(initResponse);
                ClearAuthenticationRequirement();
 
@@ -1253,9 +1369,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
             catch (Exception ex)
             {
-                ConnectionErrorMessage = $"连接失败：{ex.Message}";
+                _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(false, $"连接失败：{ex.Message}"));
                 Logger.LogError(ex, "连接时出错");
-                IsConnected = false;
                 _currentRemoteSessionId = null;
                 // Keep the local conversation visible; only clear the remote binding so we don't send to stale ids.
                 ClearRemoteSessionBindingForCurrentConversation();
@@ -1393,59 +1508,44 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
                 if (e.Update is AgentMessageUpdate messageUpdate && messageUpdate.Content != null)
                 {
-                    IsThinking = false;
-                    ClearThinkingPlaceholder();
+                    _ = _chatStore.Dispatch(new SetIsThinkingAction(false));
                     HandleAgentContentChunk(messageUpdate.Content);
                 }
                 else if (e.Update is AgentThoughtUpdate)
                 {
                     // Agents may stream thought chunks. Surface a placeholder that will be replaced by the next reply.
-                    IsThinking = true;
-                    EnsureThinkingPlaceholder();
+                    _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
                 }
                 else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
                 {
-                    _activeAgentTextStreamMessage = null;
                     AddMessageToHistory(userMessageUpdate.Content, isOutgoing: true);
                 }
                 else if (e.Update is ToolCallUpdate toolCallUpdate)
                 {
-                    IsThinking = true;
-                    _activeAgentTextStreamMessage = null;
-                    
+                    _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
+
                     var message = CreateToolCallMessage(toolCallUpdate);
-                    if (_activeThinkingMessage != null)
-                    {
-                        ReplaceThinkingPlaceholder(message);
-                    }
-                    else
-                    {
-                        AppendToTranscript(message);
-                    }
+                    AppendToTranscript(message);
                 }
                 else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
                 {
-                    IsThinking = true;
+                    _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
                     UpdateToolCallStatus(toolCallStatusUpdate);
                 }
                 else if (e.Update is PlanUpdate planUpdate)
                 {
-                    _activeAgentTextStreamMessage = null;
                     UpdatePlan(planUpdate);
                 }
                 else if (e.Update is CurrentModeUpdate modeChange)
                 {
-                    _activeAgentTextStreamMessage = null;
                     OnModeChanged(modeChange);
                 }
                 else if (e.Update is ConfigUpdateUpdate configUpdate)
                 {
-                    _activeAgentTextStreamMessage = null;
                     UpdateConfigOptions(configUpdate);
                 }
                 else if (e.Update is AvailableCommandsUpdate commandsUpdate)
                 {
-                    _activeAgentTextStreamMessage = null;
                     UpdateSlashCommands(commandsUpdate);
                 }
                 else if (e.Update != null)
@@ -1471,31 +1571,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        _activeAgentTextStreamMessage = null;
         AddMessageToHistory(content, isOutgoing: false);
     }
 
     private void AppendAgentTextChunk(string chunk)
     {
-        if (string.IsNullOrEmpty(chunk))
+        if (string.IsNullOrWhiteSpace(chunk))
         {
             return;
         }
 
-        if (_activeAgentTextStreamMessage == null ||
-            _activeAgentTextStreamMessage.IsOutgoing ||
-            !string.Equals(_activeAgentTextStreamMessage.ContentType, "text", StringComparison.Ordinal))
-        {
-            var id = Guid.NewGuid().ToString();
-            _activeAgentTextStreamMessage = ChatMessageViewModel.CreateFromTextContent(
-                id,
-                new TextContentBlock { Text = chunk },
-                isOutgoing: false);
-            AppendToTranscript(_activeAgentTextStreamMessage);
-            return;
-        }
-
-        _activeAgentTextStreamMessage.TextContent += chunk;
+        _ = _chatStore.Dispatch(new AppendTextDeltaAction(chunk));
 
         var binding = TryGetConversationBinding(CurrentSessionId);
         if (binding != null)
@@ -1938,40 +2024,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void EnsureThinkingPlaceholder()
-    {
-        if (_activeThinkingMessage != null)
-        {
-            return;
-        }
 
-        var placeholder = ChatMessageViewModel.CreateThinkingPlaceholder(Guid.NewGuid().ToString());
-        _activeThinkingMessage = placeholder;
-        AppendToTranscript(placeholder);
-    }
-
-    private void ClearThinkingPlaceholder()
-    {
-        if (_activeThinkingMessage == null)
-        {
-            return;
-        }
-
-        RemoveMessageFromTranscript(_activeThinkingMessage);
-        _activeThinkingMessage = null;
-    }
-
-    private void ReplaceThinkingPlaceholder(ChatMessageViewModel replacement)
-    {
-        if (_activeThinkingMessage == null)
-        {
-            AppendToTranscript(replacement);
-            return;
-        }
-
-        ReplaceMessageInTranscript(_activeThinkingMessage, replacement);
-        _activeThinkingMessage = null;
-    }
 
     private void RemoveMessageFromTranscript(ChatMessageViewModel message)
     {
@@ -2038,7 +2091,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         var rawInput = toolCall.RawInput?.GetRawText();
         var rawOutput = toolCall.RawOutput?.GetRawText();
-        
+
         return ChatMessageViewModel.CreateFromToolCall(
             Guid.NewGuid().ToString(),
             toolCall.ToolCallId,
@@ -2053,38 +2106,35 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private void AddMessageToHistory(ContentBlock content, bool isOutgoing)
     {
         var id = Guid.NewGuid().ToString();
-        ChatMessageViewModel message;
+        var parts = ImmutableList<ChatContentPart>.Empty;
 
-        switch (content)
+        if (content is TextContentBlock text)
         {
-            case TextContentBlock text:
-                message = ChatMessageViewModel.CreateFromTextContent(id, content, isOutgoing);
-                break;
-            case ImageContentBlock image:
-                message = ChatMessageViewModel.CreateFromImageContent(id, content, isOutgoing);
-                break;
-            case AudioContentBlock audio:
-                message = ChatMessageViewModel.CreateFromAudioContent(id, content, isOutgoing);
-                break;
-            case ResourceContentBlock resourceContent:
-                message = ChatMessageViewModel.CreateFromResourceContent(id, resourceContent, isOutgoing);
-                break;
-            case ResourceLinkContentBlock resourceLink:
-                message = ChatMessageViewModel.CreateFromResourceLink(id, resourceLink, isOutgoing);
-                break;
-            default:
-                message = ChatMessageViewModel.CreateFromTextContent(id, content, isOutgoing);
-                break;
+            parts = parts.Add(new TextPart(text.Text ?? string.Empty));
+        }
+        else
+        {
+            // For non-text blocks, fallback to a placeholder text for now in the Store
+            // Future steps will add specialized ChatContentPart types
+            parts = parts.Add(new TextPart($"[{content.GetType().Name}]"));
         }
 
-        AppendToTranscript(message);
+        var message = new ChatMessage(id, DateTimeOffset.Now, isOutgoing, Parts: parts);
+        _ = _chatStore.Dispatch(new AddMessageAction(message));
+
+        var binding = TryGetConversationBinding(CurrentSessionId);
+        if (binding != null)
+        {
+            binding.LastUpdatedAt = DateTime.UtcNow;
+            ScheduleConversationSave();
+        }
     }
 
     private void AddToolCallToHistory(ToolCallUpdate toolCall)
     {
         var rawInput = toolCall.RawInput?.GetRawText();
         var rawOutput = toolCall.RawOutput?.GetRawText();
-        
+
         var message = ChatMessageViewModel.CreateFromToolCall(
             Guid.NewGuid().ToString(),
             toolCall.ToolCallId,
@@ -2415,9 +2465,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         try
         {
-            ClearError();
-            IsPromptInFlight = true;
-            IsThinking = false;
+            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, null));
+            await _chatStore.Dispatch(new SetPromptInFlightAction(true));
+            await _chatStore.Dispatch(new SetIsThinkingAction(false));
 
             // Clear input immediately for better UX (agents may stream without returning a response for a while).
             // We'll restore it on failure so the user can retry.
@@ -2426,7 +2476,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             // 添加用户消息到历史
             var userContent = new TextContentBlock { Text = promptText };
             AddMessageToHistory(userContent, isOutgoing: true);
-            _activeAgentTextStreamMessage = null;
 
             if (_chatService != null)
             {
@@ -2473,7 +2522,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         catch (TimeoutException ex)
         {
             Logger.LogError(ex, "SendPrompt timed out");
-            SetError("发送超时：Agent 长时间无响应。");
+            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, "发送超时：Agent 长时间无响应。"));
 
             if (string.IsNullOrWhiteSpace(CurrentPrompt))
             {
@@ -2485,7 +2534,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Logger.LogError(ex, "SendPrompt failed");
-            SetError($"发送失败：{ex.Message}");
+            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, $"发送失败：{ex.Message}"));
 
             // Restore text so the user can retry quickly.
             if (string.IsNullOrWhiteSpace(CurrentPrompt))
@@ -2499,8 +2548,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             try { _sendPromptCts?.Dispose(); } catch { }
             _sendPromptCts = null;
-            IsPromptInFlight = false;
-            IsThinking = false;
+            await _chatStore.Dispatch(new SetPromptInFlightAction(false));
+            await _chatStore.Dispatch(new SetIsThinkingAction(false));
         }
     }
 
@@ -2856,11 +2905,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsInputEnabled));
         OnPropertyChanged(nameof(CanSendPromptUi));
 
-        if (!value)
-        {
-            // End-of-turn: stop coalescing into the current assistant bubble.
-            _activeAgentTextStreamMessage = null;
-        }
+
     }
 
     partial void OnIsConnectedChanged(bool value)
@@ -2907,11 +2952,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                    _conversationSaveCts?.Cancel();
                    _sendPromptCts?.Cancel();
                    _transientNotificationCts?.Cancel();
-                   try
-                   {
-                       // Best-effort flush so the latest transcript survives restarts without blocking UI thread.
-                       _ = Task.Run(async () =>
-                       {
+                   _storeStateCts?.Cancel();
+
+                    try { _storeStateSubscription?.Dispose(); } catch { }
+                    _storeStateSubscription = null;
+
+                    try
+                    {
+                        // Best-effort flush so the latest transcript survives restarts without blocking UI thread.
+                        _ = Task.Run(async () =>
+                        {
                            try { await SaveConversationsAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
                        });
                    }
@@ -2919,10 +2969,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                    {
                    }
 
-                   try { _conversationSaveCts?.Dispose(); } catch { }
-                   try { _sendPromptCts?.Dispose(); } catch { }
-                   try { _transientNotificationCts?.Dispose(); } catch { }
-               }
+                    try { _conversationSaveCts?.Dispose(); } catch { }
+                    try { _sendPromptCts?.Dispose(); } catch { }
+                    try { _transientNotificationCts?.Dispose(); } catch { }
+                    try { _storeStateCts?.Dispose(); } catch { }
+
+                    _conversationSaveCts = null;
+                    _sendPromptCts = null;
+                    _transientNotificationCts = null;
+                    _storeStateCts = null;
+                }
 
                _disposed = true;
            }

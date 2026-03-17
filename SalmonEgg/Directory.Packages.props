@@ -19,5 +19,8 @@
     <PackageVersion Include="Serilog.Extensions.Logging" Version="9.0.0" />
     <PackageVersion Include="System.Security.Permissions" Version="6.0.0" />
     <PackageVersion Include="Uno.WinUI.Lottie" Version="6.5.153" />
+    <PackageVersion Include="Uno.Extensions.Reactive" Version="7.1.1" />
+    <PackageVersion Include="Uno.Extensions.Reactive.WinUI" Version="7.1.1" />
+    <PackageVersion Include="Uno.Extensions.Reactive.Messaging" Version="7.1.1" />
   </ItemGroup>
 </Project>
