@@ -612,6 +612,8 @@
                 </Grid>
 
                 <controls:ResizeGrip x:Name="RightPanelResizer" 
+                                     Grid.Row="0"
+                                     Grid.RowSpan="2"
                                      HorizontalAlignment="Left" 
                                      VerticalAlignment="Stretch" 
                                      Width="6" 

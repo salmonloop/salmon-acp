@@ -49,7 +49,6 @@ public sealed partial class MainPage : Page
     private double _leftNavResizeStartX;
     private double _leftNavResizeStartWidth;
 
-    private double _rightPanelLastWidth = 320;
     private Storyboard? _rightPanelStoryboard;
     private Storyboard? _navPaneStoryboard;
     private bool _navPaneAnimating;
@@ -271,6 +270,30 @@ public sealed partial class MainPage : Page
         if (e.PropertyName == nameof(NavVM.RightPanelMode))
         {
             UpdateRightPanelState();
+        }
+
+        if (e.PropertyName == nameof(NavVM.RightPanelWidth))
+        {
+            SyncRightPanelWidthFromViewModel();
+        }
+    }
+
+    private void SyncRightPanelWidthFromViewModel()
+    {
+        if (_isResizingRightPanel || RightPanelColumn is null)
+        {
+            return;
+        }
+
+        if (RightPanelColumn.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        var target = Math.Clamp(NavVM.RightPanelWidth, RightPanelMinWidth, RightPanelMaxWidth);
+        if (!double.Equals(RightPanelColumn.Width, target))
+        {
+            RightPanelColumn.Width = target;
         }
     }
 
@@ -697,7 +720,8 @@ public sealed partial class MainPage : Page
             RightPanelColumnDefinition.Width = GridLength.Auto;
         }
 
-        var targetWidth = Math.Clamp(_rightPanelLastWidth, RightPanelMinWidth, RightPanelMaxWidth);
+        var targetWidth = Math.Clamp(NavVM.RightPanelWidth, RightPanelMinWidth, RightPanelMaxWidth);
+        NavVM.RightPanelWidth = targetWidth;
         
         if (UiMotion.Current.IsAnimationEnabled)
         {
@@ -733,9 +757,9 @@ public sealed partial class MainPage : Page
         {
             var fromWidth = RightPanelColumn.Width;
             if (double.IsNaN(fromWidth) || fromWidth <= 0) fromWidth = RightPanelColumn.ActualWidth;
-            if (fromWidth <= 0) fromWidth = _rightPanelLastWidth;
+            if (fromWidth <= 0) fromWidth = NavVM.RightPanelWidth;
 
-            _rightPanelLastWidth = Math.Clamp(fromWidth, RightPanelMinWidth, RightPanelMaxWidth);
+            NavVM.RightPanelWidth = Math.Clamp(fromWidth, RightPanelMinWidth, RightPanelMaxWidth);
             AnimateRightPanel(open: false, fromWidth: fromWidth, toWidth: 0);
         }
         else
@@ -832,7 +856,7 @@ public sealed partial class MainPage : Page
         }
 
         RightPanelColumn.Width = newWidth;
-        _rightPanelLastWidth = newWidth;
+        NavVM.RightPanelWidth = newWidth;
         e.Handled = true;
     }
 

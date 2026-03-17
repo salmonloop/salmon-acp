@@ -6,6 +6,7 @@ namespace SalmonEgg.Presentation.Services;
 public sealed class RightPanelService : IRightPanelService
 {
     private RightPanelMode _currentMode = RightPanelMode.None;
+    private double _panelWidth = 320;
 
     public RightPanelMode CurrentMode
     {
@@ -21,4 +22,19 @@ public sealed class RightPanelService : IRightPanelService
     }
 
     public event EventHandler? ModeChanged;
+
+    public double PanelWidth
+    {
+        get => _panelWidth;
+        set
+        {
+            if (!double.Equals(_panelWidth, value))
+            {
+                _panelWidth = value;
+                WidthChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public event EventHandler? WidthChanged;
 }

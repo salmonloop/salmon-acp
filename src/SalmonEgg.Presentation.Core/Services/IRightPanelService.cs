@@ -11,4 +11,7 @@ public interface IRightPanelService
 {
     RightPanelMode CurrentMode { get; set; }
     event EventHandler? ModeChanged;
+
+    double PanelWidth { get; set; }
+    event EventHandler? WidthChanged;
 }

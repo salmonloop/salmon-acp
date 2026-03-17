@@ -114,6 +114,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         set => _rightPanelService.CurrentMode = value;
     }
 
+    public double RightPanelWidth
+    {
+        get => _rightPanelService.PanelWidth;
+        set => _rightPanelService.PanelWidth = value;
+    }
+
     private void OnServicePaneStateChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsPaneOpen));
@@ -123,6 +129,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private void OnRightPanelServiceModeChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(RightPanelMode));
+    }
+
+    private void OnRightPanelServiceWidthChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(RightPanelWidth));
     }
 
     public NavigationPaneDisplayMode PaneDisplayMode
@@ -247,6 +258,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         _navigationState.PaneStateChanged += OnServicePaneStateChanged;
         _rightPanelService.ModeChanged += OnRightPanelServiceModeChanged;
+        _rightPanelService.WidthChanged += OnRightPanelServiceWidthChanged;
     }
 
     public void SetPaneOpen(bool isOpen)
@@ -295,6 +307,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         _navigationState.PaneStateChanged -= OnServicePaneStateChanged;
         _rightPanelService.ModeChanged -= OnRightPanelServiceModeChanged;
+        _rightPanelService.WidthChanged -= OnRightPanelServiceWidthChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         _preferences.Projects.CollectionChanged -= _projectsChangedHandler;
         _relativeTimeTimer.Dispose();
