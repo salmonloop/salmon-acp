@@ -803,7 +803,7 @@ public sealed partial class MainPage : Page
         }
 
         var isOpen = isOpenOverride ?? LayoutVM.IsNavPaneOpen;
-        ToolTipService.SetToolTip(TitleBarToggleLeftNavButton, isOpen ? "折叠左侧边栏" : "展开左侧边栏");
+        ToolTipService.SetToolTip(TitleBarToggleLeftNavButton, isOpen ? "Collapse Sidebar" : "Expand Sidebar");
     }
 
     private void UpdateBackButtonState()

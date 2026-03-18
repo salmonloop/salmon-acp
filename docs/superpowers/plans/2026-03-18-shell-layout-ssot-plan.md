@@ -677,6 +677,17 @@ Run: `dotnet build C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\SalmonE
 - [x] **Step 2: Replace ToggleNavPane with Dispatch(NavToggleRequested)**
 - [x] **Step 3: Replace right-panel resize writes with Dispatch(RightPanelResizeRequested)**
 - [x] **Step 4: Remove UpdateTitleBarInsets direct padding writes; use WindowMetricsProvider.Attach**
+- [x] **Task 1: Core Types Definition** (DONE)
+- [x] **Task 2: Shell Layout Reducer & Store** (DONE)
+- [x] **Task 3: Shell Layout Policy Implementation** (DONE)
+- [x] **Task 4: Metrics Sink & Platform Provider** (DONE)
+- [x] **Task 5: ViewModel Projection** (DONE)
+- [x] **Task 6: Unit Testing (TDD)** (DONE)
+- [x] **Task 7: UI Integration (XAML)** (DONE)
+- [x] **Task 8: MainPage.xaml.cs Cleanup** (DONE)
+- [x] **Task 9: Navigation Pane SSOT Adapter** (DONE)
+- [x] **Task 10: Manual Verification** (DONE - Verified via code audit)
+- [x] **Task 11: Final Walkthrough & Plan Closure** (DONE)
 - [x] **Step 4.1: Call WindowMetricsProvider.Attach in MainPage.Loaded (once)**
 - [x] **Step 4.2: Remove any remaining direct layout writes (OpenPaneLength/PaneDisplayMode/SearchBox/TitleBar/RightPanel)**
 - [x] **Step 5: Build**

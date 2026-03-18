@@ -82,9 +82,9 @@
                                 Background="{ThemeResource SubtleFillColorTransparentBrush}"
                                 BorderBrush="{ThemeResource SubtleFillColorTransparentBrush}"
                                 BorderThickness="0"
-                                ToolTipService.ToolTip="添加项目"
+                                ToolTipService.ToolTip="Add Project"
                                 Command="{x:Bind AddProjectCommand}"
-                                AutomationProperties.Name="添加项目">
+                                AutomationProperties.Name="Add Project">
                             <FontIcon Glyph="&#xE710;"
                                       FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                       FontSize="14" />
@@ -284,22 +284,22 @@
                                 VerticalAlignment="Center">
                         <Button x:Name="TitleBarBackButton"
                                 Style="{StaticResource TitleBarCommandButtonStyle}"
-                                ToolTipService.ToolTip="返回"
-                                AutomationProperties.Name="返回"
+                                ToolTipService.ToolTip="Back"
+                                AutomationProperties.Name="Back"
                                 Click="OnTitleBarBackClick">
                             <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE72B;"/>
                         </Button>
                         <Button x:Name="TitleBarToggleLeftNavButton"
                                 Style="{StaticResource TitleBarCommandButtonStyle}"
-                                ToolTipService.ToolTip="折叠左侧边栏"
-                                AutomationProperties.Name="切换侧边栏"
+                                ToolTipService.ToolTip="Collapse Sidebar"
+                                AutomationProperties.Name="Toggle Sidebar"
                                 Click="OnToggleLeftNavClick">
                             <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE700;"/>
                         </Button>
                         <Button x:Name="TitleBarMiniWindowButton"
                                 Style="{StaticResource TitleBarCommandButtonStyle}"
-                                ToolTipService.ToolTip="小窗模式"
-                                AutomationProperties.Name="小窗模式"
+                                ToolTipService.ToolTip="Mini Window"
+                                AutomationProperties.Name="Mini Window"
                                 Visibility="{x:Bind Preferences.IsMiniWindowSupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                 Command="{x:Bind ChatVM.OpenMiniWindowCommand}">
                             <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xEE49;" FontSize="14" />
@@ -459,7 +459,7 @@
                                       Tag="Diff"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       ToolTipService.ToolTip="Diff"
-                                      AutomationProperties.Name="Diff 面板"
+                                      AutomationProperties.Name="Diff Panel"
                                       Click="OnRightPanelButtonClick"
                                       IsChecked="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Diff}">
                             <SymbolIcon Symbol="Preview" />
@@ -468,7 +468,7 @@
                                       Tag="Todo"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       ToolTipService.ToolTip="Todo"
-                                      AutomationProperties.Name="Todo 面板"
+                                      AutomationProperties.Name="Todo Panel"
                                       Click="OnRightPanelButtonClick"
                                       IsChecked="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Todo}">
                             <SymbolIcon Symbol="Bullets" />
