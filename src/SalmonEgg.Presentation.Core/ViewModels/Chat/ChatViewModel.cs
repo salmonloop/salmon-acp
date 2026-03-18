@@ -3052,53 +3052,57 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
        protected virtual void Dispose(bool disposing)
        {
-           if (!_disposed)
+           if (_disposed)
            {
-               if (disposing && _chatService != null)
-               {
-                   UnsubscribeFromChatService(_chatService);
-               }
-
-               if (disposing)
-               {
-                   PlanEntries.CollectionChanged -= OnCurrentPlanCollectionChanged;
-                   _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
-                   _acpProfiles.Profiles.CollectionChanged -= OnAcpProfilesCollectionChanged;
-                   _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
-
-                   _conversationSaveCts?.Cancel();
-                   _sendPromptCts?.Cancel();
-                   _transientNotificationCts?.Cancel();
-                   _storeStateCts?.Cancel();
-
-                    try { _storeStateSubscription?.Dispose(); } catch { }
-                    _storeStateSubscription = null;
-
-                    try
-                    {
-                        // Best-effort flush so the latest transcript survives restarts without blocking UI thread.
-                        _ = Task.Run(async () =>
-                        {
-                           try { await SaveConversationsAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
-                       });
-                   }
-                   catch
-                   {
-                   }
-
-                    try { _conversationSaveCts?.Dispose(); } catch { }
-                    try { _sendPromptCts?.Dispose(); } catch { }
-                    try { _transientNotificationCts?.Dispose(); } catch { }
-                    try { _storeStateCts?.Dispose(); } catch { }
-
-                    _conversationSaveCts = null;
-                    _sendPromptCts = null;
-                    _transientNotificationCts = null;
-                    _storeStateCts = null;
-                }
-
-               _disposed = true;
+               return;
            }
+
+           _disposed = true;
+
+           if (!disposing)
+           {
+               return;
+           }
+
+           if (_chatService != null)
+           {
+               UnsubscribeFromChatService(_chatService);
+           }
+
+           PlanEntries.CollectionChanged -= OnCurrentPlanCollectionChanged;
+           _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
+           _acpProfiles.Profiles.CollectionChanged -= OnAcpProfilesCollectionChanged;
+           _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
+
+           _conversationSaveCts?.Cancel();
+           _sendPromptCts?.Cancel();
+           _transientNotificationCts?.Cancel();
+           _storeStateCts?.Cancel();
+
+            try { _storeStateSubscription?.Dispose(); } catch { }
+            _storeStateSubscription = null;
+
+            try
+            {
+                // Best-effort flush so the latest transcript survives restarts without blocking UI thread.
+                _ = Task.Run(async () =>
+                {
+                   try { await SaveConversationsAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+               });
+           }
+           catch
+           {
+           }
+
+            try { _conversationSaveCts?.Dispose(); } catch { }
+            try { _sendPromptCts?.Dispose(); } catch { }
+            try { _transientNotificationCts?.Dispose(); } catch { }
+            try { _storeStateCts?.Dispose(); } catch { }
+
+            _conversationSaveCts = null;
+            _sendPromptCts = null;
+            _transientNotificationCts = null;
+            _storeStateCts = null;
        }
 }
 

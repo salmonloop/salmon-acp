@@ -8,7 +8,11 @@ public static class ShellLayoutPolicy
     {
         var w = state.WindowMetrics.EffectiveWidth > 0 ? state.WindowMetrics.EffectiveWidth : state.WindowMetrics.Width;
         var mode = w >= 1000 ? NavigationPaneDisplayMode.Expanded : w >= 640 ? NavigationPaneDisplayMode.Compact : NavigationPaneDisplayMode.Minimal;
-        var isOpen = mode == NavigationPaneDisplayMode.Expanded && state.UserNavOpenIntent != false;
+        var isOpen = mode switch
+        {
+            NavigationPaneDisplayMode.Expanded => state.UserNavOpenIntent != false,
+            _ => state.UserNavOpenIntent == true
+        };
 
         var searchVisible = mode != NavigationPaneDisplayMode.Minimal;
         var minSearch = mode == NavigationPaneDisplayMode.Expanded ? 220 : 180;

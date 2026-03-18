@@ -229,6 +229,79 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task Dispose_DropsAlreadyQueuedStoreProjection()
+    {
+        var initialState = ChatState.Empty with { IsThinking = false };
+        await using var state = State.Value(this, () => initialState);
+        var chatStore = new Mock<IChatStore>();
+        chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
+            .Returns<ChatAction>(action => state.Update(s => ChatReducer.Reduce(s!, action), CancellationToken.None));
+
+        var syncContext = new QueueingSynchronizationContext();
+        var transportFactory = new Mock<ITransportFactory>();
+        var messageParser = new Mock<IMessageParser>();
+        var messageValidator = new Mock<IMessageValidator>();
+        var errorLogger = new Mock<IErrorLogger>();
+        var capabilityManager = new Mock<ICapabilityManager>();
+        var sessionManager = new Mock<ISessionManager>();
+        var serilog = new Mock<Serilog.ILogger>();
+
+        var chatServiceFactory = new ChatServiceFactory(
+            transportFactory.Object,
+            messageParser.Object,
+            messageValidator.Object,
+            errorLogger.Object,
+            capabilityManager.Object,
+            sessionManager.Object,
+            serilog.Object);
+
+        var configService = new Mock<IConfigurationService>();
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
+        var startupService = new Mock<IAppStartupService>();
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+
+        var preferences = new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            prefsLogger.Object);
+
+        var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
+        var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
+        var conversationStore = new Mock<IConversationStore>();
+        var miniWindow = new Mock<IMiniWindowCoordinator>();
+        var vmLogger = new Mock<ILogger<ChatViewModel>>();
+
+        using var viewModel = new ChatViewModel(
+            chatStore.Object,
+            chatServiceFactory,
+            configService.Object,
+            preferences,
+            profiles,
+            sessionManager.Object,
+            conversationStore.Object,
+            miniWindow.Object,
+            vmLogger.Object,
+            syncContext);
+
+        syncContext.RunAll();
+        Assert.False(viewModel.IsThinking);
+
+        await state.Update(_ => initialState with { IsThinking = true }, CancellationToken.None);
+        viewModel.Dispose();
+
+        syncContext.RunAll();
+        Assert.False(viewModel.IsThinking);
+    }
+
+    [Fact]
     public async Task CurrentPrompt_UpdatesDraftTextInStore()
     {
         using var fixture = CreateViewModel();

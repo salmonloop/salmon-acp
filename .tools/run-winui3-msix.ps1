@@ -392,12 +392,8 @@ Write-Host "Publishing MSIX ($Configuration, $tfm)..."
 New-Item -ItemType Directory -Force -Path $msixOutDir | Out-Null
 
 $msbuild = Get-MSBuildPath
-Write-Host "Restoring with MSBuild..."
-& $msbuild (Join-Path $repoRoot 'SalmonEgg.sln') /t:Restore /p:EnableWinUIBuild=true /v:m | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    throw "MSBuild restore failed with exit code $LASTEXITCODE"
-}
-& $msbuild $project /t:Publish /p:Configuration=$Configuration /p:TargetFramework=$tfm /p:PublishProfile=$publishProfile /p:EnableWinUIBuild=true /v:m | Out-Host
+Write-Host "Restoring and publishing with MSBuild..."
+& $msbuild $project /restore /t:Publish /p:Configuration=$Configuration /p:TargetFramework=$tfm /p:PublishProfile=$publishProfile /p:EnableWinUIBuild=true /v:m | Out-Host
 if ($LASTEXITCODE -ne 0) {
     throw "MSBuild publish failed with exit code $LASTEXITCODE"
 }

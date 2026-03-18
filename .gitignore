@@ -33,6 +33,7 @@ bld/
 [Ll]og/
 [Ll]ogs/
 publish/
+.obj/
 
 # Visual Studio cache/options directory
 .vs/

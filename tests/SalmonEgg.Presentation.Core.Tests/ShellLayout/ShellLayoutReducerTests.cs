@@ -46,4 +46,14 @@ public class ShellLayoutReducerTests
         var reduced = ShellLayoutReducer.Reduce(state, new NavToggleRequested("TitleBar"));
         Assert.False(reduced.State.UserNavOpenIntent);
     }
+
+    [Fact]
+    public void Reducer_Toggle_OpensPane_InCompactMode()
+    {
+        var state = ShellLayoutState.Default with { WindowMetrics = new WindowMetrics(800, 700, 800, 700) };
+
+        var reduced = ShellLayoutReducer.Reduce(state, new NavToggleRequested("TitleBar"));
+
+        Assert.True(reduced.Snapshot.IsNavPaneOpen);
+    }
 }

@@ -107,7 +107,7 @@
                           VerticalAlignment="Center">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
-                            <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                            <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}"
                                        TextTrimming="CharacterEllipsis"
                                        MaxLines="1" />
                         </DataTemplate>

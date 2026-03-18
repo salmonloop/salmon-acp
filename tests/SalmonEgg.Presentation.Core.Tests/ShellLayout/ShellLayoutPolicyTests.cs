@@ -56,6 +56,23 @@ public class ShellLayoutPolicyTests
         Assert.True(snapshot.IsNavPaneOpen);
     }
 
+    [Theory]
+    [InlineData(800, NavigationPaneDisplayMode.Compact)]
+    [InlineData(500, NavigationPaneDisplayMode.Minimal)]
+    public void Policy_Allows_UserToOpenPane_InOverlayModes(double width, NavigationPaneDisplayMode expectedMode)
+    {
+        var state = ShellLayoutState.Default with
+        {
+            UserNavOpenIntent = true,
+            WindowMetrics = new WindowMetrics(width, 700, width, 700)
+        };
+
+        var snapshot = ShellLayoutPolicy.Compute(state);
+
+        Assert.Equal(expectedMode, snapshot.NavPaneDisplayMode);
+        Assert.True(snapshot.IsNavPaneOpen);
+    }
+
     [Fact]
     public void Policy_SearchBox_Visibility_And_Widths_ByBreakpoint()
     {
