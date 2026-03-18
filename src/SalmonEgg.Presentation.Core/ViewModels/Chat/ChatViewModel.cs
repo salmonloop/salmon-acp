@@ -29,8 +29,9 @@ using SalmonEgg.Presentation.ViewModels.Settings;
 namespace SalmonEgg.Presentation.ViewModels.Chat;
 
 /// <summary>
-/// Chat ViewModel，管理会话、消息显示、权限请求等 UI 逻辑
-/// 这是重构后的主要 ViewModel，使用新的 ACP 协议 API
+/// Main ViewModel for the Chat interface.
+/// Orchestrates the lifecycle of conversations, ACP agent connectivity, and UI state projection.
+/// Follows the MVVM pattern where the View is driven strictly by this ViewModel and its projected state.
 /// </summary>
 public partial class ChatViewModel : ViewModelBase, IDisposable
 {
@@ -58,7 +59,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
     private bool _suppressMiniWindowSessionSync;
 
-    // Local conversation binding: ConversationId (stable for sidebar/UI) -> active remote session id (per ACP) + transcript.
+    /// <summary>
+    /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
+    /// This allows the user to switch between tabs/histories without losing the underlying agent session context,
+    /// and handles reconnections by re-binding new remote sessions to the same local ID.
+    /// </summary>
     private readonly Dictionary<string, ConversationBinding> _conversationBindings = new(StringComparer.Ordinal);
 
     private sealed class ConversationBinding
@@ -142,7 +147,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _transientNotificationMessage = string.Empty;
 
-    // 传输配置
+    // Transport and Connection configuration
     [ObservableProperty]
     private TransportConfigViewModel _transportConfig = new();
 
@@ -157,8 +162,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     public bool IsInputEnabled => !IsBusy && !IsPromptInFlight;
 
-    // WinUI/Uno sometimes won't reflect ICommand.CanExecute into IsEnabled consistently across targets,
-    // so expose a stable property for UI bindings.
+    // UI-BOUND PROPERTIES: Handlers for WinUI/Uno property change notifications.
+    // These ensure the View reflects internal state changes that might not trigger automatically.
     public bool CanSendPromptUi => CanSendPrompt();
 
     public bool HasPlanEntries => PlanEntries.Count > 0;
@@ -182,7 +187,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private ServerConfiguration? _selectedAcpProfile;
 
-    // 配置选项
+    // Agent Configuration options (as defined by the protocol)
     [ObservableProperty]
     private ObservableCollection<ConfigOptionViewModel> _configOptions = new();
 
@@ -191,7 +196,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private string? _modeConfigId;
 
-    // Slash commands
+    // Slash command completion
     [ObservableProperty]
     private ObservableCollection<SlashCommandViewModel> _availableSlashCommands = new();
 
@@ -207,6 +212,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _slashGhostSuffix = string.Empty;
 
+    // Agent Planning panel: dynamically shows the agent's current task list.
     [ObservableProperty]
     private ObservableCollection<PlanEntryViewModel> _planEntries = new();
 
@@ -261,7 +267,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _miniWindowCoordinator = miniWindowCoordinator ?? throw new ArgumentNullException(nameof(miniWindowCoordinator));
         _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 
-        // Subscribe to Store state and sync properties as projections (SSOT -> UI projection).
+        // SINGLE SOURCE OF TRUTH (SSOT): We project the central store state into UI-bound properties.
+        // This reactive pattern ensures the UI stays synchronized with the domain state regardless of which
+        // thread triggered the update (e.g. background ACP streaming vs user interaction).
         _storeStateCts = new CancellationTokenSource();
         var token = _storeStateCts.Token;
 
@@ -288,7 +296,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
             {
-                // Normal shutdown
+                // Graceful cancellation on disposal
             }
             catch (Exception ex)
             {
@@ -296,13 +304,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
         }, out _storeStateSubscription);
 
-        // 创建默认 ChatService 实例
-        // 延迟创建 ChatService，等待用户配置
-    // _chatService = _chatServiceFactory.CreateDefaultChatService();
-
-        // 订阅事件
-        SubscribeToEvents();
-        PlanEntries.CollectionChanged += OnCurrentPlanCollectionChanged;
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
 
@@ -319,8 +320,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "打开小窗失败");
-            ShowTransientNotificationToast("打开小窗失败。请尝试使用 MSIX Script Run（WinUI 3）启动，或查看日志。");
+            // Mini window failure is usually due to missing MSIX context or Skia runtime issues.
+            Logger.LogError(ex, "Failed to open mini window");
+            ShowTransientNotificationToast("Failed to open mini window. Please ensure you are running as an MSIX package.");
         }
     }
 
@@ -333,8 +335,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "返回主窗口失败");
-            ShowTransientNotificationToast("返回主窗口失败。");
+            Logger.LogError(ex, "Failed to return to main window");
+            ShowTransientNotificationToast("Failed to return to main window.");
         }
     }
 
@@ -425,7 +427,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             EditingSessionName = string.Empty;
         }
 
-        // Persist "last active" selection.
+        // Persist the active conversation state to ensure it survives application restarts.
         ScheduleConversationSave();
 
         SyncMiniWindowSelectedSession();
@@ -444,6 +446,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// Retrieves or initializes a local conversation binding.
+    /// Bindings act as a bridge between the persistent store and the live UI state.
+    /// </summary>
     private ConversationBinding GetOrCreateConversationBinding(string conversationId)
     {
         if (_conversationBindings.TryGetValue(conversationId, out var existing))
@@ -468,7 +474,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private void RestoreConversation(ConversationBinding binding)
     {
-        // Restore transcript (do not pull from the remote session; conversations are local).
+        // Locally-persisted conversations are the source of truth for UI history playback.
         MessageHistory.Clear();
         foreach (var msg in binding.Transcript)
         {
@@ -484,12 +490,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         CurrentPlanTitle = binding.PlanTitle;
     }
 
+    /// <summary>
+    /// Executes an action on the UI thread.
+    /// WinUI and Uno collections (like MessageHistory) MUST be updated on the main thread
+    /// to avoid random "The application called an interface that was marshalled for a different thread" crashes.
+    /// </summary>
     private Task PostToUiAsync(Action action)
     {
-        if (action == null)
-        {
-            throw new ArgumentNullException(nameof(action));
-        }
 
         var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _syncContext.Post(_ =>
@@ -688,7 +695,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        // Simple sync: reconcile ViewModel collection with Store state
+        // Incremental Reconciliation: We perform a targeted diff between the new state and the UI collection.
+        // This preserves existing ViewModel instances where possible, which is critical for:
+        // 1. Maintaining UI virtualization state (scroll position).
+        // 2. Ensuring smooth text animation (e.g. streaming deltas).
+        // 3. Avoiding expensive re-renders of complex message bubbles.
         for (int i = 0; i < messages.Count; i++)
         {
             var message = messages[i];
@@ -992,7 +1003,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "归档操作由于底层异常失败: {ConversationId}", conversationId);
+                Logger.LogError(ex, "Archive operation failed due to underlying exception: {ConversationId}", conversationId);
             }
         }, null);
     }
@@ -1028,7 +1039,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "删除操作由于底层异常失败: {ConversationId}", conversationId);
+                Logger.LogError(ex, "Delete operation failed due to underlying exception: {ConversationId}", conversationId);
             }
         }, null);
     }
@@ -1176,6 +1187,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             await ApplyTransportConfigCoreAsync(preserveConversation: false);
         }
 
+        /// <summary>
+        /// Core logic for applying a new transport configuration.
+        /// This method tears down the existing connection and establishes a new one,
+        /// optionally preserving the active conversation's local state.
+        /// </summary>
         private async Task ApplyTransportConfigCoreAsync(bool preserveConversation)
         {
             var (isValid, errorMessage) = TransportConfig.Validate();
@@ -1189,17 +1205,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             IsConnecting = true;
            try
            {
-               Logger.LogInformation("应用传输配置：{TransportType}", TransportConfig.SelectedTransportType);
-               Logger.LogInformation("TransportConfig 当前值 - StdioCommand: '{StdioCommand}', StdioArgs: '{StdioArgs}', RemoteUrl: '{RemoteUrl}'",
+               Logger.LogInformation("Applying transport configuration: {TransportType}", TransportConfig.SelectedTransportType);
+               Logger.LogInformation("TransportConfig current values - StdioCommand: '{StdioCommand}', StdioArgs: '{StdioArgs}', RemoteUrl: '{RemoteUrl}'",
                    TransportConfig.StdioCommand, TransportConfig.StdioArgs, TransportConfig.RemoteUrl);
 
-               // 使用 ChatServiceFactory 根据用户配置重新创建 ChatService
-               // 1. 根据传输类型创建新的 ChatService 实例
-               IChatService newChatService;
-               switch (TransportConfig.SelectedTransportType)
+                // Recreate ChatService using the factory based on user configuration.
+                // 1. Instantiate the appropriate ChatService for the transport type.
+                IChatService newChatService;
+                switch (TransportConfig.SelectedTransportType)
                {
                    case TransportType.Stdio:
-                       Logger.LogInformation("Stdio 配置 - 命令：{Command}, 参数：{Args}", TransportConfig.StdioCommand, TransportConfig.StdioArgs);
+                       Logger.LogInformation("Stdio config - Command: {Command}, Args: {Args}", TransportConfig.StdioCommand, TransportConfig.StdioArgs);
                        newChatService = _chatServiceFactory.CreateChatService(
                            TransportType.Stdio,
                            TransportConfig.StdioCommand,
@@ -1221,35 +1237,37 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                            TransportConfig.RemoteUrl);
                        break;
                    default:
-                       throw new InvalidOperationException($"不支持的传输类型：{TransportConfig.SelectedTransportType}");
+                       throw new InvalidOperationException($"Unsupported transport type: {TransportConfig.SelectedTransportType}");
                }
 
                // Best-effort: disconnect previous transport to avoid leaks (do not reset local conversation state).
-               if (_chatService != null)
-               {
-                   try
-                   {
-                       await _chatService.DisconnectAsync();
-                   }
-                   catch
-                   {
-                   }
-               }
+                if (_chatService != null)
+                {
+                    try
+                    {
+                        await _chatService.DisconnectAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Failure to disconnect the previous transport is non-fatal.
+                        Logger.LogDebug(ex, "Failed to disconnect previous transport");
+                    }
+                }
 
-               // 2. 先取消订阅旧服务的事件（如果存在）
+               // 2. Unsubscribe from events of the old service (if any).
                if (_chatService != null)
                {
                    UnsubscribeFromChatService(_chatService);
                }
 
-               // 3. 订阅新服务的事件
+               // 3. Subscribe to events of the new service.
                SubscribeToChatService(newChatService);
 
-               // 4. 替换旧的 ChatService 实例
+               // 4. Replace the old ChatService instance.
                _chatService = newChatService;
 
-               // 4. 初始化 ACP 协议 (带超时)
-               Logger.LogInformation("正在初始化 ACP 协议...");
+               // 5. Initialize ACP protocol (with timeout).
+               Logger.LogInformation("Initializing ACP protocol...");
                var initParams = new InitializeParams
                {
                    ProtocolVersion = 1,
@@ -1269,19 +1287,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                    }
                };
 
-               // 使用 Task.WhenAny 实现超时，避免 UI 卡死
+               // Use Task.WhenAny for timeout to avoid UI freeze.
                var initTask = _chatService.InitializeAsync(initParams);
                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
                var completedTask = await Task.WhenAny(initTask, timeoutTask);
 
                if (completedTask == timeoutTask)
                {
-                   throw new TimeoutException("初始化超时：Agent 未在规定时间内响应。请检查命令和参数是否正确。");
+                   throw new TimeoutException("Initialization timeout: Agent did not respond within the allocated time. Please verify command and arguments.");
                }
 
                var initResponse = await initTask;
                UpdateAgentInfo();
-               Logger.LogInformation("ACP 协议初始化完成，Agent: {Name} v{Version}", AgentName, AgentVersion);
+               Logger.LogInformation("ACP protocol initialization complete, Agent: {Name} v{Version}", AgentName, AgentVersion);
 
                var isConnected = _chatService.IsConnected && _chatService.IsInitialized;
                _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(isConnected));
@@ -1295,9 +1313,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
                IsSessionActive = !string.IsNullOrWhiteSpace(CurrentSessionId);
 
-               // 初始化成功后，自动创建新会话（ACP 标准流程）
-               // 参考：https://agentclientprotocol.com/protocol/session-setup
-               Logger.LogInformation("正在创建新会话...");
+               // Initialize success; auto-create new session (ACP standard flow).
+               // Ref: https://agentclientprotocol.com/protocol/session-setup
+               Logger.LogInformation("Creating new session...");
                var sessionParams = new SalmonEgg.Domain.Models.Protocol.SessionNewParams
                {
                    Cwd = GetActiveSessionCwdOrDefault()
@@ -1321,7 +1339,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
                     response = await _chatService.CreateSessionAsync(sessionParams);
                 }
-                Logger.LogInformation("会话创建成功，SessionId={SessionId}", response.SessionId);
+                Logger.LogInformation("Session created successfully, SessionId={SessionId}", response.SessionId);
 
                 var remoteSessionId = response.SessionId;
                 var hasRemoteSession = !string.IsNullOrWhiteSpace(remoteSessionId);
@@ -1365,12 +1383,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     LoadSessionHistory();
                 }
                 ShowTransportConfigPanel = false;
-                Logger.LogInformation("连接成功");
+                Logger.LogInformation("Connected successfully");
             }
             catch (Exception ex)
             {
-                _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(false, $"连接失败：{ex.Message}"));
-                Logger.LogError(ex, "连接时出错");
+                _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(false, $"Connection failed: {ex.Message}"));
+                Logger.LogError(ex, "Error during connection");
                 _currentRemoteSessionId = null;
                 // Keep the local conversation visible; only clear the remote binding so we don't send to stale ids.
                 ClearRemoteSessionBindingForCurrentConversation();
@@ -1440,13 +1458,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             chatService.TerminalRequestReceived += OnTerminalRequestReceived;
             chatService.ErrorOccurred += OnErrorOccurred;
 
-           // 监听初始化状态变化
+           // Listen for initialization status changes.
            if (chatService.IsInitialized)
            {
                UpdateAgentInfo();
            }
 
-           // 监听会话状态
+           // Listen for session status.
            if (chatService.CurrentSessionId != null)
            {
                CurrentSessionId = chatService.CurrentSessionId;
@@ -1466,19 +1484,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         private void SubscribeToEvents()
       {
-          // 只有当 _chatService 不为 null 时才订阅事件
-          // 在构造函数中 _chatService 可能为 null，将在 ApplyTransportConfigAsync 中创建
+          // Only subscribe if _chatService is not null. 
+          // In constructor, _chatService might be null; it will be created in ApplyTransportConfigAsync.
           if (_chatService != null)
           {
               SubscribeToChatService(_chatService);
 
-              // 监听初始化状态变化
+              // Listen for initialization status changes.
               if (_chatService.IsInitialized)
               {
                   UpdateAgentInfo();
               }
 
-              // 监听会话状态
+              // Listen for session status.
               if (_chatService.CurrentSessionId != null)
               {
                   CurrentSessionId = _chatService.CurrentSessionId;
@@ -1499,10 +1517,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     return;
                 }
 
+                // SECURITY/PROTOCOL CHECK: Ensure updates only affect the currently active remote session.
+                // This prevents cross-talk if multiple agents or sessions are running.
                 if (!string.IsNullOrWhiteSpace(_currentRemoteSessionId) &&
                     !string.Equals(e.SessionId, _currentRemoteSessionId, StringComparison.Ordinal))
                 {
-                    // Only render updates for the active remote session bound to this conversation.
                     return;
                 }
 
@@ -1513,7 +1532,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 }
                 else if (e.Update is AgentThoughtUpdate)
                 {
-                    // Agents may stream thought chunks. Surface a placeholder that will be replaced by the next reply.
+                    // Thought chunks are transient states; they trigger 'thinking' UI feedback.
                     _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
                 }
                 else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
@@ -1550,21 +1569,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 }
                 else if (e.Update != null)
                 {
-                    // Log unhandled update types for debugging protocol alignment issues.
-                    Logger.LogInformation("未处理的会话更新类型: {UpdateType}", e.Update.GetType().Name);
+                    // FUTURE-PROOFING: Log unknown protocol extensions to detect agent version mismatches.
+                    Logger.LogInformation("Unhandled session update type: {UpdateType}", e.Update.GetType().Name);
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "处理会话更新时出错");
+                Logger.LogError(ex, "Error processing session update");
             }
         }, null);
     }
 
     private void HandleAgentContentChunk(ContentBlock content)
     {
-        // ACP streams assistant responses via session/update (agent_message_chunk). Coalesce text chunks into a
-        // single chat bubble to match protocol intent and common client behavior.
+        // ACP streams response content as an array of blocks. We coalesce adjacent text blocks
+        // into a single UI element to mimic a natural typing effect.
         if (content is TextContentBlock text)
         {
             AppendAgentTextChunk(text.Text ?? string.Empty);
@@ -1648,7 +1667,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             _syncContext.Post(_ =>
             {
-                ConnectionErrorMessage = $"切换会话失败：{ex.Message}";
+                ConnectionErrorMessage = $"Failed to switch session: {ex.Message}";
                 IsSessionActive = !string.IsNullOrWhiteSpace(CurrentSessionId);
             }, null);
 
@@ -1791,7 +1810,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                         }))
                 };
 
-                // 设置响应回调
+                // Set response callback
                 viewModel.OnRespond = async (outcome, optionId) =>
                 {
                     if (_chatService != null)
@@ -1807,7 +1826,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "处理权限请求时出错");
+                Logger.LogError(ex, "Error processing permission request");
             }
         }, null);
     }
@@ -1828,7 +1847,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     Content = e.Content
                 };
 
-                // 设置响应回调
+                // Set response callback
                 viewModel.OnRespond = async (success, content, message) =>
                 {
                     if (_chatService != null)
@@ -1844,7 +1863,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "处理文件系统请求时出错");
+                Logger.LogError(ex, "Error processing file system request");
             }
         }, null);
     }
@@ -1855,12 +1874,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         {
             try
             {
-                Logger.LogInformation("收到终端请求: Method={Method}, TerminalId={TerminalId}", e.Method, e.TerminalId);
-                ShowTransientNotificationToast($"终端请求: {e.Method}");
+                Logger.LogInformation("Terminal request received: Method={Method}, TerminalId={TerminalId}", e.Method, e.TerminalId);
+                ShowTransientNotificationToast($"Terminal request: {e.Method}");
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "处理终端请求时出错");
+                Logger.LogError(ex, "Error processing terminal request");
             }
         }, null);
     }
@@ -1902,7 +1921,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         var message =
             messageOverride
             ?? method?.Description
-            ?? "该 Agent 需要先完成登录/认证后才能正常回复。";
+            ?? "The agent requires authentication before it can respond.";
 
         IsAuthenticationRequired = true;
         AuthenticationHintMessage = message;
@@ -1964,7 +1983,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Logger.LogError(ex, "Authenticate failed");
-            MarkAuthenticationRequired(method, $"认证失败：{ex.Message}");
+            MarkAuthenticationRequired(method, $"Authentication failed: {ex.Message}");
             return false;
         }
     }
@@ -2231,7 +2250,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
         {
-            // 更新当前模式
+            // Update current mode.
             var selectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == modeChange.CurrentModeId);
             if (selectedMode != null)
             {
@@ -2294,10 +2313,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
        if (IsInitializing || IsConnecting)
            return;
 
-       // 如果还没有创建 ChatService，先应用配置
+       // If ChatService is not yet created, apply transport config first.
        if (_chatService == null)
        {
-           Logger.LogInformation("ChatService 尚未创建，调用 ApplyTransportConfigAsync");
+           Logger.LogInformation("ChatService not yet created; calling ApplyTransportConfigAsync");
            await ApplyTransportConfigCommand.ExecuteAsync(null);
            return;
        }
@@ -2307,7 +2326,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
            IsInitializing = true;
            ClearError();
 
-           // 初始化 ACP 客户端
+           // Initialize ACP client.
            var initParams = new InitializeParams
            {
                ProtocolVersion = 1,
@@ -2339,8 +2358,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
        }
        catch (Exception ex)
        {
-           Logger.LogError(ex, "初始化失败");
-           SetError($"初始化失败：{ex.Message}");
+           Logger.LogError(ex, "Initialization failed");
+           SetError($"Initialization failed: {ex.Message}");
        }
        finally
        {
@@ -2362,7 +2381,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             var sessionParams = new SessionNewParams
             {
                 Cwd = GetActiveSessionCwdOrDefault(),
-                McpServers = new List<McpServer>() // 可以根据配置添加 MCP 服务器
+                McpServers = new List<McpServer>() // Can add MCP servers based on configuration.
             };
 
             if (_chatService == null)
@@ -2388,7 +2407,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             CurrentSessionId = response.SessionId;
             IsSessionActive = true;
 
-            // 加载可用模式（deprecated in favor of configOptions）
+            // Load available modes (deprecated in favor of configOptions).
             if (response.Modes?.AvailableModes != null)
             {
                 AvailableModes.Clear();
@@ -2405,7 +2424,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     }
                 }
 
-                // 选择第一个模式作为默认
+                // Select the first mode as default
                 if (AvailableModes.Count > 0)
                 {
                     var currentModeId = response.Modes.CurrentModeId;
@@ -2416,7 +2435,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             }
 
 
-            // 加载配置选项
+            // Load configuration options
             if (response.ConfigOptions != null)
             {
                 ConfigOptions.Clear();
@@ -2433,8 +2452,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "创建会话失败");
-            SetError($"创建会话失败：{ex.Message}");
+            Logger.LogError(ex, "Failed to create session");
+            SetError($"Failed to create session: {ex.Message}");
         }
         finally
         {
@@ -2442,6 +2461,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// Sends the current prompt to the active agent.
+    /// Handles lazy session creation, authentication requirements, and error recovery.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanSendPrompt))]
     private async Task SendPromptAsync()
     {
@@ -2456,7 +2479,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             var authenticated = await TryAuthenticateAsync(_sendPromptCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
             if (!authenticated)
             {
-                ShowTransientNotificationToast(AuthenticationHintMessage ?? "该 Agent 需要先完成登录/认证后才能回复。");
+                ShowTransientNotificationToast(AuthenticationHintMessage ?? "The agent requires authentication before it can respond.");
                 return;
             }
         }
@@ -2473,7 +2496,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             // We'll restore it on failure so the user can retry.
             CurrentPrompt = string.Empty;
 
-            // 添加用户消息到历史
+            // Add user message to history
             var userContent = new TextContentBlock { Text = promptText };
             AddMessageToHistory(userContent, isOutgoing: true);
 
@@ -2507,7 +2530,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 }
                 catch (Exception ex) when (IsRemoteSessionNotFound(ex))
                 {
-                    // The agent process might have restarted; create a new remote session and retry once.
+                    // Error Recovery: If the agent process was restarted or the remote session expired,
+                    // we clear the stale binding, create a new remote session, and retry the prompt once.
+                    // This provides a seamless "auto-recovery" experience for the user.
                     ClearRemoteSessionBindingForCurrentConversation();
                     remoteSessionId = await EnsureRemoteSessionAsync(_sendPromptCts.Token);
                     promptParams.SessionId = remoteSessionId;
@@ -2522,19 +2547,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         catch (TimeoutException ex)
         {
             Logger.LogError(ex, "SendPrompt timed out");
-            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, "发送超时：Agent 长时间无响应。"));
+            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, "Send timed out: Agent did not respond for a long time."));
 
             if (string.IsNullOrWhiteSpace(CurrentPrompt))
             {
                 CurrentPrompt = promptText;
             }
 
-            ShowTransientNotificationToast("Agent 无响应（超时）。请检查 Agent 是否需要先登录/初始化，或稍后重试。");
+            ShowTransientNotificationToast("Agent no response (timeout). Please check if the agent needs login/initialization or try again later.");
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "SendPrompt failed");
-            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, $"发送失败：{ex.Message}"));
+            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, $"Send failed: {ex.Message}"));
 
             // Restore text so the user can retry quickly.
             if (string.IsNullOrWhiteSpace(CurrentPrompt))
@@ -2542,7 +2567,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 CurrentPrompt = promptText;
             }
 
-            ShowTransientNotificationToast("发送失败，请稍后重试。");
+            ShowTransientNotificationToast("Send failed, please try again later.");
         }
         finally
         {
@@ -2609,7 +2634,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Cancel prompt failed");
-            ShowTransientNotificationToast("取消失败。");
+            ShowTransientNotificationToast("Cancellation failed.");
         }
     }
 
@@ -2680,16 +2705,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// Ensures that a remote ACP session exists and is bound to the current local conversation.
+    /// Remote sessions are created lazily to avoid unnecessary resource consumption
+    /// until the user actually sends a message or a feature requires an active session.
+    /// </summary>
     private async Task<string> EnsureRemoteSessionAsync(CancellationToken cancellationToken = default)
     {
         if (_chatService is not { IsConnected: true, IsInitialized: true })
         {
-            throw new InvalidOperationException("尚未连接到 ACP Agent。");
+            throw new InvalidOperationException("Not connected to ACP agent.");
         }
 
         if (!IsSessionActive || string.IsNullOrWhiteSpace(CurrentSessionId))
         {
-            throw new InvalidOperationException("未选择会话。");
+            throw new InvalidOperationException("No session selected.");
         }
 
         var binding = GetOrCreateConversationBinding(CurrentSessionId!);
@@ -2715,7 +2745,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             var authenticated = await TryAuthenticateAsync(cancellationToken).ConfigureAwait(false);
             if (!authenticated)
             {
-                throw new InvalidOperationException(AuthenticationHintMessage ?? "该 Agent 需要先完成登录/认证后才能回复。");
+                throw new InvalidOperationException(AuthenticationHintMessage ?? "The agent requires authentication before it can respond.");
             }
 
             response = await _chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
@@ -2795,8 +2825,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "切换模式失败");
-            SetError($"切换模式失败：{ex.Message}");
+            Logger.LogError(ex, "Failed to switch mode");
+            SetError($"Failed to switch mode: {ex.Message}");
         }
         finally
         {
@@ -2828,8 +2858,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "取消会话失败");
-            SetError($"取消会话失败：{ex.Message}");
+            Logger.LogError(ex, "Failed to cancel session");
+            SetError($"Failed to cancel session: {ex.Message}");
         }
         finally
         {
@@ -2883,8 +2913,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "断开连接失败");
-            SetError($"断开连接失败：{ex.Message}");
+            Logger.LogError(ex, "Failed to disconnect");
+            SetError($"Failed to disconnect: {ex.Message}");
         }
         finally
         {
@@ -2986,7 +3016,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 }
 
 /// <summary>
-/// 会话模式 ViewModel
+/// Session mode ViewModel
 /// </summary>
 public partial class SessionModeViewModel : ObservableObject
 {
@@ -3001,7 +3031,7 @@ public partial class SessionModeViewModel : ObservableObject
 }
 
 /// <summary>
-/// 权限请求 ViewModel
+/// Permission request ViewModel
 /// </summary>
 public partial class PermissionRequestViewModel : ObservableObject
 {
@@ -3032,7 +3062,7 @@ public partial class PermissionRequestViewModel : ObservableObject
 }
 
 /// <summary>
-/// 权限选项 ViewModel
+/// Permission option ViewModel
 /// </summary>
 public partial class PermissionOptionViewModel : ObservableObject
 {
@@ -3047,7 +3077,7 @@ public partial class PermissionOptionViewModel : ObservableObject
 }
 
 /// <summary>
-/// 文件系统请求 ViewModel
+/// File system request ViewModel
 /// </summary>
 public partial class FileSystemRequestViewModel : ObservableObject
 {

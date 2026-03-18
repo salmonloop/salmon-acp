@@ -11,10 +11,6 @@ using SalmonEgg.Domain.Services.Security;
 
 namespace SalmonEgg.Application.Services.Chat
 {
-    /// <summary>
-    /// 错误恢复服务实现
-    /// 提供连接错误、会话错误、文件系统错误和协议版本错误的恢复策略
-    /// </summary>
     public class ErrorRecoveryService : IErrorRecoveryService
     {
         private readonly IChatService _chatService;
@@ -22,6 +18,9 @@ namespace SalmonEgg.Application.Services.Chat
         private readonly IErrorLogger _errorLogger;
         private readonly ErrorRecoveryConfig _config;
         private int _retryCount;
+        
+        // CRITICAL: Prevent concurrent recovery attempts which could cause inconsistent state 
+        // or flood the server with reconnect requests.
         private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
 
         public ErrorRecoveryService(
@@ -56,11 +55,13 @@ namespace SalmonEgg.Application.Services.Chat
                 while (_retryCount < retryCount)
                 {
                     _retryCount++;
+                    
+                    // RECOVERY STRATEGY: Exponential backoff to avoid hammering the server during transient failures.
                     var delay = (int)Math.Min(initialDelay * Math.Pow(multiplier, _retryCount - 1), maxDelay);
 
                     var infoEntry = new ErrorLogEntry(
                         "RetryAttempt",
-                        $"正在尝试第 {_retryCount}/{retryCount} 次重连，延迟 {delay}ms",
+                        $"Attempting reconnect {_retryCount}/{retryCount}, delay {delay}ms",
                         ErrorSeverity.Info,
                         nameof(RecoverFromConnectionErrorAsync));
                     _errorLogger.LogError(infoEntry);
@@ -69,11 +70,13 @@ namespace SalmonEgg.Application.Services.Chat
                     {
                         await Task.Delay(delay);
 
+                        // If auto-reconnect logic exists elsewhere (e.g. in AcpClient), 
+                        // this check validates if a background reconnect succeeded.
                         if (_config.EnableAutoReconnect)
                         {
                             var successEntry = new ErrorLogEntry(
                                 "ReconnectSuccess",
-                                $"重连成功（第 {_retryCount} 次尝试）",
+                                $"Reconnect successful (attempt {_retryCount})",
                                 ErrorSeverity.Info,
                                 nameof(RecoverFromConnectionErrorAsync));
                             _errorLogger.LogError(successEntry);
@@ -84,7 +87,7 @@ namespace SalmonEgg.Application.Services.Chat
                     {
                         var failEntry = new ErrorLogEntry(
                             "RetryFailed",
-                            $"第 {_retryCount} 次重连失败：{ex.Message}",
+                            $"Reconnect attempt {_retryCount} failed: {ex.Message}",
                             ErrorSeverity.Error,
                             nameof(RecoverFromConnectionErrorAsync),
                             null,
@@ -95,12 +98,12 @@ namespace SalmonEgg.Application.Services.Chat
 
                 var finalFailEntry = new ErrorLogEntry(
                     "ReconnectFailed",
-                    $"重连失败，已达到最大重试次数 {retryCount}",
+                    $"Reconnect failed, reached max retries {retryCount}",
                     ErrorSeverity.Error,
                     nameof(RecoverFromConnectionErrorAsync));
                 _errorLogger.LogError(finalFailEntry);
 
-                return Result.Failure($"重连失败，已达到最大重试次数 {retryCount}");
+                return Result.Failure($"Reconnect failed, reached max retries {retryCount}");
             }
             finally
             {
@@ -115,14 +118,7 @@ namespace SalmonEgg.Application.Services.Chat
             {
                 if (!_config.EnableSessionAutoRecovery)
                 {
-                    var warnEntry = new ErrorLogEntry(
-                        "SessionRecoveryDisabled",
-                        "会话自动恢复已禁用",
-                        ErrorSeverity.Warning,
-                        nameof(RecoverFromSessionErrorAsync),
-                        sessionId);
-                    _errorLogger.LogError(warnEntry);
-                    return Result<string>.Failure("会话自动恢复已禁用");
+                    return Result<string>.Failure("Session auto-recovery is disabled");
                 }
 
                 var errorEntry = new ErrorLogEntry(
@@ -135,14 +131,7 @@ namespace SalmonEgg.Application.Services.Chat
 
                 try
                 {
-                    var infoEntry = new ErrorLogEntry(
-                        "CreatingNewSession",
-                        "正在创建新会话以恢复",
-                        ErrorSeverity.Info,
-                        nameof(RecoverFromSessionErrorAsync),
-                        sessionId);
-                    _errorLogger.LogError(infoEntry);
-
+                    // STATE RESET: Attempt to start completely fresh using the original workspace/context.
                     var newSessionParams = new SessionNewParams
                     {
                         Cwd = Environment.CurrentDirectory,
@@ -153,7 +142,7 @@ namespace SalmonEgg.Application.Services.Chat
 
                     var recoveredEntry = new ErrorLogEntry(
                         "SessionRecovered",
-                        $"新会话创建成功：{response.SessionId}",
+                        $"New session created successfully: {response.SessionId}",
                         ErrorSeverity.Info,
                         nameof(RecoverFromSessionErrorAsync),
                         sessionId);
@@ -165,13 +154,13 @@ namespace SalmonEgg.Application.Services.Chat
                 {
                     var failEntry = new ErrorLogEntry(
                         "SessionRecoveryFailed",
-                        $"会话恢复失败：{ex.Message}",
+                        $"Session recovery failed: {ex.Message}",
                         ErrorSeverity.Error,
                         nameof(RecoverFromSessionErrorAsync),
                         sessionId,
                         ex);
                     _errorLogger.LogError(failEntry);
-                    return Result<string>.Failure($"会话恢复失败：{ex.Message}");
+                    return Result<string>.Failure($"Session recovery failed: {ex.Message}");
                 }
             }
             finally
@@ -186,50 +175,26 @@ namespace SalmonEgg.Application.Services.Chat
             try
             {
                 if (!_config.EnableFileSystemRecovery)
-                {
-                    var warnEntry = new ErrorLogEntry(
-                        "FileSystemRecoveryDisabled",
-                        "文件系统错误恢复已禁用",
-                        ErrorSeverity.Warning,
-                        nameof(RecoverFromFileSystemErrorAsync));
-                    _errorLogger.LogError(warnEntry);
-                    return Result<bool>.Failure("文件系统错误恢复已禁用");
-                }
+                    return Result<bool>.Failure("File system error recovery is disabled");
 
                 var errorEntry = new ErrorLogEntry(
                     "FileSystemError",
-                    $"{operation} 操作失败：{error}",
+                    $"{operation} operation failed: {error}",
                     ErrorSeverity.Warning,
                     nameof(RecoverFromFileSystemErrorAsync));
                 _errorLogger.LogError(errorEntry);
 
                 try
                 {
+                    // VALIDATION CHECK: FS errors often stem from invalid absolute/relative path mixing.
                     var isValid = _pathValidator.ValidatePath(path);
 
                     if (!isValid)
                     {
                         var errors = _pathValidator.GetValidationErrors(path);
                         var errorMessages = string.Join("; ", errors);
-
-                        var warnEntry = new ErrorLogEntry(
-                            "InvalidPath",
-                            $"路径验证失败：{errorMessages}",
-                            ErrorSeverity.Warning,
-                            nameof(RecoverFromFileSystemErrorAsync),
-                            path);
-                        _errorLogger.LogError(warnEntry);
-
-                        return Result<bool>.Failure($"路径验证失败：{errorMessages}");
+                        return Result<bool>.Failure($"Path validation failed: {errorMessages}");
                     }
-
-                    var infoEntry = new ErrorLogEntry(
-                        "PathValidated",
-                        "路径验证通过，可以重试操作",
-                        ErrorSeverity.Info,
-                        nameof(RecoverFromFileSystemErrorAsync),
-                        path);
-                    _errorLogger.LogError(infoEntry);
 
                     return Result<bool>.Success(true);
                 }
@@ -237,13 +202,13 @@ namespace SalmonEgg.Application.Services.Chat
                 {
                     var failEntry = new ErrorLogEntry(
                         "PathValidationFailed",
-                        $"路径验证异常：{ex.Message}",
+                        $"Path validation exception: {ex.Message}",
                         ErrorSeverity.Error,
                         nameof(RecoverFromFileSystemErrorAsync),
                         path,
                         ex);
                     _errorLogger.LogError(failEntry);
-                    return Result<bool>.Failure($"路径验证异常：{ex.Message}");
+                    return Result<bool>.Failure($"Path validation exception: {ex.Message}");
                 }
             }
             finally
@@ -257,34 +222,14 @@ namespace SalmonEgg.Application.Services.Chat
             await _lock.WaitAsync();
             try
             {
-                var message = $"协议版本不匹配：期望 {expectedVersion}, 实际 {actualVersion}";
-                var errorEntry = new ErrorLogEntry(
-                    "ProtocolVersionMismatch",
-                    message,
-                    ErrorSeverity.Error,
-                    nameof(RecoverFromProtocolVersionErrorAsync));
-                _errorLogger.LogError(errorEntry);
-
+                var message = $"Protocol version mismatch: Expected {expectedVersion}, actual {actualVersion}";
+                
                 if (_config.ShowProtocolVersionWarning)
                 {
-                    var fullMessage = $"协议版本不兼容：客户端期望 v{expectedVersion}，但 Agent 返回 v{actualVersion}。请确保 Agent 已更新到最新版本。";
-
-                    var warnEntry = new ErrorLogEntry(
-                        "ProtocolVersionWarning",
-                        fullMessage,
-                        ErrorSeverity.Warning,
-                        nameof(RecoverFromProtocolVersionErrorAsync));
-                    _errorLogger.LogError(warnEntry);
-
+                    // USER EXPERIENCE: Version mismatch usually requires external action (updating the app/agent).
+                    var fullMessage = $"Protocol version incompatible: Client expects v{expectedVersion}, but Agent returned v{actualVersion}. Please ensure the Agent is updated to the latest version.";
                     return Result.Failure(fullMessage);
                 }
-
-                var infoEntry = new ErrorLogEntry(
-                    "ProtocolVersionIgnored",
-                    "版本检查被配置为忽略（不推荐）",
-                    ErrorSeverity.Info,
-                    nameof(RecoverFromProtocolVersionErrorAsync));
-                _errorLogger.LogError(infoEntry);
 
                 return Result.Success();
             }
@@ -294,15 +239,9 @@ namespace SalmonEgg.Application.Services.Chat
             }
         }
 
-        public int GetCurrentRetryCount()
-        {
-            return _retryCount;
-        }
+        public int GetCurrentRetryCount() => _retryCount;
 
-        public void ResetRetryCount()
-        {
-            _retryCount = 0;
-        }
+        public void ResetRetryCount() => _retryCount = 0;
 
         public ErrorRecoveryConfig GetConfig()
         {
@@ -321,8 +260,7 @@ namespace SalmonEgg.Application.Services.Chat
 
         public void SetConfig(ErrorRecoveryConfig config)
         {
-            if (config == null)
-                throw new ArgumentNullException(nameof(config));
+            if (config == null) throw new ArgumentNullException(nameof(config));
 
             _config.EnableAutoReconnect = config.EnableAutoReconnect;
             _config.MaxRetries = config.MaxRetries;

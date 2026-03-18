@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace SalmonEgg.Presentation.ViewModels
 {
     /// <summary>
-    /// ViewModel 基类，提供通用功能和属性
+    /// ViewModel base class providing common functionality and properties
     /// Requirements: 4.1, 4.2, 6.1
     /// </summary>
     public abstract partial class ViewModelBase : ObservableObject

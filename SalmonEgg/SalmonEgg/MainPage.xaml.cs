@@ -82,7 +82,7 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         BootLogDebug("MainPage: ctor start");
-        // 1. 鍦ㄥ垵濮嬪寲缁勪欢鍓嶈幏鍙?ViewModel锛岀‘淇?x:Bind 缁戝畾姝ｅ父
+        // 1. Get ViewModels before InitializeComponent to ensure x:Bind works correctly
         Preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
         NavVM = App.ServiceProvider.GetRequiredService<MainNavigationViewModel>();
         _chatViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
@@ -107,11 +107,11 @@ public sealed partial class MainPage : Page
         }
 #endif
 
-        // 2. 鐩戝惉鍏ㄥ眬璁剧疆鍙樺寲锛堝鍔ㄧ敾寮€鍏炽€佷富棰樸€佽儗鏅潗璐級
+        // 2. Listen for global preference changes (animations, theme, backdrop)
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
 
-        // 3. 鍒濆鍖栦富棰樹笌鍔ㄧ敾鐘舵€?
+        // 3. Initialize theme and motion state
         ApplyTheme();
         ApplyBackdrop();
         UpdateNavigationTransitions();
@@ -121,7 +121,7 @@ public sealed partial class MainPage : Page
         SubscribeNavItems();
         // NavVM.PropertyChanged registration removed as layout is now driven by LayoutVM SSOT
 
-        // 4. 鍚姩鍚庨粯璁よ繘鍏ュ紑濮嬬晫闈?
+        // 4. Default to Start view on launch
         NavVM.SelectStart();
         NavigateToStart();
         BootLogDebug("MainPage: navigated to StartView");
@@ -308,7 +308,7 @@ public sealed partial class MainPage : Page
 
     private void UpdateNavigationTransitions()
     {
-        // 鏍规嵁鍏ㄥ眬璁剧疆鍔ㄦ€佸紑鍚垨鍏抽棴 Frame 鐨勮繃娓″姩鐢?
+        // Dynamically enable/disable Frame transitions based on global settings
         if (UiMotion.Current.IsAnimationEnabled)
         {
             ContentFrame.ContentTransitions = new TransitionCollection
@@ -773,7 +773,7 @@ public sealed partial class MainPage : Page
 
     private void OnSearchPanelPopupOpened(object sender, object e)
     {
-        // Flyout 涓嶉渶瑕佹墜鍔ㄨ绠椾綅缃?
+        // Flyout positioning is handled automatically by the system
     }
 
     private void OnSearchPanelPopupClosed(object sender, object e)
@@ -788,7 +788,7 @@ public sealed partial class MainPage : Page
     {
         if (TopSearchBox != null)
         {
-            // 绉婚櫎鐒︾偣鍒拌儗鏅垨 Frame
+            // Move focus to background or Frame to dismiss search keyboard if needed
             ContentFrame?.Focus(FocusState.Programmatic);
         }
     }

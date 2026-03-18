@@ -13,10 +13,6 @@ using SalmonEgg.Domain.Services.Security;
 
 namespace SalmonEgg.Application.Services.Chat
 {
-    /// <summary>
-    /// Chat 服务实现类
-    /// 封装了 ACP 客户端的核心功能，提供聊天相关的服务
-    /// </summary>
     public class ChatService : IChatService
     {
         private readonly IAcpClient _acpClient;
@@ -48,7 +44,6 @@ namespace SalmonEgg.Application.Services.Chat
             _errorLogger = errorLogger ?? throw new ArgumentNullException(nameof(errorLogger));
             _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
 
-            // 订阅 ACP 客户端事件
             _acpClient.SessionUpdateReceived += OnSessionUpdateReceived;
             _acpClient.PermissionRequestReceived += OnPermissionRequestReceived;
             _acpClient.FileSystemRequestReceived += OnFileSystemRequestReceived;
@@ -59,9 +54,7 @@ namespace SalmonEgg.Application.Services.Chat
         private Session? GetSession(string? sessionId)
         {
             if (string.IsNullOrWhiteSpace(sessionId))
-            {
                 return null;
-            }
 
             return _sessionManager.GetSession(sessionId);
         }
@@ -70,11 +63,12 @@ namespace SalmonEgg.Application.Services.Chat
         {
             var existing = _sessionManager.GetSession(sessionId);
             if (existing != null)
-            {
                 return existing;
-            }
 
-            // The session manager API is async; events are sync, so we do a best-effort sync creation.
+            // CRITICAL: Event handlers are synchronous, but session creation is asynchronous. 
+            // We use GetAwaiter().GetResult() here because the ACP client events (like updates) 
+            // can arrive before the session is fully tracked in our local state. 
+            // This ensures state consistency during fast session initialization.
             return _sessionManager.CreateSessionAsync(sessionId, cwd).GetAwaiter().GetResult();
         }
 
@@ -82,7 +76,6 @@ namespace SalmonEgg.Application.Services.Chat
         {
             if (e.Update != null)
             {
-                // 更新会话历史
                 var entry = CreateSessionUpdateEntry(e.Update, e.SessionId);
                 if (entry != null)
                 {
@@ -95,37 +88,31 @@ namespace SalmonEgg.Application.Services.Chat
                         // Ignore session tracking failures; UI will still receive SessionUpdateReceived.
                     }
 
-                    // 处理不同类型的更新
+                    // CRITICAL PATH: Syncing Agent's internal state (Plan, Mode) with our local variables.
+                    // This allows the ViewModel to access the latest state without parsing history.
                     switch (e.Update)
                     {
                         case AgentMessageUpdate messageUpdate:
-                            // 处理消息更新
                             break;
                         case AgentThoughtUpdate thoughtUpdate:
-                            // 思考片段：可选择忽略或用于调试
                             break;
                         case ToolCallUpdate toolCallUpdate:
-                            // 处理工具调用更新
                             break;
                         case ToolCallStatusUpdate toolCallStatusUpdate:
-                            // 工具调用状态更新（某些 Agent 使用 tool_call_update）
                             break;
                         case PlanUpdate planUpdate:
-                            // 更新当前计划
                             if (planUpdate.Entries != null)
                             {
                                 _currentPlan = new Plan { Entries = planUpdate.Entries };
                             }
                             break;
                         case CurrentModeUpdate modeChange:
-                            // 更新当前模式
                             if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
                             {
                                 _currentMode = new SessionModeState { CurrentModeId = modeChange.CurrentModeId };
                             }
                             break;
                         case ConfigOptionUpdate configOption:
-                            // 配置选项更新（当前实现仅记录到 history）
                             break;
                     }
                 }
@@ -252,12 +239,6 @@ namespace SalmonEgg.Application.Services.Chat
                     session.State = SessionState.Active;
                 }
 
-                // 保存会话模式信息
-                if (response.Modes?.AvailableModes != null && response.Modes.AvailableModes.Count > 0)
-                {
-                    // 可以选择默认模式
-                }
-
                 return response;
             }
             catch (Exception ex)
@@ -282,18 +263,22 @@ namespace SalmonEgg.Application.Services.Chat
 
             try
             {
-                // Make the target session current before we start receiving replay updates.
+                // CRITICAL: We update _currentSessionId *before* LoadSessionAsync 
+                // because the loading process triggers Replay events, which must be 
+                // associated with the new session ID immediately.
                 _currentSessionId = @params.SessionId;
                 _currentPlan = null;
                 _currentMode = null;
 
-                // Avoid duplicating cached history when loading triggers a replay.
                 var existing = _sessionManager.GetSession(@params.SessionId);
                 if (existing != null && existing.History.Count > 0)
                 {
                     hadPreviousHistory = true;
                     previousHistory = existing.History.ToList();
                 }
+                
+                // Clear history before loading to ensure we don't have duplicate entries 
+                // if the server replays the history during the load process.
                 _sessionManager.UpdateSession(@params.SessionId, s => s.History.Clear());
 
                 var response = await _acpClient.LoadSessionAsync(@params);
@@ -305,11 +290,13 @@ namespace SalmonEgg.Application.Services.Chat
                 }
                 catch
                 {
+                    // Ignore session tracking failures
                 }
                 return response;
             }
             catch (Exception ex)
             {
+                // ROLLBACK: If loading fails, restore the previous history and session context.
                 if (hadPreviousHistory && previousHistory != null)
                 {
                     _sessionManager.UpdateSession(@params.SessionId, s =>
@@ -518,12 +505,9 @@ namespace SalmonEgg.Application.Services.Chat
             try
             {
                 if (string.IsNullOrEmpty(_currentSessionId))
-                {
                     return null;
-                }
 
-                // 可以通过会话更新事件获取模式信息
-                // 这里暂时返回 null，实际实现需要根据响应获取
+                // TODO: Modes should be cached from response or requested via separate protocol call if available.
                 return null;
             }
             catch (Exception ex)
@@ -561,7 +545,6 @@ namespace SalmonEgg.Application.Services.Chat
 
         private void OnTerminalRequestReceived(object? sender, TerminalRequestEventArgs e)
         {
-            // 转发终端请求事件给UI层
             TerminalRequestReceived?.Invoke(this, e);
         }
     }

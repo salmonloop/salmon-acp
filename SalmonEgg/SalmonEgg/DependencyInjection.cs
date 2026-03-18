@@ -34,13 +34,13 @@ using SalmonEgg.Presentation.Core.Services;
 namespace SalmonEgg;
 
 /// <summary>
-/// 依赖注入容器配置
+    /// Dependency injection container configuration
 /// Requirements: 7.5
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// 配置所有服务和依赖项
+    /// Configures all services and dependencies
     /// </summary>
     public static IServiceCollection AddSalmonEgg(this IServiceCollection services)
     {
@@ -67,29 +67,29 @@ public static class DependencyInjection
 
     private static void RegisterDomainServices(IServiceCollection services)
     {
-        // ACP 协议服务
+        // ACP Protocol Services
         services.AddSingleton<IAcpProtocolService, AcpMessageParser>();
 
-        // 消息解析器和验证器
+        // Message Parser and Validator
         services.AddSingleton<IMessageParser, MessageParser>();
         services.AddSingleton<IMessageValidator, MessageValidator>();
 
-        // 能力管理器
+        // Capability Manager
         services.AddSingleton<ICapabilityManager, Infrastructure.Services.CapabilityManager>();
 
-        // 会话管理器
+        // Session Manager
         services.AddSingleton<ISessionManager, Infrastructure.Services.SessionManager>();
 
-        // 路径验证器
+        // Path Validator
         services.AddSingleton<IPathValidator, Infrastructure.Services.Security.PathValidator>();
 
-        // 权限管理器
+        // Permission Manager
         services.AddSingleton<IPermissionManager, Infrastructure.Services.Security.PermissionManager>();
 
-        // 错误日志器
+        // Error Logger
         services.AddSingleton<IErrorLogger, ErrorLogger>();
 
-        // 连接管理器（使用工厂方法支持动态传输选择）
+        // Connection Manager (factory method supporting dynamic transport selection)
         services.AddSingleton<IConnectionManager>(sp =>
         	{
         				var protocolService = sp.GetRequiredService<IAcpProtocolService>();
@@ -111,7 +111,7 @@ public static class DependencyInjection
 
     private static void RegisterInfrastructureServices(IServiceCollection services)
     {
-        // 安全存储
+        // Secure Storage
         services.AddSingleton<ISecureStorage, SecureStorage>();
 
         // App settings (config/app.yaml)
@@ -124,14 +124,14 @@ public static class DependencyInjection
         services.AddSingleton<IAppStartupService, AppStartupService>();
         services.AddSingleton<IAppLanguageService, AppLanguageService>();
 
-        // 配置管理器
+        // Configuration Manager
         services.AddSingleton<IConfigurationService, ConfigurationManager>();
 
         // Validator
         // Validator
         services.AddSingleton<IValidator<ServerConfiguration>, ServerConfigurationValidator>();
 
-        // 传输层工厂
+        // Transport Layer Factory
         services.AddSingleton<SalmonEgg.Domain.Interfaces.ITransportFactory, TransportFactory>();
 
 
@@ -156,16 +156,16 @@ public static class DependencyInjection
         });
         services.AddSingleton<IShellLayoutMetricsSink, ShellLayoutMetricsSink>();
 
-        // 用例
+        // Use Cases
         services.AddTransient<ConnectToServerUseCase>();
         services.AddTransient<DisconnectUseCase>();
         services.AddTransient<SendMessageUseCase>();
 
-        // 应用服务
+        // Application Services
         services.AddSingleton<IConnectionService, ConnectionService>();
         services.AddSingleton<IMessageService, MessageService>();
 
-        // Chat 服务工厂（支持动态创建）
+        // Chat Service Factory (supporting dynamic creation)
         services.AddSingleton<ChatServiceFactory>(sp =>
         {
             var transportFactory = sp.GetRequiredService<ITransportFactory>();
@@ -178,14 +178,14 @@ public static class DependencyInjection
             return new ChatServiceFactory(transportFactory, parser, validator, errorLogger, capabilityManager, sessionManager, logger);
         });
 
-        // Chat 服务（默认实例，使用默认传输）
+        // Chat Service (default instance using default transport)
         services.AddSingleton<IChatService>(sp =>
         {
             var factory = sp.GetRequiredService<ChatServiceFactory>();
             return factory.CreateDefaultChatService();
         });
 
-        // 错误恢复服务
+        // Error Recovery Service
         services.AddSingleton<IErrorRecoveryService>(sp =>
         {
             var chatService = sp.GetRequiredService<IChatService>();
@@ -197,11 +197,11 @@ public static class DependencyInjection
 
     private static void RegisterViewModels(IServiceCollection services)
     {
-        // 原有 ViewModel
+        // Existing ViewModels (Legacy)
         services.AddTransient<MainViewModel>();
         services.AddTransient<ConfigurationEditorViewModel>();
 
-        // 新的 Chat ViewModel（重构后）
+        // New Chat ViewModel (refactored)
         // Must be singleton so connection/session state survives navigation and is shared between Settings and Chat pages.
         services.AddSingleton<ChatViewModel>();
 

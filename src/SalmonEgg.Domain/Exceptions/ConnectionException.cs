@@ -3,25 +3,25 @@ using System;
 namespace SalmonEgg.Domain.Exceptions
 {
     /// <summary>
-    /// 连接相关异常
+    /// Connection related exceptions.
     /// </summary>
     public class ConnectionException : Exception
     {
         /// <summary>
-        /// 错误类型
+        /// Error type
         /// </summary>
         public ConnectionErrorType ErrorType { get; set; }
 
         /// <summary>
-        /// 服务器 URL（可选，并非所有连接错误都有 URL）
+        /// Server URL (optional, not all connection errors have a URL)
         /// </summary>
         public string? ServerUrl { get; set; }
 
         /// <summary>
-        /// 创建连接异常实例
+        /// Creates a connection exception instance.
         /// </summary>
-        /// <param name="message">错误消息</param>
-        /// <param name="errorType">错误类型</param>
+        /// <param name="message">Error message</param>
+        /// <param name="errorType">Error type</param>
         public ConnectionException(string message, ConnectionErrorType errorType)
             : base(message)
         {
@@ -29,11 +29,11 @@ namespace SalmonEgg.Domain.Exceptions
         }
 
         /// <summary>
-        /// 创建连接异常实例（包含服务器 URL）
+        /// Creates a connection exception instance (with server URL).
         /// </summary>
-        /// <param name="message">错误消息</param>
-        /// <param name="errorType">错误类型</param>
-        /// <param name="serverUrl">服务器 URL</param>
+        /// <param name="message">Error message</param>
+        /// <param name="errorType">Error type</param>
+        /// <param name="serverUrl">Server URL</param>
         public ConnectionException(string message, ConnectionErrorType errorType, string? serverUrl)
             : base(message)
         {
@@ -42,11 +42,11 @@ namespace SalmonEgg.Domain.Exceptions
         }
 
         /// <summary>
-        /// 创建连接异常实例（包含内部异常）
+        /// Creates a connection exception instance (with inner exception).
         /// </summary>
-        /// <param name="message">错误消息</param>
-        /// <param name="errorType">错误类型</param>
-        /// <param name="innerException">内部异常</param>
+        /// <param name="message">Error message</param>
+        /// <param name="errorType">Error type</param>
+        /// <param name="innerException">Inner exception</param>
         public ConnectionException(string message, ConnectionErrorType errorType, Exception innerException)
             : base(message, innerException)
         {
@@ -54,12 +54,12 @@ namespace SalmonEgg.Domain.Exceptions
         }
 
         /// <summary>
-        /// 创建连接异常实例（包含服务器 URL 和内部异常）
+        /// Creates a connection exception instance (with server URL and inner exception).
         /// </summary>
-        /// <param name="message">错误消息</param>
-        /// <param name="errorType">错误类型</param>
-        /// <param name="serverUrl">服务器 URL</param>
-        /// <param name="innerException">内部异常</param>
+        /// <param name="message">Error message</param>
+        /// <param name="errorType">Error type</param>
+        /// <param name="serverUrl">Server URL</param>
+        /// <param name="innerException">Inner exception</param>
         public ConnectionException(string message, ConnectionErrorType errorType, string? serverUrl, Exception innerException)
             : base(message, innerException)
         {
