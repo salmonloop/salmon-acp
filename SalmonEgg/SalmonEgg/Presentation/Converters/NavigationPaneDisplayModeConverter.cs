@@ -13,7 +13,7 @@ public sealed class NavigationPaneDisplayModeConverter : IValueConverter
         {
             return mode switch
             {
-                NavigationPaneDisplayMode.Open => NavigationViewPaneDisplayMode.Left,
+                NavigationPaneDisplayMode.Expanded => NavigationViewPaneDisplayMode.Left,
                 NavigationPaneDisplayMode.Compact => NavigationViewPaneDisplayMode.LeftCompact,
                 NavigationPaneDisplayMode.Minimal => NavigationViewPaneDisplayMode.LeftMinimal,
                 _ => NavigationViewPaneDisplayMode.Auto

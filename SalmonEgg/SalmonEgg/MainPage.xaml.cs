@@ -24,6 +24,8 @@ using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Utilities;
@@ -51,9 +53,6 @@ public sealed partial class MainPage : Page
     private double _leftNavResizeStartX;
     private double _leftNavResizeStartWidth;
 
-    private Storyboard? _rightPanelStoryboard;
-    private Storyboard? _navPaneStoryboard;
-    private bool _navPaneAnimating;
     private string _activePrimaryNavKey = MainNavItemKeys.Start;
     private bool _suppressNavSelectionChanged;
     private long _navSelectionRequestId;
@@ -96,8 +95,6 @@ public sealed partial class MainPage : Page
         this.InitializeComponent();
         BootLogDebug("MainPage: InitializeComponent done");
 
-        _searchLogic.Attach(this);
-
         Loaded += OnMainPageLoaded;
         Unloaded += OnMainPageUnloaded;
         ContentFrame.Navigated += OnContentFrameNavigated;
@@ -120,7 +117,6 @@ public sealed partial class MainPage : Page
         UpdateNavigationTransitions();
         BootLogDebug("MainPage: transitions updated");
 
-        ConfigureNavigationView();
         SubscribeMotion();
         SubscribeNavItems();
         // NavVM.PropertyChanged registration removed as layout is now driven by LayoutVM SSOT
@@ -146,20 +142,10 @@ public sealed partial class MainPage : Page
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         // NavVM.PropertyChanged unregistration removed
         _metricsProvider.Detach();
-        _searchLogic.Detach();
-        App.CleanupWebResources();
 #if WINDOWS
         _trayIcon?.Dispose();
         _trayIcon = null;
 #endif
-    }
-
-    private void ConfigureNavigationView()
-    {
-        // SSOT: These are now driven by LayoutVM bindings.
-        // We report initial sizes only if they differ from Layout defaults, 
-        // but typically the defaults in LayoutState (300/72) match the app.
-        UpdateLeftNavMargin();
     }
 
     private void SetSelectedSettingsItemDeferred()
@@ -263,37 +249,8 @@ public sealed partial class MainPage : Page
         // Layout sync is now handled by ShellLayoutStore and LayoutVM bindings
     }
 
-    private void SyncRightPanelWidthFromViewModel()
-    {
-        if (_isResizingRightPanel || RightPanelColumn is null)
-        {
-            return;
-        }
+    // Redundant layout methods removed as they are now driven by LayoutVM bindings.
 
-        if (RightPanelColumn.Visibility != Visibility.Visible)
-        {
-            return;
-        }
-
-        var target = Math.Clamp(NavVM.RightPanelWidth, RightPanelMinWidth, RightPanelMaxWidth);
-        if (!double.Equals(RightPanelColumn.Width, target))
-        {
-            RightPanelColumn.Width = target;
-        }
-    }
-
-    private void UpdateRightPanelState()
-    {
-        var mode = NavVM.RightPanelMode;
-        if (mode == RightPanelMode.None)
-        {
-            CloseRightPanel();
-        }
-        else
-        {
-            OpenRightPanel(mode);
-        }
-    }
 
     private void ApplyTheme()
     {
@@ -694,85 +651,15 @@ public sealed partial class MainPage : Page
 
 
 
-    private void OpenRightPanel(RightPanelMode mode)
+
+    private string GetRightPanelTitle(RightPanelMode mode, string? planTitle)
     {
-        if (RightPanelColumn is null) return;
-
-        UpdateRightPanelTitle();
-
-        if (RightPanelColumnDefinition is not null)
-        {
-            RightPanelColumnDefinition.Width = GridLength.Auto;
-        }
-
-        var targetWidth = Math.Clamp(NavVM.RightPanelWidth, RightPanelMinWidth, RightPanelMaxWidth);
-        NavVM.RightPanelWidth = targetWidth;
-        
-        if (UiMotion.Current.IsAnimationEnabled)
-        {
-            if (RightPanelColumn.Visibility != Visibility.Visible || RightPanelColumn.ActualWidth == 0)
-            {
-                RightPanelColumn.Visibility = Visibility.Visible;
-                RightPanelColumn.Width = 0;
-                RightPanelColumn.Opacity = 0;
-                if (RightPanelTranslate is not null) RightPanelTranslate.X = RightPanelAnimationOffset;
-                AnimateRightPanel(open: true, fromWidth: 0, toWidth: targetWidth);
-            }
-            else
-            {
-                RightPanelColumn.Width = targetWidth;
-                RightPanelColumn.Opacity = 1;
-                if (RightPanelTranslate is not null) RightPanelTranslate.X = 0;
-            }
-        }
-        else
-        {
-            RightPanelColumn.Visibility = Visibility.Visible;
-            RightPanelColumn.Width = targetWidth;
-            RightPanelColumn.Opacity = 1;
-            if (RightPanelTranslate is not null) RightPanelTranslate.X = 0;
-        }
-    }
-
-    private void CloseRightPanel()
-    {
-        if (RightPanelColumn is null) return;
-
-        if (UiMotion.Current.IsAnimationEnabled)
-        {
-            var fromWidth = RightPanelColumn.Width;
-            if (double.IsNaN(fromWidth) || fromWidth <= 0) fromWidth = RightPanelColumn.ActualWidth;
-            if (fromWidth <= 0) fromWidth = NavVM.RightPanelWidth;
-
-            NavVM.RightPanelWidth = Math.Clamp(fromWidth, RightPanelMinWidth, RightPanelMaxWidth);
-            AnimateRightPanel(open: false, fromWidth: fromWidth, toWidth: 0);
-        }
-        else
-        {
-            RightPanelColumn.Visibility = Visibility.Collapsed;
-            RightPanelColumn.Width = 0;
-        }
-    }
-
-    private void UpdateRightPanelTitle()
-    {
-        if (RightPanelTitle is null)
-        {
-            return;
-        }
-
-        RightPanelTitle.Text = NavVM.RightPanelMode switch
+        return mode switch
         {
             RightPanelMode.Diff => "Diff",
-            RightPanelMode.Todo => ResolveTodoPanelTitle(),
+            RightPanelMode.Todo => string.IsNullOrWhiteSpace(planTitle) ? "Todo" : planTitle,
             _ => "Panel"
         };
-    }
-
-    private string ResolveTodoPanelTitle()
-    {
-        var title = _chatViewModel.CurrentPlanTitle?.Trim();
-        return string.IsNullOrWhiteSpace(title) ? "Todo" : title;
     }
 
     private void UpdateRightPanelAvailability(bool isChat)
@@ -781,27 +668,9 @@ public sealed partial class MainPage : Page
         DiffPanelButton.Visibility = visibility;
         TodoPanelButton.Visibility = visibility;
 
-        if (RightPanelColumnDefinition is not null)
+        if (!isChat && LayoutVM.RightPanelMode != RightPanelMode.None)
         {
-            if (!isChat)
-            {
-                RightPanelColumnDefinition.Width = new GridLength(0);
-                if (RightPanelColumn is not null)
-                {
-                    RightPanelColumn.Visibility = Visibility.Collapsed;
-                    RightPanelColumn.Width = 0;
-                    RightPanelColumn.Opacity = 1;
-                    if (RightPanelTranslate is not null)
-                    {
-                        RightPanelTranslate.X = 0;
-                    }
-                }
-            }
-        }
-
-        if (!isChat)
-        {
-            CloseRightPanel();
+            _metricsSink.ReportRightPanelMode(RightPanelMode.None);
         }
     }
 
@@ -844,82 +713,6 @@ public sealed partial class MainPage : Page
         e.Handled = true;
     }
 
-    private void AnimateRightPanel(bool open, double fromWidth, double toWidth)
-    {
-        if (RightPanelColumn is null)
-        {
-            return;
-        }
-
-        _rightPanelStoryboard?.Stop();
-
-        var duration = TimeSpan.FromMilliseconds(180);
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-
-        var widthAnimation = new DoubleAnimation
-        {
-            From = fromWidth,
-            To = toWidth,
-            Duration = duration,
-            EasingFunction = easing,
-            EnableDependentAnimation = true
-        };
-        Storyboard.SetTarget(widthAnimation, RightPanelColumn);
-        Storyboard.SetTargetProperty(widthAnimation, "Width");
-
-        var opacityAnimation = new DoubleAnimation
-        {
-            From = open ? 0 : 1,
-            To = open ? 1 : 0,
-            Duration = duration,
-            EasingFunction = easing
-        };
-        Storyboard.SetTarget(opacityAnimation, RightPanelColumn);
-        Storyboard.SetTargetProperty(opacityAnimation, "Opacity");
-
-        var translateAnimation = new DoubleAnimation
-        {
-            From = open ? RightPanelAnimationOffset : 0,
-            To = open ? 0 : RightPanelAnimationOffset,
-            Duration = duration,
-            EasingFunction = easing
-        };
-        if (RightPanelTranslate is not null)
-        {
-            Storyboard.SetTarget(translateAnimation, RightPanelTranslate);
-            Storyboard.SetTargetProperty(translateAnimation, "X");
-        }
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(widthAnimation);
-        storyboard.Children.Add(opacityAnimation);
-        if (RightPanelTranslate is not null)
-        {
-            storyboard.Children.Add(translateAnimation);
-        }
-
-        storyboard.Completed += (_, _) =>
-        {
-            if (!open)
-            {
-                RightPanelColumn.Visibility = Visibility.Collapsed;
-                if (RightPanelColumnDefinition is not null)
-                {
-                    RightPanelColumnDefinition.Width = new GridLength(0);
-                }
-                RightPanelColumn.Width = 0;
-                RightPanelColumn.Opacity = 1;
-                if (RightPanelTranslate is not null)
-                {
-                    RightPanelTranslate.X = 0;
-                }
-            }
-            _rightPanelStoryboard = null;
-        };
-
-        _rightPanelStoryboard = storyboard;
-        storyboard.Begin();
-    }
 
     private void OnRightPanelResizerPointerReleased(object sender, PointerRoutedEventArgs e)
     {
@@ -1075,14 +868,15 @@ public sealed partial class MainPage : Page
 
     private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (NavVM.RightPanelMode != RightPanelMode.Todo)
+        if (LayoutVM.RightPanelMode != RightPanelMode.Todo)
         {
             return;
         }
 
         if (e.PropertyName == nameof(ChatViewModel.CurrentPlanTitle))
         {
-            UpdateRightPanelTitle();
+            // The title is now bound in XAML using GetRightPanelTitle.
+            // comunitToolkit.Mvvm will notify property changes.
         }
     }
 
@@ -1220,12 +1014,6 @@ public sealed partial class MainPage : Page
         // but preserve system hover/pressed visuals (including the Close button red state).
         _appWindowTitleBar.ButtonBackgroundColor = Colors.Transparent;
         _appWindowTitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        UpdateTitleBarInsets();
-
-        // Windows App SDK (current pinned version) does not expose LayoutMetricsChanged/IsVisibleChanged here.
-        // We refresh insets on common window lifecycle events instead.
-        window.Activated += OnMainWindowActivated;
-        window.SizeChanged += OnMainWindowSizeChanged;
 #endif
     }
 
@@ -1328,32 +1116,8 @@ public sealed partial class MainPage : Page
         sender.Hide();
     }
 #endif
-#if WINDOWS
-    private void OnMainWindowActivated(object sender, WindowActivatedEventArgs e)
-    {
-        UpdateTitleBarInsets();
-    }
-
-    private void OnMainWindowSizeChanged(object sender, WindowSizeChangedEventArgs e)
-    {
-        UpdateTitleBarInsets();
-    }
-
-    private void UpdateTitleBarInsets()
-    {
-        if (_appWindowTitleBar == null || AppTitleBar is null || AppTitleBarContent is null)
-        {
-            return;
-        }
-
-        // Keep interactive content out of the system caption button area.
-        AppTitleBarContent.Padding = new Thickness(_appWindowTitleBar.LeftInset, 0, _appWindowTitleBar.RightInset, 0);
-        if (_appWindowTitleBar.Height > 0)
-        {
-            AppTitleBar.Height = _appWindowTitleBar.Height;
-        }
-    }
-#endif
+    // TitleBar insets are now handled by WindowMetricsProvider reporting to IShellLayoutMetricsSink,
+    // which updates ShellLayoutStore/ShellLayoutViewModel. Visuals are bound using x:Bind in XAML.
 }
 public sealed partial class MainPage
 {
@@ -1366,12 +1130,5 @@ public sealed partial class MainPage
         Loaded -= OnMainPageLoaded;
         Unloaded -= OnMainPageUnloaded;
         ContentFrame.Navigated -= OnContentFrameNavigated;
-#if WINDOWS
-        if (App.MainWindowInstance != null)
-        {
-            App.MainWindowInstance.Activated -= OnMainWindowActivated;
-            App.MainWindowInstance.SizeChanged -= OnMainWindowSizeChanged;
-        }
-#endif
     }
 }
