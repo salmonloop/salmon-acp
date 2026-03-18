@@ -60,7 +60,7 @@
 - Create: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Mvux\ShellLayout\ShellLayoutAction.cs`
 - Create: `C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\ShellLayout\ShellLayoutStateTests.cs`
 
-- [ ] **Step 1: Write failing tests for types and defaults**
+- [x] **Step 1: Write failing tests for types and defaults**
 
 ```csharp
 [Fact]
@@ -75,13 +75,13 @@ public void ShellLayoutState_Defaults_AreStable()
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~ShellLayoutState_Defaults_AreStable`
 
 Expected: FAIL (types not found).
 
-- [ ] **Step 3: Implement minimal types**
+- [x] **Step 3: Implement minimal types**
 
 ```csharp
 public readonly record struct LayoutPadding(double Left, double Top, double Right, double Bottom);
@@ -127,13 +127,13 @@ public sealed record RightPanelModeChanged(RightPanelMode Mode) : ShellLayoutAct
 public sealed record RightPanelResizeRequested(double AbsoluteWidth) : ShellLayoutAction;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~ShellLayoutState_Defaults_AreStable`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Mvux\ShellLayout\ShellLayoutTypes.cs \
@@ -151,7 +151,7 @@ git commit -m "feat: add shell layout core types"
 - Create: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Mvux\ShellLayout\ShellLayoutPolicy.cs`
 - Modify: `C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\ShellLayout\ShellLayoutPolicyTests.cs`
 
-- [ ] **Step 1: Write failing policy tests (Wide/Medium/Narrow)**
+- [x] **Step 1: Write failing policy tests (Wide/Medium/Narrow)**
 
 ```csharp
 [Theory]
@@ -222,13 +222,13 @@ public void Policy_SearchBox_Visibility_And_Widths_ByBreakpoint()
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~Policy_MapsWidth_ToPaneMode`
 
 Expected: FAIL (policy missing).
 
-- [ ] **Step 3: Implement minimal policy**
+- [x] **Step 3: Implement minimal policy**
 
 ```csharp
 public static class ShellLayoutPolicy
@@ -275,13 +275,13 @@ public static class ShellLayoutPolicy
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~Policy_MapsWidth_ToPaneMode`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Mvux\ShellLayout\ShellLayoutPolicy.cs \
@@ -297,7 +297,7 @@ git commit -m "feat: add shell layout policy"
 - Create: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Mvux\ShellLayout\ShellLayoutStore.cs`
 - Create: `C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\ShellLayout\ShellLayoutReducerTests.cs`
 
-- [ ] **Step 1: Write failing reducer tests**
+- [x] **Step 1: Write failing reducer tests**
 
 ```csharp
 [Fact]
@@ -343,13 +343,13 @@ public void Reducer_Toggle_Uses_CurrentOpenState()
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~Reducer_UpdatesSnapshot_WhenWindowMetricsChange`
 
 Expected: FAIL (Reducer missing).
 
-- [ ] **Step 3: Implement reducer/store**
+- [x] **Step 3: Implement reducer/store**
 
 ```csharp
 public sealed record ShellLayoutReduced(ShellLayoutState State, ShellLayoutSnapshot Snapshot);
@@ -408,13 +408,13 @@ public sealed class ShellLayoutStore : IShellLayoutStore
 // Note: do NOT expose _snapshotState via DI; keep Snapshot read-only through IFeed.
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~Reducer_UpdatesSnapshot_WhenWindowMetricsChange`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Mvux\ShellLayout\ShellLayoutReducer.cs \
@@ -431,7 +431,7 @@ git commit -m "feat: add shell layout reducer and store"
 **Files:**
 - Create: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\ViewModels\ShellLayout\ShellLayoutViewModel.cs`
 
-- [ ] **Step 1: Write failing test for Snapshot projection**
+- [x] **Step 1: Write failing test for Snapshot projection**
 
 ```csharp
 [Fact]
@@ -459,13 +459,13 @@ private sealed class FakeShellLayoutStore : IShellLayoutStore
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test C:\Users\shang\Project\salmon-acp\tests\SalmonEgg.Presentation.Core.Tests\SalmonEgg.Presentation.Core.Tests.csproj -c Release --filter FullyQualifiedName~ViewModel_ProjectsSnapshot`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement minimal ViewModel**
+- [x] **Step 3: Implement minimal ViewModel**
 
 ```csharp
 public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
@@ -508,8 +508,8 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run test to verify it passes**
+- [x] **Step 5: Commit**
 
 ### Task 5: Add metrics sink + WindowMetricsProvider
 
@@ -517,7 +517,7 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
 - Create: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Services\IShellLayoutMetricsSink.cs`
 - Create: `C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\Presentation\Services\WindowMetricsProvider.cs`
 
-- [ ] **Step 1: Write failing tests for metrics sink dispatch**
+- [x] **Step 1: Write failing tests for metrics sink dispatch**
 
 ```csharp
 [Fact]
@@ -538,8 +538,8 @@ private sealed class CapturingStore : IShellLayoutStore
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run tests to verify failure**
+- [x] **Step 3: Implement**
 
 ```csharp
 public interface IShellLayoutMetricsSink
@@ -579,15 +579,15 @@ Note: Call `Attach` from `MainPage.Loaded`. If resize events are hot, add a ligh
 
 Note: `WindowMetricsProvider` is the only place that uses `Microsoft.UI.Xaml.Window` / `AppWindowTitleBar` to keep Core UI-free.
 
-- [ ] **Step 4: Run tests to verify pass**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run tests to verify pass**
+- [x] **Step 5: Commit**
 
 ### Task 6: Wire DI for store/snapshot/viewmodel/metrics
 
 **Files:**
 - Modify: `C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\DependencyInjection.cs`
 
-- [ ] **Step 1: Add DI registrations**
+- [x] **Step 1: Add DI registrations**
 
 ```csharp
 services.AddSingleton<IShellLayoutStore>(sp =>
@@ -602,11 +602,11 @@ services.AddSingleton<WindowMetricsProvider>();
 // Do NOT register IState<ShellLayoutSnapshot> publicly.
 ```
 
-- [ ] **Step 2: Build to ensure DI compiles**
+- [x] **Step 2: Build to ensure DI compiles**
 
 Run: `dotnet build C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\SalmonEgg.csproj -c Release`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -618,7 +618,7 @@ Run: `dotnet build C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\SalmonE
 - Modify: `C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\MainPage.xaml`
 - Create: `C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\Presentation\Converters\NavigationPaneDisplayModeConverter.cs`
 
-- [ ] **Step 1: Add converter**
+- [x] **Step 1: Add converter**
 
 ```csharp
 public sealed class NavigationPaneDisplayModeConverter : IValueConverter
@@ -638,7 +638,7 @@ public sealed class NavigationPaneDisplayModeConverter : IValueConverter
 }
 ```
 
-- [ ] **Step 2: Remove VisualState group and bind layout props**
+- [x] **Step 2: Remove VisualState group and bind layout props**
 
 ```xml
 <muxc:NavigationView
@@ -658,13 +658,13 @@ public sealed class NavigationPaneDisplayModeConverter : IValueConverter
     Padding="{x:Bind ShellLayoutVM.TitleBarPadding, Converter={StaticResource PaddingConverter}}" />
 ```
 
-- [ ] **Step 3: Run XAML build**
+- [x] **Step 3: Run XAML build**
 
 Run: `dotnet build C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\SalmonEgg.csproj -c Release`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
-- [ ] **Step 5: NavigationViewDisplayModeMonitor safety check**
+- [x] **Step 5: NavigationViewDisplayModeMonitor safety check**
   - Ensure it does **not** dispatch Actions or touch Store.
   - If kept, restrict it to DEBUG logging only (no side effects).
 
@@ -673,14 +673,14 @@ Run: `dotnet build C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\SalmonE
 **Files:**
 - Modify: `C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\MainPage.xaml.cs`
 
-- [ ] **Step 1: Inject ShellLayoutViewModel + WindowMetricsProvider**
-- [ ] **Step 2: Replace ToggleNavPane with Dispatch(NavToggleRequested)**
-- [ ] **Step 3: Replace right-panel resize writes with Dispatch(RightPanelResizeRequested)**
-- [ ] **Step 4: Remove UpdateTitleBarInsets direct padding writes; use WindowMetricsProvider.Attach**
-- [ ] **Step 4.1: Call WindowMetricsProvider.Attach in MainPage.Loaded (once)**
-- [ ] **Step 4.2: Remove any remaining direct layout writes (OpenPaneLength/PaneDisplayMode/SearchBox/TitleBar/RightPanel)**
-- [ ] **Step 5: Build**
-- [ ] **Step 6: Commit**
+- [x] **Step 1: Inject ShellLayoutViewModel + WindowMetricsProvider**
+- [x] **Step 2: Replace ToggleNavPane with Dispatch(NavToggleRequested)**
+- [x] **Step 3: Replace right-panel resize writes with Dispatch(RightPanelResizeRequested)**
+- [x] **Step 4: Remove UpdateTitleBarInsets direct padding writes; use WindowMetricsProvider.Attach**
+- [x] **Step 4.1: Call WindowMetricsProvider.Attach in MainPage.Loaded (once)**
+- [x] **Step 4.2: Remove any remaining direct layout writes (OpenPaneLength/PaneDisplayMode/SearchBox/TitleBar/RightPanel)**
+- [x] **Step 5: Build**
+- [x] **Step 6: Commit**
 
 ### Task 9: Navigation viewmodels bind to read-only pane state
 
@@ -690,7 +690,7 @@ Run: `dotnet build C:\Users\shang\Project\salmon-acp\SalmonEgg\SalmonEgg\SalmonE
 - Modify: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Services\NavigationStateService.cs`
 - Create: `C:\Users\shang\Project\salmon-acp\src\SalmonEgg.Presentation.Core\Services\ShellLayoutNavigationStateAdapter.cs`
 
-- [ ] **Step 1: Implement INavigationPaneState and adapter**
+- [x] **Step 1: Implement INavigationPaneState and adapter**
 
 ```csharp
 public interface INavigationPaneState
@@ -720,10 +720,10 @@ public sealed class ShellLayoutNavigationStateAdapter : INavigationPaneState, ID
 }
 ```
 
-- [ ] **Step 2: Update MainNavItemViewModel to depend on INavigationPaneState**
-- [ ] **Step 3: Update MainNavigationViewModel to remove IsPaneOpen setter and dispatch NavToggleRequested via metrics sink/store**
-- [ ] **Step 4: Run tests for navigation VM**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Update MainNavItemViewModel to depend on INavigationPaneState**
+- [x] **Step 3: Update MainNavigationViewModel to remove IsPaneOpen setter and dispatch NavToggleRequested via metrics sink/store**
+- [x] **Step 4: Run tests for navigation VM**
+- [x] **Step 5: Commit**
 
 ---
 

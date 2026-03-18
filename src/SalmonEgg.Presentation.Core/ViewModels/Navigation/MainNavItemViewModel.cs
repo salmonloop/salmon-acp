@@ -8,11 +8,11 @@ namespace SalmonEgg.Presentation.ViewModels.Navigation;
 
 public abstract partial class MainNavItemViewModel : ObservableObject, IDisposable
 {
-    protected readonly INavigationStateService NavigationState;
+    protected readonly INavigationPaneState NavigationState;
 
     public ObservableCollection<MainNavItemViewModel> Children { get; } = new();
 
-    protected MainNavItemViewModel(INavigationStateService navigationState)
+    protected MainNavItemViewModel(INavigationPaneState navigationState)
     {
         NavigationState = navigationState;
         NavigationState.PaneStateChanged += OnServicePaneStateChanged;
@@ -54,7 +54,7 @@ public sealed partial class SessionsHeaderNavItemViewModel : MainNavItemViewMode
 
     public bool ShowCompactButton => IsPaneClosed;
 
-    public SessionsHeaderNavItemViewModel(IAsyncRelayCommand addProjectCommand, INavigationStateService navigationState)
+    public SessionsHeaderNavItemViewModel(IAsyncRelayCommand addProjectCommand, INavigationPaneState navigationState)
         : base(navigationState)
     {
         AddProjectCommand = addProjectCommand;

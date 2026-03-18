@@ -26,7 +26,10 @@ using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.ViewModels.Start;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
+using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 using Uno.Extensions.Reactive;
+using SalmonEgg.Presentation.Core.Services;
 
 namespace SalmonEgg;
 
@@ -144,6 +147,15 @@ public static class DependencyInjection
         services.AddSingleton<IState<ChatState>>(sp => State.Value(sp, () => ChatState.Empty));
         services.AddSingleton<IChatStore, ChatStore>();
 
+        // MVUX Shell Layout Store
+        services.AddSingleton<IShellLayoutStore>(sp =>
+        {
+            var state = State.Value(sp, () => ShellLayoutState.Default);
+            var snapshot = State.Value(sp, () => ShellLayoutPolicy.Compute(ShellLayoutState.Default));
+            return new ShellLayoutStore(state, snapshot);
+        });
+        services.AddSingleton<IShellLayoutMetricsSink, ShellLayoutMetricsSink>();
+
         // 用例
         services.AddTransient<ConnectToServerUseCase>();
         services.AddTransient<DisconnectUseCase>();
@@ -223,7 +235,8 @@ public static class DependencyInjection
         // Shell navigation facade (prevents Settings pages from walking the visual tree)
         services.AddSingleton<IShellNavigationService, ShellNavigationService>();
 
-        // Navigation state service (Single Source of Truth for IsPaneOpen)
+        // Navigation state service (Single Source of Truth for IsPaneOpen) - Read-only adapter for SSOT
+        services.AddSingleton<INavigationPaneState, ShellLayoutNavigationStateAdapter>();
         services.AddSingleton<INavigationStateService, NavigationStateService>();
 
         // Right panel state service (Single Source of Truth for RightPanelMode)
@@ -237,6 +250,10 @@ public static class DependencyInjection
 
         // Mini floating chat window coordinator (Windows-only feature; other targets no-op via capability).
         services.AddSingleton<IMiniWindowCoordinator, MiniWindowCoordinator>();
+
+        // Shell Layout SSOT
+        services.AddSingleton<ShellLayoutViewModel>();
+        services.AddSingleton<WindowMetricsProvider>();
     }
 
     private static string GetAppDataPath()

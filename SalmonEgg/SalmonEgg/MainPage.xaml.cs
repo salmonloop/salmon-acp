@@ -24,6 +24,8 @@ using SalmonEgg.Presentation.ViewModels;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
+using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.Views;
 using SalmonEgg.Presentation.Views.Chat;
@@ -73,19 +75,33 @@ public sealed partial class MainPage : Page
     public GlobalSearchViewModel SearchVM { get; }
     private readonly ChatViewModel _chatViewModel;
     public ChatViewModel ChatVM => _chatViewModel;
+    public ShellLayoutViewModel LayoutVM { get; }
+    private readonly WindowMetricsProvider _metricsProvider;
+    private readonly IShellLayoutMetricsSink _metricsSink;
     private readonly SalmonEgg.Presentation.Logic.SearchInteractionLogic _searchLogic = new();
 
     public MainPage()
     {
         BootLogDebug("MainPage: ctor start");
-        // 1. 在初始化组件前获取 ViewModel，确保 x:Bind 绑定正常
+        // 1. 鍦ㄥ垵濮嬪寲缁勪欢鍓嶈幏鍙?ViewModel锛岀‘淇?x:Bind 缁戝畾姝ｅ父
         Preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
         NavVM = App.ServiceProvider.GetRequiredService<MainNavigationViewModel>();
         _chatViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
         SearchVM = App.ServiceProvider.GetRequiredService<GlobalSearchViewModel>();
 
+        LayoutVM = App.ServiceProvider.GetRequiredService<ShellLayoutViewModel>();
+        _metricsProvider = App.ServiceProvider.GetRequiredService<WindowMetricsProvider>();
+        _metricsSink = App.ServiceProvider.GetRequiredService<IShellLayoutMetricsSink>();
+
         this.InitializeComponent();
         BootLogDebug("MainPage: InitializeComponent done");
+
+#if WINDOWS
+        _metricsProvider.Attach(App.MainWindowInstance!, _appWindowTitleBar);
+#else
+        _metricsProvider.Attach(App.MainWindowInstance!, null);
+#endif
+        _searchLogic.Attach(this);
 
         Loaded += OnMainPageLoaded;
         Unloaded += OnMainPageUnloaded;
@@ -99,11 +115,11 @@ public sealed partial class MainPage : Page
         }
 #endif
 
-        // 2. 监听全局设置变化（如动画开关、主题、背景材质）
+        // 2. 鐩戝惉鍏ㄥ眬璁剧疆鍙樺寲锛堝鍔ㄧ敾寮€鍏炽€佷富棰樸€佽儗鏅潗璐級
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
 
-        // 3. 初始化主题与动画状态
+        // 3. 鍒濆鍖栦富棰樹笌鍔ㄧ敾鐘舵€?
         ApplyTheme();
         ApplyBackdrop();
         UpdateNavigationTransitions();
@@ -112,9 +128,9 @@ public sealed partial class MainPage : Page
         ConfigureNavigationView();
         SubscribeMotion();
         SubscribeNavItems();
-        NavVM.PropertyChanged += OnNavVMPropertyChanged;
+        // NavVM.PropertyChanged registration removed as layout is now driven by LayoutVM SSOT
 
-        // 4. 启动后默认进入开始界面
+        // 4. 鍚姩鍚庨粯璁よ繘鍏ュ紑濮嬬晫闈?
         NavVM.SelectStart();
         NavigateToStart();
         BootLogDebug("MainPage: navigated to StartView");
@@ -133,7 +149,10 @@ public sealed partial class MainPage : Page
         UnsubscribeMotion();
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
-        NavVM.PropertyChanged -= OnNavVMPropertyChanged;
+        // NavVM.PropertyChanged unregistration removed
+        _metricsProvider.Detach();
+        _searchLogic.Detach();
+        App.CleanupWebResources();
 #if WINDOWS
         _trayIcon?.Dispose();
         _trayIcon = null;
@@ -142,31 +161,10 @@ public sealed partial class MainPage : Page
 
     private void ConfigureNavigationView()
     {
-        if (MainNavView == null)
-        {
-            return;
-        }
-
-        // Single source of truth: pull default sizes from XAML resources.
-        if (Resources.TryGetValue("NavCompactPaneLength", out var compact) && compact is double compactLength)
-        {
-            NavVM.NavCompactPaneLength = compactLength;
-        }
-        else
-        {
-            NavVM.NavCompactPaneLength = MainNavView.CompactPaneLength;
-        }
-
-        if (Resources.TryGetValue("NavOpenPaneLength", out var open) && open is double openLength)
-        {
-            NavVM.NavOpenPaneLength = openLength;
-        }
-        else
-        {
-            NavVM.NavOpenPaneLength = MainNavView.OpenPaneLength;
-        }
-
-        UpdateLeftNavResizerPosition();
+        // SSOT: These are now driven by LayoutVM bindings.
+        // We report initial sizes only if they differ from Layout defaults, 
+        // but typically the defaults in LayoutState (300/72) match the app.
+        UpdateLeftNavMargin();
     }
 
     private void SetSelectedSettingsItemDeferred()
@@ -267,15 +265,7 @@ public sealed partial class MainPage : Page
 
     private void OnNavVMPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(NavVM.RightPanelMode))
-        {
-            UpdateRightPanelState();
-        }
-
-        if (e.PropertyName == nameof(NavVM.RightPanelWidth))
-        {
-            SyncRightPanelWidthFromViewModel();
-        }
+        // Layout sync is now handled by ShellLayoutStore and LayoutVM bindings
     }
 
     private void SyncRightPanelWidthFromViewModel()
@@ -366,7 +356,7 @@ public sealed partial class MainPage : Page
 
     private void UpdateNavigationTransitions()
     {
-        // 根据全局设置动态开启或关闭 Frame 的过渡动画
+        // 鏍规嵁鍏ㄥ眬璁剧疆鍔ㄦ€佸紑鍚垨鍏抽棴 Frame 鐨勮繃娓″姩鐢?
         if (UiMotion.Current.IsAnimationEnabled)
         {
             ContentFrame.ContentTransitions = new TransitionCollection
@@ -699,10 +689,10 @@ public sealed partial class MainPage : Page
 
             if (targetMode != RightPanelMode.None)
             {
-                // Toggle behavior: if already in this mode, turn off.
-                NavVM.RightPanelMode = NavVM.RightPanelMode == targetMode 
+                var newMode = LayoutVM.RightPanelMode == targetMode 
                     ? RightPanelMode.None 
                     : targetMode;
+                _metricsSink.ReportRightPanelMode(newMode);
             }
         }
     }
@@ -822,14 +812,14 @@ public sealed partial class MainPage : Page
 
     private void OnRightPanelResizerPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (RightPanelColumn is null || RightPanelResizer is null || RightPanelColumn.Visibility != Visibility.Visible)
+        if (RightPanelColumn is null || RightPanelResizer is null || LayoutVM.RightPanelVisible == false)
         {
             return;
         }
 
         _isResizingRightPanel = true;
         _rightPanelResizeStartX = e.GetCurrentPoint(this).Position.X;
-        _rightPanelResizeStartWidth = RightPanelColumn.Width;
+        _rightPanelResizeStartWidth = LayoutVM.RightPanelWidth;
 
         RightPanelResizer.CapturePointer(e.Pointer);
         e.Handled = true;
@@ -855,8 +845,7 @@ public sealed partial class MainPage : Page
             newWidth = RightPanelMaxWidth;
         }
 
-        RightPanelColumn.Width = newWidth;
-        NavVM.RightPanelWidth = newWidth;
+        _metricsSink.ReportRightPanelWidth(newWidth);
         e.Handled = true;
     }
 
@@ -986,12 +975,12 @@ public sealed partial class MainPage : Page
 
     private void OnToggleLeftNavClick(object sender, RoutedEventArgs e)
     {
-        ToggleNavPane();
+        _metricsSink.ReportNavToggle("TitleBarButton");
     }
 
     private void OnSearchPanelPopupOpened(object sender, object e)
     {
-        // Flyout 不需要手动计算位置
+        // Flyout 涓嶉渶瑕佹墜鍔ㄨ绠椾綅缃?
     }
 
     private void OnSearchPanelPopupClosed(object sender, object e)
@@ -1006,31 +995,12 @@ public sealed partial class MainPage : Page
     {
         if (TopSearchBox != null)
         {
-            // 移除焦点到背景或 Frame
+            // 绉婚櫎鐒︾偣鍒拌儗鏅垨 Frame
             ContentFrame?.Focus(FocusState.Programmatic);
         }
     }
 
-    private void ToggleNavPane()
-    {
-        if (MainNavView == null)
-        {
-            return;
-        }
-
-        var currentOpen = NavVM.IsPaneOpen;
-        var targetOpen = _panePolicy.Toggle(currentOpen);
-
-        if (!UiMotion.Current.IsAnimationEnabled || MainNavView.DisplayMode == NavigationViewDisplayMode.Minimal)
-        {
-            NavVM.IsPaneOpen = targetOpen;
-            UpdateNavPaneToggleUi(targetOpen);
-            return;
-        }
-
-        AnimateNavPane(targetOpen);
-        UpdateNavPaneToggleUi(targetOpen);
-    }
+    // ToggleNavPane removed as it now simply dispatches via the Click handler.
 
     private void UpdateNavPaneToggleUi(bool? isOpenOverride = null)
     {
@@ -1039,7 +1009,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        var isOpen = isOpenOverride ?? NavVM.IsPaneOpen;
+        var isOpen = isOpenOverride ?? LayoutVM.IsNavPaneOpen;
         ToolTipService.SetToolTip(TitleBarToggleLeftNavButton, isOpen ? "折叠左侧边栏" : "展开左侧边栏");
     }
 
@@ -1088,19 +1058,19 @@ public sealed partial class MainPage : Page
 
     private void OnMainNavPaneOpened(NavigationView sender, object args)
     {
+        _metricsSink.ReportNavToggle("PaneOpened");
         UpdateNavPaneToggleUi();
-        UpdateLeftNavResizerPosition();
     }
 
     private void OnMainNavPaneClosed(NavigationView sender, object args)
     {
+        _metricsSink.ReportNavToggle("PaneClosed");
         UpdateNavPaneToggleUi();
-        UpdateLeftNavResizerPosition();
     }
 
     private void OnMainNavDisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
     {
-        UpdateLeftNavResizerPosition();
+        UpdateNavPaneToggleUi();
     }
 
     private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1116,78 +1086,14 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void AnimateNavPane(bool targetOpen)
-    {
-        if (MainNavView == null)
-        {
-            return;
-        }
-
-        var navVm = NavVM;
-        if (_navPaneAnimating)
-        {
-            _navPaneStoryboard?.Stop();
-            _navPaneAnimating = false;
-        }
-
-        UpdateLeftNavResizerPosition();
-
-        var from = targetOpen ? navVm.NavCompactPaneLength : MainNavView.OpenPaneLength;
-        var to = targetOpen ? navVm.NavOpenPaneLength : navVm.NavCompactPaneLength;
-
-        if (targetOpen)
-        {
-            navVm.IsPaneOpen = true;
-        }
-
-        MainNavView.OpenPaneLength = from;
-
-        var duration = TimeSpan.FromMilliseconds(NavPaneAnimationDurationMs);
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-
-        var widthAnimation = new DoubleAnimation
-        {
-            From = from,
-            To = to,
-            Duration = duration,
-            EasingFunction = easing,
-            EnableDependentAnimation = true
-        };
-
-        Storyboard.SetTarget(widthAnimation, MainNavView);
-        Storyboard.SetTargetProperty(widthAnimation, "OpenPaneLength");
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(widthAnimation);
-        storyboard.Completed += (_, _) =>
-        {
-            _navPaneAnimating = false;
-            navVm.IsNavPaneAnimating = false;
-            if (!targetOpen)
-            {
-                navVm.IsPaneOpen = false;
-            }
-            else
-            {
-                MainNavView.OpenPaneLength = navVm.NavOpenPaneLength;
-            }
-            UpdateNavPaneToggleUi();
-            UpdateLeftNavResizerPosition();
-            _navPaneStoryboard = null;
-        };
-
-        _navPaneAnimating = true;
-        navVm.IsNavPaneAnimating = true;
-        _navPaneStoryboard = storyboard;
-        storyboard.Begin();
-    }
+    // Animation logic removed
 
     private void OnMainNavPaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)
     {
         // If the state change was already confirmed in the ViewModel (Single Source of Truth), 
         // we should not interfere with the closing process. This ensures that programmatic 
         // or policy-driven collapses (like at startup) sync correctly with the UI.
-        if (NavVM != null && !NavVM.IsPaneOpen)
+        if (LayoutVM != null && !LayoutVM.IsNavPaneOpen)
         {
             return;
         }
@@ -1199,46 +1105,11 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void UpdateLeftNavResizerPosition()
-    {
-        if (LeftNavResizerTransform == null || LeftNavResizer == null || MainNavView == null)
-        {
-            return;
-        }
-
-        var width = LeftNavResizer.Width;
-        if (double.IsNaN(width) || width <= 0)
-        {
-            width = 6;
-        }
-
-        var targetX = MainNavView.OpenPaneLength - width;
-        if (targetX < 0)
-        {
-            targetX = 0;
-        }
-
-        LeftNavResizerTransform.X = targetX;
-    }
+    // Manual resizer positioning removed as it is now handled by XAML binding to LayoutVM.LeftNavResizerLeft
 
     private bool CanResizeLeftNav()
     {
-        if (MainNavView == null)
-        {
-            return false;
-        }
-
-        if (_navPaneAnimating)
-        {
-            return false;
-        }
-
-        if (!NavVM.IsPaneOpen)
-        {
-            return false;
-        }
-
-        return MainNavView.DisplayMode != NavigationViewDisplayMode.Minimal;
+        return LayoutVM != null && LayoutVM.IsNavResizerVisible;
     }
 
     private void OnLeftNavResizerPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1250,7 +1121,7 @@ public sealed partial class MainPage : Page
 
         _isResizingLeftNav = true;
         _leftNavResizeStartX = e.GetCurrentPoint(this).Position.X;
-        _leftNavResizeStartWidth = MainNavView.OpenPaneLength;
+        _leftNavResizeStartWidth = LayoutVM.NavOpenPaneLength;
 
         LeftNavResizer.CapturePointer(e.Pointer);
         e.Handled = true;
@@ -1276,14 +1147,11 @@ public sealed partial class MainPage : Page
             newWidth = NavPaneMaxWidth;
         }
 
-        NavVM.NavOpenPaneLength = newWidth;
-        NavVM.OpenPaneLength = newWidth;
-        UpdateLeftNavResizerPosition();
+        _metricsSink.ReportLeftNavWidth(newWidth);
         e.Handled = true;
-#if DEBUG
-        System.Diagnostics.Debug.WriteLine($"[NavResize] NewWidth={newWidth} IsPaneOpen={MainNavView.IsPaneOpen} DisplayMode={MainNavView.DisplayMode}");
-#endif
     }
+    
+    // Debug line removed
 
     private void OnLeftNavResizerPointerReleased(object sender, PointerRoutedEventArgs e)
     {
@@ -1305,7 +1173,6 @@ public sealed partial class MainPage : Page
 
         _isResizingLeftNav = false;
         LeftNavResizer.ReleasePointerCapture(pointer);
-        UpdateLeftNavResizerPosition();
     }
 
     private void ConfigureTitleBar()

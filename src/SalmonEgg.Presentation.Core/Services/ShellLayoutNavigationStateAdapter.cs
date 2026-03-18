@@ -1,39 +1,22 @@
 using System;
-using System.Threading.Tasks;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using Uno.Extensions.Reactive;
-using SalmonEgg.Presentation.Core.Services;
 
 namespace SalmonEgg.Presentation.Services;
 
-public sealed class NavigationStateService : INavigationStateService, IDisposable
+public sealed class ShellLayoutNavigationStateAdapter : INavigationPaneState, IDisposable
 {
-    private readonly IShellLayoutMetricsSink _sink;
     private readonly IDisposable _subscription;
-    private bool _isPaneOpen = true;
-
-    public bool IsPaneOpen
-    {
-        get => _isPaneOpen;
-        set
-        {
-            if (_isPaneOpen != value)
-            {
-                _sink.ReportNavToggle("ServiceOverride");
-            }
-        }
-    }
-
+    private bool _isPaneOpen;
+    public bool IsPaneOpen => _isPaneOpen;
     public event EventHandler? PaneStateChanged;
 
-    public NavigationStateService(IShellLayoutStore store, IShellLayoutMetricsSink sink)
+    public ShellLayoutNavigationStateAdapter(IShellLayoutStore store)
     {
-        _sink = sink;
         _subscription = store.Snapshot.ForEach((snapshot, ct) =>
         {
             if (snapshot is null) return ValueTask.CompletedTask;
             if (_isPaneOpen == snapshot.IsNavPaneOpen) return ValueTask.CompletedTask;
-
             _isPaneOpen = snapshot.IsNavPaneOpen;
             PaneStateChanged?.Invoke(this, EventArgs.Empty);
             return ValueTask.CompletedTask;

@@ -12,7 +12,7 @@ public sealed partial class StartNavItemViewModel : MainNavItemViewModel
 {
     public string Title { get; } = "开始";
 
-    public StartNavItemViewModel(INavigationStateService navigationState) 
+    public StartNavItemViewModel(INavigationPaneState navigationState) 
         : base(navigationState)
     {
     }
@@ -44,7 +44,7 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
         ProjectDefinition project, 
         bool isSystemProject, 
         Func<string, Task> createSessionAsync,
-        INavigationStateService navigationState)
+        INavigationPaneState navigationState)
         : base(navigationState)
     {
         ProjectId = project.ProjectId;
@@ -90,7 +90,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         string relativeTimeText,
         IUiInteractionService ui,
         ChatViewModel chatViewModel,
-        INavigationStateService navigationState,
+        INavigationPaneState navigationState,
         bool isPlaceholder = false)
         : base(navigationState)
     {
@@ -172,7 +172,7 @@ public sealed partial class MoreSessionsNavItemViewModel : MainNavItemViewModel
 
     public IAsyncRelayCommand ShowMoreCommand { get; }
 
-    public MoreSessionsNavItemViewModel(string projectId, int remainingCount, IAsyncRelayCommand showMoreCommand, INavigationStateService navigationState)
+    public MoreSessionsNavItemViewModel(string projectId, int remainingCount, IAsyncRelayCommand showMoreCommand, INavigationPaneState navigationState)
         : base(navigationState)
     {
         ProjectId = projectId;

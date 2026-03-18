@@ -27,8 +27,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly IUiInteractionService _ui;
     private readonly IShellNavigationService _shellNavigation;
     private readonly ILogger<MainNavigationViewModel> _logger;
-    private readonly INavigationStateService _navigationState;
-    private readonly IRightPanelService _rightPanelService;
+    private readonly INavigationPaneState _navigationState;
+    private readonly IShellLayoutMetricsSink _metricsSink;
     private readonly SynchronizationContext _syncContext;
     private readonly System.Collections.Specialized.NotifyCollectionChangedEventHandler _projectsChangedHandler;
     private readonly Timer _relativeTimeTimer;
@@ -38,12 +38,6 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectIndex = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectVms = new(StringComparer.Ordinal);
     private string? _pendingProjectIdForNewSession;
-    private double _navCompactPaneLength = 72;
-    private double _navOpenPaneLength = 300;
-    private double _openPaneLength = 300;
-    private NavigationPaneDisplayMode _paneDisplayMode = NavigationPaneDisplayMode.Expanded;
-    private bool _isNavPaneAnimating;
-    private bool _isLeftNavResizerVisible;
 
     public ObservableCollection<MainNavItemViewModel> Items { get; } = new();
 
@@ -58,154 +52,14 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         set => SetProperty(ref _selectedItem, value);
     }
 
-    public double NavCompactPaneLength
-    {
-        get => _navCompactPaneLength;
-        set
-        {
-            if (SetProperty(ref _navCompactPaneLength, value))
-            {
-                LogPaneState("NavCompactPaneLengthChanged");
-                UpdateOpenPaneLength();
-            }
-        }
-    }
-
-    public double NavOpenPaneLength
-    {
-        get => _navOpenPaneLength;
-        set
-        {
-            if (SetProperty(ref _navOpenPaneLength, value))
-            {
-                LogPaneState("NavOpenPaneLengthChanged");
-                UpdateOpenPaneLength();
-            }
-        }
-    }
-
-    public double OpenPaneLength
-    {
-        get => _openPaneLength;
-        set
-        {
-            if (SetProperty(ref _openPaneLength, value))
-            {
-                LogPaneState("OpenPaneLengthChanged");
-            }
-        }
-    }
-
-    public bool IsPaneOpen
-    {
-        get => _navigationState.IsPaneOpen;
-        set
-        {
-            if (_navigationState.IsPaneOpen != value)
-            {
-                _navigationState.IsPaneOpen = value;
-            }
-        }
-    }
-
-    public RightPanelMode RightPanelMode
-    {
-        get => _rightPanelService.CurrentMode;
-        set => _rightPanelService.CurrentMode = value;
-    }
-
-    public double RightPanelWidth
-    {
-        get => _rightPanelService.PanelWidth;
-        set => _rightPanelService.PanelWidth = value;
-    }
+    public bool IsPaneOpen => _navigationState.IsPaneOpen;
 
     private void OnServicePaneStateChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsPaneOpen));
-        OnIsPaneOpenChanged(_navigationState.IsPaneOpen, "ServiceSync");
-    }
-
-    private void OnRightPanelServiceModeChanged(object? sender, EventArgs e)
-    {
-        OnPropertyChanged(nameof(RightPanelMode));
-    }
-
-    private void OnRightPanelServiceWidthChanged(object? sender, EventArgs e)
-    {
-        OnPropertyChanged(nameof(RightPanelWidth));
-    }
-
-    public NavigationPaneDisplayMode PaneDisplayMode
-    {
-        get => _paneDisplayMode;
-        set
-        {
-            if (_paneDisplayMode == value)
-            {
-                return;
-            }
-
-            var previous = _paneDisplayMode;
-            if (SetProperty(ref _paneDisplayMode, value))
-            {
-                LogPaneState("PaneDisplayModeChanged");
-                ApplyPaneDisplayModePolicy(previous, value);
-                UpdateOpenPaneLength();
-                UpdateLeftNavResizerVisibility();
-            }
-        }
-    }
-
-    public bool IsNavPaneAnimating
-    {
-        get => _isNavPaneAnimating;
-        set
-        {
-            if (SetProperty(ref _isNavPaneAnimating, value))
-            {
-                LogPaneState("IsNavPaneAnimatingChanged");
-                UpdateLeftNavResizerVisibility();
-            }
-        }
-    }
-
-    public bool IsLeftNavResizerVisible
-    {
-        get => _isLeftNavResizerVisible;
-        private set => SetProperty(ref _isLeftNavResizerVisible, value);
-    }
-
-    private void OnIsPaneOpenChanged(bool isOpen, string reason)
-    {
-        SetPaneOpen(isOpen);
-        LogPaneState(reason);
-        UpdateOpenPaneLength();
-        UpdateLeftNavResizerVisibility();
-    }
-
-    private void ApplyPaneDisplayModePolicy(NavigationPaneDisplayMode previous, NavigationPaneDisplayMode current)
-    {
-        // Ensure a single source of truth for pane state across platforms.
-        // Window-size visual states (View) drive PaneDisplayMode, while Core decides IsPaneOpen defaults.
-        var shouldBeOpen = current switch
-        {
-            NavigationPaneDisplayMode.Expanded => true,
-            _ => false
-        };
-
-        // Only adjust when the display mode actually changes; user toggles within a mode are preserved.
-        if (shouldBeOpen == _navigationState.IsPaneOpen)
-        {
-            return;
-        }
-
-        _navigationState.IsPaneOpen = shouldBeOpen;
     }
 
     public IAsyncRelayCommand AddProjectCommand { get; }
-
-
 
     public MainNavigationViewModel(
         ChatViewModel chatViewModel,
@@ -214,8 +68,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         IUiInteractionService ui,
         IShellNavigationService shellNavigation,
         ILogger<MainNavigationViewModel> logger,
-        INavigationStateService navigationState,
-        IRightPanelService rightPanelService)
+        INavigationPaneState navigationState,
+        IShellLayoutMetricsSink metricsSink)
     {
         _chatViewModel = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
@@ -224,11 +78,10 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _shellNavigation = shellNavigation ?? throw new ArgumentNullException(nameof(shellNavigation));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationState = navigationState ?? throw new ArgumentNullException(nameof(navigationState));
-        _rightPanelService = rightPanelService ?? throw new ArgumentNullException(nameof(rightPanelService));
+        _metricsSink = metricsSink ?? throw new ArgumentNullException(nameof(metricsSink));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
         AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
-
 
         StartItem = new StartNavItemViewModel(_navigationState);
         SessionsHeaderItem = new SessionsHeaderNavItemViewModel(AddProjectCommand, _navigationState);
@@ -253,61 +106,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             RelativeTimeRefreshInterval,
             RelativeTimeRefreshInterval);
 
-        UpdateOpenPaneLength();
-        UpdateLeftNavResizerVisibility();
-
         _navigationState.PaneStateChanged += OnServicePaneStateChanged;
-        _rightPanelService.ModeChanged += OnRightPanelServiceModeChanged;
-        _rightPanelService.WidthChanged += OnRightPanelServiceWidthChanged;
-    }
-
-    public void SetPaneOpen(bool isOpen)
-    {
-        // We do not broadcast state recursively anymore, because all VMs share the Service directly.
-        _navigationState.IsPaneOpen = isOpen;
-    }
-
-    private void UpdateOpenPaneLength()
-    {
-        var useCompact = !IsPaneOpen &&
-                         (PaneDisplayMode == NavigationPaneDisplayMode.Compact
-                          || PaneDisplayMode == NavigationPaneDisplayMode.Minimal);
-
-        var target = useCompact ? NavCompactPaneLength : NavOpenPaneLength;
-        if (!double.Equals(OpenPaneLength, target))
-        {
-            OpenPaneLength = target;
-        }
-    }
-
-    private void UpdateLeftNavResizerVisibility()
-    {
-        var shouldShow = IsPaneOpen
-                         && !IsNavPaneAnimating
-                         && PaneDisplayMode == NavigationPaneDisplayMode.Expanded;
-
-        IsLeftNavResizerVisible = shouldShow;
-    }
-
-    private void LogPaneState(string reason)
-    {
-#if DEBUG
-        _logger.LogDebug(
-            "NavPaneState {Reason} CompactLen={CompactLen} OpenLen={OpenLen} PaneOpen={PaneOpen} Mode={Mode} EffectiveLen={EffectiveLen}",
-            reason,
-            NavCompactPaneLength,
-            NavOpenPaneLength,
-            IsPaneOpen,
-            PaneDisplayMode,
-            OpenPaneLength);
-#endif
     }
 
     public void Dispose()
     {
         _navigationState.PaneStateChanged -= OnServicePaneStateChanged;
-        _rightPanelService.ModeChanged -= OnRightPanelServiceModeChanged;
-        _rightPanelService.WidthChanged -= OnRightPanelServiceWidthChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         _preferences.Projects.CollectionChanged -= _projectsChangedHandler;
         _relativeTimeTimer.Dispose();
