@@ -58,6 +58,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private string? _currentRemoteSessionId;
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
     private bool _suppressMiniWindowSessionSync;
+    private bool _suppressStoreConversationProjection;
+    private bool _suppressStoreProfileProjection;
+    private bool _suppressStorePromptProjection;
+    private bool _suppressProfileSyncFromStore;
+    private string? _selectedProfileIdFromStore;
 
     /// <summary>
     /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
@@ -292,6 +297,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     CurrentConnectionStatus = state.ConnectionStatus;
                     ConnectionErrorMessage = state.ConnectionError;
                     SyncMessageHistory(state.Messages, state.IsThinking);
+                    ApplyStoreProjection(state);
                 }).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
@@ -305,6 +311,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }, out _storeStateSubscription);
 
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
+        _acpProfiles.Profiles.CollectionChanged += OnAcpProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
 
         // Start restoring local conversation list immediately so the sidebar can show it ASAP.
@@ -362,6 +369,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         if (e.PropertyName == nameof(AcpProfilesViewModel.SelectedProfile))
         {
+            if (_suppressProfileSyncFromStore)
+            {
+                return;
+            }
+
             // Sync UI selection without triggering another connect attempt.
             _suppressAcpProfileConnect = true;
             try
@@ -375,9 +387,75 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void ApplyStoreProjection(ChatState state)
+    {
+        _suppressStoreConversationProjection = true;
+        _suppressStoreProfileProjection = true;
+        _suppressStorePromptProjection = true;
+        try
+        {
+            if (!string.Equals(CurrentSessionId, state.SelectedConversationId, StringComparison.Ordinal))
+            {
+                CurrentSessionId = state.SelectedConversationId;
+            }
+
+            var draft = state.DraftText ?? string.Empty;
+            if (!string.Equals(CurrentPrompt, draft, StringComparison.Ordinal))
+            {
+                CurrentPrompt = draft;
+            }
+
+            ApplySelectedProfileFromStore(state.SelectedAcpProfileId);
+        }
+        finally
+        {
+            _suppressStorePromptProjection = false;
+            _suppressStoreProfileProjection = false;
+            _suppressStoreConversationProjection = false;
+        }
+    }
+
+    private void ApplySelectedProfileFromStore(string? profileId)
+    {
+        _selectedProfileIdFromStore = profileId;
+
+        var match = string.IsNullOrWhiteSpace(profileId)
+            ? null
+            : _acpProfiles.Profiles.FirstOrDefault(p => string.Equals(p.Id, profileId, StringComparison.Ordinal));
+
+        if (!ReferenceEquals(SelectedAcpProfile, match))
+        {
+            _suppressAcpProfileConnect = true;
+            _suppressProfileSyncFromStore = true;
+            try
+            {
+                SelectedAcpProfile = match;
+                _acpProfiles.SelectedProfile = match;
+            }
+            finally
+            {
+                _suppressProfileSyncFromStore = false;
+                _suppressAcpProfileConnect = false;
+            }
+        }
+    }
+
+    private void OnAcpProfilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_selectedProfileIdFromStore))
+        {
+            return;
+        }
+
+        ApplySelectedProfileFromStore(_selectedProfileIdFromStore);
+    }
+
     partial void OnSelectedAcpProfileChanged(ServerConfiguration? value)
     {
-        _ = _chatStore.Dispatch(new SelectProfileAction(value?.Id));
+        if (!_suppressStoreProfileProjection)
+        {
+            _ = _chatStore.Dispatch(new SelectProfileAction(value?.Id));
+        }
 
         if (_suppressAcpProfileConnect || value == null)
         {
@@ -397,7 +475,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     partial void OnCurrentSessionIdChanged(string? value)
     {
-        _ = _chatStore.Dispatch(new SelectConversationAction(value));
+        if (!_suppressStoreConversationProjection)
+        {
+            _ = _chatStore.Dispatch(new SelectConversationAction(value));
+        }
 
         // Keep the header name stable and decouple it from ACP sessionId.
         CurrentSessionDisplayName = ResolveSessionDisplayName(value);
@@ -2924,6 +3005,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     partial void OnCurrentPromptChanged(string value)
     {
+        if (!_suppressStorePromptProjection)
+        {
+            _ = _chatStore.Dispatch(new SetDraftTextAction(value));
+        }
+
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSendPromptUi));
         RefreshSlashCommandFilter();
@@ -2977,6 +3063,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                {
                    PlanEntries.CollectionChanged -= OnCurrentPlanCollectionChanged;
                    _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
+                   _acpProfiles.Profiles.CollectionChanged -= OnAcpProfilesCollectionChanged;
                    _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
 
                    _conversationSaveCts?.Cancel();

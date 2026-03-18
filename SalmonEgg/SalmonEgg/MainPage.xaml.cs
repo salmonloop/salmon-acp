@@ -851,13 +851,11 @@ public sealed partial class MainPage : Page
 
     private void OnMainNavPaneOpened(NavigationView sender, object args)
     {
-        _metricsSink.ReportNavToggle("PaneOpened");
         UpdateNavPaneToggleUi();
     }
 
     private void OnMainNavPaneClosed(NavigationView sender, object args)
     {
-        _metricsSink.ReportNavToggle("PaneClosed");
         UpdateNavPaneToggleUi();
     }
 

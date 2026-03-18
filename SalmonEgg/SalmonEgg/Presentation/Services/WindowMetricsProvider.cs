@@ -27,11 +27,11 @@ public sealed class WindowMetricsProvider
         _window.Activated += OnActivated;
 
         // Initial report
-        _sink.ReportWindowMetrics(_window.Bounds.Width, _window.Bounds.Height, _window.Bounds.Width, _window.Bounds.Height);
+        _ = _sink.ReportWindowMetrics(_window.Bounds.Width, _window.Bounds.Height, _window.Bounds.Width, _window.Bounds.Height);
 
         if (_titleBar != null)
         {
-            _sink.ReportTitleBarInsets(_titleBar.LeftInset, _titleBar.RightInset, _titleBar.Height);
+            ReportTitleBarInsets(_titleBar);
         }
     }
 
@@ -49,14 +49,29 @@ public sealed class WindowMetricsProvider
 
     private void OnSizeChanged(object sender, WindowSizeChangedEventArgs e)
     {
-        _sink.ReportWindowMetrics(e.Size.Width, e.Size.Height, e.Size.Width, e.Size.Height); // Corrected typo
+        _ = _sink.ReportWindowMetrics(e.Size.Width, e.Size.Height, e.Size.Width, e.Size.Height);
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs e)
     {
         if (_titleBar != null)
         {
-            _sink.ReportTitleBarInsets(_titleBar.LeftInset, _titleBar.RightInset, _titleBar.Height);
+            ReportTitleBarInsets(_titleBar);
         }
+    }
+
+    private void ReportTitleBarInsets(AppWindowTitleBar titleBar)
+    {
+        var (left, right, height) = GetTitleBarInsets(titleBar);
+        _ = _sink.ReportTitleBarInsets(left, right, height);
+    }
+
+    private static (double Left, double Right, double Height) GetTitleBarInsets(AppWindowTitleBar titleBar)
+    {
+#if WINDOWS
+        return (titleBar.LeftInset, titleBar.RightInset, titleBar.Height);
+#else
+        return (0, 0, titleBar.Height);
+#endif
     }
 }

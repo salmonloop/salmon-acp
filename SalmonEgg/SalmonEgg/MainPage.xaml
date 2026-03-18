@@ -489,7 +489,7 @@
                              Background="Transparent"
                              CompactPaneLength="{x:Bind LayoutVM.NavCompactPaneLength, Mode=OneWay}"
                              OpenPaneLength="{x:Bind LayoutVM.NavOpenPaneLength, Mode=OneWay}"
-                             IsPaneOpen="{x:Bind LayoutVM.IsNavPaneOpen, Mode=TwoWay}"
+                             IsPaneOpen="{x:Bind LayoutVM.IsNavPaneOpen, Mode=OneWay}"
                              IsBackButtonVisible="Collapsed"
                              IsPaneToggleButtonVisible="False"
                              IsSettingsVisible="True"

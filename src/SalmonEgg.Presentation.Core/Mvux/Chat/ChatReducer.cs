@@ -11,6 +11,8 @@ public static class ChatReducer
         return action switch
         {
             SelectConversationAction selectConversation => state with { SelectedConversationId = selectConversation.ConversationId },
+            SelectProfileAction selectProfile => state with { SelectedAcpProfileId = selectProfile.ProfileId },
+            SetDraftTextAction draftText => state with { DraftText = draftText.Text },
             SetPromptInFlightAction setPromptInFlight => state with { IsPromptInFlight = setPromptInFlight.IsInFlight },
             SetIsThinkingAction setIsThinking => state with { IsThinking = setIsThinking.IsThinking },
             AddMessageAction addMessage => state with { Messages = (state.Messages ?? ImmutableList<ChatMessage>.Empty).Add(addMessage.Message) },

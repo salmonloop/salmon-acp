@@ -10,6 +10,7 @@ namespace SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
 {
     private readonly IShellLayoutStore _store;
+    private readonly IState<ShellLayoutSnapshot>? _snapshotState;
     private IDisposable? _subscription;
 
     [ObservableProperty] private NavigationPaneDisplayMode _navPaneDisplayMode;
@@ -31,7 +32,8 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
     public ShellLayoutViewModel(IShellLayoutStore store)
     {
         _store = store;
-        _store.SnapshotState.ForEach(async (snapshot, ct) =>
+        _snapshotState = State.FromFeed(this, _store.Snapshot);
+        _snapshotState.ForEach(async (snapshot, ct) =>
         {
             if (snapshot is null) return;
             NavPaneDisplayMode = snapshot.NavPaneDisplayMode;
@@ -52,5 +54,12 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
         }, out _subscription);
     }
 
-    public void Dispose() => _subscription?.Dispose();
+    public void Dispose()
+    {
+        _subscription?.Dispose();
+        if (_snapshotState is IAsyncDisposable asyncDisposable)
+        {
+            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
 }

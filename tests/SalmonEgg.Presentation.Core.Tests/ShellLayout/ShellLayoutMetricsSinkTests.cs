@@ -11,7 +11,7 @@ public class ShellLayoutMetricsSinkTests
     [Fact]
     public async Task MetricsSink_Dispatches_WindowMetrics()
     {
-        var store = new CapturingStore();
+        await using var store = new CapturingStore();
         var sink = new ShellLayoutMetricsSink(store);
         await sink.ReportWindowMetrics(100, 200, 80, 160);
         Assert.IsType<WindowMetricsChanged>(store.LastAction);
@@ -19,11 +19,18 @@ public class ShellLayoutMetricsSinkTests
         Assert.Equal(100, action.Width);
     }
 
-    private sealed class CapturingStore : IShellLayoutStore
+    private sealed class CapturingStore : IShellLayoutStore, IAsyncDisposable
     {
-        public IState<ShellLayoutState> State { get; } = Uno.Extensions.Reactive.State.Value(new object(), () => ShellLayoutState.Default);
-        public IState<ShellLayoutSnapshot> Snapshot { get; } = Uno.Extensions.Reactive.State.Value(new object(), () => ShellLayoutPolicy.Compute(ShellLayoutState.Default));
+        private readonly IState<ShellLayoutState> _state = Uno.Extensions.Reactive.State.Value(new object(), () => ShellLayoutState.Default);
+        public IState<ShellLayoutSnapshot> SnapshotState { get; } = Uno.Extensions.Reactive.State.Value(new object(), () => ShellLayoutPolicy.Compute(ShellLayoutState.Default));
+        public IFeed<ShellLayoutSnapshot> Snapshot => SnapshotState;
         public ShellLayoutAction? LastAction { get; private set; }
         public ValueTask Dispatch(ShellLayoutAction action) { LastAction = action; return ValueTask.CompletedTask; }
+
+        public async ValueTask DisposeAsync()
+        {
+            await SnapshotState.DisposeAsync();
+            await _state.DisposeAsync();
+        }
     }
 }

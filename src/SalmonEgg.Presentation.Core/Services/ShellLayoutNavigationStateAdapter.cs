@@ -8,14 +8,16 @@ namespace SalmonEgg.Presentation.Services;
 public sealed class ShellLayoutNavigationStateAdapter : INavigationPaneState, IDisposable
 {
     private readonly IDisposable? _subscription;
+    private readonly IState<ShellLayoutSnapshot>? _snapshotState;
     private bool _isPaneOpen;
     public bool IsPaneOpen => _isPaneOpen;
     public event EventHandler? PaneStateChanged;
 
     public ShellLayoutNavigationStateAdapter(IShellLayoutStore store)
     {
+        _snapshotState = State.FromFeed(this, store.Snapshot);
         // Using the ForEach overload that worked in ShellLayoutViewModel
-        store.SnapshotState.ForEach(async (snapshot, ct) =>
+        _snapshotState.ForEach(async (snapshot, ct) =>
         {
             if (snapshot is null) return;
             if (_isPaneOpen == snapshot.IsNavPaneOpen) return;
@@ -24,5 +26,12 @@ public sealed class ShellLayoutNavigationStateAdapter : INavigationPaneState, ID
         }, out _subscription);
     }
 
-    public void Dispose() => _subscription?.Dispose();
+    public void Dispose()
+    {
+        _subscription?.Dispose();
+        if (_snapshotState is IAsyncDisposable asyncDisposable)
+        {
+            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
 }

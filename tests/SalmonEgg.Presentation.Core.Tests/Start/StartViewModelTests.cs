@@ -5,11 +5,11 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
-using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -17,6 +17,7 @@ using SalmonEgg.Presentation.ViewModels.Start;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SerilogLogger = Serilog.ILogger;
+using Uno.Extensions.Reactive;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Start;
@@ -35,13 +36,16 @@ public sealed class StartViewModelTests
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
         var preferences = CreatePreferences();
-        var chatViewModel = CreateChatViewModel(throwingContext, preferences, sessionManager.Object);
+        using var chat = CreateChatViewModel(throwingContext, preferences, sessionManager.Object);
+        var chatViewModel = chat.ViewModel;
 
         SynchronizationContext.SetSynchronizationContext(originalContext);
 
         var ui = new Mock<IUiInteractionService>();
         var shellNavigation = new Mock<IShellNavigationService>();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
+        var navState = new FakeNavigationPaneState();
+        var metricsSink = new Mock<IShellLayoutMetricsSink>();
         using var nav = new MainNavigationViewModel(
             chatViewModel,
             sessionManager.Object,
@@ -49,8 +53,8 @@ public sealed class StartViewModelTests
             ui.Object,
             shellNavigation.Object,
             navLogger.Object,
-            new NavigationStateService(),
-            new Mock<IRightPanelService>().Object);
+            navState,
+            metricsSink.Object);
 
         var startLogger = new Mock<ILogger<StartViewModel>>();
         var startViewModel = new StartViewModel(
@@ -82,7 +86,8 @@ public sealed class StartViewModelTests
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
         var preferences = CreatePreferences();
-        var chatViewModel = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+        using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+        var chatViewModel = chat.ViewModel;
         chatViewModel.IsConnecting = true;
 
         SynchronizationContext.SetSynchronizationContext(originalContext);
@@ -90,6 +95,8 @@ public sealed class StartViewModelTests
         var ui = new Mock<IUiInteractionService>();
         var shellNavigation = new Mock<IShellNavigationService>();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
+        var navState = new FakeNavigationPaneState();
+        var metricsSink = new Mock<IShellLayoutMetricsSink>();
         using var nav = new MainNavigationViewModel(
             chatViewModel,
             sessionManager.Object,
@@ -97,8 +104,8 @@ public sealed class StartViewModelTests
             ui.Object,
             shellNavigation.Object,
             navLogger.Object,
-            new NavigationStateService(),
-            new Mock<IRightPanelService>().Object);
+            navState,
+            metricsSink.Object);
 
         var startLogger = new Mock<ILogger<StartViewModel>>();
         var startViewModel = new StartViewModel(
@@ -116,13 +123,14 @@ public sealed class StartViewModelTests
         shellNavigation.Verify(n => n.NavigateToSettings(It.IsAny<string>()), Times.Never);
     }
 
-    private static ChatViewModel CreateChatViewModel(
+    private static ChatViewModelHarness CreateChatViewModel(
         SynchronizationContext syncContext,
         AppPreferencesViewModel preferences,
         ISessionManager sessionManager)
     {
+        var state = State.Value(new object(), () => ChatState.Empty);
         var chatStore = new Mock<IChatStore>();
-        chatStore.Setup(s => s.State).Returns(State.Value(new object(), () => ChatState.Empty));
+        chatStore.Setup(s => s.State).Returns(state);
         var transportFactory = new Mock<ITransportFactory>();
         var messageParser = new Mock<IMessageParser>();
         var messageValidator = new Mock<IMessageValidator>();
@@ -144,8 +152,7 @@ public sealed class StartViewModelTests
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
 
         var conversationStore = new Mock<IConversationStore>();
-        var neverComplete = new TaskCompletionSource<ConversationDocument>();
-        conversationStore.Setup(s => s.LoadAsync(CancellationToken.None)).Returns(neverComplete.Task);
+        conversationStore.Setup(s => s.LoadAsync(CancellationToken.None)).ReturnsAsync(new ConversationDocument());
 
         var miniWindow = new Mock<IMiniWindowCoordinator>();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
@@ -154,7 +161,7 @@ public sealed class StartViewModelTests
         SynchronizationContext.SetSynchronizationContext(syncContext);
         try
         {
-            return new ChatViewModel(
+            var viewModel = new ChatViewModel(
                 chatStore.Object,
                 chatServiceFactory,
                 configService.Object,
@@ -164,6 +171,7 @@ public sealed class StartViewModelTests
                 conversationStore.Object,
                 miniWindow.Object,
                 vmLogger.Object);
+            return new ChatViewModelHarness(viewModel, state);
         }
         finally
         {
@@ -209,6 +217,41 @@ public sealed class StartViewModelTests
             }
 
             d(state);
+        }
+    }
+
+    private sealed class FakeNavigationPaneState : INavigationPaneState
+    {
+        public bool IsPaneOpen { get; private set; }
+        public event EventHandler? PaneStateChanged;
+
+        public void SetPaneOpen(bool isOpen)
+        {
+            if (IsPaneOpen == isOpen)
+            {
+                return;
+            }
+
+            IsPaneOpen = isOpen;
+            PaneStateChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private sealed class ChatViewModelHarness : IDisposable
+    {
+        private readonly IState<ChatState> _state;
+        public ChatViewModel ViewModel { get; }
+
+        public ChatViewModelHarness(ChatViewModel viewModel, IState<ChatState> state)
+        {
+            ViewModel = viewModel;
+            _state = state;
+        }
+
+        public void Dispose()
+        {
+            ViewModel.Dispose();
+            _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }
 }

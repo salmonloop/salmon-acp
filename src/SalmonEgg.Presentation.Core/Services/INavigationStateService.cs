@@ -8,6 +8,6 @@ namespace SalmonEgg.Presentation.Services;
 /// </summary>
 public interface INavigationStateService
 {
-    bool IsPaneOpen { get; set; }
+    bool IsPaneOpen { get; }
     event EventHandler? PaneStateChanged;
 }

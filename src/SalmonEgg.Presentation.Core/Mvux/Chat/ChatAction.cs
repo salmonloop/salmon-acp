@@ -31,6 +31,11 @@ public sealed record SelectConversationAction(string? ConversationId) : ChatActi
 public sealed record SelectProfileAction(string? ProfileId) : ChatAction;
 
 /// <summary>
+/// Dispatched when the user edits the draft prompt text.
+/// </summary>
+public sealed record SetDraftTextAction(string Text) : ChatAction;
+
+/// <summary>
 /// Dispatched to clear the current chat state.
 /// </summary>
 public sealed record ClearChatAction : ChatAction;

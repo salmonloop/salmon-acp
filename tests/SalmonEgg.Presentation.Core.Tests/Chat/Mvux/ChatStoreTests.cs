@@ -13,7 +13,7 @@ public class ChatStoreTests
     {
         // Arrange
         var initialState = new ChatState(SelectedConversationId: "initial");
-        var state = State.Value(this, () => initialState);
+        await using var state = State.Value(this, () => initialState);
         var store = new ChatStore(state);
         var newConversationId = "updated-id";
         var action = new SelectConversationAction(newConversationId);
@@ -31,7 +31,7 @@ public class ChatStoreTests
     public async Task GivenStore_WhenMultipleDispatches_ThenStateTransitionsSequentially()
     {
         // Arrange
-        var state = State.Value(this, () => ChatState.Empty);
+        await using var state = State.Value(this, () => ChatState.Empty);
         var store = new ChatStore(state);
 
         // Act

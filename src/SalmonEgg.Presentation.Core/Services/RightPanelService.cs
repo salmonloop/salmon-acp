@@ -1,51 +1,28 @@
 using System;
-using System.Threading.Tasks;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
-using SalmonEgg.Presentation.Core.Services;
 using Uno.Extensions.Reactive;
 
 namespace SalmonEgg.Presentation.Services;
 
 public sealed class RightPanelService : IRightPanelService, IDisposable
 {
-    private readonly IShellLayoutMetricsSink _sink;
     private readonly IDisposable? _subscription;
+    private readonly IState<ShellLayoutSnapshot>? _snapshotState;
     private RightPanelMode _currentMode = RightPanelMode.None;
     private double _panelWidth = 320;
 
-    public RightPanelMode CurrentMode
-    {
-        get => _currentMode;
-        set
-        {
-            if (_currentMode != value)
-            {
-                _sink.ReportRightPanelMode(value);
-            }
-        }
-    }
+    public RightPanelMode CurrentMode => _currentMode;
 
     public event EventHandler? ModeChanged;
 
-    public double PanelWidth
-    {
-        get => _panelWidth;
-        set
-        {
-            if (!double.Equals(_panelWidth, value))
-            {
-                _sink.ReportRightPanelWidth(value);
-            }
-        }
-    }
+    public double PanelWidth => _panelWidth;
 
     public event EventHandler? WidthChanged;
 
-    public RightPanelService(IShellLayoutStore store, IShellLayoutMetricsSink sink)
+    public RightPanelService(IShellLayoutStore store)
     {
-        _sink = sink;
-        // Using the ForEach overload that worked in ShellLayoutViewModel
-        store.SnapshotState.ForEach(async (snapshot, ct) =>
+        _snapshotState = State.FromFeed(this, store.Snapshot);
+        _snapshotState.ForEach(async (snapshot, ct) =>
         {
             if (snapshot is null) return;
 
@@ -63,5 +40,12 @@ public sealed class RightPanelService : IRightPanelService, IDisposable
         }, out _subscription);
     }
 
-    public void Dispose() => _subscription?.Dispose();
+    public void Dispose()
+    {
+        _subscription?.Dispose();
+        if (_snapshotState is IAsyncDisposable asyncDisposable)
+        {
+            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
 }

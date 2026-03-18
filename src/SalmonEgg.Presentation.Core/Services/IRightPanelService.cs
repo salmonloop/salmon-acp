@@ -9,9 +9,9 @@ using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 /// </summary>
 public interface IRightPanelService
 {
-    RightPanelMode CurrentMode { get; set; }
+    RightPanelMode CurrentMode { get; }
     event EventHandler? ModeChanged;
 
-    double PanelWidth { get; set; }
+    double PanelWidth { get; }
     event EventHandler? WidthChanged;
 }

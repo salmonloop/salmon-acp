@@ -23,10 +23,13 @@ namespace SalmonEgg.Presentation.Core.Tests.Chat;
 [Collection("NonParallel")]
 public class ChatViewModelTests
 {
-    private static ChatViewModel CreateViewModel(SynchronizationContext? syncContext = null)
+    private static ViewModelFixture CreateViewModel(SynchronizationContext? syncContext = null)
     {
+        var state = State.Value(new object(), () => ChatState.Empty);
         var chatStore = new Mock<IChatStore>();
-        chatStore.Setup(s => s.State).Returns(State.Value(new object(), () => ChatState.Empty));
+        chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
+            .Returns<ChatAction>(action => state.Update(s => ChatReducer.Reduce(s!, action), default));
         var transportFactory = new Mock<ITransportFactory>();
         var messageParser = new Mock<IMessageParser>();
         var messageValidator = new Mock<IMessageValidator>();
@@ -74,7 +77,7 @@ public class ChatViewModelTests
         {
             SynchronizationContext.SetSynchronizationContext(syncContext ?? new SynchronizationContext());
 
-            return new ChatViewModel(
+            var viewModel = new ChatViewModel(
                 chatStore.Object,
                 chatServiceFactory,
                 configService.Object,
@@ -85,6 +88,7 @@ public class ChatViewModelTests
                 miniWindow.Object,
                 vmLogger.Object,
                 syncContext);
+            return new ViewModelFixture(viewModel, state, chatStore.Object);
         }
         finally
         {
@@ -95,7 +99,8 @@ public class ChatViewModelTests
     [Fact]
     public async System.Threading.Tasks.Task TrySwitchToSessionAsync_NewSession_DoesNotSeedRemoteSessionId()
     {
-        var viewModel = CreateViewModel();
+        using var fixture = CreateViewModel();
+        var viewModel = fixture.ViewModel;
         var localSessionId = Guid.NewGuid().ToString("N");
 
         await viewModel.TrySwitchToSessionAsync(localSessionId);
@@ -113,7 +118,8 @@ public class ChatViewModelTests
     public async Task TrySwitchToSessionAsync_WaitsForUiStateBeforeCompleting()
     {
         var syncContext = new QueueingSynchronizationContext();
-        var viewModel = CreateViewModel(syncContext);
+        using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
         var sessionId = Guid.NewGuid().ToString("N");
         var syncField = typeof(ChatViewModel).GetField("_syncContext", BindingFlags.Instance | BindingFlags.NonPublic);
         var capturedContext = syncField?.GetValue(viewModel);
@@ -145,8 +151,10 @@ public class ChatViewModelTests
         // 1. Setup store with initial state
         var initialState = ChatState.Empty with { IsThinking = false };
         var chatStore = new Mock<IChatStore>();
-        var state = State.Value(this, () => initialState);
+        await using var state = State.Value(this, () => initialState);
         chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
+            .Returns<ChatAction>(action => state.Update(s => ChatReducer.Reduce(s!, action), CancellationToken.None));
 
         // 2. Create VM with queueing sync context
         var syncContext = new QueueingSynchronizationContext();
@@ -190,7 +198,7 @@ public class ChatViewModelTests
         var miniWindow = new Mock<IMiniWindowCoordinator>();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
-        var viewModel = new ChatViewModel(
+        using var viewModel = new ChatViewModel(
             chatStore.Object,
             chatServiceFactory,
             configService.Object,
@@ -220,6 +228,32 @@ public class ChatViewModelTests
         Assert.False(viewModel.IsThinking);
     }
 
+    [Fact]
+    public async Task CurrentPrompt_UpdatesDraftTextInStore()
+    {
+        using var fixture = CreateViewModel();
+        var viewModel = fixture.ViewModel;
+
+        viewModel.CurrentPrompt = "draft text";
+
+        await Task.Delay(50);
+
+        Assert.Equal("draft text", viewModel.CurrentPrompt);
+        Assert.Equal("draft text", (await fixture.GetStateAsync()).DraftText);
+    }
+
+    [Fact]
+    public async Task StoreDraftText_ProjectsToCurrentPrompt()
+    {
+        using var fixture = CreateViewModel();
+        var viewModel = fixture.ViewModel;
+
+        await fixture.DispatchAsync(new SetDraftTextAction("from store"));
+        await Task.Delay(50);
+
+        Assert.Equal("from store", viewModel.CurrentPrompt);
+    }
+
     private sealed class QueueingSynchronizationContext : SynchronizationContext
     {
         private readonly Queue<(SendOrPostCallback callback, object? state)> _work = new();
@@ -236,6 +270,30 @@ public class ChatViewModelTests
                 var (callback, state) = _work.Dequeue();
                 callback(state);
             }
+        }
+    }
+
+    private sealed class ViewModelFixture : IDisposable
+    {
+        private readonly IState<ChatState> _state;
+        private readonly IChatStore _store;
+        public ChatViewModel ViewModel { get; }
+
+        public ViewModelFixture(ChatViewModel viewModel, IState<ChatState> state, IChatStore store)
+        {
+            ViewModel = viewModel;
+            _state = state;
+            _store = store;
+        }
+
+        public async Task<ChatState> GetStateAsync() => await _state ?? ChatState.Empty;
+
+        public ValueTask DispatchAsync(ChatAction action) => _store.Dispatch(action);
+
+        public void Dispose()
+        {
+            ViewModel.Dispose();
+            _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }
 }
