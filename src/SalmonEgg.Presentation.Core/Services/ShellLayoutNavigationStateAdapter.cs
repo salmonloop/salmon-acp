@@ -9,7 +9,7 @@ public sealed class ShellLayoutNavigationStateAdapter : INavigationPaneState, ID
 {
     private readonly IDisposable? _subscription;
     private readonly IState<ShellLayoutSnapshot>? _snapshotState;
-    private bool _isPaneOpen;
+    private bool _isPaneOpen = ShellLayoutPolicy.Compute(ShellLayoutState.Default).IsNavPaneOpen;
     public bool IsPaneOpen => _isPaneOpen;
     public event EventHandler? PaneStateChanged;
 
@@ -29,9 +29,5 @@ public sealed class ShellLayoutNavigationStateAdapter : INavigationPaneState, ID
     public void Dispose()
     {
         _subscription?.Dispose();
-        if (_snapshotState is IAsyncDisposable asyncDisposable)
-        {
-            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
     }
 }

@@ -8,7 +8,7 @@ public sealed class NavigationStateService : INavigationStateService, IDisposabl
 {
     private readonly IDisposable? _subscription;
     private readonly IState<ShellLayoutSnapshot>? _snapshotState;
-    private bool _isPaneOpen = true;
+    private bool _isPaneOpen = ShellLayoutPolicy.Compute(ShellLayoutState.Default).IsNavPaneOpen;
 
     public bool IsPaneOpen => _isPaneOpen;
 
@@ -30,9 +30,5 @@ public sealed class NavigationStateService : INavigationStateService, IDisposabl
     public void Dispose()
     {
         _subscription?.Dispose();
-        if (_snapshotState is IAsyncDisposable asyncDisposable)
-        {
-            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
     }
 }

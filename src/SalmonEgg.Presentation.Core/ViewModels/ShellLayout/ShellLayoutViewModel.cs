@@ -32,34 +32,36 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
     public ShellLayoutViewModel(IShellLayoutStore store)
     {
         _store = store;
+        ApplySnapshot(ShellLayoutPolicy.Compute(ShellLayoutState.Default));
         _snapshotState = State.FromFeed(this, _store.Snapshot);
         _snapshotState.ForEach(async (snapshot, ct) =>
         {
             if (snapshot is null) return;
-            NavPaneDisplayMode = snapshot.NavPaneDisplayMode;
-            IsNavPaneOpen = snapshot.IsNavPaneOpen;
-            NavOpenPaneLength = snapshot.NavOpenPaneLength;
-            NavCompactPaneLength = snapshot.NavCompactPaneLength;
-            SearchBoxVisible = snapshot.SearchBoxVisible;
-            SearchBoxMinWidth = snapshot.SearchBoxMinWidth;
-            SearchBoxMaxWidth = snapshot.SearchBoxMaxWidth;
-            TitleBarPadding = snapshot.TitleBarPadding;
-            NavViewPadding = snapshot.NavViewPadding;
-            TitleBarHeight = snapshot.TitleBarHeight;
-            RightPanelVisible = snapshot.RightPanelVisible;
-            RightPanelWidth = snapshot.RightPanelWidth;
-            RightPanelMode = snapshot.RightPanelMode;
-            IsNavResizerVisible = snapshot.IsNavResizerVisible;
-            LeftNavResizerLeft = snapshot.LeftNavResizerLeft;
+            ApplySnapshot(snapshot);
         }, out _subscription);
+    }
+
+    private void ApplySnapshot(ShellLayoutSnapshot snapshot)
+    {
+        NavPaneDisplayMode = snapshot.NavPaneDisplayMode;
+        IsNavPaneOpen = snapshot.IsNavPaneOpen;
+        NavOpenPaneLength = snapshot.NavOpenPaneLength;
+        NavCompactPaneLength = snapshot.NavCompactPaneLength;
+        SearchBoxVisible = snapshot.SearchBoxVisible;
+        SearchBoxMinWidth = snapshot.SearchBoxMinWidth;
+        SearchBoxMaxWidth = snapshot.SearchBoxMaxWidth;
+        TitleBarPadding = snapshot.TitleBarPadding;
+        NavViewPadding = snapshot.NavViewPadding;
+        TitleBarHeight = snapshot.TitleBarHeight;
+        RightPanelVisible = snapshot.RightPanelVisible;
+        RightPanelWidth = snapshot.RightPanelWidth;
+        RightPanelMode = snapshot.RightPanelMode;
+        IsNavResizerVisible = snapshot.IsNavResizerVisible;
+        LeftNavResizerLeft = snapshot.LeftNavResizerLeft;
     }
 
     public void Dispose()
     {
         _subscription?.Dispose();
-        if (_snapshotState is IAsyncDisposable asyncDisposable)
-        {
-            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
     }
 }

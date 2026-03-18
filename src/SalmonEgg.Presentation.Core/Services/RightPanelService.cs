@@ -8,8 +8,8 @@ public sealed class RightPanelService : IRightPanelService, IDisposable
 {
     private readonly IDisposable? _subscription;
     private readonly IState<ShellLayoutSnapshot>? _snapshotState;
-    private RightPanelMode _currentMode = RightPanelMode.None;
-    private double _panelWidth = 320;
+    private RightPanelMode _currentMode = ShellLayoutPolicy.Compute(ShellLayoutState.Default).RightPanelMode;
+    private double _panelWidth = ShellLayoutPolicy.Compute(ShellLayoutState.Default).RightPanelWidth;
 
     public RightPanelMode CurrentMode => _currentMode;
 
@@ -43,9 +43,5 @@ public sealed class RightPanelService : IRightPanelService, IDisposable
     public void Dispose()
     {
         _subscription?.Dispose();
-        if (_snapshotState is IAsyncDisposable asyncDisposable)
-        {
-            asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
     }
 }

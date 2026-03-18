@@ -11,6 +11,20 @@ namespace SalmonEgg.Presentation.Core.Tests.ShellLayout;
 public class ShellLayoutViewModelTests
 {
     [Fact]
+    public async Task ViewModel_SeedsDefaultSnapshotImmediately()
+    {
+        await using var store = new FakeShellLayoutStore();
+        using var vm = new ShellLayoutViewModel(store);
+
+        Assert.Equal(NavigationPaneDisplayMode.Expanded, vm.NavPaneDisplayMode);
+        Assert.True(vm.IsNavPaneOpen);
+        Assert.Equal(300, vm.NavOpenPaneLength);
+        Assert.Equal(72, vm.NavCompactPaneLength);
+        Assert.True(vm.SearchBoxVisible);
+        Assert.Equal(48, vm.TitleBarHeight);
+    }
+
+    [Fact]
     public async Task ViewModel_ProjectsSnapshot()
     {
         await using var store = new FakeShellLayoutStore();
