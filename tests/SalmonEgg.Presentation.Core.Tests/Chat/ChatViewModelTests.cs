@@ -99,7 +99,7 @@ public class ChatViewModelTests
     [Fact]
     public async System.Threading.Tasks.Task TrySwitchToSessionAsync_NewSession_DoesNotSeedRemoteSessionId()
     {
-        using var fixture = CreateViewModel();
+        await using var fixture = CreateViewModel();
         var viewModel = fixture.ViewModel;
         var localSessionId = Guid.NewGuid().ToString("N");
 
@@ -118,7 +118,7 @@ public class ChatViewModelTests
     public async Task TrySwitchToSessionAsync_WaitsForUiStateBeforeCompleting()
     {
         var syncContext = new QueueingSynchronizationContext();
-        using var fixture = CreateViewModel(syncContext);
+        await using var fixture = CreateViewModel(syncContext);
         var viewModel = fixture.ViewModel;
         var sessionId = Guid.NewGuid().ToString("N");
         var syncField = typeof(ChatViewModel).GetField("_syncContext", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -304,7 +304,7 @@ public class ChatViewModelTests
     [Fact]
     public async Task CurrentPrompt_UpdatesDraftTextInStore()
     {
-        using var fixture = CreateViewModel();
+        await using var fixture = CreateViewModel();
         var viewModel = fixture.ViewModel;
 
         viewModel.CurrentPrompt = "draft text";
@@ -318,7 +318,7 @@ public class ChatViewModelTests
     [Fact]
     public async Task StoreDraftText_ProjectsToCurrentPrompt()
     {
-        using var fixture = CreateViewModel();
+        await using var fixture = CreateViewModel();
         var viewModel = fixture.ViewModel;
 
         await fixture.DispatchAsync(new SetDraftTextAction("from store"));
@@ -327,9 +327,71 @@ public class ChatViewModelTests
         Assert.Equal("from store", viewModel.CurrentPrompt);
     }
 
+    [Fact]
+    public async Task TrySwitchToSessionAsync_OnTargetSynchronizationContext_CompletesWithoutQueuePump()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        syncContext.RunAll();
+        var sessionId = Guid.NewGuid().ToString("N");
+
+        var original = SynchronizationContext.Current;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(syncContext);
+            var switchTask = viewModel.TrySwitchToSessionAsync(sessionId);
+            var completed = await Task.WhenAny(switchTask, Task.Delay(TimeSpan.FromSeconds(1)));
+
+            Assert.Same(switchTask, completed);
+            Assert.True(await switchTask);
+            Assert.Equal(sessionId, viewModel.CurrentSessionId);
+            Assert.Equal(0, syncContext.PendingCount);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(original);
+        }
+    }
+
+    [Fact]
+    public async Task PlanEntries_CollectionChanges_RaiseDerivedPropertyNotifications()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var raised = new List<string>();
+        syncContext.RunAll();
+
+        viewModel.ShowPlanPanel = true;
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.PropertyName))
+            {
+                raised.Add(e.PropertyName!);
+            }
+        };
+
+        viewModel.PlanEntries.Add(new PlanEntryViewModel
+        {
+            Content = "Step 1"
+        });
+
+        await Task.Yield();
+
+        Assert.Contains(nameof(ChatViewModel.HasPlanEntries), raised);
+        Assert.Contains(nameof(ChatViewModel.ShouldShowPlanList), raised);
+        Assert.Contains(nameof(ChatViewModel.ShouldShowPlanEmpty), raised);
+        Assert.True(viewModel.HasPlanEntries);
+        Assert.True(viewModel.ShouldShowPlanList);
+        Assert.False(viewModel.ShouldShowPlanEmpty);
+    }
+
     private sealed class QueueingSynchronizationContext : SynchronizationContext
     {
         private readonly Queue<(SendOrPostCallback callback, object? state)> _work = new();
+
+        public int PendingCount => _work.Count;
 
         public override void Post(SendOrPostCallback d, object? state)
         {
@@ -346,7 +408,7 @@ public class ChatViewModelTests
         }
     }
 
-    private sealed class ViewModelFixture : IDisposable
+    private sealed class ViewModelFixture : IDisposable, IAsyncDisposable
     {
         private readonly IState<ChatState> _state;
         private readonly IChatStore _store;
@@ -363,10 +425,15 @@ public class ChatViewModelTests
 
         public ValueTask DispatchAsync(ChatAction action) => _store.Dispatch(action);
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             ViewModel.Dispose();
-            _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await _state.DisposeAsync();
+        }
+
+        public void Dispose()
+        {
+            DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }
 }

@@ -313,6 +313,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
         _acpProfiles.Profiles.CollectionChanged += OnAcpProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
+        PlanEntries.CollectionChanged += OnCurrentPlanCollectionChanged;
 
         // Start restoring local conversation list immediately so the sidebar can show it ASAP.
         _ = RestoreConversationsAsync();
@@ -578,6 +579,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     /// </summary>
     private Task PostToUiAsync(Action action)
     {
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            action();
+            return Task.CompletedTask;
+        }
 
         var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _syncContext.Post(_ =>
@@ -585,11 +591,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             try
             {
                 action();
-                tcs.SetResult(null);
+                tcs.TrySetResult(null);
             }
             catch (Exception ex)
             {
-                tcs.SetException(ex);
+                tcs.TrySetException(ex);
             }
         }, null);
         return tcs.Task;
