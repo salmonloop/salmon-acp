@@ -173,19 +173,6 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             RebuildTree();
         }
-        else if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId))
-        {
-            // Sync selection when the current session changes externally (e.g. archiving)
-            var sessionId = _chatViewModel.CurrentSessionId;
-            if (string.IsNullOrWhiteSpace(sessionId))
-            {
-                SelectStart();
-            }
-            else
-            {
-                SelectSession(sessionId);
-            }
-        }
     }
 
     public void SelectStart()

@@ -46,6 +46,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             await chat.ViewModel.TrySwitchToSessionAsync("session-1");
             navVm.RebuildTree();
+            navVm.SelectSession("session-1");
 
             Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
             Assert.IsType<SessionNavItemViewModel>(navVm.SelectedItem);
@@ -85,6 +86,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             await chat.ViewModel.TrySwitchToSessionAsync("session-1");
             navVm.RebuildTree();
+            navVm.SelectSession("session-1");
 
             Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
             var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
@@ -125,6 +127,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             await chat.ViewModel.TrySwitchToSessionAsync("session-1");
             navVm.RebuildTree();
+            navVm.SelectSession("session-1");
 
             var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
             Assert.True(project.IsActiveDescendant);
@@ -162,6 +165,36 @@ public sealed class MainNavigationViewModelSelectionTests
             Assert.True(navVm.IsSettingsSelected);
             Assert.Null(navVm.SelectedItem);
             Assert.Null(navVm.ProjectedControlSelectedItem);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public void ExternalCurrentSessionChange_DoesNotOverrideVisibleStartSelection()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            var sessionManager = CreateSessionManager(new Session("session-1", @"C:\repo\demo")
+            {
+                DisplayName = "Session 1"
+            });
+            var preferences = CreatePreferencesWithProject();
+
+            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+            using var navVm = CreateNavigationViewModel(chat.ViewModel, sessionManager.Object, preferences, navState);
+
+            navVm.SelectStart();
+            chat.ViewModel.CurrentSessionId = "session-1";
+
+            Assert.IsType<NavigationSelectionState.Start>(navVm.CurrentSelection);
+            Assert.Same(navVm.StartItem, navVm.SelectedItem);
         }
         finally
         {

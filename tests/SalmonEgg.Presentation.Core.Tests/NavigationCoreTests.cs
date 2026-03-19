@@ -100,6 +100,14 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void MainNavigationXaml_UsesNativeChildSelectionProjection_ForProjectAncestorEmphasis()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml");
+
+        Assert.Contains("IsChildSelected=\"{x:Bind IsActiveDescendant, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SessionsDialogXaml_ExposesStableAutomationIds_ForGuiTesting()
     {
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Navigation\SessionsListDialog.xaml");

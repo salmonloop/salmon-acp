@@ -25,6 +25,16 @@ public sealed class MainNavigationContentSyncAdapter
 
     public void OnFrameNavigated(Type? pageType)
     {
+        SyncFromVisibleContent(pageType);
+    }
+
+    public void OnChatSessionChanged(Type? pageType)
+    {
+        SyncFromVisibleContent(pageType);
+    }
+
+    private void SyncFromVisibleContent(Type? pageType)
+    {
         if (!TryResolveContent(pageType, out var content))
         {
             return;

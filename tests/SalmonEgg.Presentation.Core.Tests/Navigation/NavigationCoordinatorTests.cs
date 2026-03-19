@@ -137,8 +137,7 @@ public sealed class NavigationCoordinatorTests
             using var navVm = CreateNavigationViewModel(chat.ViewModel, sessionManager.Object, preferences, navState);
             var coordinator = new NavigationCoordinator(navVm, chat.ViewModel, preferences, shellNavigation.Object);
 
-            await chat.ViewModel.TrySwitchToSessionAsync("session-1");
-            navVm.RebuildTree();
+            await coordinator.ActivateSessionAsync("session-1", "project-1");
 
             var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
             var originalExpanded = project.IsExpanded;

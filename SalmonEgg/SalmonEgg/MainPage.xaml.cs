@@ -61,6 +61,7 @@ public sealed partial class MainPage : Page
 
     private bool _isMotionSubscribed;
     private bool _isNavItemsSubscribed;
+    private readonly List<ObservableCollection<MainNavItemViewModel>> _projectChildCollections = new();
     private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
     private string? _pendingArchiveSessionId;
 #if WINDOWS
@@ -318,6 +319,7 @@ public sealed partial class MainPage : Page
         }
 
         NavVM.Items.CollectionChanged += OnNavItemsChanged;
+        RefreshProjectChildSubscriptions();
         _isNavItemsSubscribed = true;
     }
 
@@ -329,12 +331,42 @@ public sealed partial class MainPage : Page
         }
 
         NavVM.Items.CollectionChanged -= OnNavItemsChanged;
+        ClearProjectChildSubscriptions();
         _isNavItemsSubscribed = false;
     }
 
     private void OnNavItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         ApplyNavItemTransitionsDeferred();
+        RefreshProjectChildSubscriptions();
+        _mainNavigationViewAdapter.ApplySelectionDeferred();
+    }
+
+    private void OnProjectChildrenChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ApplyNavItemTransitionsDeferred();
+        _mainNavigationViewAdapter.ApplySelectionDeferred();
+    }
+
+    private void RefreshProjectChildSubscriptions()
+    {
+        ClearProjectChildSubscriptions();
+
+        foreach (var project in NavVM.Items.OfType<ProjectNavItemViewModel>())
+        {
+            project.Children.CollectionChanged += OnProjectChildrenChanged;
+            _projectChildCollections.Add(project.Children);
+        }
+    }
+
+    private void ClearProjectChildSubscriptions()
+    {
+        foreach (var children in _projectChildCollections)
+        {
+            children.CollectionChanged -= OnProjectChildrenChanged;
+        }
+
+        _projectChildCollections.Clear();
     }
 
     private void ApplyNavItemTransitionsDeferred()
@@ -596,6 +628,7 @@ public sealed partial class MainPage : Page
         UpdateNavPaneToggleUi();
         NavVM.RebuildTree();
         _mainNavigationViewAdapter.ApplySelection();
+        _mainNavigationViewAdapter.ApplySelectionDeferred();
         ApplyNavItemTransitionsDeferred();
 #if WINDOWS
         InitializeTray();
@@ -618,8 +651,10 @@ public sealed partial class MainPage : Page
 
     private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
     {
+        BootLogDebug($"ContentFrame Navigated: {e.SourcePageType?.Name ?? "<null>"}");
         UpdateBackButtonState();
         _mainNavigationContentSyncAdapter.OnFrameNavigated(e.SourcePageType);
+        _mainNavigationViewAdapter.ApplySelectionDeferred();
     }
 
     private void OnTitleBarBackClick(object sender, RoutedEventArgs e)
@@ -700,18 +735,31 @@ public sealed partial class MainPage : Page
         _mainNavigationViewAdapter.ApplySelectionDeferred();
     }
 
+    private void OnMainNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        BootLogDebug($"MainNav SelectionChanged: selected={DescribeNavSelection(sender.SelectedItem)} settings={args.IsSettingsSelected}");
+        _mainNavigationViewAdapter.ApplySelectionDeferred();
+    }
+
     private void OnNavigationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainNavigationViewModel.SelectedItem) ||
             e.PropertyName == nameof(MainNavigationViewModel.ProjectedControlSelectedItem) ||
             e.PropertyName == nameof(MainNavigationViewModel.IsSettingsSelected))
         {
+            BootLogDebug($"NavVM ProjectionChanged: current={NavVM.CurrentSelection}; projected={DescribeNavSelection(NavVM.ProjectedControlSelectedItem)}; settings={NavVM.IsSettingsSelected}");
             _mainNavigationViewAdapter.ApplySelection();
         }
     }
 
     private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId))
+        {
+            BootLogDebug($"Chat CurrentSessionId changed: session={_chatViewModel.CurrentSessionId ?? "<null>"} page={ContentFrame?.CurrentSourcePageType?.Name ?? "<null>"}");
+            _mainNavigationContentSyncAdapter.OnChatSessionChanged(ContentFrame?.CurrentSourcePageType);
+        }
+
         if (LayoutVM.RightPanelMode != RightPanelMode.Todo)
         {
             return;
@@ -737,6 +785,16 @@ public sealed partial class MainPage : Page
     }
 
     // Manual resizer positioning removed as it is now handled by XAML binding to LayoutVM.LeftNavResizerLeft
+
+    private static string DescribeNavSelection(object? selection) => selection switch
+    {
+        StartNavItemViewModel => "Start",
+        SessionNavItemViewModel session => $"Session:{session.SessionId}",
+        ProjectNavItemViewModel project => $"Project:{project.ProjectId}",
+        MoreSessionsNavItemViewModel more => $"More:{more.ProjectId}",
+        null => "<null>",
+        _ => selection.GetType().Name
+    };
 
     private bool CanResizeLeftNav()
     {

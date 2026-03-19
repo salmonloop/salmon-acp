@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using FlaUI.Core.Definitions;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
@@ -14,12 +15,14 @@ internal sealed class WindowsGuiAppSession : IDisposable
     private const string ProcessName = "SalmonEgg";
     private readonly UIA3Automation _automation;
     private readonly Application _application;
+    private readonly bool _ownsProcess;
 
-    private WindowsGuiAppSession(Application application, UIA3Automation automation, Window mainWindow)
+    private WindowsGuiAppSession(Application application, UIA3Automation automation, Window mainWindow, bool ownsProcess)
     {
         _application = application;
         _automation = automation;
         MainWindow = mainWindow;
+        _ownsProcess = ownsProcess;
     }
 
     public Window MainWindow { get; }
@@ -47,7 +50,56 @@ internal sealed class WindowsGuiAppSession : IDisposable
             TimeSpan.FromSeconds(20),
             "Timed out waiting for SalmonEgg main window.");
 
-        return new WindowsGuiAppSession(application, automation, mainWindow!);
+        return new WindowsGuiAppSession(application, automation, mainWindow!, ownsProcess: false);
+    }
+
+    public static WindowsGuiAppSession LaunchFresh()
+    {
+        GuiTestGate.RequireEnabled();
+        StopAllRunningInstances();
+
+        var manifest = MsixManifestInfo.LoadFromRepo();
+        LaunchInstalledMsix(manifest);
+
+        var process = RetryUntil(
+            () => Process.GetProcessesByName(ProcessName)
+                .OrderByDescending(candidate => candidate.StartTime)
+                .FirstOrDefault(),
+            candidate => candidate != null,
+            TimeSpan.FromSeconds(20),
+            $"Timed out waiting for process '{ProcessName}'.")!;
+
+        return AttachToProcess(process, ownsProcess: true);
+    }
+
+    public static void StopAllRunningInstances()
+    {
+        foreach (var process in Process.GetProcessesByName(ProcessName))
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    if (process.CloseMainWindow())
+                    {
+                        process.WaitForExit(5000);
+                    }
+
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit(5000);
+                    }
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
     }
 
     public AutomationElement FindByAutomationId(string automationId, TimeSpan? timeout = null)
@@ -59,21 +111,59 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"AutomationId '{automationId}' was not found.")!;
     }
 
+    public AutomationElement? TryFindByAutomationId(string automationId, TimeSpan? timeout = null)
+    {
+        try
+        {
+            return FindByAutomationId(automationId, timeout);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
     public AutomationElement? FindFirstByAutomationIdPrefix(string prefix, TimeSpan? timeout = null)
     {
         return RetryUntil(
             () => MainWindow
                 .FindAllDescendants()
-                .FirstOrDefault(element => element.AutomationId?.StartsWith(prefix, StringComparison.Ordinal) == true),
+                .FirstOrDefault(element => HasAutomationIdPrefix(element, prefix)),
             element => element != null,
             timeout ?? TimeSpan.FromSeconds(5),
             $"AutomationId prefix '{prefix}' was not found.");
+    }
+
+    public AutomationElement FindFirstDescendantByControlType(
+        AutomationElement scope,
+        ControlType controlType,
+        TimeSpan? timeout = null)
+    {
+        return RetryUntil(
+            () => scope.FindFirstDescendant(cf => cf.ByControlType(controlType)),
+            element => element != null,
+            timeout ?? TimeSpan.FromSeconds(10),
+            $"ControlType '{controlType}' was not found.")!;
     }
 
     public void InvokeButton(string automationId)
     {
         var button = FindByAutomationId(automationId);
         ActivateElement(button);
+    }
+
+    public void EnterText(string automationId, string text)
+    {
+        var element = FindByAutomationId(automationId);
+
+        if (element.Patterns.Value.IsSupported)
+        {
+            element.Patterns.Value.Pattern.SetValue(text);
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Element '{automationId}' does not support ValuePattern for text entry.");
     }
 
     public void ActivateElement(AutomationElement element)
@@ -94,10 +184,25 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"Element '{element.AutomationId}' does not support Invoke or SelectionItem patterns.");
     }
 
+    public bool? TryGetIsSelected(string automationId)
+    {
+        var element = TryFindByAutomationId(automationId, TimeSpan.FromSeconds(2));
+        if (element == null || !element.Patterns.SelectionItem.IsSupported)
+        {
+            return null;
+        }
+
+        return element.Patterns.SelectionItem.Pattern.IsSelected.Value;
+    }
+
     public void Dispose()
     {
         _automation.Dispose();
         _application.Dispose();
+        if (_ownsProcess)
+        {
+            StopAllRunningInstances();
+        }
     }
 
     private static void LaunchInstalledMsix(MsixManifestInfo manifest)
@@ -150,6 +255,27 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"Timed out waiting for process '{processName}'.")!;
     }
 
+    private static WindowsGuiAppSession AttachToProcess(Process process, bool ownsProcess)
+    {
+        var automation = new UIA3Automation();
+        try
+        {
+            var application = Application.Attach(process);
+            var mainWindow = RetryUntil(
+                () => application.GetMainWindow(automation),
+                window => window != null && !window.IsOffscreen,
+                TimeSpan.FromSeconds(20),
+                "Timed out waiting for SalmonEgg main window.");
+
+            return new WindowsGuiAppSession(application, automation, mainWindow!, ownsProcess);
+        }
+        catch
+        {
+            automation.Dispose();
+            throw;
+        }
+    }
+
     private static T? RetryUntil<T>(
         Func<T?> probe,
         Func<T?, bool> success,
@@ -171,5 +297,17 @@ internal sealed class WindowsGuiAppSession : IDisposable
         }
 
         throw new TimeoutException(failureMessage);
+    }
+
+    private static bool HasAutomationIdPrefix(AutomationElement element, string prefix)
+    {
+        try
+        {
+            return element.AutomationId?.StartsWith(prefix, StringComparison.Ordinal) == true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

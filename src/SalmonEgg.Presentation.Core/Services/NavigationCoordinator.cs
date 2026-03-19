@@ -50,14 +50,16 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             return;
         }
 
-        _navigationViewModel.SelectSession(sessionId);
         _shellNavigationService.NavigateToChat();
 
         _preferences.LastSelectedProjectId = string.Equals(projectId, MainNavigationViewModel.UnclassifiedProjectId, StringComparison.Ordinal)
             ? null
             : projectId;
 
-        await _chatViewModel.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true);
+        if (await _chatViewModel.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true))
+        {
+            _navigationViewModel.SelectSession(sessionId);
+        }
     }
 
     public Task ToggleProjectAsync(string projectId)
