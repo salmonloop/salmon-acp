@@ -78,7 +78,7 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
 public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
 {
     private readonly IUiInteractionService _ui;
-    private readonly ChatViewModel _chatViewModel;
+    private readonly IChatSessionCatalog _chatSessionCatalog;
 
     public string SessionId { get; }
     public string ProjectId { get; }
@@ -112,6 +112,27 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         ChatViewModel chatViewModel,
         INavigationPaneState navigationState,
         bool isPlaceholder = false)
+        : this(
+            sessionId,
+            projectId,
+            title,
+            relativeTimeText,
+            ui,
+            new ChatViewModelSessionCatalogAdapter(chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel))),
+            navigationState,
+            isPlaceholder)
+    {
+    }
+
+    public SessionNavItemViewModel(
+        string sessionId,
+        string projectId,
+        string title,
+        string relativeTimeText,
+        IUiInteractionService ui,
+        IChatSessionCatalog chatSessionCatalog,
+        INavigationPaneState navigationState,
+        bool isPlaceholder = false)
         : base(navigationState)
     {
         SessionId = sessionId;
@@ -119,7 +140,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         Title = title;
         RelativeTimeText = relativeTimeText;
         _ui = ui;
-        _chatViewModel = chatViewModel;
+        _chatSessionCatalog = chatSessionCatalog ?? throw new ArgumentNullException(nameof(chatSessionCatalog));
         IsPlaceholder = isPlaceholder;
 
         RenameCommand = new AsyncRelayCommand(RenameAsync, CanRename);
@@ -145,7 +166,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
             return;
         }
 
-        _chatViewModel.ArchiveConversation(SessionId);
+        _chatSessionCatalog.ArchiveConversation(SessionId);
     }
 
     private async Task RenameAsync()
@@ -167,7 +188,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
             ? SessionNamePolicy.CreateDefault(SessionId)
             : sanitized;
 
-        _chatViewModel.RenameConversation(SessionId, finalName);
+        _chatSessionCatalog.RenameConversation(SessionId, finalName);
         Title = finalName;
     }
 }

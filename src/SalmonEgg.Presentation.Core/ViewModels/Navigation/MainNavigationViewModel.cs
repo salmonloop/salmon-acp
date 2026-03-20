@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
@@ -14,25 +15,27 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.ViewModels.Navigation;
 
-public sealed partial class MainNavigationViewModel : ObservableObject, IDisposable
+public sealed partial class MainNavigationViewModel : ObservableObject, IDisposable, INavigationSelectionHost
 {
-    public const string UnclassifiedProjectId = "__unclassified__";
+    public const string UnclassifiedProjectId = NavigationProjectIds.Unclassified;
 
-    private readonly ChatViewModel _chatViewModel;
-    private readonly ISessionManager _sessionManager;
-    private readonly AppPreferencesViewModel _preferences;
+    private readonly IConversationSessionSwitcher _conversationSessionSwitcher;
+    private readonly IChatSessionCatalog _chatSessionCatalogActions;
+    private readonly INavigationProjectPreferences _projectPreferences;
     private readonly IUiInteractionService _ui;
     private readonly IShellNavigationService _shellNavigation;
     private readonly ILogger<MainNavigationViewModel> _logger;
     private readonly INavigationPaneState _navigationState;
     private readonly IShellLayoutMetricsSink _metricsSink;
     private readonly NavigationSelectionProjector _selectionProjector;
+    private readonly IConversationCatalogReadModel _conversationCatalogPresenter;
     private readonly SynchronizationContext _syncContext;
     private readonly System.Collections.Specialized.NotifyCollectionChangedEventHandler _projectsChangedHandler;
     private readonly Timer _relativeTimeTimer;
@@ -42,6 +45,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly Dictionary<string, SessionNavItemViewModel> _sessionIndex = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectIndex = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectVms = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ConversationCatalogItem> _conversationCatalogIndex = new(StringComparer.Ordinal);
     private string? _pendingProjectIdForNewSession;
 
     public ObservableCollection<MainNavItemViewModel> Items { get; } = new();
@@ -80,25 +84,27 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     public IAsyncRelayCommand AddProjectCommand { get; }
 
     public MainNavigationViewModel(
-        ChatViewModel chatViewModel,
-        ISessionManager sessionManager,
-        AppPreferencesViewModel preferences,
+        IConversationCatalog conversationCatalog,
+        IConversationSessionSwitcher conversationSessionSwitcher,
+        INavigationProjectPreferences projectPreferences,
         IUiInteractionService ui,
         IShellNavigationService shellNavigation,
         ILogger<MainNavigationViewModel> logger,
         INavigationPaneState navigationState,
         IShellLayoutMetricsSink metricsSink,
-        NavigationSelectionProjector? selectionProjector = null)
+        NavigationSelectionProjector selectionProjector,
+        IConversationCatalogReadModel conversationCatalogPresenter)
     {
-        _chatViewModel = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
-        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
-        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _conversationSessionSwitcher = conversationSessionSwitcher ?? throw new ArgumentNullException(nameof(conversationSessionSwitcher));
+        _chatSessionCatalogActions = conversationCatalog as IChatSessionCatalog ?? new ChatViewModelSessionCatalogAdapter(conversationCatalog);
+        _projectPreferences = projectPreferences ?? throw new ArgumentNullException(nameof(projectPreferences));
         _ui = ui ?? throw new ArgumentNullException(nameof(ui));
         _shellNavigation = shellNavigation ?? throw new ArgumentNullException(nameof(shellNavigation));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationState = navigationState ?? throw new ArgumentNullException(nameof(navigationState));
         _metricsSink = metricsSink ?? throw new ArgumentNullException(nameof(metricsSink));
-        _selectionProjector = selectionProjector ?? new NavigationSelectionProjector();
+        _selectionProjector = selectionProjector ?? throw new ArgumentNullException(nameof(selectionProjector));
+        _conversationCatalogPresenter = conversationCatalogPresenter ?? throw new ArgumentNullException(nameof(conversationCatalogPresenter));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
         _sessionActivationHandler = SelectSessionAsync;
 
@@ -118,9 +124,9 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         SelectedItem = StartItem;
         ApplySelectionProjection();
 
-        _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
+        _conversationCatalogPresenter.PropertyChanged += OnConversationCatalogPresenterPropertyChanged;
         _projectsChangedHandler = (_, _) => RebuildTree();
-        _preferences.Projects.CollectionChanged += _projectsChangedHandler;
+        ((INotifyCollectionChanged)_projectPreferences.Projects).CollectionChanged += _projectsChangedHandler;
 
         _relativeTimeTimer = new Timer(
             _ => _syncContext.Post(__ => RefreshRelativeTimes(), null),
@@ -134,8 +140,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     public void Dispose()
     {
         _navigationState.PaneStateChanged -= OnServicePaneStateChanged;
-        _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
-        _preferences.Projects.CollectionChanged -= _projectsChangedHandler;
+        _conversationCatalogPresenter.PropertyChanged -= OnConversationCatalogPresenterPropertyChanged;
+        ((INotifyCollectionChanged)_projectPreferences.Projects).CollectionChanged -= _projectsChangedHandler;
         _relativeTimeTimer.Dispose();
 
         DisposeItem(StartItem);
@@ -166,10 +172,10 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }
     }
 
-    private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnConversationCatalogPresenterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ChatViewModel.IsConversationListLoading)
-            || e.PropertyName == nameof(ChatViewModel.ConversationListVersion))
+        if (e.PropertyName == nameof(IConversationCatalogReadModel.IsConversationListLoading)
+            || e.PropertyName == nameof(IConversationCatalogReadModel.ConversationListVersion))
         {
             RebuildTree();
         }
@@ -237,7 +243,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             ? null
             : projectId;
 
-        _preferences.LastSelectedProjectId = normalizedId;
+        _projectPreferences.LastSelectedProjectId = normalizedId;
         _pendingProjectIdForNewSession = normalizedId;
         _shellNavigation.NavigateToStart();
         SelectStart();
@@ -254,13 +260,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             return null;
         }
 
-        var project = _preferences.Projects.FirstOrDefault(p => string.Equals(p.ProjectId, projectId, StringComparison.Ordinal));
-        if (project == null || string.IsNullOrWhiteSpace(project.RootPath))
-        {
-            return null;
-        }
-
-        return project.RootPath.Trim();
+        return _projectPreferences.TryGetProjectRootPath(projectId);
     }
 
     public async Task ShowAllSessionsForProjectAsync(string projectId)
@@ -292,7 +292,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             title: "加载中…",
             relativeTimeText: string.Empty,
             ui: _ui,
-            chatViewModel: _chatViewModel,
+            chatSessionCatalog: _chatSessionCatalogActions,
             navigationState: _navigationState,
             isPlaceholder: true);
     }
@@ -345,7 +345,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             return;
         }
 
-        if (_preferences.Projects.Any(p => string.Equals(NavTimeFormatter.NormalizePathForPrefixMatch(p.RootPath).TrimEnd(System.IO.Path.DirectorySeparatorChar), normalized, StringComparison.OrdinalIgnoreCase)))
+        if (_projectPreferences.Projects.Any(p => string.Equals(NavTimeFormatter.NormalizePathForPrefixMatch(p.RootPath).TrimEnd(System.IO.Path.DirectorySeparatorChar), normalized, StringComparison.OrdinalIgnoreCase)))
         {
             await _ui.ShowInfoAsync("该项目路径已存在。").ConfigureAwait(true);
             return;
@@ -357,7 +357,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             name = normalized;
         }
 
-        _preferences.Projects.Add(new ProjectDefinition
+        _projectPreferences.AddProject(new ProjectDefinition
         {
             ProjectId = Guid.NewGuid().ToString("N"),
             Name = name,
@@ -430,7 +430,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                         Items.Add(projectVm);
                     }
 
-                    SyncSessions(projectVm, sessionsByProject.TryGetValue(projectId, out var s) ? s : new List<Session>());
+                    SyncSessions(projectVm, sessionsByProject.TryGetValue(projectId, out var s) ? s : new List<ConversationCatalogItem>());
                     itemIndex++;
                 }
 
@@ -458,7 +458,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }, null);
     }
 
-    private void SyncSessions(ProjectNavItemViewModel projectVm, List<Session> sessions)
+    private void SyncSessions(ProjectNavItemViewModel projectVm, List<ConversationCatalogItem> sessions)
     {
         var top = sessions.Take(20).ToList();
         var remainingCount = Math.Max(0, sessions.Count - top.Count);
@@ -467,14 +467,14 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         foreach (var session in top)
         {
             var title = string.IsNullOrWhiteSpace(session.DisplayName)
-                ? SessionNamePolicy.CreateDefault(session.SessionId)
+                ? SessionNamePolicy.CreateDefault(session.ConversationId)
                 : session.DisplayName.Trim();
-            var relative = NavTimeFormatter.ToRelativeText(session.LastActivityAt == default ? session.CreatedAt : session.LastActivityAt);
+            var relative = NavTimeFormatter.ToRelativeText(session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt);
 
             SessionNavItemViewModel? sessionVm = null;
             if (childIndex < projectVm.Children.Count && projectVm.Children[childIndex] is SessionNavItemViewModel existingSvm && !existingSvm.IsPlaceholder)
             {
-                if (string.Equals(existingSvm.SessionId, session.SessionId, StringComparison.Ordinal))
+                if (string.Equals(existingSvm.SessionId, session.ConversationId, StringComparison.Ordinal))
                 {
                     sessionVm = existingSvm;
                     sessionVm.Title = title;
@@ -485,7 +485,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             if (sessionVm == null)
             {
                 // Look for it elsewhere in children to avoid full re-creation if it moved
-                sessionVm = projectVm.Children.OfType<SessionNavItemViewModel>().FirstOrDefault(v => string.Equals(v.SessionId, session.SessionId, StringComparison.Ordinal));
+                sessionVm = projectVm.Children.OfType<SessionNavItemViewModel>().FirstOrDefault(v => string.Equals(v.SessionId, session.ConversationId, StringComparison.Ordinal));
                 if (sessionVm != null)
                 {
                     // Note: We don't dispose here because we are re-inserting it at a new position
@@ -496,18 +496,18 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 else
                 {
                     sessionVm = new SessionNavItemViewModel(
-                        sessionId: session.SessionId,
-                        projectId: projectVm.ProjectId,
-                        title: title,
-                        relativeTimeText: relative,
-                        ui: _ui,
-                        chatViewModel: _chatViewModel,
-                        navigationState: _navigationState);
+                            sessionId: session.ConversationId,
+                            projectId: projectVm.ProjectId,
+                            title: title,
+                            relativeTimeText: relative,
+                            ui: _ui,
+                            chatSessionCatalog: _chatSessionCatalogActions,
+                            navigationState: _navigationState);
                 }
                 projectVm.Children.Insert(childIndex, sessionVm);
             }
 
-            _sessionIndex[session.SessionId] = sessionVm;
+            _sessionIndex[session.ConversationId] = sessionVm;
             childIndex++;
         }
 
@@ -544,7 +544,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }
 
         // Add loading placeholder if needed
-        if (_chatViewModel.IsConversationListLoading && childIndex == 0 && projectVm.ProjectId == UnclassifiedProjectId)
+        if (IsConversationListLoading && childIndex == 0 && projectVm.ProjectId == UnclassifiedProjectId)
         {
             projectVm.Children.Add(CreateLoadingPlaceholder());
             childIndex++;
@@ -566,7 +566,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             (new ProjectDefinition { ProjectId = UnclassifiedProjectId, Name = "未归类", RootPath = string.Empty }, true)
         };
 
-        projects.AddRange(_preferences.Projects
+        projects.AddRange(_projectPreferences.Projects
             .Where(p => p != null
                         && !string.IsNullOrWhiteSpace(p.ProjectId)
                         && !string.IsNullOrWhiteSpace(p.Name)
@@ -576,22 +576,18 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         return projects;
     }
 
-    private Dictionary<string, List<Session>> GetSessionsByProject(List<(ProjectDefinition Project, bool IsSystem)> projects)
+    private Dictionary<string, List<ConversationCatalogItem>> GetSessionsByProject(List<(ProjectDefinition Project, bool IsSystem)> projects)
     {
         var normalizedRoots = projects.ToDictionary(
             p => p.Project.ProjectId!,
             p => NavTimeFormatter.NormalizePathForPrefixMatch(p.Project.RootPath),
             StringComparer.Ordinal);
 
-        var sessions = _chatViewModel.GetKnownConversationIds()
-            .Select(id => _sessionManager.GetSession(id))
-            .Where(s => s != null)
-            .Cast<Session>()
-            .ToList();
+        var sessions = GetConversationCatalogSnapshot();
 
         return sessions
             .GroupBy(s => ProjectSessionClassifier.ClassifyProjectId(s.Cwd, normalizedRoots, UnclassifiedProjectId), StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).ToList(), StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastUpdatedAt).ToList(), StringComparer.Ordinal);
     }
 
     private void NormalizeSelectionAfterRebuild()
@@ -676,15 +672,16 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     }
 
     private object? ResolveProjectedSelectedItem()
-        => _selection switch
+    {
+        if (_selection is NavigationSelectionState.Start
+            && !string.IsNullOrWhiteSpace(_conversationSessionSwitcher.CurrentConversationId)
+            && _sessionIndex.TryGetValue(_conversationSessionSwitcher.CurrentConversationId, out var activeSessionItem))
         {
-            NavigationSelectionState.Start => StartItem,
-            NavigationSelectionState.Settings => null,
-            NavigationSelectionState.Session sessionSelection when !string.IsNullOrWhiteSpace(sessionSelection.SessionId)
-                && _sessionIndex.TryGetValue(sessionSelection.SessionId, out var sessionItem) => sessionItem,
-            NavigationSelectionState.Session => StartItem,
-            _ => StartItem
-        };
+            return activeSessionItem;
+        }
+
+        return _projection.ControlSelectedItem;
+    }
 
 
     private void RefreshRelativeTimes()
@@ -704,13 +701,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 return;
             }
 
-            var session = _sessionManager.GetSession(sessionItem.SessionId);
-            if (session == null)
+            if (!_conversationCatalogIndex.TryGetValue(sessionItem.SessionId, out var session))
             {
                 return;
             }
 
-            var timestamp = session.LastActivityAt == default ? session.CreatedAt : session.LastActivityAt;
+            var timestamp = session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt;
             var relative = NavTimeFormatter.ToRelativeText(timestamp);
             if (!string.Equals(sessionItem.RelativeTimeText, relative, StringComparison.Ordinal))
             {
@@ -738,24 +734,24 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 IsExpanded = true
             };
 
-            var list = byProject.TryGetValue(project.ProjectId!, out var value) ? value : new List<Session>();
+            var list = byProject.TryGetValue(project.ProjectId!, out var value) ? value : new List<ConversationCatalogItem>();
             var top = list.Take(20).ToList();
             var remaining = Math.Max(0, list.Count - top.Count);
 
             foreach (var session in top)
             {
                 var title = string.IsNullOrWhiteSpace(session.DisplayName)
-                    ? SessionNamePolicy.CreateDefault(session.SessionId)
+                    ? SessionNamePolicy.CreateDefault(session.ConversationId)
                     : session.DisplayName.Trim();
 
-                var relative = NavTimeFormatter.ToRelativeText(session.LastActivityAt == default ? session.CreatedAt : session.LastActivityAt);
+                var relative = NavTimeFormatter.ToRelativeText(session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt);
                 var vm = new SessionNavItemViewModel(
-                    sessionId: session.SessionId,
+                    sessionId: session.ConversationId,
                     projectId: projectVm.ProjectId,
                     title: title,
                     relativeTimeText: relative,
                     ui: _ui,
-                    chatViewModel: _chatViewModel,
+                    chatSessionCatalog: _chatSessionCatalogActions,
                     navigationState: _navigationState);
 
                 projectVm.Children.Add(vm);
@@ -767,7 +763,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 projectVm.Children.Add(new MoreSessionsNavItemViewModel(projectVm.ProjectId, remaining, showMore, _navigationState));
             }
 
-            if (_chatViewModel.IsConversationListLoading && projectVm.Children.Count == 0 && projectVm.ProjectId == UnclassifiedProjectId)
+            if (IsConversationListLoading && projectVm.Children.Count == 0 && projectVm.ProjectId == UnclassifiedProjectId)
             {
                 projectVm.Children.Add(CreateLoadingPlaceholder());
             }
@@ -800,18 +796,15 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             new() { ProjectId = UnclassifiedProjectId, Name = "未归类", RootPath = string.Empty }
         };
-        projects.AddRange(_preferences.Projects);
+        projects.AddRange(_projectPreferences.Projects);
 
         var normalizedRoots = projects
             .Where(p => !string.IsNullOrWhiteSpace(p.ProjectId))
             .ToDictionary(p => p.ProjectId, p => NavTimeFormatter.NormalizePathForPrefixMatch(p.RootPath), StringComparer.Ordinal);
 
-        var sessions = _chatViewModel.GetKnownConversationIds()
-            .Select(id => _sessionManager.GetSession(id))
-            .Where(s => s != null)
-            .Cast<Session>()
+        var sessions = GetConversationCatalogSnapshot()
             .Where(s => string.Equals(ProjectSessionClassifier.ClassifyProjectId(s.Cwd, normalizedRoots, UnclassifiedProjectId), projectId, StringComparison.Ordinal))
-            .OrderByDescending(s => s.LastActivityAt)
+            .OrderByDescending(s => s.LastUpdatedAt)
             .ToList();
 
         if (limit.HasValue)
@@ -821,16 +814,32 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         return sessions.Select(s =>
         {
-            var title = string.IsNullOrWhiteSpace(s.DisplayName) ? SessionNamePolicy.CreateDefault(s.SessionId) : s.DisplayName.Trim();
-            var relative = NavTimeFormatter.ToRelativeText(s.LastActivityAt == default ? s.CreatedAt : s.LastActivityAt);
+            var title = string.IsNullOrWhiteSpace(s.DisplayName) ? SessionNamePolicy.CreateDefault(s.ConversationId) : s.DisplayName.Trim();
+            var relative = NavTimeFormatter.ToRelativeText(s.LastUpdatedAt == default ? s.CreatedAt : s.LastUpdatedAt);
             return new SessionNavItemViewModel(
-                sessionId: s.SessionId,
+                sessionId: s.ConversationId,
                 projectId: projectId,
                 title: title,
                 relativeTimeText: relative,
                 ui: _ui,
-                chatViewModel: _chatViewModel,
+                chatSessionCatalog: _chatSessionCatalogActions,
                 navigationState: _navigationState);
         }).ToList();
     }
+
+    private bool IsConversationListLoading => _conversationCatalogPresenter.IsConversationListLoading;
+
+    private IReadOnlyList<ConversationCatalogItem> GetConversationCatalogSnapshot()
+    {
+        _conversationCatalogIndex.Clear();
+        foreach (var item in _conversationCatalogPresenter.Snapshot)
+        {
+            _conversationCatalogIndex[item.ConversationId] = item;
+        }
+
+        return _conversationCatalogPresenter.Snapshot;
+    }
+
+    private IEnumerable<string> GetKnownConversationIds()
+        => _conversationCatalogPresenter.Snapshot.Select(static item => item.ConversationId);
 }

@@ -10,6 +10,7 @@ using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -26,101 +27,61 @@ namespace SalmonEgg.Presentation.Core.Tests.Start;
 public sealed class StartViewModelTests
 {
     [Fact]
-    public async Task StartSessionAndSendAsync_DoesNotNavigate_WhenSwitchFails()
+    public async Task StartSessionAndSendAsync_DoesNotInvokeWorkflow_WhenPromptIsBlank()
     {
-        var originalContext = SynchronizationContext.Current;
-        var throwingContext = new ControlledThrowSynchronizationContext();
-
-        var sessionManager = new Mock<ISessionManager>();
-        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
-
         var preferences = CreatePreferences();
-        using var chat = CreateChatViewModel(throwingContext, preferences, sessionManager.Object);
+        using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
         var chatViewModel = chat.ViewModel;
-
-        SynchronizationContext.SetSynchronizationContext(originalContext);
-
-        var ui = new Mock<IUiInteractionService>();
-        var navigationCoordinator = new Mock<INavigationCoordinator>();
-        var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-        var navState = new FakeNavigationPaneState();
-        var metricsSink = new Mock<IShellLayoutMetricsSink>();
-        using var nav = new MainNavigationViewModel(
-            chatViewModel,
-            sessionManager.Object,
-            preferences,
-            ui.Object,
-            Mock.Of<IShellNavigationService>(),
-            navLogger.Object,
-            navState,
-            metricsSink.Object);
+        var workflow = new Mock<IChatLaunchWorkflow>();
 
         var startLogger = new Mock<ILogger<StartViewModel>>();
-        var startViewModel = new StartViewModel(
-            chatViewModel,
-            sessionManager.Object,
-            preferences,
-            navigationCoordinator.Object,
-            nav,
-            startLogger.Object);
+        using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+        var startViewModel = CreateStartViewModel(chatViewModel, preferences, nav, workflow.Object, startLogger.Object);
 
-        chatViewModel.CurrentPrompt = "hello";
-        throwingContext.ThrowNextPost();
+        chatViewModel.CurrentPrompt = "   ";
 
         await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
 
-        navigationCoordinator.Verify(n => n.ActivateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
-        navigationCoordinator.Verify(n => n.ActivateSettingsAsync(It.IsAny<string>()), Times.Never);
-        Assert.Empty(chatViewModel.MessageHistory);
+        workflow.Verify(w => w.StartSessionAndSendAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task StartSessionAndSendAsync_DoesNotNavigate_WhenConnectionInProgress()
+    public async Task StartSessionAndSendAsync_DelegatesTrimmedPromptToWorkflow()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new SynchronizationContext();
-
-        var sessionManager = new Mock<ISessionManager>();
-        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
-
         var preferences = CreatePreferences();
-        using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+        using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
         var chatViewModel = chat.ViewModel;
-        chatViewModel.IsConnecting = true;
+        var workflow = new Mock<IChatLaunchWorkflow>();
 
-        SynchronizationContext.SetSynchronizationContext(originalContext);
+        using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+        var startViewModel = CreateStartViewModel(chatViewModel, preferences, nav, workflow.Object);
 
-        var ui = new Mock<IUiInteractionService>();
-        var navigationCoordinator = new Mock<INavigationCoordinator>();
-        var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-        var navState = new FakeNavigationPaneState();
-        var metricsSink = new Mock<IShellLayoutMetricsSink>();
-        using var nav = new MainNavigationViewModel(
-            chatViewModel,
-            sessionManager.Object,
-            preferences,
-            ui.Object,
-            Mock.Of<IShellNavigationService>(),
-            navLogger.Object,
-            navState,
-            metricsSink.Object);
+        chatViewModel.CurrentPrompt = "  hello  ";
 
-        var startLogger = new Mock<ILogger<StartViewModel>>();
-        var startViewModel = new StartViewModel(
-            chatViewModel,
-            sessionManager.Object,
-            preferences,
-            navigationCoordinator.Object,
-            nav,
-            startLogger.Object);
+        await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
+
+        workflow.Verify(w => w.StartSessionAndSendAsync("hello", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartSessionAndSendAsync_ResetsBusyState_WhenWorkflowThrows()
+    {
+        var preferences = CreatePreferences();
+        using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
+        var chatViewModel = chat.ViewModel;
+        var workflow = new Mock<IChatLaunchWorkflow>();
+        workflow.Setup(w => w.StartSessionAndSendAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+        var startViewModel = CreateStartViewModel(chatViewModel, preferences, nav, workflow.Object);
 
         chatViewModel.CurrentPrompt = "hello";
 
         await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
 
-        navigationCoordinator.Verify(n => n.ActivateSettingsAsync(It.IsAny<string>()), Times.Never);
+        Assert.False(startViewModel.IsStarting);
+        Assert.True(startViewModel.StartSessionAndSendCommand.CanExecute(null));
     }
 
     private static ChatViewModelHarness CreateChatViewModel(
@@ -152,9 +113,16 @@ public sealed class StartViewModelTests
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
 
         var conversationStore = new Mock<IConversationStore>();
-        conversationStore.Setup(s => s.LoadAsync(CancellationToken.None)).ReturnsAsync(new ConversationDocument());
+        conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new ConversationDocument());
 
         var miniWindow = new Mock<IMiniWindowCoordinator>();
+        var workspace = new ChatConversationWorkspace(
+            sessionManager,
+            conversationStore.Object,
+            new AppPreferencesConversationWorkspacePreferences(preferences),
+            Mock.Of<ILogger<ChatConversationWorkspace>>(),
+            syncContext);
+        var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
         var originalContext = SynchronizationContext.Current;
@@ -168,10 +136,13 @@ public sealed class StartViewModelTests
                 preferences,
                 profiles,
                 sessionManager,
-                conversationStore.Object,
                 miniWindow.Object,
+                workspace,
+                conversationCatalogPresenter,
+                null,
+                null,
                 vmLogger.Object);
-            return new ChatViewModelHarness(viewModel, state);
+            return new ChatViewModelHarness(viewModel, state, conversationCatalogPresenter);
         }
         finally
         {
@@ -199,25 +170,44 @@ public sealed class StartViewModelTests
             prefsLogger.Object);
     }
 
-    private sealed class ControlledThrowSynchronizationContext : SynchronizationContext
+    private static MainNavigationViewModel CreateNavigationViewModel(
+        ChatViewModelHarness chat,
+        ISessionManager sessionManager,
+        AppPreferencesViewModel preferences)
     {
-        private bool _throwNext;
+        var ui = new Mock<IUiInteractionService>();
+        var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
+        var navState = new FakeNavigationPaneState();
+        var metricsSink = new Mock<IShellLayoutMetricsSink>();
 
-        public void ThrowNextPost()
-        {
-            _throwNext = true;
-        }
+        return new MainNavigationViewModel(
+            chat.ViewModel,
+            chat.ViewModel,
+            new NavigationProjectPreferencesAdapter(preferences),
+            ui.Object,
+            Mock.Of<IShellNavigationService>(),
+            navLogger.Object,
+            navState,
+            metricsSink.Object,
+            new NavigationSelectionProjector(),
+            chat.Presenter);
+    }
 
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            if (_throwNext)
-            {
-                _throwNext = false;
-                throw new InvalidOperationException("Injected failure");
-            }
-
-            d(state);
-        }
+    private static StartViewModel CreateStartViewModel(
+        ChatViewModel chatViewModel,
+        AppPreferencesViewModel preferences,
+        MainNavigationViewModel nav,
+        IChatLaunchWorkflow workflow,
+        ILogger<StartViewModel>? logger = null)
+    {
+        return new StartViewModel(
+            chatViewModel: chatViewModel,
+            sessionManager: Mock.Of<ISessionManager>(),
+            preferences: preferences,
+            navigationCoordinator: Mock.Of<INavigationCoordinator>(),
+            nav: nav,
+            logger: logger ?? Mock.Of<ILogger<StartViewModel>>(),
+            chatLaunchWorkflow: workflow);
     }
 
     private sealed class FakeNavigationPaneState : INavigationPaneState
@@ -240,12 +230,14 @@ public sealed class StartViewModelTests
     private sealed class ChatViewModelHarness : IDisposable
     {
         private readonly IState<ChatState> _state;
+        public ConversationCatalogPresenter Presenter { get; }
         public ChatViewModel ViewModel { get; }
 
-        public ChatViewModelHarness(ChatViewModel viewModel, IState<ChatState> state)
+        public ChatViewModelHarness(ChatViewModel viewModel, IState<ChatState> state, ConversationCatalogPresenter presenter)
         {
             ViewModel = viewModel;
             _state = state;
+            Presenter = presenter;
         }
 
         public void Dispose()

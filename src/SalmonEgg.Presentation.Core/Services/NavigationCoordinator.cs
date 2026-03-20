@@ -1,44 +1,42 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
-using SalmonEgg.Presentation.ViewModels;
-using SalmonEgg.Presentation.ViewModels.Chat;
-using SalmonEgg.Presentation.ViewModels.Navigation;
-using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.Core.Services;
 
 public sealed class NavigationCoordinator : INavigationCoordinator
 {
-    private readonly MainNavigationViewModel _navigationViewModel;
-    private readonly ChatViewModel _chatViewModel;
-    private readonly AppPreferencesViewModel _preferences;
+    private readonly INavigationSelectionHost _navigationHost;
+    private readonly IConversationSessionSwitcher _conversationSessionSwitcher;
+    private readonly INavigationProjectSelectionStore _projectSelectionStore;
     private readonly IShellNavigationService _shellNavigationService;
 
     public NavigationCoordinator(
-        MainNavigationViewModel navigationViewModel,
-        ChatViewModel chatViewModel,
-        AppPreferencesViewModel preferences,
+        INavigationSelectionHost navigationHost,
+        IConversationSessionSwitcher conversationSessionSwitcher,
+        INavigationProjectSelectionStore projectSelectionStore,
         IShellNavigationService shellNavigationService)
     {
-        _navigationViewModel = navigationViewModel ?? throw new ArgumentNullException(nameof(navigationViewModel));
-        _chatViewModel = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
-        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _navigationHost = navigationHost ?? throw new ArgumentNullException(nameof(navigationHost));
+        _conversationSessionSwitcher = conversationSessionSwitcher ?? throw new ArgumentNullException(nameof(conversationSessionSwitcher));
+        _projectSelectionStore = projectSelectionStore ?? throw new ArgumentNullException(nameof(projectSelectionStore));
         _shellNavigationService = shellNavigationService ?? throw new ArgumentNullException(nameof(shellNavigationService));
-        _navigationViewModel.RegisterSessionActivationHandler(ActivateSessionAsync);
+        _navigationHost.RegisterSessionActivationHandler(ActivateSessionAsync);
     }
 
     public Task ActivateStartAsync()
     {
-        _navigationViewModel.SelectStart();
+        _navigationHost.SelectStart();
         _shellNavigationService.NavigateToStart();
         return Task.CompletedTask;
     }
 
     public Task ActivateSettingsAsync(string settingsKey)
     {
-        _navigationViewModel.SelectSettings();
+        _navigationHost.SelectSettings();
         _shellNavigationService.NavigateToSettings(string.IsNullOrWhiteSpace(settingsKey) ? "General" : settingsKey);
         return Task.CompletedTask;
     }
@@ -51,20 +49,17 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         }
 
         _shellNavigationService.NavigateToChat();
+        _projectSelectionStore.RememberSelectedProject(projectId);
 
-        _preferences.LastSelectedProjectId = string.Equals(projectId, MainNavigationViewModel.UnclassifiedProjectId, StringComparison.Ordinal)
-            ? null
-            : projectId;
-
-        if (await _chatViewModel.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true))
+        if (await _conversationSessionSwitcher.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true))
         {
-            _navigationViewModel.SelectSession(sessionId);
+            _navigationHost.SelectSession(sessionId);
         }
     }
 
     public Task ToggleProjectAsync(string projectId)
     {
-        _navigationViewModel.ToggleProjectExpanded(projectId);
+        _navigationHost.ToggleProjectExpanded(projectId);
         return Task.CompletedTask;
     }
 
@@ -73,17 +68,17 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         switch (content)
         {
             case ShellNavigationContent.Start:
-                _navigationViewModel.SelectStart();
+                _navigationHost.SelectStart();
                 return;
 
             case ShellNavigationContent.Settings:
-                _navigationViewModel.SelectSettings();
+                _navigationHost.SelectSettings();
                 return;
 
             case ShellNavigationContent.Chat:
                 if (!string.IsNullOrWhiteSpace(currentSessionId))
                 {
-                    _navigationViewModel.SelectSession(currentSessionId);
+                    _navigationHost.SelectSession(currentSessionId);
                 }
 
                 return;

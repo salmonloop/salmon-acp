@@ -1,3 +1,6 @@
+using SalmonEgg.Domain.Models.Conversation;
+using System.Collections.Immutable;
+
 namespace SalmonEgg.Presentation.Core.Mvux.Chat;
 
 /// <summary>
@@ -45,6 +48,16 @@ public sealed record ClearChatAction : ChatAction;
 /// </summary>
 public sealed record UpdateConnectionStatusAction(bool IsConnected, string? ErrorMessage = null) : ChatAction;
 
+public sealed record SetConnectionLifecycleAction(
+    bool IsConnecting,
+    bool IsConnected,
+    bool IsInitialized,
+    string? ErrorMessage = null) : ChatAction;
+
+public sealed record SetAuthenticationStateAction(bool IsRequired, string? HintMessage) : ChatAction;
+
+public sealed record SetAgentIdentityAction(string? AgentName, string? AgentVersion) : ChatAction;
+
 /// <summary>
 /// Dispatched to update the prompt in-flight status.
 /// </summary>
@@ -58,4 +71,26 @@ public sealed record SetIsThinkingAction(bool IsThinking) : ChatAction;
 /// <summary>
 /// Dispatched when a text delta is received for the active streaming message.
 /// </summary>
-public sealed record AppendTextDeltaAction(string Delta) : ChatAction;
+public sealed record AppendTextDeltaAction(string? ConversationId, string Delta) : ChatAction;
+
+public sealed record HydrateConversationAction(
+    string? ConversationId,
+    IImmutableList<ConversationMessageSnapshot> Transcript,
+    IImmutableList<ConversationPlanEntrySnapshot> PlanEntries,
+    bool ShowPlanPanel,
+    string? PlanTitle,
+    string? BoundProfileId,
+    string? RemoteSessionId) : ChatAction;
+
+public sealed record UpsertTranscriptMessageAction(string? ConversationId, ConversationMessageSnapshot Message) : ChatAction;
+
+public sealed record ReplacePlanEntriesAction(
+    string? ConversationId,
+    IImmutableList<ConversationPlanEntrySnapshot> PlanEntries,
+    bool ShowPlanPanel,
+    string? PlanTitle) : ChatAction;
+
+public sealed record UpdateConversationBindingAction(
+    string? ConversationId,
+    string? BoundProfileId,
+    string? RemoteSessionId) : ChatAction;

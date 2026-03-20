@@ -1,12 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using SalmonEgg.Domain.Models;
+using SalmonEgg.Presentation.Core.Services.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Chat;
 
 /// <summary>
 /// 传输配置 ViewModel，用于在 UI 中管理不同的传输方式（Stdio, WebSocket, HTTP SSE）。
 /// </summary>
-public partial class TransportConfigViewModel : ObservableObject
+public partial class TransportConfigViewModel : ObservableObject, IAcpTransportConfiguration
 {
     /// <summary>
     /// 当前选择的传输类型

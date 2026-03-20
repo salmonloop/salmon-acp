@@ -1,21 +1,17 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Domain.Models;
-using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
-using SalmonEgg.Domain.Interfaces;
-using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
-using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
-using SerilogLogger = Serilog.ILogger;
-using Uno.Extensions.Reactive;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Navigation;
@@ -35,22 +31,15 @@ public sealed class MainNavigationViewModelPaneTests
 
             var sessionManager = new Mock<ISessionManager>();
             var preferences = CreatePreferences();
-            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
-            var chatViewModel = chat.ViewModel;
-            var ui = new Mock<IUiInteractionService>();
-            var shellNavigation = new Mock<IShellNavigationService>();
-            var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-            var metricsSink = new Mock<IShellLayoutMetricsSink>();
+            var chatCatalog = CreateChatSessionCatalog();
+            var sessionSwitcher = new FakeConversationSessionSwitcher();
 
-            using var navVm = new MainNavigationViewModel(
-                chatViewModel,
-                sessionManager.Object,
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                sessionSwitcher,
+                sessionManager,
                 preferences,
-                ui.Object,
-                shellNavigation.Object,
-                navLogger.Object,
-                navState,
-                metricsSink.Object);
+                navState);
 
             var startItem = new StartNavItemViewModel(navState);
 
@@ -115,24 +104,19 @@ public sealed class MainNavigationViewModelPaneTests
                 RootPath = @"C:\repo\demo"
             });
 
-            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
-            var chatViewModel = chat.ViewModel;
-            var ui = new Mock<IUiInteractionService>();
-            var shellNavigation = new Mock<IShellNavigationService>();
-            var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
-            var metricsSink = new Mock<IShellLayoutMetricsSink>();
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+            var sessionSwitcher = new FakeConversationSessionSwitcher
+            {
+                CurrentConversationId = "session-1"
+            };
 
-            using var navVm = new MainNavigationViewModel(
-                chatViewModel,
-                sessionManager.Object,
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                sessionSwitcher,
+                sessionManager,
                 preferences,
-                ui.Object,
-                shellNavigation.Object,
-                navLogger.Object,
-                navState,
-                metricsSink.Object);
+                navState);
 
-            await chatViewModel.TrySwitchToSessionAsync("session-1");
             navVm.RebuildTree();
 
             Assert.IsType<SessionNavItemViewModel>(navVm.SelectedItem);
@@ -175,24 +159,29 @@ public sealed class MainNavigationViewModelPaneTests
                 RootPath = @"C:\repo\demo"
             });
 
-            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
-            var chatViewModel = chat.ViewModel;
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+            var sessionSwitcher = new FakeConversationSessionSwitcher
+            {
+                CurrentConversationId = "session-1"
+            };
+            var presenter = CreatePresenter(chatCatalog);
             var ui = new Mock<IUiInteractionService>();
             var shellNavigation = new Mock<IShellNavigationService>();
             var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
             var metricsSink = new Mock<IShellLayoutMetricsSink>();
 
             using var navVm = new MainNavigationViewModel(
-                chatViewModel,
-                sessionManager.Object,
-                preferences,
+                chatCatalog,
+                sessionSwitcher,
+                CreateProjectPreferences(preferences),
                 ui.Object,
                 shellNavigation.Object,
                 navLogger.Object,
                 navState,
-                metricsSink.Object);
+                metricsSink.Object,
+                new NavigationSelectionProjector(),
+                presenter);
 
-            await chatViewModel.TrySwitchToSessionAsync("session-1");
             navVm.RebuildTree();
             navState.SetPaneOpen(false);
 
@@ -234,24 +223,29 @@ public sealed class MainNavigationViewModelPaneTests
                 RootPath = @"C:\repo\demo"
             });
 
-            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
-            var chatViewModel = chat.ViewModel;
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+            var sessionSwitcher = new FakeConversationSessionSwitcher
+            {
+                CurrentConversationId = "session-1"
+            };
+            var presenter = CreatePresenter(chatCatalog);
             var ui = new Mock<IUiInteractionService>();
             var shellNavigation = new Mock<IShellNavigationService>();
             var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
             var metricsSink = new Mock<IShellLayoutMetricsSink>();
 
             using var navVm = new MainNavigationViewModel(
-                chatViewModel,
-                sessionManager.Object,
-                preferences,
+                chatCatalog,
+                sessionSwitcher,
+                CreateProjectPreferences(preferences),
                 ui.Object,
                 shellNavigation.Object,
                 navLogger.Object,
                 navState,
-                metricsSink.Object);
+                metricsSink.Object,
+                new NavigationSelectionProjector(),
+                presenter);
 
-            await chatViewModel.TrySwitchToSessionAsync("session-1");
             navVm.RebuildTree();
 
             navState.SetPaneOpen(false);
@@ -289,61 +283,41 @@ public sealed class MainNavigationViewModelPaneTests
         public override void Post(SendOrPostCallback d, object? state) => d(state);
     }
 
-    private static ChatViewModelHarness CreateChatViewModel(
-        SynchronizationContext syncContext,
-        AppPreferencesViewModel preferences,
-        ISessionManager sessionManager)
+    private static ConversationCatalogPresenter CreatePresenter(FakeChatSessionCatalog catalog)
     {
-        var state = Uno.Extensions.Reactive.State.Value(new object(), () => ChatState.Empty);
-        var chatStore = new Mock<IChatStore>();
-        chatStore.Setup(s => s.State).Returns(state);
-        var transportFactory = new Mock<ITransportFactory>();
-        var messageParser = new Mock<IMessageParser>();
-        var messageValidator = new Mock<IMessageValidator>();
-        var errorLogger = new Mock<IErrorLogger>();
-        var capabilityManager = new Mock<ICapabilityManager>();
-        var serilog = new Mock<SerilogLogger>();
-
-        var chatServiceFactory = new SalmonEgg.Application.Services.Chat.ChatServiceFactory(
-            transportFactory.Object,
-            messageParser.Object,
-            messageValidator.Object,
-            errorLogger.Object,
-            capabilityManager.Object,
-            sessionManager,
-            serilog.Object);
-
-        var configService = new Mock<IConfigurationService>();
-        var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
-        var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
-
-        var conversationStore = new Mock<IConversationStore>();
-        conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new ConversationDocument());
-
-        var miniWindow = new Mock<IMiniWindowCoordinator>();
-        var vmLogger = new Mock<ILogger<ChatViewModel>>();
-
-        var originalContext = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
-        {
-            var viewModel = new ChatViewModel(
-                chatStore.Object,
-                chatServiceFactory,
-                configService.Object,
-                preferences,
-                profiles,
-                sessionManager,
-                conversationStore.Object,
-                miniWindow.Object,
-                vmLogger.Object);
-            return new ChatViewModelHarness(viewModel, state);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        var presenter = new ConversationCatalogPresenter();
+        presenter.SetLoading(catalog.IsConversationListLoading);
+        presenter.Refresh(catalog.CreateSnapshot());
+        return presenter;
     }
+
+    private static MainNavigationViewModel CreateNavigationViewModel(
+        IConversationCatalog chatCatalog,
+        IConversationSessionSwitcher sessionSwitcher,
+        Mock<ISessionManager> sessionManager,
+        AppPreferencesViewModel preferences,
+        FakeNavigationPaneState navState)
+    {
+        var ui = new Mock<IUiInteractionService>();
+        var shellNavigation = new Mock<IShellNavigationService>();
+        var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
+        var metricsSink = new Mock<IShellLayoutMetricsSink>();
+
+        return new MainNavigationViewModel(
+            chatCatalog,
+            sessionSwitcher,
+            CreateProjectPreferences(preferences),
+            ui.Object,
+            shellNavigation.Object,
+            navLogger.Object,
+            navState,
+            metricsSink.Object,
+            new NavigationSelectionProjector(),
+            CreatePresenter((FakeChatSessionCatalog)chatCatalog));
+    }
+
+    private static FakeChatSessionCatalog CreateChatSessionCatalog(params string[] conversationIds)
+        => new(conversationIds);
 
     private static AppPreferencesViewModel CreatePreferences()
     {
@@ -365,21 +339,63 @@ public sealed class MainNavigationViewModelPaneTests
             prefsLogger.Object);
     }
 
-    private sealed class ChatViewModelHarness : IDisposable
-    {
-        private readonly IState<ChatState> _state;
-        public ChatViewModel ViewModel { get; }
+    private static INavigationProjectPreferences CreateProjectPreferences(AppPreferencesViewModel preferences)
+        => new NavigationProjectPreferencesAdapter(preferences);
 
-        public ChatViewModelHarness(ChatViewModel viewModel, IState<ChatState> state)
+    private sealed class FakeChatSessionCatalog : IConversationCatalog
+    {
+        private readonly List<string> _conversationIds;
+
+        public FakeChatSessionCatalog(params string[] conversationIds)
         {
-            ViewModel = viewModel;
-            _state = state;
+            _conversationIds = new List<string>(conversationIds);
         }
 
-        public void Dispose()
+        public bool IsConversationListLoading { get; set; }
+
+        public int ConversationListVersion { get; private set; }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public string[] GetKnownConversationIds() => _conversationIds.ToArray();
+
+        public IReadOnlyList<ConversationCatalogItem> CreateSnapshot()
+            => _conversationIds.ConvertAll(id => new ConversationCatalogItem(
+                id,
+                id,
+                @"C:\repo\demo",
+                DateTime.UtcNow,
+                DateTime.UtcNow));
+
+        public Task RestoreAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public void RenameConversation(string conversationId, string newName)
         {
-            ViewModel.Dispose();
-            _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
+        public void ArchiveConversation(string conversationId)
+        {
+        }
+
+        public void DeleteConversation(string conversationId)
+        {
+        }
+
+        public void RaiseConversationListChanged()
+        {
+            ConversationListVersion++;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ConversationListVersion)));
+        }
+    }
+
+    private sealed class FakeConversationSessionSwitcher : IConversationSessionSwitcher
+    {
+        public string? CurrentConversationId { get; set; }
+
+        public Task<bool> TrySwitchToSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            CurrentConversationId = sessionId;
+            return Task.FromResult(true);
         }
     }
 }

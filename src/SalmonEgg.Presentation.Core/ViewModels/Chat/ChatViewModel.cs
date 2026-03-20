@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
 using SalmonEgg.Domain.Interfaces.Transport;
@@ -23,6 +24,7 @@ using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
 
@@ -33,24 +35,25 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 /// Orchestrates the lifecycle of conversations, ACP agent connectivity, and UI state projection.
 /// Follows the MVVM pattern where the View is driven strictly by this ViewModel and its projected state.
 /// </summary>
-public partial class ChatViewModel : ViewModelBase, IDisposable
+public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCatalog, IConversationSessionSwitcher, IAcpChatCoordinatorSink
 {
     private readonly ChatServiceFactory _chatServiceFactory;
+    private readonly ChatConversationWorkspace _conversationWorkspace;
+    private readonly IAcpConnectionCommands _acpConnectionCommands;
     private readonly IConfigurationService _configurationService;
     private readonly AppPreferencesViewModel _preferences;
     private readonly AcpProfilesViewModel _acpProfiles;
     private readonly ISessionManager _sessionManager;
-    private readonly IConversationStore _conversationStore;
     private readonly IMiniWindowCoordinator _miniWindowCoordinator;
+    private readonly ConversationCatalogPresenter _conversationCatalogPresenter;
+    private readonly IChatStateProjector _chatStateProjector;
+    private readonly IAcpSessionUpdateProjector _acpSessionUpdateProjector;
     private IChatService? _chatService;
     private readonly SynchronizationContext _syncContext;
     private bool _disposed;
-    private readonly SemaphoreSlim _sessionSwitchGate = new(1, 1);
     private bool _suppressSessionUpdatesToUi;
     private bool _autoConnectAttempted;
     private bool _suppressAcpProfileConnect;
-    private bool _conversationsRestored;
-    private CancellationTokenSource? _conversationSaveCts;
     private CancellationTokenSource? _sendPromptCts;
     private CancellationTokenSource? _transientNotificationCts;
     private CancellationTokenSource? _storeStateCts;
@@ -63,35 +66,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private bool _suppressStorePromptProjection;
     private bool _suppressProfileSyncFromStore;
     private string? _selectedProfileIdFromStore;
+    private int _storeProjectionSequence;
+    private readonly object _restoreSync = new();
+    private Task? _restoreTask;
 
     /// <summary>
     /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
     /// This allows the user to switch between tabs/histories without losing the underlying agent session context,
     /// and handles reconnections by re-binding new remote sessions to the same local ID.
     /// </summary>
-    private readonly Dictionary<string, ConversationBinding> _conversationBindings = new(StringComparer.Ordinal);
-
-    private sealed class ConversationBinding
-    {
-        public ConversationBinding(string conversationId)
-        {
-            ConversationId = conversationId;
-            CreatedAt = DateTime.UtcNow;
-            LastUpdatedAt = DateTime.UtcNow;
-        }
-
-        public string ConversationId { get; }
-        public string? BoundProfileId { get; set; }
-        public string? RemoteSessionId { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime LastUpdatedAt { get; set; }
-
-        public List<ChatMessageViewModel> Transcript { get; } = new();
-        public List<PlanEntryViewModel> Plan { get; } = new();
-        public bool ShowPlanPanel { get; set; }
-        public string? PlanTitle { get; set; }
-    }
-
     [ObservableProperty]
     private ObservableCollection<ChatMessageViewModel> _messageHistory = new();
 
@@ -249,6 +232,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private readonly IChatStore _chatStore;
 
+    private sealed class ChatServiceFactoryAdapter : IAcpChatServiceFactory
+    {
+        private readonly ChatServiceFactory _inner;
+
+        public ChatServiceFactoryAdapter(ChatServiceFactory inner)
+        {
+            _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        }
+
+        public IChatService CreateChatService(
+            TransportType transportType,
+            string? command = null,
+            string? args = null,
+            string? url = null)
+            => _inner.CreateChatService(transportType, command, args, url);
+    }
+
     public ChatViewModel(
         IChatStore chatStore,
         ChatServiceFactory chatServiceFactory,
@@ -256,10 +256,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         AppPreferencesViewModel preferences,
         AcpProfilesViewModel acpProfiles,
         ISessionManager sessionManager,
-        IConversationStore conversationStore,
         IMiniWindowCoordinator miniWindowCoordinator,
+        ChatConversationWorkspace conversationWorkspace,
+        ConversationCatalogPresenter conversationCatalogPresenter,
+        IChatStateProjector? chatStateProjector,
+        IAcpSessionUpdateProjector? acpSessionUpdateProjector,
         ILogger<ChatViewModel> logger,
-        SynchronizationContext? syncContext = null)
+        SynchronizationContext? syncContext = null,
+        IAcpConnectionCommands? acpConnectionCommands = null)
         : base(logger)
     {
         _chatStore = chatStore ?? throw new ArgumentNullException(nameof(chatStore));
@@ -268,25 +272,52 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _acpProfiles = acpProfiles ?? throw new ArgumentNullException(nameof(acpProfiles));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
-        _conversationStore = conversationStore ?? throw new ArgumentNullException(nameof(conversationStore));
         _miniWindowCoordinator = miniWindowCoordinator ?? throw new ArgumentNullException(nameof(miniWindowCoordinator));
+        _conversationWorkspace = conversationWorkspace ?? throw new ArgumentNullException(nameof(conversationWorkspace));
+        _conversationCatalogPresenter = conversationCatalogPresenter ?? throw new ArgumentNullException(nameof(conversationCatalogPresenter));
+        _chatStateProjector = chatStateProjector ?? new ChatStateProjector();
+        _acpSessionUpdateProjector = acpSessionUpdateProjector ?? new AcpSessionUpdateProjector();
         _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+        _acpConnectionCommands = acpConnectionCommands
+            ?? new AcpChatCoordinator(
+                new ChatServiceFactoryAdapter(chatServiceFactory),
+                NullLogger<AcpChatCoordinator>.Instance);
         StartStoreProjection();
 
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
         _acpProfiles.Profiles.CollectionChanged += OnAcpProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
+        _conversationWorkspace.PropertyChanged += OnConversationWorkspacePropertyChanged;
         PlanEntries.CollectionChanged += OnCurrentPlanCollectionChanged;
 
-        // Start restoring local conversation list immediately so the sidebar can show it ASAP.
-        _ = RestoreConversationsAsync();
+        IsConversationListLoading = _conversationWorkspace.IsConversationListLoading;
+        ConversationListVersion = _conversationWorkspace.ConversationListVersion;
+        _conversationCatalogPresenter.SetLoading(IsConversationListLoading);
+        _conversationCatalogPresenter.Refresh(_conversationWorkspace.GetCatalog());
+
+    }
+
+    private void OnConversationWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(ChatConversationWorkspace.IsConversationListLoading):
+                IsConversationListLoading = _conversationWorkspace.IsConversationListLoading;
+                _conversationCatalogPresenter.SetLoading(IsConversationListLoading);
+                RefreshMiniWindowSessions();
+                break;
+
+            case nameof(ChatConversationWorkspace.ConversationListVersion):
+                ConversationListVersion = _conversationWorkspace.ConversationListVersion;
+                _conversationCatalogPresenter.Refresh(_conversationWorkspace.GetCatalog());
+                OnPropertyChanged(nameof(GetKnownConversationIds));
+                RefreshMiniWindowSessions();
+                break;
+        }
     }
 
     private void StartStoreProjection()
     {
-        // SINGLE SOURCE OF TRUTH (SSOT): We project the central store state into UI-bound properties.
-        // This reactive pattern ensures the UI stays synchronized with the domain state regardless of which
-        // thread triggered the update (e.g. background ACP streaming vs user interaction).
         _storeStateCts = new CancellationTokenSource();
         var token = _storeStateCts.Token;
 
@@ -299,6 +330,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
             try
             {
+                var projectionSequence = Interlocked.Increment(ref _storeProjectionSequence);
+
                 await PostToUiAsync(() =>
                 {
                     if (token.IsCancellationRequested || _disposed)
@@ -306,13 +339,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                         return;
                     }
 
-                    IsPromptInFlight = state.IsPromptInFlight;
-                    IsThinking = state.IsThinking;
-                    IsConnected = state.ConnectionStatus == "Connected";
-                    CurrentConnectionStatus = state.ConnectionStatus;
-                    ConnectionErrorMessage = state.ConnectionError;
-                    SyncMessageHistory(state.Messages, state.IsThinking);
-                    ApplyStoreProjection(state);
+                    if (projectionSequence != Volatile.Read(ref _storeProjectionSequence))
+                    {
+                        return;
+                    }
+
+                    var projection = _chatStateProjector.Apply(state);
+                    SyncMessageHistory(projection.Transcript, projection.IsThinking);
+                    ApplyStoreProjection(projection);
+                    PersistConversationState(state, scheduleSave: true);
                 }).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
@@ -420,31 +455,61 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void ApplyStoreProjection(ChatState state)
+    private void ApplyStoreProjection(ChatUiProjection projection)
     {
         _suppressStoreConversationProjection = true;
         _suppressStoreProfileProjection = true;
         _suppressStorePromptProjection = true;
         try
         {
-            if (!string.Equals(CurrentSessionId, state.SelectedConversationId, StringComparison.Ordinal))
+            if (!string.Equals(CurrentSessionId, projection.SelectedConversationId, StringComparison.Ordinal))
             {
-                CurrentSessionId = state.SelectedConversationId;
+                CurrentSessionId = projection.SelectedConversationId;
             }
 
-            var draft = state.DraftText ?? string.Empty;
+            var draft = projection.CurrentPrompt;
             if (!string.Equals(CurrentPrompt, draft, StringComparison.Ordinal))
             {
                 CurrentPrompt = draft;
             }
 
-            ApplySelectedProfileFromStore(state.SelectedAcpProfileId);
+            ApplySelectedProfileFromStore(projection.SelectedProfileId);
+            _currentRemoteSessionId = projection.RemoteSessionId;
+            IsSessionActive = projection.IsSessionActive;
+            IsPromptInFlight = projection.IsPromptInFlight;
+            IsThinking = projection.IsThinking;
+            IsConnecting = projection.IsConnecting;
+            IsConnected = projection.IsConnected;
+            IsInitializing = projection.IsInitializing;
+            CurrentConnectionStatus = projection.ConnectionStatus;
+            ConnectionErrorMessage = projection.ConnectionError;
+            IsAuthenticationRequired = projection.IsAuthenticationRequired;
+            AuthenticationHintMessage = projection.AuthenticationHintMessage;
+            AgentName = projection.AgentName;
+            AgentVersion = projection.AgentVersion;
+            ShowPlanPanel = projection.ShowPlanPanel;
+            CurrentPlanTitle = projection.PlanTitle;
+            SyncPlanEntries(projection.PlanEntries);
         }
         finally
         {
             _suppressStorePromptProjection = false;
             _suppressStoreProfileProjection = false;
             _suppressStoreConversationProjection = false;
+        }
+    }
+
+    private void SyncPlanEntries(IReadOnlyList<ConversationPlanEntrySnapshot> planEntries)
+    {
+        PlanEntries.Clear();
+        foreach (var entry in planEntries)
+        {
+            PlanEntries.Add(new PlanEntryViewModel
+            {
+                Content = entry.Content ?? string.Empty,
+                Status = entry.Status,
+                Priority = entry.Priority
+            });
         }
     }
 
@@ -510,29 +575,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         if (!_suppressStoreConversationProjection)
         {
-            _ = _chatStore.Dispatch(new SelectConversationAction(value));
+            _ = SelectAndHydrateConversationAsync(value);
         }
 
         // Keep the header name stable and decouple it from ACP sessionId.
         CurrentSessionDisplayName = ResolveSessionDisplayName(value);
 
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            // Ensure we have a conversation binding for this conversation id.
-            var binding = GetOrCreateConversationBinding(value);
-
-            binding.BoundProfileId ??= _preferences.LastSelectedServerId;
-
-            _currentRemoteSessionId = binding.RemoteSessionId;
-
-            RestoreConversation(binding);
-        }
-        else
+        if (string.IsNullOrWhiteSpace(value))
         {
             _currentRemoteSessionId = null;
-            CurrentPlanTitle = null;
-            ShowPlanPanel = false;
-            PlanEntries.Clear();
         }
 
         if (IsEditingSessionName)
@@ -540,9 +591,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             IsEditingSessionName = false;
             EditingSessionName = string.Empty;
         }
-
-        // Persist the active conversation state to ensure it survives application restarts.
-        ScheduleConversationSave();
 
         SyncMiniWindowSelectedSession();
     }
@@ -556,52 +604,52 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         if (!string.Equals(CurrentSessionId, value.ConversationId, StringComparison.Ordinal))
         {
-            CurrentSessionId = value.ConversationId;
+            _ = TrySwitchToSessionAsync(value.ConversationId);
         }
     }
 
-    /// <summary>
-    /// Retrieves or initializes a local conversation binding.
-    /// Bindings act as a bridge between the persistent store and the live UI state.
-    /// </summary>
-    private ConversationBinding GetOrCreateConversationBinding(string conversationId)
+    private async Task SelectAndHydrateConversationAsync(string? conversationId)
     {
-        if (_conversationBindings.TryGetValue(conversationId, out var existing))
-        {
-            return existing;
-        }
-
-        var created = new ConversationBinding(conversationId);
-        _conversationBindings[conversationId] = created;
-        return created;
+        await _chatStore.Dispatch(new SelectConversationAction(conversationId));
+        await DispatchConversationHydrationAsync(conversationId).ConfigureAwait(false);
+        await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
     }
 
-    private ConversationBinding? TryGetConversationBinding(string? conversationId)
+    private async Task DispatchConversationHydrationAsync(string? conversationId)
     {
         if (string.IsNullOrWhiteSpace(conversationId))
         {
-            return null;
+            return;
         }
 
-        return _conversationBindings.TryGetValue(conversationId, out var binding) ? binding : null;
+        var snapshot = _conversationWorkspace.GetConversationSnapshot(conversationId);
+        var binding = _conversationWorkspace.GetRemoteBinding(conversationId);
+
+        await _chatStore.Dispatch(new HydrateConversationAction(
+            conversationId,
+            snapshot?.Transcript.ToImmutableList() ?? ImmutableList<ConversationMessageSnapshot>.Empty,
+            snapshot?.Plan.ToImmutableList() ?? ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+            snapshot?.ShowPlanPanel ?? false,
+            snapshot?.PlanTitle,
+            binding?.BoundProfileId,
+            binding?.RemoteSessionId)).ConfigureAwait(false);
     }
 
-    private void RestoreConversation(ConversationBinding binding)
+    private async Task ApplyCurrentStoreProjectionAsync()
     {
-        // Locally-persisted conversations are the source of truth for UI history playback.
-        MessageHistory.Clear();
-        foreach (var msg in binding.Transcript)
-        {
-            MessageHistory.Add(msg);
-        }
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var projection = _chatStateProjector.Apply(state);
 
-        PlanEntries.Clear();
-        foreach (var entry in binding.Plan)
+        await PostToUiAsync(() =>
         {
-            PlanEntries.Add(entry);
-        }
-        ShowPlanPanel = binding.ShowPlanPanel;
-        CurrentPlanTitle = binding.PlanTitle;
+            if (_disposed)
+            {
+                return;
+            }
+
+            SyncMessageHistory(projection.Transcript, projection.IsThinking);
+            ApplyStoreProjection(projection);
+        }).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -633,129 +681,58 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         return tcs.Task;
     }
 
-    public async Task RestoreConversationsAsync()
+    public Task RestoreConversationsAsync()
+        => RestoreAsync();
+
+    private Task EnsureConversationWorkspaceRestoredAsync(CancellationToken cancellationToken = default)
     {
-        if (_conversationsRestored)
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_restoreSync)
         {
-            return;
+            _restoreTask ??= RestoreConversationsCoreAsync();
+            return _restoreTask;
         }
+    }
 
-        _conversationsRestored = true;
-
-        ConversationDocument doc;
+    private async Task RestoreConversationsCoreAsync()
+    {
         try
         {
-            IsConversationListLoading = true;
-            doc = await _conversationStore.LoadAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-            _syncContext.Post(_ => { IsConversationListLoading = false; }, null);
-            return;
-        }
-
-        foreach (var convo in doc.Conversations)
-        {
-            if (string.IsNullOrWhiteSpace(convo.ConversationId))
+            await _conversationWorkspace.RestoreAsync().ConfigureAwait(false);
+            await PostToUiAsync(() =>
             {
-                continue;
-            }
-
-            if (_sessionManager.GetSession(convo.ConversationId) != null)
-            {
-                continue;
-            }
-
-            try
-            {
-                await _sessionManager.CreateSessionAsync(convo.ConversationId, convo.Cwd).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-        }
-
-        _syncContext.Post(_ =>
-        {
-            try
-            {
-                foreach (var convo in doc.Conversations)
+                var restoredConversationId = _conversationWorkspace.CurrentConversationId;
+                if (!string.IsNullOrWhiteSpace(restoredConversationId))
                 {
-                    if (string.IsNullOrWhiteSpace(convo.ConversationId))
-                    {
-                        continue;
-                    }
-
-                    var binding = GetOrCreateConversationBinding(convo.ConversationId);
-                    binding.CreatedAt = convo.CreatedAt == default ? DateTime.UtcNow : convo.CreatedAt;
-                    binding.LastUpdatedAt = convo.LastUpdatedAt == default ? DateTime.UtcNow : convo.LastUpdatedAt;
-
-                    // Display name is persisted separately from ACP sessionId.
-                    var displayName = string.IsNullOrWhiteSpace(convo.DisplayName)
-                        ? SessionNamePolicy.CreateDefault(convo.ConversationId)
-                        : convo.DisplayName.Trim();
-
-                    _sessionManager.UpdateSession(
-                        convo.ConversationId,
-                        s =>
-                        {
-                            s.DisplayName = displayName;
-                            s.CreatedAt = binding.CreatedAt;
-                            s.LastActivityAt = binding.LastUpdatedAt;
-                            // Restore Cwd from persisted conversation record.
-                            if (!string.IsNullOrWhiteSpace(convo.Cwd))
-                            {
-                                s.Cwd = convo.Cwd;
-                            }
-                        },
-                        updateActivity: false);
-
-                    binding.Transcript.Clear();
-                    foreach (var msg in convo.Messages)
-                    {
-                        binding.Transcript.Add(FromSnapshot(msg));
-                    }
-                }
-
-                var last = doc.LastActiveConversationId;
-                if (!string.IsNullOrWhiteSpace(last) &&
-                    _conversationBindings.ContainsKey(last))
-                {
-                    CurrentSessionId = last;
+                    _suppressStoreConversationProjection = true;
+                    CurrentSessionId = restoredConversationId;
                     IsSessionActive = true;
+                    _suppressStoreConversationProjection = false;
                 }
-                else if (_conversationBindings.Count > 0)
+                else
                 {
-                    // If last-active is missing, default to the most recent conversation for a better UX.
-                    var fallback = _conversationBindings.Values
-                        .OrderByDescending(c => c.LastUpdatedAt)
-                        .Select(c => c.ConversationId)
-                        .FirstOrDefault();
-
-                    if (!string.IsNullOrWhiteSpace(fallback))
-                    {
-                        CurrentSessionId = fallback;
-                        IsSessionActive = true;
-                    }
+                    _suppressStoreConversationProjection = true;
+                    CurrentSessionId = null;
+                    IsSessionActive = false;
+                    _suppressStoreConversationProjection = false;
                 }
-            }
-            catch
-            {
-            }
+            }).ConfigureAwait(false);
 
-            IsConversationListLoading = false;
-            NotifyConversationListChanged();
-        }, null);
+            await SelectAndHydrateConversationAsync(_conversationWorkspace.CurrentConversationId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Conversation workspace restore failed");
+        }
     }
 
     private void NotifyConversationListChanged()
     {
-        _syncContext.Post(_ =>
-        {
-            ConversationListVersion++;
-            OnPropertyChanged(nameof(GetKnownConversationIds));
-            RefreshMiniWindowSessions();
-        }, null);
+        ConversationListVersion = _conversationWorkspace.ConversationListVersion;
+        _conversationCatalogPresenter.Refresh(_conversationWorkspace.GetCatalog());
+        OnPropertyChanged(nameof(GetKnownConversationIds));
+        RefreshMiniWindowSessions();
     }
 
     private void RefreshMiniWindowSessions()
@@ -806,19 +783,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void SyncMessageHistory(IImmutableList<ChatMessage>? messages, bool isThinking)
+    private void SyncMessageHistory(IReadOnlyList<ConversationMessageSnapshot> transcript, bool isThinking)
     {
-        if (messages == null)
-        {
-            MessageHistory.Clear();
-            return;
-        }
-
-        // Incremental Reconciliation: We perform a targeted diff between the new state and the UI collection.
-        // This preserves existing ViewModel instances where possible, which is critical for:
-        // 1. Maintaining UI virtualization state (scroll position).
-        // 2. Ensuring smooth text animation (e.g. streaming deltas).
-        // 3. Avoiding expensive re-renders of complex message bubbles.
+        var messages = transcript ?? Array.Empty<ConversationMessageSnapshot>();
         for (int i = 0; i < messages.Count; i++)
         {
             var message = messages[i];
@@ -826,24 +793,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             {
                 if (MessageHistory[i].Id != message.Id)
                 {
-                    // Re-sync from this point onwards if IDs drift
                     while (MessageHistory.Count > i) MessageHistory.RemoveAt(i);
-                    MessageHistory.Add(MapToViewModel(message));
+                    MessageHistory.Add(FromSnapshot(message));
                 }
-                else
+                else if (!MatchesSnapshot(MessageHistory[i], message))
                 {
-                    // Same ID, update content if changed (e.g. streaming deltas)
-                    var vm = MessageHistory[i];
-                    var newContent = message.Parts?.OfType<TextPart>().LastOrDefault()?.Text ?? string.Empty;
-                    if (vm.TextContent != newContent)
-                    {
-                        vm.TextContent = newContent;
-                    }
+                    MessageHistory[i] = FromSnapshot(message);
                 }
             }
             else
             {
-                MessageHistory.Add(MapToViewModel(message));
+                MessageHistory.Add(FromSnapshot(message));
             }
         }
 
@@ -865,19 +825,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 MessageHistory.Add(ChatMessageViewModel.CreateThinkingPlaceholder(Guid.NewGuid().ToString()));
             }
         }
-    }
-
-    private ChatMessageViewModel MapToViewModel(ChatMessage message)
-    {
-        var content = message.Parts?.OfType<TextPart>().LastOrDefault()?.Text ?? string.Empty;
-        return new ChatMessageViewModel
-        {
-            Id = message.Id,
-            Timestamp = message.Timestamp.DateTime,
-            IsOutgoing = message.IsOutgoing,
-            ContentType = "text",
-            TextContent = content
-        };
     }
 
     private static ConversationMessageSnapshot ToSnapshot(ChatMessageViewModel vm)
@@ -945,66 +892,135 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         return vm;
     }
 
-    private void ScheduleConversationSave()
+    private static bool MatchesSnapshot(ChatMessageViewModel viewModel, ConversationMessageSnapshot snapshot)
     {
-        if (_preferences.SaveLocalHistory == false)
+        return string.Equals(viewModel.Id, snapshot.Id, StringComparison.Ordinal)
+            && viewModel.Timestamp == snapshot.Timestamp.ToLocalTime()
+            && viewModel.IsOutgoing == snapshot.IsOutgoing
+            && string.Equals(viewModel.ContentType ?? string.Empty, snapshot.ContentType ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.Title ?? string.Empty, snapshot.Title ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.TextContent ?? string.Empty, snapshot.TextContent ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.ImageData ?? string.Empty, snapshot.ImageData ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.ImageMimeType ?? string.Empty, snapshot.ImageMimeType ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.AudioData ?? string.Empty, snapshot.AudioData ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.AudioMimeType ?? string.Empty, snapshot.AudioMimeType ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(viewModel.ToolCallId, snapshot.ToolCallId, StringComparison.Ordinal)
+            && viewModel.ToolCallKind == snapshot.ToolCallKind
+            && viewModel.ToolCallStatus == snapshot.ToolCallStatus
+            && string.Equals(viewModel.ToolCallJson, snapshot.ToolCallJson, StringComparison.Ordinal)
+            && string.Equals(viewModel.ModeId, snapshot.ModeId, StringComparison.Ordinal)
+            && PlanEntryMatches(viewModel.PlanEntry, snapshot.PlanEntry);
+    }
+
+    private static bool PlanEntryMatches(PlanEntryViewModel? viewModel, ConversationPlanEntrySnapshot? snapshot)
+    {
+        if (viewModel is null && snapshot is null)
+        {
+            return true;
+        }
+
+        if (viewModel is null || snapshot is null)
+        {
+            return false;
+        }
+
+        return string.Equals(viewModel.Content ?? string.Empty, snapshot.Content ?? string.Empty, StringComparison.Ordinal)
+            && viewModel.Status == snapshot.Status
+            && viewModel.Priority == snapshot.Priority;
+    }
+
+    private static ConversationMessageSnapshot CloneSnapshot(ConversationMessageSnapshot snapshot)
+    {
+        return new ConversationMessageSnapshot
+        {
+            Id = snapshot.Id,
+            Timestamp = snapshot.Timestamp,
+            IsOutgoing = snapshot.IsOutgoing,
+            ContentType = snapshot.ContentType,
+            Title = snapshot.Title,
+            TextContent = snapshot.TextContent,
+            ImageData = snapshot.ImageData,
+            ImageMimeType = snapshot.ImageMimeType,
+            AudioData = snapshot.AudioData,
+            AudioMimeType = snapshot.AudioMimeType,
+            ToolCallId = snapshot.ToolCallId,
+            ToolCallKind = snapshot.ToolCallKind,
+            ToolCallStatus = snapshot.ToolCallStatus,
+            ToolCallJson = snapshot.ToolCallJson,
+            PlanEntry = ClonePlanEntrySnapshot(snapshot.PlanEntry),
+            ModeId = snapshot.ModeId
+        };
+    }
+
+    private static ConversationPlanEntrySnapshot? ClonePlanEntrySnapshot(ConversationPlanEntrySnapshot? snapshot)
+    {
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        return new ConversationPlanEntrySnapshot
+        {
+            Content = snapshot.Content,
+            Status = snapshot.Status,
+            Priority = snapshot.Priority
+        };
+    }
+
+    private static bool IsThinkingPlaceholder(ConversationMessageSnapshot message)
+        => string.Equals(message.ContentType, "thinking", StringComparison.OrdinalIgnoreCase);
+
+    private ConversationWorkspaceSnapshot? TryGetConversationSnapshot(string? conversationId)
+        => _conversationWorkspace.GetConversationSnapshot(conversationId);
+
+    private ConversationRemoteBindingState? TryGetRemoteBinding(string? conversationId)
+        => _conversationWorkspace.GetRemoteBinding(conversationId);
+
+    private void PersistConversationState(ChatState state, bool scheduleSave)
+    {
+        if (string.IsNullOrWhiteSpace(state.SelectedConversationId))
         {
             return;
         }
 
-        _conversationSaveCts?.Cancel();
-        _conversationSaveCts = new CancellationTokenSource();
-        var token = _conversationSaveCts.Token;
-
-        _ = Task.Run(async () =>
+        if (state.Transcript is null && state.PlanEntries is null)
         {
-            try
-            {
-                // Debounce to avoid too frequent writes while streaming updates.
-                await Task.Delay(400, token).ConfigureAwait(false);
-                await SaveConversationsAsync(token).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-        }, token);
-    }
-
-    private async Task SaveConversationsAsync(CancellationToken cancellationToken)
-    {
-        var doc = new ConversationDocument
-        {
-            Version = 1,
-            LastActiveConversationId = CurrentSessionId
-        };
-
-        // Keep most-recent first.
-        var ordered = _conversationBindings.Values
-            .OrderByDescending(c => c.LastUpdatedAt)
-            .ToArray();
-
-        foreach (var binding in ordered)
-        {
-            var name = ResolveSessionDisplayName(binding.ConversationId);
-            var session = _sessionManager.GetSession(binding.ConversationId);
-            var record = new ConversationRecord
-            {
-                ConversationId = binding.ConversationId,
-                DisplayName = name,
-                CreatedAt = binding.CreatedAt,
-                LastUpdatedAt = binding.LastUpdatedAt,
-                Cwd = session?.Cwd
-            };
-
-            foreach (var msg in binding.Transcript)
-            {
-                record.Messages.Add(ToSnapshot(msg));
-            }
-
-            doc.Conversations.Add(record);
+            return;
         }
 
-        await _conversationStore.SaveAsync(doc, cancellationToken).ConfigureAwait(false);
+        var conversationId = state.SelectedConversationId!;
+        var existing = _conversationWorkspace.GetConversationSnapshot(conversationId);
+        var transcript = (state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty)
+            .Where(static message => !IsThinkingPlaceholder(message))
+            .Select(CloneSnapshot)
+            .ToArray();
+        var planEntries = (state.PlanEntries ?? ImmutableList<ConversationPlanEntrySnapshot>.Empty)
+            .Select(ClonePlanEntrySnapshot)
+            .ToArray();
+
+        _conversationWorkspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            conversationId,
+            transcript,
+            planEntries,
+            state.ShowPlanPanel,
+            state.PlanTitle,
+            existing?.CreatedAt ?? DateTime.UtcNow,
+            DateTime.UtcNow));
+
+        _conversationWorkspace.UpdateRemoteBinding(
+            conversationId,
+            state.RemoteSessionId,
+            state.BoundProfileId);
+
+        if (scheduleSave)
+        {
+            _conversationWorkspace.ScheduleSave();
+        }
+    }
+
+    private void ScheduleConversationSave()
+    {
+        _conversationWorkspace.ScheduleSave();
     }
 
     private string ResolveSessionDisplayName(string? sessionId)
@@ -1070,25 +1086,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var sanitized = SessionNamePolicy.Sanitize(newDisplayName);
-        var finalName = string.IsNullOrEmpty(sanitized)
-            ? SessionNamePolicy.CreateDefault(conversationId)
-            : sanitized;
-
-        _sessionManager.UpdateSession(conversationId, s => s.DisplayName = finalName, updateActivity: false);
+        _conversationWorkspace.RenameConversation(conversationId, newDisplayName);
+        var finalName = ResolveSessionDisplayName(conversationId);
 
         if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
         {
             CurrentSessionDisplayName = finalName;
         }
-
-        var binding = TryGetConversationBinding(conversationId);
-        if (binding != null)
-        {
-            binding.LastUpdatedAt = DateTime.UtcNow;
-        }
-
-        ScheduleConversationSave();
     }
 
     public void ArchiveConversation(string conversationId)
@@ -1110,21 +1114,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             _suppressSessionUpdatesToUi = false;
         }
 
-        _syncContext.Post(_ =>
+        try
         {
-            try
-            {
-                _sessionManager.RemoveSession(conversationId);
-                _conversationBindings.Remove(conversationId);
-
-                ScheduleConversationSave();
-                NotifyConversationListChanged();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Archive operation failed due to underlying exception: {ConversationId}", conversationId);
-            }
-        }, null);
+            _conversationWorkspace.ArchiveConversation(conversationId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Archive operation failed due to underlying exception: {ConversationId}", conversationId);
+        }
     }
 
     public void DeleteConversation(string conversationId)
@@ -1146,31 +1143,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             _suppressSessionUpdatesToUi = false;
         }
 
-        _syncContext.Post(_ =>
+        try
         {
-            try
-            {
-                _conversationBindings.Remove(conversationId);
-                _sessionManager.RemoveSession(conversationId);
-
-                ScheduleConversationSave();
-                NotifyConversationListChanged();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Delete operation failed due to underlying exception: {ConversationId}", conversationId);
-            }
-        }, null);
+            _conversationWorkspace.DeleteConversation(conversationId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Delete operation failed due to underlying exception: {ConversationId}", conversationId);
+        }
     }
 
-    public string[] GetKnownConversationIds()
-    {
-        return _conversationBindings.Values
-            .OrderByDescending(c => c.LastUpdatedAt)
-            .Select(c => c.ConversationId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToArray();
-    }
+    public string[] GetKnownConversationIds() => _conversationWorkspace.GetKnownConversationIds();
 
     public async Task EnsureAcpProfilesLoadedAsync()
     {
@@ -1269,34 +1252,25 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             _acpProfiles.MarkLastConnected(profile);
             _acpProfiles.SelectedProfile = profile;
 
-            ApplyProfileToTransportConfig(profile);
+            await _chatStore.Dispatch(new SetConnectionLifecycleAction(true, IsConnected, IsInitializing, null));
+            var result = await _acpConnectionCommands
+                .ConnectToProfileAsync(profile, TransportConfig, this)
+                .ConfigureAwait(false);
 
-            // Switching ACP should not reset the current conversation transcript.
-            var preserveConversation = IsSessionActive && !string.IsNullOrWhiteSpace(CurrentSessionId);
-            await ApplyTransportConfigCoreAsync(preserveConversation);
+            CacheAuthMethods(result.InitializeResponse);
+            ClearAuthenticationRequirement();
+            UpdateAgentInfo();
+            _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, null));
+            ShowTransportConfigPanel = false;
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to connect to ACP profile {ProfileId}", profile.Id);
             throw;
         }
-    }
-
-    private void ApplyProfileToTransportConfig(ServerConfiguration profile)
-    {
-        TransportConfig.SelectedTransportType = profile.Transport;
-
-        if (profile.Transport == TransportType.Stdio)
+        finally
         {
-            TransportConfig.StdioCommand = profile.StdioCommand ?? string.Empty;
-            TransportConfig.StdioArgs = profile.StdioArgs ?? string.Empty;
-            TransportConfig.RemoteUrl = string.Empty;
-        }
-        else
-        {
-            TransportConfig.RemoteUrl = profile.ServerUrl ?? string.Empty;
-            TransportConfig.StdioCommand = string.Empty;
-            TransportConfig.StdioArgs = string.Empty;
+            await _chatStore.Dispatch(new SetConnectionLifecycleAction(false, IsConnected, IsInitializing, ConnectionErrorMessage));
         }
     }
 
@@ -1313,254 +1287,56 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         /// </summary>
         private async Task ApplyTransportConfigCoreAsync(bool preserveConversation)
         {
-            var (isValid, errorMessage) = TransportConfig.Validate();
-            if (!isValid)
+            await _chatStore.Dispatch(new SetConnectionLifecycleAction(
+                IsConnecting: true,
+                IsConnected: IsConnected,
+                IsInitialized: IsInitializing,
+                ErrorMessage: null));
+            try
             {
-                ConnectionErrorMessage = errorMessage;
-                return;
-            }
+                var result = await _acpConnectionCommands
+                    .ApplyTransportConfigurationAsync(TransportConfig, this, preserveConversation)
+                    .ConfigureAwait(false);
 
-            ConnectionErrorMessage = null;
-            IsConnecting = true;
-           try
-           {
-               Logger.LogInformation("Applying transport configuration: {TransportType}", TransportConfig.SelectedTransportType);
-               Logger.LogInformation("TransportConfig current values - StdioCommand: '{StdioCommand}', StdioArgs: '{StdioArgs}', RemoteUrl: '{RemoteUrl}'",
-                   TransportConfig.StdioCommand, TransportConfig.StdioArgs, TransportConfig.RemoteUrl);
+                CacheAuthMethods(result.InitializeResponse);
+                ClearAuthenticationRequirement();
+                UpdateAgentInfo();
 
-                // Recreate ChatService using the factory based on user configuration.
-                // 1. Instantiate the appropriate ChatService for the transport type.
-                IChatService newChatService;
-                switch (TransportConfig.SelectedTransportType)
-               {
-                   case TransportType.Stdio:
-                       Logger.LogInformation("Stdio config - Command: {Command}, Args: {Args}", TransportConfig.StdioCommand, TransportConfig.StdioArgs);
-                       newChatService = _chatServiceFactory.CreateChatService(
-                           TransportType.Stdio,
-                           TransportConfig.StdioCommand,
-                           TransportConfig.StdioArgs,
-                           null);
-                       break;
-                   case TransportType.WebSocket:
-                       newChatService = _chatServiceFactory.CreateChatService(
-                           TransportType.WebSocket,
-                           null,
-                           null,
-                           TransportConfig.RemoteUrl);
-                       break;
-                   case TransportType.HttpSse:
-                       newChatService = _chatServiceFactory.CreateChatService(
-                           TransportType.HttpSse,
-                           null,
-                           null,
-                           TransportConfig.RemoteUrl);
-                       break;
-                   default:
-                       throw new InvalidOperationException($"Unsupported transport type: {TransportConfig.SelectedTransportType}");
-               }
-
-               // Best-effort: disconnect previous transport to avoid leaks (do not reset local conversation state).
-                if (_chatService != null)
+                if (string.IsNullOrWhiteSpace(CurrentSessionId))
                 {
-                    try
+                    var sessionId = Guid.NewGuid().ToString("N");
+                    await _sessionManager.CreateSessionAsync(sessionId, GetActiveSessionCwdOrDefault()).ConfigureAwait(false);
+                    await _conversationWorkspace.TrySwitchToSessionAsync(sessionId).ConfigureAwait(false);
+                    await PostToUiAsync(() =>
                     {
-                        await _chatService.DisconnectAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        // Failure to disconnect the previous transport is non-fatal.
-                        Logger.LogDebug(ex, "Failed to disconnect previous transport");
-                    }
+                        CurrentSessionId = sessionId;
+                        IsSessionActive = true;
+                    }).ConfigureAwait(false);
                 }
 
-               // 2. Unsubscribe from events of the old service (if any).
-               if (_chatService != null)
-               {
-                   UnsubscribeFromChatService(_chatService);
-               }
-
-               // 3. Subscribe to events of the new service.
-               SubscribeToChatService(newChatService);
-
-               // 4. Replace the old ChatService instance.
-               _chatService = newChatService;
-
-               // 5. Initialize ACP protocol (with timeout).
-               Logger.LogInformation("Initializing ACP protocol...");
-               var initParams = new InitializeParams
-               {
-                   ProtocolVersion = 1,
-                   ClientInfo = new ClientInfo
-                   {
-                       Name = "SalmonEgg",
-                       Title = "Uno Acp Client",
-                       Version = "1.0.0"
-                   },
-                   ClientCapabilities = new ClientCapabilities
-                   {
-                       Fs = new FsCapability
-                       {
-                           ReadTextFile = true,
-                           WriteTextFile = true
-                       }
-                   }
-               };
-
-               // Use Task.WhenAny for timeout to avoid UI freeze.
-               var initTask = _chatService.InitializeAsync(initParams);
-               var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
-               var completedTask = await Task.WhenAny(initTask, timeoutTask);
-
-               if (completedTask == timeoutTask)
-               {
-                   throw new TimeoutException("Initialization timeout: Agent did not respond within the allocated time. Please verify command and arguments.");
-               }
-
-               var initResponse = await initTask;
-               UpdateAgentInfo();
-               Logger.LogInformation("ACP protocol initialization complete, Agent: {Name} v{Version}", AgentName, AgentVersion);
-
-               var isConnected = _chatService.IsConnected && _chatService.IsInitialized;
-               _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(isConnected));
-               CacheAuthMethods(initResponse);
-               ClearAuthenticationRequirement();
-
-               if (string.IsNullOrWhiteSpace(CurrentSessionId))
-               {
-                   CurrentSessionId = Guid.NewGuid().ToString();
-               }
-
-               IsSessionActive = !string.IsNullOrWhiteSpace(CurrentSessionId);
-
-               // Initialize success; auto-create new session (ACP standard flow).
-               // Ref: https://agentclientprotocol.com/protocol/session-setup
-               Logger.LogInformation("Creating new session...");
-               var sessionParams = new SalmonEgg.Domain.Models.Protocol.SessionNewParams
-               {
-                   Cwd = GetActiveSessionCwdOrDefault()
-               };
-
-                SessionNewResponse response;
-                try
-                {
-                    response = await _chatService.CreateSessionAsync(sessionParams);
-                }
-                catch (Exception ex) when (IsAuthenticationRequiredError(ex))
-                {
-                    var authenticated = await TryAuthenticateAsync(CancellationToken.None).ConfigureAwait(false);
-                    if (!authenticated)
-                    {
-                        // Keep the transport connected; the user may complete auth externally and retry.
-                        Logger.LogWarning("Authentication required before session creation.");
-                        ShowTransportConfigPanel = false;
-                        return;
-                    }
-
-                    response = await _chatService.CreateSessionAsync(sessionParams);
-                }
-                Logger.LogInformation("Session created successfully, SessionId={SessionId}", response.SessionId);
-
-                var remoteSessionId = response.SessionId;
-                var hasRemoteSession = !string.IsNullOrWhiteSpace(remoteSessionId);
-
-                if (preserveConversation && IsSessionActive && !string.IsNullOrWhiteSpace(CurrentSessionId) && hasRemoteSession)
-                {
-                    var binding = GetOrCreateConversationBinding(CurrentSessionId!);
-                    binding.RemoteSessionId = remoteSessionId;
-                    binding.BoundProfileId = _preferences.LastSelectedServerId;
-                    _currentRemoteSessionId = remoteSessionId;
-
-                    // Keep the local transcript; just rebind the active remote session.
-                    IsSessionActive = true;
-                }
-                else
-                {
-                    // Do NOT replace the local conversation id with the ACP session id.
-                    // If there isn't a local conversation selected, create one and bind it to the new remote session.
-                    if (string.IsNullOrWhiteSpace(CurrentSessionId))
-                    {
-                        CurrentSessionId = Guid.NewGuid().ToString();
-                    }
-
-                    IsSessionActive = !string.IsNullOrWhiteSpace(CurrentSessionId);
-                    _currentRemoteSessionId = remoteSessionId;
-
-                    if (!string.IsNullOrWhiteSpace(CurrentSessionId))
-                    {
-                        var binding = GetOrCreateConversationBinding(CurrentSessionId);
-                        binding.RemoteSessionId = remoteSessionId;
-                        binding.BoundProfileId = _preferences.LastSelectedServerId;
-                        binding.LastUpdatedAt = DateTime.UtcNow;
-                    }
-                }
-
-                ApplySessionNewResponse(response);
-
-                if (IsSessionActive)
-                {
-                    // Local transcript is restored by conversation switch; keep remote replay separate.
-                    LoadSessionHistory();
-                }
+                _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(IsConnected, null));
                 ShowTransportConfigPanel = false;
-                Logger.LogInformation("Connected successfully");
             }
             catch (Exception ex)
             {
                 _ = _chatStore.Dispatch(new UpdateConnectionStatusAction(false, $"Connection failed: {ex.Message}"));
                 Logger.LogError(ex, "Error during connection");
-                _currentRemoteSessionId = null;
-                // Keep the local conversation visible; only clear the remote binding so we don't send to stale ids.
                 ClearRemoteSessionBindingForCurrentConversation();
             }
-           finally
-           {
-               IsConnecting = false;
-           }
+            finally
+            {
+                await _chatStore.Dispatch(new SetConnectionLifecycleAction(
+                    IsConnecting: false,
+                    IsConnected: IsConnected,
+                    IsInitialized: IsInitializing,
+                    ErrorMessage: ConnectionErrorMessage));
+            }
         }
 
     private void ApplySessionNewResponse(SessionNewResponse response)
     {
-        // Load modes (some Agents may omit this field; deprecated in favor of configOptions)
-        AvailableModes.Clear();
-        SelectedMode = null;
-        if (response.Modes?.AvailableModes != null)
-        {
-            foreach (var mode in response.Modes.AvailableModes)
-            {
-                if (mode != null)
-                {
-                    AvailableModes.Add(new SessionModeViewModel
-                    {
-                        ModeId = mode.Id ?? string.Empty,
-                        ModeName = mode.Name ?? string.Empty,
-                        Description = mode.Description ?? string.Empty
-                    });
-                }
-            }
-
-            if (AvailableModes.Count > 0)
-            {
-                var currentModeId = response.Modes.CurrentModeId;
-                SelectedMode = string.IsNullOrWhiteSpace(currentModeId)
-                    ? AvailableModes[0]
-                    : AvailableModes.FirstOrDefault(m => m.ModeId == currentModeId) ?? AvailableModes[0];
-            }
-        }
-
+        ApplySessionUpdateDelta(_acpSessionUpdateProjector.ProjectSessionNew(response));
         Logger.LogInformation("Session modes loaded: {Count}", AvailableModes.Count);
-
-        // Load config options
-        ConfigOptions.Clear();
-        ShowConfigOptionsPanel = false;
-        if (response.ConfigOptions != null)
-        {
-            foreach (var option in response.ConfigOptions)
-            {
-                ConfigOptions.Add(ConfigOptionViewModel.CreateFromAcp(option));
-            }
-            ShowConfigOptionsPanel = ConfigOptions.Count > 0;
-            SyncModesFromConfigOptions();
-        }
     }
 
     [RelayCommand]
@@ -1581,14 +1357,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
            if (chatService.IsInitialized)
            {
                UpdateAgentInfo();
-           }
-
-           // Listen for session status.
-           if (chatService.CurrentSessionId != null)
-           {
-               CurrentSessionId = chatService.CurrentSessionId;
-               IsSessionActive = true;
-               LoadSessionHistory();
            }
        }
 
@@ -1615,13 +1383,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                   UpdateAgentInfo();
               }
 
-              // Listen for session status.
-              if (_chatService.CurrentSessionId != null)
-              {
-                  CurrentSessionId = _chatService.CurrentSessionId;
-                  IsSessionActive = true;
-                  LoadSessionHistory();
-              }
           }
       }
 
@@ -1638,8 +1399,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
                 // SECURITY/PROTOCOL CHECK: Ensure updates only affect the currently active remote session.
                 // This prevents cross-talk if multiple agents or sessions are running.
-                if (!string.IsNullOrWhiteSpace(_currentRemoteSessionId) &&
-                    !string.Equals(e.SessionId, _currentRemoteSessionId, StringComparison.Ordinal))
+                var activeRemoteSessionId = _currentRemoteSessionId;
+                if (string.IsNullOrWhiteSpace(activeRemoteSessionId) && !string.IsNullOrWhiteSpace(CurrentSessionId))
+                {
+                    activeRemoteSessionId = _conversationWorkspace.GetRemoteBinding(CurrentSessionId)?.RemoteSessionId;
+                }
+
+                if (!string.IsNullOrWhiteSpace(activeRemoteSessionId) &&
+                    !string.Equals(e.SessionId, activeRemoteSessionId, StringComparison.Ordinal))
                 {
                     return;
                 }
@@ -1662,25 +1429,24 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                 {
                     _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
 
-                    var message = CreateToolCallMessage(toolCallUpdate);
-                    AppendToTranscript(message);
+                    _ = UpsertTranscriptSnapshotAsync(CreateToolCallSnapshot(toolCallUpdate));
                 }
                 else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
                 {
                     _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
-                    UpdateToolCallStatus(toolCallStatusUpdate);
+                    _ = UpdateToolCallStatusAsync(toolCallStatusUpdate);
                 }
                 else if (e.Update is PlanUpdate planUpdate)
                 {
-                    UpdatePlan(planUpdate);
+                    ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, planUpdate)));
                 }
                 else if (e.Update is CurrentModeUpdate modeChange)
                 {
-                    OnModeChanged(modeChange);
+                    ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, modeChange)));
                 }
                 else if (e.Update is ConfigUpdateUpdate configUpdate)
                 {
-                    UpdateConfigOptions(configUpdate);
+                    ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, configUpdate)));
                 }
                 else if (e.Update is AvailableCommandsUpdate commandsUpdate)
                 {
@@ -1719,64 +1485,52 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        _ = _chatStore.Dispatch(new AppendTextDeltaAction(chunk));
-
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
-        }
+        _ = _chatStore.Dispatch(new AppendTextDeltaAction(CurrentSessionId, chunk));
     }
 
-    public async Task<bool> TrySwitchToSessionAsync(string sessionId)
+    public async Task<bool> TrySwitchToSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return false;
         }
 
+        await EnsureConversationWorkspaceRestoredAsync(cancellationToken).ConfigureAwait(false);
+
         if (string.Equals(CurrentSessionId, sessionId, StringComparison.Ordinal))
         {
+            var currentState = await _chatStore.State ?? ChatState.Empty;
+            if (currentState.Transcript is null)
+            {
+                await SelectAndHydrateConversationAsync(sessionId).ConfigureAwait(false);
+            }
+
             return true;
         }
 
-        await _sessionSwitchGate.WaitAsync().ConfigureAwait(false);
         try
         {
             _suppressSessionUpdatesToUi = true;
 
+            var switched = await _conversationWorkspace
+                .TrySwitchToSessionAsync(sessionId, cancellationToken)
+                .ConfigureAwait(false);
+            if (!switched)
+            {
+                return false;
+            }
+
             // Switch local conversation first (UI stays stable even if not connected).
             await PostToUiAsync(() =>
             {
+                _suppressStoreConversationProjection = true;
                 CurrentSessionId = sessionId;
                 IsSessionActive = true;
+                _suppressStoreConversationProjection = false;
             }).ConfigureAwait(false);
 
-            var binding = GetOrCreateConversationBinding(sessionId);
-            binding.BoundProfileId ??= _preferences.LastSelectedServerId;
-
-            // If the active ACP changed since this conversation was last used, defer remote session creation to the next send.
-            // Switching conversations should be instant and offline-friendly.
-            var currentProfileId = _preferences.LastSelectedServerId;
-            if (!string.IsNullOrWhiteSpace(currentProfileId) &&
-                !string.Equals(binding.BoundProfileId, currentProfileId, StringComparison.Ordinal))
-            {
-                binding.BoundProfileId = currentProfileId;
-                binding.RemoteSessionId = null;
-                binding.LastUpdatedAt = DateTime.UtcNow;
-                _currentRemoteSessionId = null;
-                ScheduleConversationSave();
-            }
-            else
-            {
-                _currentRemoteSessionId = binding.RemoteSessionId;
-            }
-
-            await PostToUiAsync(() =>
-            {
-                RestoreConversation(binding);
-            }).ConfigureAwait(false);
+            await SelectAndHydrateConversationAsync(sessionId).ConfigureAwait(false);
+            NotifyConversationListChanged();
 
             return true;
         }
@@ -1795,7 +1549,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         finally
         {
             _suppressSessionUpdatesToUi = false;
-            _sessionSwitchGate.Release();
         }
     }
 
@@ -2016,8 +1769,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     {
         if (_chatService?.AgentInfo != null)
         {
-            AgentName = _chatService.AgentInfo.Name;
-            AgentVersion = _chatService.AgentInfo.Version;
+            _ = _chatStore.Dispatch(new SetAgentIdentityAction(_chatService.AgentInfo.Name, _chatService.AgentInfo.Version));
         }
     }
 
@@ -2031,8 +1783,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
     private void ClearAuthenticationRequirement()
     {
-        IsAuthenticationRequired = false;
-        AuthenticationHintMessage = null;
+        _ = _chatStore.Dispatch(new SetAuthenticationStateAction(false, null));
     }
 
     private void MarkAuthenticationRequired(AuthMethodDefinition? method, string? messageOverride = null)
@@ -2042,8 +1793,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             ?? method?.Description
             ?? "The agent requires authentication before it can respond.";
 
-        IsAuthenticationRequired = true;
-        AuthenticationHintMessage = message;
+        _ = _chatStore.Dispatch(new SetAuthenticationStateAction(true, message));
 
         if (method != null)
         {
@@ -2110,286 +1860,204 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     private static bool IsAuthenticationRequiredError(Exception ex) =>
         ex is AcpException acp && acp.ErrorCode == JsonRpcErrorCode.AuthenticationRequired;
 
-    private void LoadSessionHistory()
+    private void AddMessageToHistory(ContentBlock content, bool isOutgoing)
     {
-        // Conversations are local. When a remote session replays history, it is appended through SessionUpdate events.
-        // We keep transcript per conversation and restore it when switching conversations.
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            RestoreConversation(binding);
-        }
+        _ = UpsertTranscriptSnapshotAsync(CreateContentSnapshot(content, isOutgoing));
     }
 
-    private void AddEntryToMessageHistory(SessionUpdateEntry entry)
+    private ConversationMessageSnapshot CreateContentSnapshot(ContentBlock content, bool isOutgoing)
     {
-        if (entry.Content != null)
+        var snapshot = new ConversationMessageSnapshot
         {
-            AddMessageToHistory(entry.Content, isOutgoing: false);
-        }
-        else if (entry.Entries != null)
-        {
-            foreach (var planEntry in entry.Entries)
-            {
-                var message = ChatMessageViewModel.CreateFromPlanEntry(
-                    Guid.NewGuid().ToString(),
-                    planEntry,
-                    isOutgoing: false);
-                AppendToTranscript(message);
-            }
-        }
-        else if (!string.IsNullOrEmpty(entry.ModeId))
-        {
-            var message = ChatMessageViewModel.CreateFromModeChange(
-                Guid.NewGuid().ToString(),
-                entry.ModeId,
-                entry.Title,
-                isOutgoing: false);
-            AppendToTranscript(message);
-        }
-    }
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTime.UtcNow,
+            IsOutgoing = isOutgoing
+        };
 
-    private void AppendToTranscript(ChatMessageViewModel message)
-    {
-        MessageHistory.Add(message);
-
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            binding.Transcript.Add(message);
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
-        }
-    }
-
-
-
-    private void RemoveMessageFromTranscript(ChatMessageViewModel message)
-    {
-        MessageHistory.Remove(message);
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            binding.Transcript.Remove(message);
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
-        }
-    }
-
-    private void ReplaceMessageInTranscript(ChatMessageViewModel oldMessage, ChatMessageViewModel newMessage)
-    {
-        var index = MessageHistory.IndexOf(oldMessage);
-        if (index >= 0)
-        {
-            MessageHistory[index] = newMessage;
-        }
-        else
-        {
-            MessageHistory.Add(newMessage);
-        }
-
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            var transcriptIndex = binding.Transcript.IndexOf(oldMessage);
-            if (transcriptIndex >= 0)
-            {
-                binding.Transcript[transcriptIndex] = newMessage;
-            }
-            else
-            {
-                binding.Transcript.Add(newMessage);
-            }
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
-        }
-    }
-
-    private ChatMessageViewModel CreateMessageFromContent(ContentBlock content, bool isOutgoing)
-    {
-        var id = Guid.NewGuid().ToString();
         switch (content)
         {
             case TextContentBlock text:
-                return ChatMessageViewModel.CreateFromTextContent(id, content, isOutgoing);
+                snapshot.ContentType = "text";
+                snapshot.TextContent = text.Text ?? string.Empty;
+                break;
             case ImageContentBlock image:
-                return ChatMessageViewModel.CreateFromImageContent(id, content, isOutgoing);
+                snapshot.ContentType = "image";
+                snapshot.ImageData = image.Data ?? string.Empty;
+                snapshot.ImageMimeType = image.MimeType ?? string.Empty;
+                break;
             case AudioContentBlock audio:
-                return ChatMessageViewModel.CreateFromAudioContent(id, content, isOutgoing);
+                snapshot.ContentType = "audio";
+                snapshot.AudioData = audio.Data ?? string.Empty;
+                snapshot.AudioMimeType = audio.MimeType ?? string.Empty;
+                break;
             case ResourceContentBlock resourceContent:
-                return ChatMessageViewModel.CreateFromResourceContent(id, resourceContent, isOutgoing);
+                snapshot.ContentType = "resource";
+                snapshot.TextContent = resourceContent.Resource?.Uri?.ToString() ?? string.Empty;
+                break;
             case ResourceLinkContentBlock resourceLink:
-                return ChatMessageViewModel.CreateFromResourceLink(id, resourceLink, isOutgoing);
+                snapshot.ContentType = "resource_link";
+                snapshot.TextContent = resourceLink.Uri?.ToString() ?? string.Empty;
+                break;
             default:
-                return ChatMessageViewModel.CreateFromTextContent(id, content, isOutgoing);
+                snapshot.ContentType = "text";
+                snapshot.TextContent = $"[{content.GetType().Name}]";
+                break;
         }
+
+        return snapshot;
     }
 
-    private ChatMessageViewModel CreateToolCallMessage(ToolCallUpdate toolCall)
+    private ConversationMessageSnapshot CreateToolCallSnapshot(ToolCallUpdate toolCall)
     {
-        var rawInput = toolCall.RawInput?.GetRawText();
-        var rawOutput = toolCall.RawOutput?.GetRawText();
-
-        return ChatMessageViewModel.CreateFromToolCall(
-            Guid.NewGuid().ToString(),
-            toolCall.ToolCallId,
-            rawInput,
-            rawOutput,
-            toolCall.Kind,
-            toolCall.Status,
-            toolCall.Title,
-            isOutgoing: false);
-    }
-
-    private void AddMessageToHistory(ContentBlock content, bool isOutgoing)
-    {
-        var id = Guid.NewGuid().ToString();
-        var parts = ImmutableList<ChatContentPart>.Empty;
-
-        if (content is TextContentBlock text)
+        return new ConversationMessageSnapshot
         {
-            parts = parts.Add(new TextPart(text.Text ?? string.Empty));
-        }
-        else
-        {
-            // For non-text blocks, fallback to a placeholder text for now in the Store
-            // Future steps will add specialized ChatContentPart types
-            parts = parts.Add(new TextPart($"[{content.GetType().Name}]"));
-        }
-
-        var message = new ChatMessage(id, DateTimeOffset.Now, isOutgoing, Parts: parts);
-        _ = _chatStore.Dispatch(new AddMessageAction(message));
-
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
-        }
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTime.UtcNow,
+            IsOutgoing = false,
+            ContentType = "tool_call",
+            Title = toolCall.Title ?? string.Empty,
+            TextContent = toolCall.RawOutput?.GetRawText() ?? string.Empty,
+            ToolCallId = toolCall.ToolCallId,
+            ToolCallKind = toolCall.Kind,
+            ToolCallStatus = toolCall.Status,
+            ToolCallJson = toolCall.RawInput?.GetRawText()
+        };
     }
 
-    private void AddToolCallToHistory(ToolCallUpdate toolCall)
+    private async Task UpsertTranscriptSnapshotAsync(ConversationMessageSnapshot snapshot)
     {
-        var rawInput = toolCall.RawInput?.GetRawText();
-        var rawOutput = toolCall.RawOutput?.GetRawText();
-
-        var message = ChatMessageViewModel.CreateFromToolCall(
-            Guid.NewGuid().ToString(),
-            toolCall.ToolCallId,
-            rawInput,
-            rawOutput,
-            toolCall.Kind,
-            toolCall.Status,
-            toolCall.Title,
-            isOutgoing: false);
-        AppendToTranscript(message);
-    }
-
-    private void UpdateToolCallStatus(ToolCallStatusUpdate toolCallStatusUpdate)
-    {
-        if (string.IsNullOrEmpty(toolCallStatusUpdate.ToolCallId))
+        if (string.IsNullOrWhiteSpace(CurrentSessionId))
         {
             return;
         }
 
-        var toolCallId = toolCallStatusUpdate.ToolCallId;
-        var status = toolCallStatusUpdate.Status;
-        var content = toolCallStatusUpdate.Content;
-
-        var existingMessage = MessageHistory.FirstOrDefault(m =>
-            m.ToolCallId == toolCallId && m.ContentType == "tool_call");
-
-        if (existingMessage != null)
-        {
-            if (status.HasValue)
-            {
-                existingMessage.ToolCallStatus = status;
-            }
-
-            if (content != null && content.Count > 0)
-            {
-                foreach (var item in content)
-                {
-                    if (item is Domain.Models.Tool.ContentToolCallContent contentItem)
-                    {
-                        if (contentItem.Content is TextContentBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
-                        {
-                            existingMessage.TextContent = string.IsNullOrEmpty(existingMessage.TextContent)
-                                ? textBlock.Text
-                                : existingMessage.TextContent + textBlock.Text;
-                        }
-                    }
-                }
-            }
-
-            var binding = TryGetConversationBinding(CurrentSessionId);
-            if (binding != null)
-            {
-                binding.LastUpdatedAt = DateTime.UtcNow;
-                ScheduleConversationSave();
-            }
-        }
+        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(CurrentSessionId, snapshot)).ConfigureAwait(false);
     }
 
-    private void UpdatePlan(PlanUpdate planUpdate)
+    private async Task UpdateToolCallStatusAsync(ToolCallStatusUpdate toolCallStatusUpdate)
     {
-        ShowPlanPanel = true;
-        PlanEntries.Clear();
-        CurrentPlanTitle = string.IsNullOrWhiteSpace(planUpdate.Title) ? null : planUpdate.Title.Trim();
-
-        if (planUpdate.Entries != null)
+        if (string.IsNullOrWhiteSpace(CurrentSessionId) || string.IsNullOrEmpty(toolCallStatusUpdate.ToolCallId))
         {
-            foreach (var entry in planUpdate.Entries)
+            return;
+        }
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var currentTranscript = state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        var existing = currentTranscript.LastOrDefault(message =>
+            string.Equals(message.ToolCallId, toolCallStatusUpdate.ToolCallId, StringComparison.Ordinal)
+            && string.Equals(message.ContentType, "tool_call", StringComparison.Ordinal));
+        if (existing is null)
+        {
+            return;
+        }
+
+        var appendedOutput = existing.TextContent ?? string.Empty;
+        if (toolCallStatusUpdate.Content != null)
+        {
+            foreach (var item in toolCallStatusUpdate.Content.OfType<Domain.Models.Tool.ContentToolCallContent>())
             {
-                PlanEntries.Add(new PlanEntryViewModel
+                if (item.Content is TextContentBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
                 {
-                    Content = entry.Content ?? string.Empty,
-                    Status = entry.Status,
-                    Priority = entry.Priority
+                    appendedOutput += textBlock.Text;
+                }
+            }
+        }
+
+        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(CurrentSessionId, new ConversationMessageSnapshot
+        {
+            Id = existing.Id,
+            Timestamp = DateTime.UtcNow,
+            IsOutgoing = existing.IsOutgoing,
+            ContentType = existing.ContentType,
+            Title = existing.Title,
+            TextContent = appendedOutput,
+            ImageData = existing.ImageData,
+            ImageMimeType = existing.ImageMimeType,
+            AudioData = existing.AudioData,
+            AudioMimeType = existing.AudioMimeType,
+            ToolCallId = existing.ToolCallId,
+            ToolCallKind = existing.ToolCallKind,
+            ToolCallStatus = toolCallStatusUpdate.Status ?? existing.ToolCallStatus,
+            ToolCallJson = existing.ToolCallJson,
+            PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
+            ModeId = existing.ModeId
+        })).ConfigureAwait(false);
+    }
+
+    private void ApplySessionUpdateDelta(AcpSessionUpdateDelta delta)
+    {
+        if (delta.AvailableModes != null)
+        {
+            AvailableModes.Clear();
+            foreach (var mode in delta.AvailableModes)
+            {
+                AvailableModes.Add(new SessionModeViewModel
+                {
+                    ModeId = mode.ModeId,
+                    ModeName = mode.ModeName,
+                    Description = mode.Description
                 });
             }
         }
 
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
-        {
-            binding.Plan.Clear();
-            foreach (var item in PlanEntries)
-            {
-                binding.Plan.Add(item);
-            }
-            binding.ShowPlanPanel = ShowPlanPanel;
-            binding.PlanTitle = CurrentPlanTitle;
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
-        }
-    }
-
-    private void OnModeChanged(CurrentModeUpdate modeChange)
-    {
-        if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
-        {
-            // Update current mode.
-            var selectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == modeChange.CurrentModeId);
-            if (selectedMode != null)
-            {
-                SelectedMode = selectedMode;
-            }
-        }
-    }
-
-    private void UpdateConfigOptions(ConfigUpdateUpdate configUpdate)
-    {
-        if (configUpdate.ConfigOptions != null)
+        if (delta.ConfigOptions != null)
         {
             ConfigOptions.Clear();
-            foreach (var option in configUpdate.ConfigOptions)
+            foreach (var option in delta.ConfigOptions)
             {
-                ConfigOptions.Add(ConfigOptionViewModel.CreateFromAcp(option));
+                ConfigOptions.Add(MapConfigOption(option));
             }
-            ShowConfigOptionsPanel = ConfigOptions.Count > 0;
+
+            ShowConfigOptionsPanel = delta.ShowConfigOptionsPanel ?? ConfigOptions.Count > 0;
             SyncModesFromConfigOptions();
         }
+        else if (delta.ShowConfigOptionsPanel.HasValue)
+        {
+            ShowConfigOptionsPanel = delta.ShowConfigOptionsPanel.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(delta.SelectedModeId) && AvailableModes.Count > 0)
+        {
+            SelectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == delta.SelectedModeId) ?? AvailableModes[0];
+        }
+
+        if (delta.PlanEntries != null)
+        {
+            _ = _chatStore.Dispatch(new ReplacePlanEntriesAction(
+                CurrentSessionId,
+                delta.PlanEntries.ToImmutableList(),
+                delta.ShowPlanPanel ?? true,
+                delta.PlanTitle));
+        }
+    }
+
+    private static ConfigOptionViewModel MapConfigOption(AcpConfigOptionSnapshot option)
+    {
+        var viewModel = new ConfigOptionViewModel
+        {
+            Id = option.Id,
+            Name = option.Name,
+            Description = option.Description,
+            Category = option.Category,
+            ValueType = option.ValueType ?? "string",
+            IsRequired = true,
+            Value = option.SelectedValue ?? string.Empty,
+            TextValue = option.SelectedValue ?? string.Empty
+        };
+
+        if (option.Options.Count > 0)
+        {
+            viewModel.Options = new ObservableCollection<OptionValueViewModel>(
+                option.Options.Select(static item => new OptionValueViewModel
+                {
+                    Value = item.Value,
+                    Name = item.Name,
+                    Description = item.Description
+                }));
+            viewModel.SelectedOption = viewModel.Options.FirstOrDefault(item => item.Value == option.SelectedValue);
+        }
+
+        return viewModel;
     }
 
     private void SyncModesFromConfigOptions()
@@ -2442,7 +2110,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
        try
        {
-           IsInitializing = true;
+           await _chatStore.Dispatch(new SetConnectionLifecycleAction(IsConnecting, IsConnected, true, ConnectionErrorMessage));
            ClearError();
 
            // Initialize ACP client.
@@ -2482,7 +2150,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
        }
        finally
        {
-           IsInitializing = false;
+           await _chatStore.Dispatch(new SetConnectionLifecycleAction(IsConnecting, IsConnected, false, ConnectionErrorMessage));
        }
    }
 
@@ -2494,7 +2162,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         try
         {
-            IsConnecting = true;
+            await _chatStore.Dispatch(new SetConnectionLifecycleAction(true, IsConnected, IsInitializing, ConnectionErrorMessage));
             ClearError();
 
             var sessionParams = new SessionNewParams
@@ -2576,7 +2244,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            IsConnecting = false;
+            await _chatStore.Dispatch(new SetConnectionLifecycleAction(false, IsConnected, IsInitializing, ConnectionErrorMessage));
         }
     }
 
@@ -2623,40 +2291,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             {
                 _sendPromptCts?.Cancel();
                 _sendPromptCts = new CancellationTokenSource();
-
-                var remoteSessionId = await EnsureRemoteSessionAsync(_sendPromptCts.Token);
-                var promptParams = new SessionPromptParams
-                {
-                    SessionId = remoteSessionId,
-                    Prompt = new List<ContentBlock> { new TextContentBlock { Text = promptText } },
-                    MaxTokens = null,
-                    StopSequences = null
-                };
-
-                try
-                {
-                    await _chatService.SendPromptAsync(promptParams, _sendPromptCts.Token);
-                }
-                catch (Exception ex) when (IsAuthenticationRequiredError(ex))
-                {
-                    var authenticated = await TryAuthenticateAsync(_sendPromptCts.Token).ConfigureAwait(false);
-                    if (!authenticated)
-                    {
-                        throw;
-                    }
-
-                    await _chatService.SendPromptAsync(promptParams, _sendPromptCts.Token);
-                }
-                catch (Exception ex) when (IsRemoteSessionNotFound(ex))
-                {
-                    // Error Recovery: If the agent process was restarted or the remote session expired,
-                    // we clear the stale binding, create a new remote session, and retry the prompt once.
-                    // This provides a seamless "auto-recovery" experience for the user.
-                    ClearRemoteSessionBindingForCurrentConversation();
-                    remoteSessionId = await EnsureRemoteSessionAsync(_sendPromptCts.Token);
-                    promptParams.SessionId = remoteSessionId;
-                    await _chatService.SendPromptAsync(promptParams, _sendPromptCts.Token);
-                }
+                await _acpConnectionCommands
+                    .SendPromptAsync(promptText, this, TryAuthenticateAsync, _sendPromptCts.Token)
+                    .ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -2728,27 +2365,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
 
         try
         {
-            var remoteSessionId = _currentRemoteSessionId;
-            if (string.IsNullOrWhiteSpace(remoteSessionId) && !string.IsNullOrWhiteSpace(CurrentSessionId))
-            {
-                remoteSessionId = TryGetConversationBinding(CurrentSessionId)?.RemoteSessionId;
-            }
-
-            if (string.IsNullOrWhiteSpace(remoteSessionId))
-            {
-                return;
-            }
-
-            var cancelParams = new SessionCancelParams
-            {
-                SessionId = remoteSessionId!,
-                Reason = "User cancelled"
-            };
-
-            if (_chatService != null)
-            {
-                await _chatService.CancelSessionAsync(cancelParams);
-            }
+            await _acpConnectionCommands.CancelPromptAsync(this, "User cancelled").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -2796,7 +2413,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private string GetActiveSessionCwdOrDefault()
+    public string GetActiveSessionCwdOrDefault()
     {
         try
         {
@@ -2824,70 +2441,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>
-    /// Ensures that a remote ACP session exists and is bound to the current local conversation.
-    /// Remote sessions are created lazily to avoid unnecessary resource consumption
-    /// until the user actually sends a message or a feature requires an active session.
-    /// </summary>
-    private async Task<string> EnsureRemoteSessionAsync(CancellationToken cancellationToken = default)
-    {
-        if (_chatService is not { IsConnected: true, IsInitialized: true })
-        {
-            throw new InvalidOperationException("Not connected to ACP agent.");
-        }
-
-        if (!IsSessionActive || string.IsNullOrWhiteSpace(CurrentSessionId))
-        {
-            throw new InvalidOperationException("No session selected.");
-        }
-
-        var binding = GetOrCreateConversationBinding(CurrentSessionId!);
-        if (!string.IsNullOrWhiteSpace(binding.RemoteSessionId))
-        {
-            _currentRemoteSessionId = binding.RemoteSessionId;
-            return binding.RemoteSessionId!;
-        }
-
-        var sessionParams = new SessionNewParams
-        {
-            Cwd = GetActiveSessionCwdOrDefault(),
-            McpServers = new List<McpServer>()
-        };
-
-        SessionNewResponse response;
-        try
-        {
-            response = await _chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (IsAuthenticationRequiredError(ex))
-        {
-            var authenticated = await TryAuthenticateAsync(cancellationToken).ConfigureAwait(false);
-            if (!authenticated)
-            {
-                throw new InvalidOperationException(AuthenticationHintMessage ?? "The agent requires authentication before it can respond.");
-            }
-
-            response = await _chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
-        }
-        binding.RemoteSessionId = response.SessionId;
-        binding.BoundProfileId = _preferences.LastSelectedServerId;
-        binding.LastUpdatedAt = DateTime.UtcNow;
-        _currentRemoteSessionId = response.SessionId;
-        ScheduleConversationSave();
-
-        // Apply agent-advertised capabilities (modes/config) on the UI thread so the rest of the page can update.
-        var activeConversationId = binding.ConversationId;
-        _syncContext.Post(_ =>
-        {
-            if (string.Equals(CurrentSessionId, activeConversationId, StringComparison.Ordinal))
-            {
-                ApplySessionNewResponse(response);
-            }
-        }, null);
-
-        return response.SessionId;
-    }
-
     private void ClearRemoteSessionBindingForCurrentConversation()
     {
         if (string.IsNullOrWhiteSpace(CurrentSessionId))
@@ -2896,18 +2449,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var binding = GetOrCreateConversationBinding(CurrentSessionId);
-        binding.RemoteSessionId = null;
-        binding.LastUpdatedAt = DateTime.UtcNow;
+        _ = _chatStore.Dispatch(new UpdateConversationBindingAction(CurrentSessionId, _preferences.LastSelectedServerId, null));
         _currentRemoteSessionId = null;
-        ScheduleConversationSave();
     }
-
-    private static bool IsRemoteSessionNotFound(Exception ex) =>
-        ex is AcpException acp
-        && (acp.ErrorCode == JsonRpcErrorCode.ResourceNotFound
-            || (acp.Message.Contains("Session", StringComparison.OrdinalIgnoreCase)
-                && acp.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)));
 
     [RelayCommand]
     private async Task SetModeAsync(SessionModeViewModel? mode)
@@ -2989,21 +2533,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ClearHistory()
     {
-        MessageHistory.Clear();
-        PlanEntries.Clear();
-        ShowPlanPanel = false;
-        CurrentPlanTitle = null;
-
-        var binding = TryGetConversationBinding(CurrentSessionId);
-        if (binding != null)
+        if (!string.IsNullOrWhiteSpace(CurrentSessionId))
         {
-            binding.Transcript.Clear();
-            binding.Plan.Clear();
-            binding.ShowPlanPanel = false;
-            binding.PlanTitle = null;
-            binding.LastUpdatedAt = DateTime.UtcNow;
-            ScheduleConversationSave();
+            _ = _chatStore.Dispatch(new HydrateConversationAction(
+                CurrentSessionId,
+                ImmutableList<ConversationMessageSnapshot>.Empty,
+                ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+                false,
+                null,
+                SelectedAcpProfile?.Id,
+                _currentRemoteSessionId));
         }
+
         _chatService?.ClearHistory();
     }
 
@@ -3019,16 +2560,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             {
                 await _chatService.DisconnectAsync();
             }
-            CurrentSessionId = null;
-            _currentRemoteSessionId = null;
-            IsSessionActive = false;
-            MessageHistory.Clear();
-            PlanEntries.Clear();
-            CurrentPlanTitle = null;
+            ClearRemoteSessionBindingForCurrentConversation();
+            await _chatStore.Dispatch(new SetConnectionLifecycleAction(false, false, false, null));
+            await _chatStore.Dispatch(new SetAgentIdentityAction(null, null));
             AvailableModes.Clear();
             SelectedMode = null;
-            AgentName = null;
-            AgentVersion = null;
         }
         catch (Exception ex)
         {
@@ -3074,6 +2610,92 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanSendPromptUi));
     }
 
+    public string? CurrentConversationId => CurrentSessionId;
+
+    public Task RestoreAsync(CancellationToken cancellationToken = default)
+        => EnsureConversationWorkspaceRestoredAsync(cancellationToken);
+
+    public IChatService? CurrentChatService => _chatService;
+
+    public bool IsInitialized => _chatService?.IsInitialized == true;
+
+    public string? CurrentRemoteSessionId => _currentRemoteSessionId;
+
+    public string? SelectedProfileId => _preferences.LastSelectedServerId;
+
+    public void SelectProfile(ServerConfiguration profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        _suppressAcpProfileConnect = true;
+        try
+        {
+            SelectedAcpProfile = profile;
+            _acpProfiles.SelectedProfile = profile;
+        }
+        finally
+        {
+            _suppressAcpProfileConnect = false;
+        }
+    }
+
+    public void ReplaceChatService(IChatService? chatService)
+    {
+        if (_chatService != null)
+        {
+            UnsubscribeFromChatService(_chatService);
+        }
+
+        _chatService = chatService;
+        if (chatService != null)
+        {
+            SubscribeToChatService(chatService);
+        }
+        OnPropertyChanged(nameof(CurrentChatService));
+        OnPropertyChanged(nameof(IsInitialized));
+    }
+
+    public void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)
+    {
+        _ = _chatStore.Dispatch(new SetConnectionLifecycleAction(isConnecting, isConnected, isInitialized, errorMessage));
+    }
+
+    public void UpdateInitializationState(bool isInitializing)
+    {
+        _ = _chatStore.Dispatch(new SetConnectionLifecycleAction(IsConnecting, IsConnected, isInitializing, ConnectionErrorMessage));
+    }
+
+    public void UpdateAuthenticationState(bool isRequired, string? hintMessage)
+    {
+        _ = _chatStore.Dispatch(new SetAuthenticationStateAction(isRequired, hintMessage));
+    }
+
+    public void UpdateAgentIdentity(string? agentName, string? agentVersion)
+    {
+        _ = _chatStore.Dispatch(new SetAgentIdentityAction(agentName, agentVersion));
+    }
+
+    public void BindRemoteSession(string remoteSessionId, string? profileId, SessionNewResponse response, bool preserveConversation)
+    {
+        if (string.IsNullOrWhiteSpace(CurrentSessionId))
+        {
+            throw new InvalidOperationException("Cannot bind a remote ACP session without an active local conversation.");
+        }
+
+        _ = _chatStore.Dispatch(new UpdateConversationBindingAction(CurrentSessionId!, profileId, remoteSessionId));
+        ApplySessionNewResponse(response);
+
+        if (!preserveConversation)
+        {
+            _ = DispatchConversationHydrationAsync(CurrentSessionId);
+        }
+    }
+
+    public void ClearRemoteSessionBinding()
+    {
+        ClearRemoteSessionBindingForCurrentConversation();
+    }
+
 
     private void OnCurrentPlanCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -3111,29 +2733,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
            _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
            _acpProfiles.Profiles.CollectionChanged -= OnAcpProfilesCollectionChanged;
            _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
+           _conversationWorkspace.PropertyChanged -= OnConversationWorkspacePropertyChanged;
 
-           _conversationSaveCts?.Cancel();
            _sendPromptCts?.Cancel();
            _transientNotificationCts?.Cancel();
            StopStoreProjection();
 
-            try
-            {
-                // Best-effort flush so the latest transcript survives restarts without blocking UI thread.
-                _ = Task.Run(async () =>
-                {
-                   try { await SaveConversationsAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
-               });
-           }
-           catch
-           {
-           }
-
-            try { _conversationSaveCts?.Dispose(); } catch { }
             try { _sendPromptCts?.Dispose(); } catch { }
             try { _transientNotificationCts?.Dispose(); } catch { }
 
-            _conversationSaveCts = null;
             _sendPromptCts = null;
             _transientNotificationCts = null;
        }

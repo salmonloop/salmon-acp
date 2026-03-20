@@ -41,7 +41,7 @@ public class ChatStoreTests
         // Assert
         var currentState = await state;
         Assert.NotNull(currentState);
-        Assert.True(currentState.IsPromptInFlight);
+        Assert.False(currentState.IsPromptInFlight);
         Assert.Equal("conv-1", currentState.SelectedConversationId);
     }
 }

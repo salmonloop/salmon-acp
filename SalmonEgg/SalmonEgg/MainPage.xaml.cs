@@ -617,7 +617,7 @@ public sealed partial class MainPage : Page
         RightPanelResizer.ReleasePointerCapture(pointer);
     }
 
-    private void OnMainPageLoaded(object sender, RoutedEventArgs e)
+    private async void OnMainPageLoaded(object sender, RoutedEventArgs e)
     {
         ConfigureTitleBar();
 #if WINDOWS
@@ -633,6 +633,7 @@ public sealed partial class MainPage : Page
 #if WINDOWS
         InitializeTray();
 #endif
+        await _chatViewModel.RestoreAsync();
     }
 
     private void OnAppTitleBarLoaded(object sender, RoutedEventArgs e)

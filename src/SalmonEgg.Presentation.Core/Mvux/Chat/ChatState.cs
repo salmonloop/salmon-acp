@@ -1,3 +1,4 @@
+using SalmonEgg.Domain.Models.Conversation;
 using System.Collections.Immutable;
 
 namespace SalmonEgg.Presentation.Core.Mvux.Chat;
@@ -5,11 +6,22 @@ namespace SalmonEgg.Presentation.Core.Mvux.Chat;
 public record ChatState(
     string? SelectedConversationId = null,
     string? SelectedAcpProfileId = null,
+    string? BoundProfileId = null,
+    string? RemoteSessionId = null,
     bool IsPromptInFlight = false,
     bool IsThinking = false,
+    bool IsConnecting = false,
+    bool IsInitializing = false,
+    bool IsAuthenticationRequired = false,
     string ConnectionStatus = "Disconnected",
     string? ConnectionError = null,
-    IImmutableList<ChatMessage>? Messages = null,
+    string? AuthenticationHintMessage = null,
+    string? AgentName = null,
+    string? AgentVersion = null,
+    IImmutableList<ConversationMessageSnapshot>? Transcript = null,
+    IImmutableList<ConversationPlanEntrySnapshot>? PlanEntries = null,
+    bool ShowPlanPanel = false,
+    string? PlanTitle = null,
     string DraftText = "")
 {
     public static ChatState Empty { get; } = new();

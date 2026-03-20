@@ -78,6 +78,22 @@ public class UiConventionsTests
     }
 
     [Fact]
+    public void DependencyInjection_ShouldRegisterChatBoundaryAdaptersAndCoordinators()
+    {
+        var repoRoot = FindRepoRoot();
+        var diFile = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "DependencyInjection.cs");
+        var text = File.ReadAllText(diFile);
+
+        Assert.Contains("AddSingleton<ISettingsChatConnection>", text);
+        Assert.Contains("AddSingleton<IChatLaunchWorkflow>", text);
+        Assert.Contains("AddSingleton<IAcpConnectionCommands, AcpChatCoordinator>", text);
+        Assert.Contains("AddSingleton<IAcpChatServiceFactory>", text);
+        Assert.Contains("AddSingleton<MainNavigationViewModel>(sp =>", text);
+        Assert.Contains("AddSingleton<INavigationCoordinator>(sp =>", text);
+        Assert.Contains("AddSingleton<AcpConnectionSettingsViewModel>(sp =>", text);
+    }
+
+    [Fact]
     public void Xaml_ShouldAvoidLegacySystemControlHighlightBrushes()
     {
         var repoRoot = FindRepoRoot();

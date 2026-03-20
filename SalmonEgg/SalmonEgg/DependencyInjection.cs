@@ -27,6 +27,7 @@ using SalmonEgg.Presentation.ViewModels.Start;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 using Uno.Extensions.Reactive;
 using SalmonEgg.Presentation.Core.Services;
@@ -177,6 +178,9 @@ public static class DependencyInjection
             var logger = sp.GetRequiredService<Serilog.ILogger>();
             return new ChatServiceFactory(transportFactory, parser, validator, errorLogger, capabilityManager, sessionManager, logger);
         });
+        services.AddSingleton<IAcpChatServiceFactory>(sp =>
+            new AcpChatServiceFactoryAdapter(sp.GetRequiredService<ChatServiceFactory>()));
+        services.AddSingleton<IAcpConnectionCommands, AcpChatCoordinator>();
 
         // Chat Service (default instance using default transport)
         services.AddSingleton<IChatService>(sp =>
@@ -200,21 +204,71 @@ public static class DependencyInjection
         // Existing ViewModels (Legacy)
         services.AddTransient<MainViewModel>();
         services.AddTransient<ConfigurationEditorViewModel>();
+        services.AddSingleton<IConversationWorkspacePreferences>(sp =>
+            new AppPreferencesConversationWorkspacePreferences(sp.GetRequiredService<AppPreferencesViewModel>()));
+        services.AddSingleton<IChatStateProjector, ChatStateProjector>();
+        services.AddSingleton<IAcpSessionUpdateProjector, AcpSessionUpdateProjector>();
 
         // New Chat ViewModel (refactored)
         // Must be singleton so connection/session state survives navigation and is shared between Settings and Chat pages.
+        services.AddSingleton<ConversationCatalogPresenter>();
+        services.AddSingleton<IConversationCatalogReadModel>(sp =>
+            sp.GetRequiredService<ConversationCatalogPresenter>());
+        services.AddSingleton<INavigationProjectPreferences>(sp =>
+            new NavigationProjectPreferencesAdapter(sp.GetRequiredService<AppPreferencesViewModel>()));
+        services.AddSingleton<INavigationProjectSelectionStore>(sp =>
+            new NavigationProjectSelectionStoreAdapter(sp.GetRequiredService<AppPreferencesViewModel>()));
         services.AddSingleton<ChatViewModel>();
+        services.AddSingleton<IConversationCatalog>(sp => sp.GetRequiredService<ChatViewModel>());
+        services.AddSingleton<IConversationSessionSwitcher>(sp => sp.GetRequiredService<ChatViewModel>());
+        services.AddSingleton<ISettingsChatConnection>(sp =>
+            new SettingsChatConnectionAdapter(sp.GetRequiredService<ChatViewModel>()));
+        services.AddSingleton<IChatLaunchWorkflowChatFacade>(sp =>
+            new ChatLaunchWorkflowChatFacadeAdapter(sp.GetRequiredService<ChatViewModel>()));
+        services.AddSingleton<IChatSessionCatalog>(sp =>
+            new ChatViewModelSessionCatalogAdapter(sp.GetRequiredService<IConversationCatalog>()));
+
+        // Extracted workspace is still registered so ChatViewModel can delegate local conversation state.
+        services.AddSingleton<ChatConversationWorkspace>();
 
         // Main shell navigation (Start + Projects -> Sessions tree)
         services.AddSingleton<NavigationSelectionProjector>();
-        services.AddSingleton<MainNavigationViewModel>();
-        services.AddSingleton<INavigationCoordinator, NavigationCoordinator>();
+        services.AddSingleton<MainNavigationViewModel>(sp =>
+            new MainNavigationViewModel(
+                sp.GetRequiredService<IConversationCatalog>(),
+                sp.GetRequiredService<IConversationSessionSwitcher>(),
+                sp.GetRequiredService<INavigationProjectPreferences>(),
+                sp.GetRequiredService<IUiInteractionService>(),
+                sp.GetRequiredService<IShellNavigationService>(),
+                sp.GetRequiredService<ILogger<MainNavigationViewModel>>(),
+                sp.GetRequiredService<INavigationPaneState>(),
+                sp.GetRequiredService<IShellLayoutMetricsSink>(),
+                sp.GetRequiredService<NavigationSelectionProjector>(),
+                sp.GetRequiredService<IConversationCatalogReadModel>()));
+        services.AddSingleton<INavigationSelectionHost>(sp =>
+            sp.GetRequiredService<MainNavigationViewModel>());
+        services.AddSingleton<INavigationCoordinator>(sp =>
+            new NavigationCoordinator(
+                sp.GetRequiredService<INavigationSelectionHost>(),
+                sp.GetRequiredService<IConversationSessionSwitcher>(),
+                sp.GetRequiredService<INavigationProjectSelectionStore>(),
+                sp.GetRequiredService<IShellNavigationService>()));
 
         // Global search
         services.AddSingleton<GlobalSearchViewModel>();
 
         // Start page orchestrator (Start creates session and submits)
         services.AddSingleton<StartViewModel>();
+        services.AddSingleton<IChatLaunchWorkflow>(sp =>
+            new ChatLaunchWorkflow(
+                sp.GetRequiredService<IChatLaunchWorkflowChatFacade>(),
+                sp.GetRequiredService<ISessionManager>(),
+                sp.GetRequiredService<AppPreferencesViewModel>(),
+                sp.GetRequiredService<INavigationCoordinator>(),
+                CreateStartCwdResolver(
+                    sp.GetRequiredService<MainNavigationViewModel>(),
+                    sp.GetRequiredService<AppPreferencesViewModel>()),
+                sp.GetRequiredService<ILogger<ChatLaunchWorkflow>>()));
 
         // App preferences used by General/Appearance settings and window behaviors.
         services.AddSingleton<AppPreferencesViewModel>();
@@ -226,7 +280,12 @@ public static class DependencyInjection
         services.AddSingleton<AcpProfilesViewModel>();
 
         // ACP connection settings page view model (wraps Chat + Profiles)
-        services.AddSingleton<AcpConnectionSettingsViewModel>();
+        services.AddSingleton<AcpConnectionSettingsViewModel>(sp =>
+            new AcpConnectionSettingsViewModel(
+                sp.GetRequiredService<ISettingsChatConnection>(),
+                sp.GetRequiredService<AcpProfilesViewModel>(),
+                sp.GetRequiredService<AppPreferencesViewModel>(),
+                sp.GetRequiredService<ILogger<AcpConnectionSettingsViewModel>>()));
 
         // Settings pages (Data/Shortcuts/Diagnostics/About)
         services.AddSingleton<DataStorageSettingsViewModel>();
@@ -262,4 +321,48 @@ public static class DependencyInjection
     {
         return SalmonEggPaths.GetAppDataRootPath();
     }
+
+    private static Func<string?> CreateStartCwdResolver(
+        MainNavigationViewModel navigationViewModel,
+        AppPreferencesViewModel preferences)
+    {
+        ArgumentNullException.ThrowIfNull(navigationViewModel);
+        ArgumentNullException.ThrowIfNull(preferences);
+
+        return () =>
+        {
+            var pending = navigationViewModel.ConsumePendingProjectRootPath();
+            string? lastSelectedRoot = null;
+
+            var projectId = preferences.LastSelectedProjectId;
+            if (!string.IsNullOrWhiteSpace(projectId))
+            {
+                var project = preferences.Projects.FirstOrDefault(p => string.Equals(p.ProjectId, projectId, StringComparison.Ordinal));
+                if (project != null && !string.IsNullOrWhiteSpace(project.RootPath))
+                {
+                    lastSelectedRoot = project.RootPath;
+                }
+            }
+
+            return SessionCwdResolver.Resolve(pending, lastSelectedRoot);
+        };
+    }
+
+    private sealed class AcpChatServiceFactoryAdapter : IAcpChatServiceFactory
+    {
+        private readonly ChatServiceFactory _chatServiceFactory;
+
+        public AcpChatServiceFactoryAdapter(ChatServiceFactory chatServiceFactory)
+        {
+            _chatServiceFactory = chatServiceFactory ?? throw new ArgumentNullException(nameof(chatServiceFactory));
+        }
+
+        public IChatService CreateChatService(
+            TransportType transportType,
+            string? command = null,
+            string? args = null,
+            string? url = null)
+            => _chatServiceFactory.CreateChatService(transportType, command, args, url);
+    }
+
 }

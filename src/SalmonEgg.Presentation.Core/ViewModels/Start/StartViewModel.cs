@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,7 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
-using SalmonEgg.Presentation.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -16,10 +15,9 @@ namespace SalmonEgg.Presentation.ViewModels.Start;
 
 public sealed partial class StartViewModel : ObservableObject
 {
-    private readonly ISessionManager _sessionManager;
     private readonly AppPreferencesViewModel _preferences;
-    private readonly INavigationCoordinator _navigationCoordinator;
     private readonly MainNavigationViewModel _nav;
+    private readonly IChatLaunchWorkflow _chatLaunchWorkflow;
     private readonly ILogger<StartViewModel> _logger;
 
     public ChatViewModel Chat { get; }
@@ -40,14 +38,22 @@ public sealed partial class StartViewModel : ObservableObject
         AppPreferencesViewModel preferences,
         INavigationCoordinator navigationCoordinator,
         MainNavigationViewModel nav,
-        ILogger<StartViewModel> logger)
+        ILogger<StartViewModel> logger,
+        IChatLaunchWorkflow? chatLaunchWorkflow = null)
     {
         Chat = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
-        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
+        ArgumentNullException.ThrowIfNull(sessionManager);
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
-        _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
+        ArgumentNullException.ThrowIfNull(navigationCoordinator);
         _nav = nav ?? throw new ArgumentNullException(nameof(nav));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        // DI stays untouched in this slice, so Start can fall back to a local workflow until the service is wired centrally.
+        _chatLaunchWorkflow = chatLaunchWorkflow ?? new ChatLaunchWorkflow(
+            new ChatLaunchWorkflowChatFacadeAdapter(Chat),
+            sessionManager,
+            _preferences,
+            navigationCoordinator,
+            ResolveDefaultCwd);
 
         StartSessionAndSendCommand = new AsyncRelayCommand(StartSessionAndSendAsync, () => !IsStarting);
     }
@@ -64,51 +70,7 @@ public sealed partial class StartViewModel : ObservableObject
         StartSessionAndSendCommand.NotifyCanExecuteChanged();
         try
         {
-            var cwd = ResolveDefaultCwd();
-            var sessionId = Guid.NewGuid().ToString("N");
-
-            try
-            {
-                await _sessionManager.CreateSessionAsync(sessionId, cwd);
-            }
-            catch
-            {
-                // If somehow collides, fall back to another id.
-                sessionId = Guid.NewGuid().ToString("N");
-                await _sessionManager.CreateSessionAsync(sessionId, cwd);
-            }
-
-            var switched = await Chat.TrySwitchToSessionAsync(sessionId).ConfigureAwait(true);
-            if (!switched)
-            {
-                _logger.LogWarning("Start session failed: unable to switch to new session (SessionId={SessionId})", sessionId);
-                return;
-            }
-
-            await _navigationCoordinator.ActivateSessionAsync(sessionId, _preferences.LastSelectedProjectId).ConfigureAwait(true);
-
-            if (!Chat.IsConnected)
-            {
-                await Chat.TryAutoConnectAsync().ConfigureAwait(true);
-            }
-
-            if (!Chat.IsConnected)
-            {
-                if (Chat.IsConnecting || Chat.IsInitializing)
-                {
-                    _logger.LogInformation("Start session paused: connection is still in progress.");
-                    return;
-                }
-
-                await _navigationCoordinator.ActivateSettingsAsync("General").ConfigureAwait(true);
-                Chat.ShowTransportConfigPanel = true;
-                return;
-            }
-
-            if (Chat.SendPromptCommand != null && Chat.SendPromptCommand.CanExecute(null))
-            {
-                Chat.SendPromptCommand.Execute(null);
-            }
+            await _chatLaunchWorkflow.StartSessionAndSendAsync(promptText).ConfigureAwait(true);
         }
         catch (Exception ex)
         {

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -15,9 +16,12 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 {
     private readonly ILogger<AcpConnectionSettingsViewModel> _logger;
     private readonly AppPreferencesViewModel _preferences;
+    private readonly ISettingsAcpConnectionState _connectionState;
+    private readonly ISettingsAcpConnectionCommands _connectionCommands;
+    private readonly ISettingsAcpTransportConfiguration _transportConfig;
     private bool _disposed;
 
-    public ChatViewModel Chat { get; }
+    public ISettingsChatConnection Chat { get; }
     public AcpProfilesViewModel Profiles { get; }
 
     public ObservableCollection<TransportOptionViewModel> TransportOptions { get; } = new()
@@ -34,23 +38,23 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     public string AgentDisplayName =>
         ResolveConnectedProfileName()
-        ?? (string.IsNullOrWhiteSpace(Chat.AgentName) ? "Agent" : Chat.AgentName!);
+        ?? (string.IsNullOrWhiteSpace(_connectionState.AgentName) ? "Agent" : _connectionState.AgentName!);
 
     public string ConnectionStatusText
     {
         get
         {
-            if (Chat.IsConnecting || Chat.IsInitializing)
+            if (_connectionState.IsConnecting || _connectionState.IsInitializing)
             {
                 return "正在连接…";
             }
 
-            if (Chat.IsConnected)
+            if (_connectionState.IsConnected)
             {
                 return "已连接";
             }
 
-            if (Chat.HasConnectionError)
+            if (_connectionState.HasConnectionError)
             {
                 return "连接失败";
             }
@@ -63,10 +67,10 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
     {
         get
         {
-            if (Chat.TransportConfig.SelectedTransportType == TransportType.Stdio)
+            if (_transportConfig.SelectedTransportType == TransportType.Stdio)
             {
-                var cmd = (Chat.TransportConfig.StdioCommand ?? string.Empty).Trim();
-                var args = (Chat.TransportConfig.StdioArgs ?? string.Empty).Trim();
+                var cmd = (_transportConfig.StdioCommand ?? string.Empty).Trim();
+                var args = (_transportConfig.StdioArgs ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(cmd))
                 {
                     return "—";
@@ -75,7 +79,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
                 return string.IsNullOrWhiteSpace(args) ? cmd : $"{cmd} {args}";
             }
 
-            var url = (Chat.TransportConfig.RemoteUrl ?? string.Empty).Trim();
+            var url = (_transportConfig.RemoteUrl ?? string.Empty).Trim();
             return string.IsNullOrWhiteSpace(url) ? "—" : url;
         }
     }
@@ -85,17 +89,52 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AcpProfilesViewModel profiles,
         AppPreferencesViewModel preferences,
         ILogger<AcpConnectionSettingsViewModel> logger)
+        : this(new SettingsChatConnectionAdapter(chatViewModel), profiles, preferences, logger)
     {
-        Chat = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
+    }
+
+    public AcpConnectionSettingsViewModel(
+        ISettingsChatConnection chat,
+        AcpProfilesViewModel profiles,
+        AppPreferencesViewModel preferences,
+        ILogger<AcpConnectionSettingsViewModel> logger)
+        : this(chat, chat, chat.TransportConfig, profiles, preferences, logger, chat)
+    {
+    }
+
+    public AcpConnectionSettingsViewModel(
+        ISettingsAcpConnectionState connectionState,
+        ISettingsAcpConnectionCommands connectionCommands,
+        ISettingsAcpTransportConfiguration transportConfig,
+        AcpProfilesViewModel profiles,
+        AppPreferencesViewModel preferences,
+        ILogger<AcpConnectionSettingsViewModel> logger)
+        : this(connectionState, connectionCommands, transportConfig, profiles, preferences, logger, null)
+    {
+    }
+
+    private AcpConnectionSettingsViewModel(
+        ISettingsAcpConnectionState connectionState,
+        ISettingsAcpConnectionCommands connectionCommands,
+        ISettingsAcpTransportConfiguration transportConfig,
+        AcpProfilesViewModel profiles,
+        AppPreferencesViewModel preferences,
+        ILogger<AcpConnectionSettingsViewModel> logger,
+        ISettingsChatConnection? chatFacade)
+    {
+        _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
+        _connectionCommands = connectionCommands ?? throw new ArgumentNullException(nameof(connectionCommands));
+        _transportConfig = transportConfig ?? throw new ArgumentNullException(nameof(transportConfig));
+        Chat = chatFacade ?? new CompositeSettingsChatConnection(_connectionState, _connectionCommands, _transportConfig);
         Profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        SelectedTransport = TransportOptions.FirstOrDefault(o => o.Type == Chat.TransportConfig.SelectedTransportType)
+        SelectedTransport = TransportOptions.FirstOrDefault(o => o.Type == _transportConfig.SelectedTransportType)
                             ?? TransportOptions.First();
 
-        Chat.TransportConfig.PropertyChanged += OnTransportConfigPropertyChanged;
-        Chat.PropertyChanged += OnChatPropertyChanged;
+        _transportConfig.PropertyChanged += OnTransportConfigPropertyChanged;
+        _connectionState.PropertyChanged += OnChatPropertyChanged;
         Profiles.Profiles.CollectionChanged += OnProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
     }
@@ -115,15 +154,16 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     private void OnChatPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Chat.AgentName))
+        if (e.PropertyName == nameof(ISettingsAcpConnectionState.AgentName))
         {
             OnPropertyChanged(nameof(AgentDisplayName));
         }
 
-        if (e.PropertyName == nameof(Chat.IsConnected) ||
-            e.PropertyName == nameof(Chat.IsConnecting) ||
-            e.PropertyName == nameof(Chat.IsInitializing) ||
-            e.PropertyName == nameof(Chat.ConnectionErrorMessage))
+        if (e.PropertyName == nameof(ISettingsAcpConnectionState.IsConnected) ||
+            e.PropertyName == nameof(ISettingsAcpConnectionState.IsConnecting) ||
+            e.PropertyName == nameof(ISettingsAcpConnectionState.IsInitializing) ||
+            e.PropertyName == nameof(ISettingsAcpConnectionState.ConnectionErrorMessage) ||
+            e.PropertyName == nameof(ISettingsAcpConnectionState.HasConnectionError))
         {
             OnPropertyChanged(nameof(ConnectionStatusText));
         }
@@ -131,19 +171,19 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     private void OnTransportConfigPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Chat.TransportConfig.SelectedTransportType))
+        if (e.PropertyName == nameof(ISettingsAcpTransportConfiguration.SelectedTransportType))
         {
-            var current = TransportOptions.FirstOrDefault(o => o.Type == Chat.TransportConfig.SelectedTransportType);
+            var current = TransportOptions.FirstOrDefault(o => o.Type == _transportConfig.SelectedTransportType);
             if (current != null && SelectedTransport?.Type != current.Type)
             {
                 SelectedTransport = current;
             }
         }
 
-        if (e.PropertyName == nameof(Chat.TransportConfig.SelectedTransportType) ||
-            e.PropertyName == nameof(Chat.TransportConfig.RemoteUrl) ||
-            e.PropertyName == nameof(Chat.TransportConfig.StdioCommand) ||
-            e.PropertyName == nameof(Chat.TransportConfig.StdioArgs))
+        if (e.PropertyName == nameof(ISettingsAcpTransportConfiguration.SelectedTransportType) ||
+            e.PropertyName == nameof(ISettingsAcpTransportConfiguration.RemoteUrl) ||
+            e.PropertyName == nameof(ISettingsAcpTransportConfiguration.StdioCommand) ||
+            e.PropertyName == nameof(ISettingsAcpTransportConfiguration.StdioArgs))
         {
             OnPropertyChanged(nameof(CurrentEndpointDisplay));
         }
@@ -158,7 +198,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
                 return;
             }
 
-            Chat.TransportConfig.SelectedTransportType = value.Type;
+            _transportConfig.SelectedTransportType = value.Type;
             OnPropertyChanged(nameof(SelectedTransportName));
         }
         catch (Exception ex)
@@ -176,8 +216,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
         try
         {
-            // Reuse the same connection path as the chat header selector so behavior stays consistent.
-            await Chat.ConnectToAcpProfileCommand.ExecuteAsync(profile);
+            await _connectionCommands.ConnectToAcpProfileAsync(profile);
         }
         catch (Exception ex)
         {
@@ -208,8 +247,8 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         }
 
         _disposed = true;
-        Chat.TransportConfig.PropertyChanged -= OnTransportConfigPropertyChanged;
-        Chat.PropertyChanged -= OnChatPropertyChanged;
+        _transportConfig.PropertyChanged -= OnTransportConfigPropertyChanged;
+        _connectionState.PropertyChanged -= OnChatPropertyChanged;
         Profiles.Profiles.CollectionChanged -= OnProfilesCollectionChanged;
         _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
     }
