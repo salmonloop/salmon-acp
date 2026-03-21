@@ -214,8 +214,7 @@ public static class DependencyInjection
         services.AddTransient<ConfigurationEditorViewModel>();
         services.AddSingleton<IConversationWorkspacePreferences>(sp =>
             new AppPreferencesConversationWorkspacePreferences(sp.GetRequiredService<AppPreferencesViewModel>()));
-        services.AddSingleton<IChatStateProjector>(sp =>
-            new ChatStateProjector(sp.GetRequiredService<IChatConnectionStore>()));
+        services.AddSingleton<IChatStateProjector, ChatStateProjector>();
         services.AddSingleton<IAcpSessionUpdateProjector, AcpSessionUpdateProjector>();
 
         // New Chat ViewModel (refactored)

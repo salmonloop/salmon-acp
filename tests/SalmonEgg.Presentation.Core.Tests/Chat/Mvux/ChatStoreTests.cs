@@ -17,7 +17,7 @@ public class ChatStoreTests
     {
         // Arrange
         var initialState = new ChatState(HydratedConversationId: "initial");
-        await using var state = State.Value(this, () => initialState);
+        await using var state = State.Value(new object(), () => initialState);
         var store = new ChatStore(state);
         var newConversationId = "updated-id";
         var action = new SelectConversationAction(newConversationId);
@@ -36,7 +36,7 @@ public class ChatStoreTests
     public async Task GivenStore_WhenMultipleDispatches_ThenStateTransitionsSequentially()
     {
         // Arrange
-        await using var state = State.Value(this, () => ChatState.Empty);
+        await using var state = State.Value(new object(), () => ChatState.Empty);
         var store = new ChatStore(state);
 
         // Act
@@ -55,7 +55,7 @@ public class ChatStoreTests
     public async Task GivenStore_WhenGenerationIncreases_ThenWorkspaceWriterProjectsSnapshots()
     {
         // Arrange
-        await using var state = State.Value(this, () => ChatState.Empty);
+        await using var state = State.Value(new object(), () => ChatState.Empty);
         var writer = new FakeWorkspaceWriter();
         var store = new ChatStore(state, writer);
 
@@ -73,7 +73,7 @@ public class ChatStoreTests
     public async Task GivenStore_WhenDispatchDoesNotChangeState_ThenWorkspaceWriterSkipsStaleGeneration()
     {
         // Arrange
-        await using var state = State.Value(this, () => ChatState.Empty);
+        await using var state = State.Value(new object(), () => ChatState.Empty);
         var writer = new FakeWorkspaceWriter();
         var store = new ChatStore(state, writer);
 

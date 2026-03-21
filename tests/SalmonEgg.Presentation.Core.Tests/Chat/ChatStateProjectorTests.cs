@@ -20,10 +20,11 @@ public class ChatStateProjectorTests
 
         var projection = projector.Apply(
             state,
+            ChatConnectionState.Empty,
             "session-1",
             new ConversationRemoteBindingState("session-1", "remote-1", "profile-a"));
 
-        Assert.Equal("profile-a", projection.SelectedProfileId);
+        Assert.Null(projection.SelectedProfileId);
         Assert.Equal("remote-1", projection.RemoteSessionId);
     }
 
@@ -39,6 +40,7 @@ public class ChatStateProjectorTests
 
         var projection = projector.Apply(
             state,
+            ChatConnectionState.Empty with { SelectedProfileId = "profile-b" },
             "session-1",
             new ConversationRemoteBindingState("session-1", "remote-1", "profile-a"));
 

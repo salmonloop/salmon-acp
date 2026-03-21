@@ -1,5 +1,6 @@
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using Uno.Extensions.Reactive;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Services;
@@ -7,40 +8,37 @@ namespace SalmonEgg.Presentation.Core.Tests.Services;
 public sealed class ChatStateProjectorTests
 {
     [Fact]
-    public void Apply_SelectedProfilePrefersStoreOverBinding()
+    public async Task Apply_SelectedProfilePrefersStoreOverBinding()
     {
-        var state = new ChatState(
-            HydratedConversationId: "conv-1",
-            SelectedAcpProfileId: "profile-store");
         var binding = new ConversationRemoteBindingState("conv-1", "remote-1", "profile-binding");
         var projector = new ChatStateProjector();
+        var connectionState = ChatConnectionState.Empty with { SelectedProfileId = "profile-store" };
 
-        var projection = projector.Apply(state, "conv-1", binding);
+        var projection = projector.Apply(ChatState.Empty, connectionState, "conv-1", binding);
 
         Assert.Equal("profile-store", projection.SelectedProfileId);
         Assert.Equal("remote-1", projection.RemoteSessionId);
     }
 
     [Fact]
-    public void Apply_FallsBackToBindingProfileWhenStoreProfileMissing()
+    public void Apply_DoesNotFallbackToBindingProfileWhenConnectionStoreProfileMissing()
     {
-        var state = new ChatState(HydratedConversationId: "conv-2");
         var binding = new ConversationRemoteBindingState("conv-2", "remote-2", "profile-binding");
         var projector = new ChatStateProjector();
 
-        var projection = projector.Apply(state, "conv-2", binding);
+        var projection = projector.Apply(ChatState.Empty, ChatConnectionState.Empty, "conv-2", binding);
 
-        Assert.Equal("profile-binding", projection.SelectedProfileId);
+        Assert.Null(projection.SelectedProfileId);
         Assert.Equal("remote-2", projection.RemoteSessionId);
     }
 
     [Fact]
     public void Apply_ReturnsNullRemoteSessionWhenBindingMissing()
     {
-        var state = new ChatState(HydratedConversationId: "conv-3", SelectedAcpProfileId: "profile-store");
         var projector = new ChatStateProjector();
+        var connectionState = ChatConnectionState.Empty with { SelectedProfileId = "profile-store" };
 
-        var projection = projector.Apply(state, "conv-3", binding: null);
+        var projection = projector.Apply(ChatState.Empty, connectionState, "conv-3", binding: null);
 
         Assert.Null(projection.RemoteSessionId);
         Assert.Equal("profile-store", projection.SelectedProfileId);

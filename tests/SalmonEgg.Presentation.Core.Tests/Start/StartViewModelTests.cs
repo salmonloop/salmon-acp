@@ -90,6 +90,8 @@ public sealed class StartViewModelTests
         ISessionManager sessionManager)
     {
         var state = State.Value(new object(), () => ChatState.Empty);
+        var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
+        var connectionStore = new ChatConnectionStore(connectionState);
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
         var transportFactory = new Mock<ITransportFactory>();
@@ -129,6 +131,7 @@ public sealed class StartViewModelTests
         SynchronizationContext.SetSynchronizationContext(syncContext);
         try
         {
+            var chatStateProjector = new ChatStateProjector();
             var viewModel = new ChatViewModel(
                 chatStore.Object,
                 chatServiceFactory,
@@ -139,10 +142,11 @@ public sealed class StartViewModelTests
                 miniWindow.Object,
                 workspace,
                 conversationCatalogPresenter,
+                chatStateProjector,
                 null,
-                null,
+                connectionStore,
                 vmLogger.Object);
-            return new ChatViewModelHarness(viewModel, state, conversationCatalogPresenter);
+            return new ChatViewModelHarness(viewModel, state, connectionState, conversationCatalogPresenter);
         }
         finally
         {
@@ -232,19 +236,26 @@ public sealed class StartViewModelTests
     private sealed class ChatViewModelHarness : IDisposable
     {
         private readonly IState<ChatState> _state;
+        private readonly IState<ChatConnectionState> _connectionState;
         public ConversationCatalogPresenter Presenter { get; }
         public ChatViewModel ViewModel { get; }
 
-        public ChatViewModelHarness(ChatViewModel viewModel, IState<ChatState> state, ConversationCatalogPresenter presenter)
+        public ChatViewModelHarness(
+            ChatViewModel viewModel,
+            IState<ChatState> state,
+            IState<ChatConnectionState> connectionState,
+            ConversationCatalogPresenter presenter)
         {
             ViewModel = viewModel;
             _state = state;
+            _connectionState = connectionState;
             Presenter = presenter;
         }
 
         public void Dispose()
         {
             ViewModel.Dispose();
+            _connectionState.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }

@@ -450,6 +450,9 @@ public sealed class NavigationCoordinatorTests
         var configService = new Mock<IConfigurationService>();
         var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object);
+        var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
+        var connectionStore = new ChatConnectionStore(connectionState);
+        var chatStateProjector = new ChatStateProjector();
 
         var conversationStore = new Mock<IConversationStore>();
         conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new ConversationDocument());
@@ -489,11 +492,12 @@ public sealed class NavigationCoordinatorTests
                 miniWindow.Object,
                 workspace,
                 conversationCatalogPresenter,
+                chatStateProjector,
                 null,
-                null,
+                connectionStore,
                 vmLogger.Object,
                 syncContext);
-            return new ChatViewModelHarness(viewModel, state, conversationCatalogPresenter);
+            return new ChatViewModelHarness(viewModel, state, connectionState, conversationCatalogPresenter);
         }
         finally
         {
@@ -504,12 +508,18 @@ public sealed class NavigationCoordinatorTests
     private sealed class ChatViewModelHarness : IDisposable
     {
         private readonly IState<ChatState> _state;
+        private readonly IState<ChatConnectionState> _connectionState;
         public ConversationCatalogPresenter Presenter { get; }
 
-        public ChatViewModelHarness(ChatViewModel viewModel, IState<ChatState> state, ConversationCatalogPresenter presenter)
+        public ChatViewModelHarness(
+            ChatViewModel viewModel,
+            IState<ChatState> state,
+            IState<ChatConnectionState> connectionState,
+            ConversationCatalogPresenter presenter)
         {
             ViewModel = viewModel;
             _state = state;
+            _connectionState = connectionState;
             Presenter = presenter;
         }
 
@@ -518,6 +528,7 @@ public sealed class NavigationCoordinatorTests
         public void Dispose()
         {
             ViewModel.Dispose();
+            _connectionState.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }

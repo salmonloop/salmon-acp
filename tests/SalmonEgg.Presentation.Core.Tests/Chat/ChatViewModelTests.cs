@@ -35,6 +35,8 @@ public class ChatViewModelTests
         Mock<IConfigurationService>? configurationService = null)
     {
         var state = State.Value(new object(), () => ChatState.Empty);
+        var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
+        var connectionStore = new ChatConnectionStore(connectionState);
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
         chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
@@ -94,6 +96,7 @@ public class ChatViewModelTests
         try
         {
             SynchronizationContext.SetSynchronizationContext(syncContext ?? new SynchronizationContext());
+            var chatStateProjector = new ChatStateProjector();
 
             var viewModel = new ChatViewModel(
                 chatStore.Object,
@@ -105,14 +108,17 @@ public class ChatViewModelTests
                 miniWindow.Object,
                 workspace,
                 conversationCatalogPresenter,
+                chatStateProjector,
                 null,
-                null,
+                connectionStore,
                 vmLogger.Object,
                 syncContext,
                 acpConnectionCommands);
             return new ViewModelFixture(
                 viewModel,
                 state,
+                connectionState,
+                connectionStore,
                 chatStore.Object,
                 workspace,
                 conversationStore,
@@ -243,7 +249,7 @@ public class ChatViewModelTests
         await using var fixture = CreateViewModel(syncContext);
         syncContext.RunAll();
 
-        await fixture.DispatchAsync(new SetConnectionLifecycleAction(false, true, false, null));
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
         await Task.Delay(50);
         syncContext.RunAll();
 
@@ -394,6 +400,20 @@ public class ChatViewModelTests
         firstGate.TrySetResult(null);
         await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(2, connectCalls);
+    }
+
+    [Fact]
+    public async Task SelectedAcpProfile_Change_UpdatesConnectionStoreSelection()
+    {
+        await using var fixture = CreateViewModel();
+        var profile = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+        fixture.Profiles.Profiles.Add(profile);
+
+        fixture.ViewModel.SelectedAcpProfile = profile;
+        await Task.Delay(50);
+
+        var connectionState = await fixture.GetConnectionStateAsync();
+        Assert.Equal("profile-a", connectionState.SelectedProfileId);
     }
 
     [Fact]
@@ -554,6 +574,9 @@ public class ChatViewModelTests
             syncContext);
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
+        await using var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
+        var connectionStore = new ChatConnectionStore(connectionState);
+        var chatStateProjector = new ChatStateProjector();
 
         using var viewModel = new ChatViewModel(
             chatStore.Object,
@@ -565,8 +588,9 @@ public class ChatViewModelTests
             miniWindow.Object,
             workspace,
             conversationCatalogPresenter,
+            chatStateProjector,
             null,
-            null,
+            connectionStore,
             vmLogger.Object,
             syncContext);
 
@@ -639,6 +663,9 @@ public class ChatViewModelTests
             syncContext);
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
+        await using var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
+        var connectionStore = new ChatConnectionStore(connectionState);
+        var chatStateProjector = new ChatStateProjector();
 
         using var viewModel = new ChatViewModel(
             chatStore.Object,
@@ -650,8 +677,9 @@ public class ChatViewModelTests
             miniWindow.Object,
             workspace,
             conversationCatalogPresenter,
+            chatStateProjector,
             null,
-            null,
+            connectionStore,
             vmLogger.Object,
             syncContext);
 
@@ -752,6 +780,9 @@ public class ChatViewModelTests
         var miniWindow = new Mock<IMiniWindowCoordinator>();
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
+        await using var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
+        var connectionStore = new ChatConnectionStore(connectionState);
+        var chatStateProjector = new ChatStateProjector();
 
         var originalContext = SynchronizationContext.Current;
         try
@@ -767,8 +798,9 @@ public class ChatViewModelTests
                 miniWindow.Object,
                 workspace,
                 conversationCatalogPresenter,
+                chatStateProjector,
                 null,
-                null,
+                connectionStore,
                 vmLogger.Object,
                 syncContext);
 
@@ -881,6 +913,8 @@ public class ChatViewModelTests
     private sealed class ViewModelFixture : IDisposable, IAsyncDisposable
     {
         private readonly IState<ChatState> _state;
+        private readonly IState<ChatConnectionState> _connectionState;
+        private readonly IChatConnectionStore _connectionStore;
         private readonly IChatStore _store;
         private readonly ChatConversationWorkspace _workspace;
         private readonly Mock<IChatStore> _chatStore;
@@ -894,6 +928,8 @@ public class ChatViewModelTests
         public ViewModelFixture(
             ChatViewModel viewModel,
             IState<ChatState> state,
+            IState<ChatConnectionState> connectionState,
+            IChatConnectionStore connectionStore,
             IChatStore store,
             ChatConversationWorkspace workspace,
             Mock<IConversationStore> conversationStore,
@@ -903,6 +939,8 @@ public class ChatViewModelTests
         {
             ViewModel = viewModel;
             _state = state;
+            _connectionState = connectionState;
+            _connectionStore = connectionStore;
             _store = store;
             _workspace = workspace;
             ConversationStore = conversationStore;
@@ -913,7 +951,11 @@ public class ChatViewModelTests
 
         public async Task<ChatState> GetStateAsync() => await _state ?? ChatState.Empty;
 
+        public async Task<ChatConnectionState> GetConnectionStateAsync() => await _connectionState ?? ChatConnectionState.Empty;
+
         public ValueTask DispatchAsync(ChatAction action) => _store.Dispatch(action);
+
+        public ValueTask DispatchConnectionAsync(ChatConnectionAction action) => _connectionStore.Dispatch(action);
 
         public ValueTask UpdateStateAsync(Func<ChatState, ChatState> update)
             => _state.Update(update, CancellationToken.None);
@@ -922,6 +964,7 @@ public class ChatViewModelTests
         {
             ViewModel.Dispose();
             _workspace.Dispose();
+            await _connectionState.DisposeAsync();
             await _state.DisposeAsync();
         }
 

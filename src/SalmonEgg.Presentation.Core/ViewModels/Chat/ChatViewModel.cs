@@ -51,6 +51,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private readonly ConversationCatalogPresenter _conversationCatalogPresenter;
     private readonly IChatStateProjector _chatStateProjector;
     private readonly IAcpSessionUpdateProjector _acpSessionUpdateProjector;
+    private readonly IChatConnectionStore _chatConnectionStore;
     private IChatService? _chatService;
     private readonly SynchronizationContext _syncContext;
     private bool _disposed;
@@ -65,6 +66,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private Task? _selectedProfileConnectTask;
     private ServerConfiguration? _pendingSelectedProfileConnect;
     private IDisposable? _storeStateSubscription;
+    private IDisposable? _connectionStateSubscription;
     private string? _currentRemoteSessionId;
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
     private bool _suppressMiniWindowSessionSync;
@@ -282,6 +284,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         ConversationCatalogPresenter conversationCatalogPresenter,
         IChatStateProjector? chatStateProjector,
         IAcpSessionUpdateProjector? acpSessionUpdateProjector,
+        IChatConnectionStore chatConnectionStore,
         ILogger<ChatViewModel> logger,
         SynchronizationContext? syncContext = null,
         IAcpConnectionCommands? acpConnectionCommands = null,
@@ -308,8 +311,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 preferences,
                 NullLogger<ConversationActivationCoordinator>.Instance);
         _conversationCatalogPresenter = conversationCatalogPresenter ?? throw new ArgumentNullException(nameof(conversationCatalogPresenter));
-        _chatStateProjector = chatStateProjector ?? new ChatStateProjector();
+        _chatStateProjector = chatStateProjector ?? throw new ArgumentNullException(nameof(chatStateProjector));
         _acpSessionUpdateProjector = acpSessionUpdateProjector ?? new AcpSessionUpdateProjector();
+        _chatConnectionStore = chatConnectionStore ?? throw new ArgumentNullException(nameof(chatConnectionStore));
         _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
         _acpConnectionCommands = acpConnectionCommands
             ?? new AcpChatCoordinator(
@@ -356,42 +360,28 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         _chatStore.State.ForEach(async (state, ct) =>
         {
-            if (state is null || token.IsCancellationRequested || ct.IsCancellationRequested || _disposed)
+            await RefreshProjectionAsync(state, token, ct).ConfigureAwait(false);
+        }, out _storeStateSubscription);
+
+        _chatConnectionStore.State.ForEach(async (_, ct) =>
+        {
+            if (token.IsCancellationRequested || ct.IsCancellationRequested || _disposed)
             {
                 return;
             }
 
+            ChatState? state = null;
             try
             {
-                var projectionSequence = Interlocked.Increment(ref _storeProjectionSequence);
-
-                await PostToUiAsync(() =>
-                {
-                if (token.IsCancellationRequested || _disposed)
-                {
-                    return;
-                }
-
-                    _connectionGeneration = state.Generation;
-                    if (projectionSequence != Volatile.Read(ref _storeProjectionSequence))
-                    {
-                        return;
-                    }
-
-                    var projection = CreateProjection(state);
-                    SyncMessageHistory(projection.Transcript, projection.IsThinking);
-                    ApplyStoreProjection(projection);
-                }).ConfigureAwait(false);
+                state = await _chatStore.State;
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
             {
-                // Graceful cancellation on disposal
+                return;
             }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Chat store projection failed");
-            }
-        }, out _storeStateSubscription);
+
+            await RefreshProjectionAsync(state, token, ct).ConfigureAwait(false);
+        }, out _connectionStateSubscription);
     }
 
     private void StopStoreProjection()
@@ -406,7 +396,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         {
         }
 
+        try
+        {
+            _connectionStateSubscription?.Dispose();
+        }
+        catch
+        {
+        }
+
         _storeStateSubscription = null;
+        _connectionStateSubscription = null;
 
         try
         {
@@ -417,6 +416,45 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         _storeStateCts = null;
+    }
+
+    private async Task RefreshProjectionAsync(ChatState? state, CancellationToken token, CancellationToken ct)
+    {
+        if (state is null || token.IsCancellationRequested || ct.IsCancellationRequested || _disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            var projectionSequence = Interlocked.Increment(ref _storeProjectionSequence);
+            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+
+            await PostToUiAsync(() =>
+            {
+                if (token.IsCancellationRequested || _disposed)
+                {
+                    return;
+                }
+
+                if (projectionSequence != Volatile.Read(ref _storeProjectionSequence))
+                {
+                    return;
+                }
+
+                var projection = CreateProjection(state, connectionState);
+                SyncMessageHistory(projection.Transcript, projection.IsThinking);
+                ApplyStoreProjection(projection);
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
+        {
+            // Graceful cancellation on disposal
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chat store projection failed");
+        }
     }
 
     [RelayCommand]
@@ -514,6 +552,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             IsConnecting = projection.IsConnecting;
             IsConnected = projection.IsConnected;
             IsInitializing = projection.IsInitializing;
+            Interlocked.Exchange(ref _connectionGeneration, projection.ConnectionGeneration);
             CurrentConnectionStatus = projection.ConnectionStatus;
             ConnectionErrorMessage = projection.ConnectionError;
             IsAuthenticationRequired = projection.IsAuthenticationRequired;
@@ -585,6 +624,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         if (!_suppressStoreProfileProjection)
         {
             _ = _chatStore.Dispatch(new SelectProfileAction(value?.Id));
+            _ = _chatConnectionStore.Dispatch(new SetSelectedProfileAction(value?.Id));
         }
 
         if (_suppressAcpProfileConnect || value == null)
@@ -697,7 +737,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private async Task ApplyCurrentStoreProjectionAsync()
     {
         var state = await _chatStore.State ?? ChatState.Empty;
-        var projection = CreateProjection(state);
+        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var projection = CreateProjection(state, connectionState);
 
         await PostToUiAsync(() =>
         {
@@ -1017,9 +1058,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private ConversationWorkspaceSnapshot? TryGetConversationSnapshot(string? conversationId)
         => _conversationWorkspace.GetConversationSnapshot(conversationId);
 
-    private ChatUiProjection CreateProjection(ChatState state)
+    private ChatUiProjection CreateProjection(ChatState state, ChatConnectionState connectionState)
         => _chatStateProjector.Apply(
             state,
+            connectionState,
             state.HydratedConversationId,
             ToBindingState(state.Binding));
 
@@ -2547,7 +2589,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public string? CurrentRemoteSessionId => _currentRemoteSessionId;
 
-    public string? SelectedProfileId => _preferences.LastSelectedServerId;
+    public string? SelectedProfileId => _selectedProfileIdFromStore ?? SelectedAcpProfile?.Id;
 
     public void SelectProfile(ServerConfiguration profile)
     {
