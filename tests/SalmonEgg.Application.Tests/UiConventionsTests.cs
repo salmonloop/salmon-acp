@@ -244,13 +244,18 @@ public class UiConventionsTests
     }
 
     [Fact]
-    public void BottomPanelButton_ShouldUseExpectedGlyph()
+    public void AuxiliaryPanelButtons_ShouldUseWindowsGlyphsWithCrossPlatformFallbacks()
     {
         var repoRoot = FindRepoRoot();
         var mainPageXaml = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml");
         var xamlText = File.ReadAllText(mainPageXaml);
 
         Assert.Contains("x:Name=\"BottomPanelButton\"", xamlText);
+        Assert.Contains("x:Bind PreferWindowsAuxiliaryGlyphs", xamlText);
         Assert.Contains("Glyph=\"&#xE75B;\"", xamlText);
+        Assert.Contains("x:Name=\"DiffPanelButton\"", xamlText);
+        Assert.Contains("Glyph=\"&#xE81E;\"", xamlText);
+        Assert.Contains("x:Name=\"TodoPanelButton\"", xamlText);
+        Assert.Contains("Glyph=\"&#xEA37;\"", xamlText);
     }
 }

@@ -85,7 +85,7 @@ public sealed partial class MainPage : Page
     private readonly MainNavigationContentSyncAdapter _mainNavigationContentSyncAdapter;
     private readonly MainNavigationViewAdapter _mainNavigationViewAdapter;
     private readonly SalmonEgg.Presentation.Logic.SearchInteractionLogic _searchLogic = new();
-    public bool IsSipRedockSymbolAvailable { get; }
+    public bool PreferWindowsAuxiliaryGlyphs { get; }
 
     public MainPage()
     {
@@ -100,7 +100,7 @@ public sealed partial class MainPage : Page
         _metricsProvider = App.ServiceProvider.GetRequiredService<WindowMetricsProvider>();
         _metricsSink = App.ServiceProvider.GetRequiredService<IShellLayoutMetricsSink>();
         _navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();
-        IsSipRedockSymbolAvailable = OperatingSystem.IsWindows();
+        PreferWindowsAuxiliaryGlyphs = OperatingSystem.IsWindows();
 
         this.InitializeComponent();
         _mainNavigationContentSyncAdapter = new MainNavigationContentSyncAdapter(_navigationCoordinator);
