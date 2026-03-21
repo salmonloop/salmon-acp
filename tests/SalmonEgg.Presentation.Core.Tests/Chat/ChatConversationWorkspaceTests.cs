@@ -88,42 +88,6 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
-    public async Task RestoreAsync_DoesNotOwnSemanticCurrentSessionSelection()
-    {
-        var syncContext = new ImmediateSynchronizationContext();
-        var store = new CapturingConversationStore
-        {
-            LoadResult = new ConversationDocument
-            {
-                LastActiveConversationId = "session-1",
-                Conversations =
-                {
-                    new ConversationRecord
-                    {
-                        ConversationId = "session-1",
-                        DisplayName = "Session One",
-                        CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
-                        LastUpdatedAt = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
-                        Cwd = @"C:\repo\one",
-                        Messages =
-                        {
-                            CreateTextMessage("m-1", "hello")
-                        }
-                    }
-                }
-            }
-        };
-
-        var sessionManager = new FakeSessionManager();
-        var preferences = CreatePreferences(syncContext);
-        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
-
-        await workspace.RestoreAsync();
-
-        Assert.Null(workspace.CurrentConversationId);
-    }
-
-    [Fact]
     public async Task TrySwitchToSessionAsync_ProfileMismatch_KeepsRemoteBindingAndLocalTranscript()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -174,34 +138,6 @@ public sealed class ChatConversationWorkspaceTests
         Assert.NotNull(remoteBinding);
         Assert.Equal("remote-1", remoteBinding!.RemoteSessionId);
         Assert.Equal("profile-a", remoteBinding.BoundProfileId);
-    }
-
-    [Fact]
-    public async Task TrySwitchToSessionAsync_DoesNotOwnSemanticCurrentSessionSelection()
-    {
-        var syncContext = new ImmediateSynchronizationContext();
-        var store = new CapturingConversationStore();
-        var sessionManager = new FakeSessionManager();
-        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
-
-        var preferences = CreatePreferences(syncContext);
-        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
-        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
-            ConversationId: "session-1",
-            Transcript:
-            [
-                CreateTextMessage("m-1", "hello")
-            ],
-            Plan: [],
-            ShowPlanPanel: false,
-            PlanTitle: null,
-            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
-            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
-
-        var switched = await workspace.TrySwitchToSessionAsync("session-1");
-
-        Assert.True(switched);
-        Assert.Null(workspace.CurrentConversationId);
     }
 
     [Fact]

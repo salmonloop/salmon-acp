@@ -52,11 +52,6 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         private set => SetProperty(ref _conversationListVersion, value);
     }
 
-    public string? CurrentConversationId
-    {
-        get => null;
-    }
-
     public string? LastActiveConversationId
     {
         get => _lastActiveConversationId;
