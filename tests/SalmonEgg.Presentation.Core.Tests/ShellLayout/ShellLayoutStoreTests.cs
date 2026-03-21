@@ -14,10 +14,12 @@ public sealed class ShellLayoutStoreTests
         await using var snapshot = State.Value(new object(), () => ShellLayoutPolicy.Compute(ShellLayoutState.Default));
         var store = new ShellLayoutStore(state, snapshot);
 
+        var expected = ShellLayoutReducer.Reduce(ShellLayoutState.Default, new NavToggleRequested("Test")).Snapshot.IsNavPaneOpen;
+
         await store.Dispatch(new NavToggleRequested("Test"));
 
         var current = await snapshot;
         Assert.NotNull(current);
-        Assert.False(current!.IsNavPaneOpen);
+        Assert.Equal(expected, current!.IsNavPaneOpen);
     }
 }

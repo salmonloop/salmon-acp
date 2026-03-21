@@ -76,14 +76,22 @@ public class RightPanelServiceTests
 
         public IFeed<ShellLayoutSnapshot> Snapshot => _snapshot;
 
-        public ValueTask Dispatch(ShellLayoutAction action)
+        public async ValueTask Dispatch(ShellLayoutAction action)
         {
-            return _state.Update(s =>
+            ShellLayoutReduced? reduced = null;
+
+            await _state.Update(s =>
             {
-                var reduced = ShellLayoutReducer.Reduce(s!, action);
-                _snapshot.Update(_ => reduced.Snapshot, default);
+                reduced = ShellLayoutReducer.Reduce(s!, action);
                 return reduced.State;
             }, default);
+
+            if (reduced is null)
+            {
+                return;
+            }
+
+            await _snapshot.Update(_ => reduced.Snapshot, default);
         }
 
         public void Dispose()

@@ -1,3 +1,4 @@
+using System;
 using FsCheck;
 using FsCheck.Xunit;
 using Xunit;
@@ -85,7 +86,13 @@ namespace SalmonEgg.Infrastructure.Tests.Services.Security
         public bool SafePaths_Accepted(string pathSegment)
         {
             // 生成安全路径（过滤掉危险字符）
-            var safeSegment = pathSegment.Replace("..", "").Replace("~", "").Replace("\0", "");
+            var safeSegment = pathSegment
+                .Replace("..", "")
+                .Replace("~", "")
+                .Replace("\0", "")
+                .Replace("$HOME", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("$USER", "", StringComparison.OrdinalIgnoreCase);
+
             var safePath = System.IO.Path.Combine("safe", safeSegment);
 
             var errors = _validator.GetValidationErrors(safePath);
