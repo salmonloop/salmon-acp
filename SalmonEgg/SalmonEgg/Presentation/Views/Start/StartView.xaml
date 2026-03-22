@@ -7,87 +7,128 @@
     xmlns:controls="using:SalmonEgg.Controls"
     xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:local_vm="using:SalmonEgg.Presentation.ViewModels.Start"
     mc:Ignorable="d"
     Background="Transparent">
 
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 
-        <Style x:Key="QuickEntryCardButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"/>
-            <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+        <!-- 建议卡片基础样式：Premium Fluent 2 卡片 -->
+        <Style x:Key="SuggestionCardButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="16"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="MinHeight" Value="92"/>
+            <Setter Property="Padding" Value="20,16"/>
+            <Setter Property="Width" Value="220"/>
+            <Setter Property="Height" Value="120"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Top"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="RootBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="RootBorder.Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="RootBorder.Background" Value="{ThemeResource ControlFillColorTertiaryBrush}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              Padding="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Page.Resources>
 
     <Grid RowDefinitions="*,Auto,Auto"
           Transitions="{x:Bind Motion.PageTransitions, Mode=OneWay}">
+        
+        <!-- 英雄区：标题与标语 -->
         <Grid Grid.Row="0"
               VerticalAlignment="Center"
-              Margin="20,20,20,0">
-            <TextBlock Text="Salmon Egg"
-                       x:Uid="Start_Title"
-                       FontSize="56"
-                       FontWeight="SemiBold"
-                       HorizontalAlignment="Center"
-                       TextAlignment="Center"
-                       AutomationProperties.AutomationId="StartView.Title"
-                       AutomationProperties.Name="Salmon Egg 欢迎标题"/>
+              Margin="20,0,20,40">
+            <StackPanel Spacing="16" HorizontalAlignment="Center">
+                <TextBlock Text="Salmon Egg"
+                           x:Uid="Start_Title"
+                           FontSize="64"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           AutomationProperties.AutomationId="StartView.Title">
+                    <TextBlock.Foreground>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="{ThemeResource SystemAccentColor}" Offset="0" />
+                            <GradientStop Color="{ThemeResource SystemAccentColorLight2}" Offset="1" />
+                        </LinearGradientBrush>
+                    </TextBlock.Foreground>
+                </TextBlock>
+                <TextBlock Text="你的 AI 好鲑鲑"
+                           FontSize="18"
+                           Opacity="0.6"
+                           FontWeight="Medium"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+            </StackPanel>
         </Grid>
 
-        <!-- 智能推荐快速入口（占位符） -->
-        <Grid Grid.Row="1"
-              Margin="20,0,20,12"
-              MaxWidth="{x:Bind models:UiLayout.ContentMaxWidth}"
-              HorizontalAlignment="Center"
-              ColumnSpacing="12"
-              ColumnDefinitions="*,*,*">
-            <Button Grid.Column="0"
-                    x:Uid="Start_Quick1"
-                    Style="{StaticResource QuickEntryCardButtonStyle}"
-                    IsEnabled="False"
-                    AutomationProperties.Name="智能推荐入口 1">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Home" />
-                    <StackPanel>
-                        <TextBlock x:Uid="Start_Quick1Title" Text="智能推荐 1" FontWeight="SemiBold"/>
-                        <TextBlock x:Uid="Start_Quick1Subtitle" Text="占位符" Opacity="0.7" FontSize="12"/>
-                    </StackPanel>
-                </StackPanel>
-            </Button>
-
-            <Button Grid.Column="1"
-                    x:Uid="Start_Quick2"
-                    Style="{StaticResource QuickEntryCardButtonStyle}"
-                    IsEnabled="False"
-                    AutomationProperties.Name="智能推荐入口 2">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Bullets" />
-                    <StackPanel>
-                        <TextBlock x:Uid="Start_Quick2Title" Text="智能推荐 2" FontWeight="SemiBold"/>
-                        <TextBlock x:Uid="Start_Quick2Subtitle" Text="占位符" Opacity="0.7" FontSize="12"/>
-                    </StackPanel>
-                </StackPanel>
-            </Button>
-
-            <Button Grid.Column="2"
-                    x:Uid="Start_Quick3"
-                    Style="{StaticResource QuickEntryCardButtonStyle}"
-                    IsEnabled="False"
-                    AutomationProperties.Name="智能推荐入口 3">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Document" />
-                    <StackPanel>
-                        <TextBlock x:Uid="Start_Quick3Title" Text="智能推荐 3" FontWeight="SemiBold"/>
-                        <TextBlock x:Uid="Start_Quick3Subtitle" Text="占位符" Opacity="0.7" FontSize="12"/>
-                    </StackPanel>
-                </StackPanel>
-            </Button>
-        </Grid>
+        <!-- 智能推荐快速入口 (MVVM 驱动) -->
+        <ItemsControl Grid.Row="1"
+                      Margin="20,0,20,48"
+                      HorizontalAlignment="Center"
+                      ItemsSource="{x:Bind ViewModel.Suggestions, Mode=OneWay}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local_vm:QuickSuggestionViewModel">
+                    <Button Style="{StaticResource SuggestionCardButtonStyle}"
+                            Command="{x:Bind ActionCommand}"
+                            CommandParameter="{x:Bind}">
+                        <StackPanel Spacing="12">
+                            <FontIcon Glyph="{x:Bind Icon, Mode=OneWay}" 
+                                      FontSize="24" 
+                                      Foreground="{ThemeResource AccentBrush}"
+                                      HorizontalAlignment="Left" />
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Bind Title, Mode=OneWay}" 
+                                           FontWeight="SemiBold" 
+                                           FontSize="15"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" 
+                                           Opacity="0.7" 
+                                           FontSize="12" 
+                                           TextWrapping="Wrap"
+                                           MaxLines="2"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
 
         <!-- 底部输入区（复用对话页组件） -->
         <controls:ChatInputArea Grid.Row="2"
