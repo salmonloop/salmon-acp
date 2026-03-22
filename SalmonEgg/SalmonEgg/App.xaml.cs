@@ -170,13 +170,15 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
 #if WINDOWS
         // Native WinUI 3 backdrop. Mica is Windows 11+; fall back to Desktop Acrylic on Windows 10.
-        // Avoid hard-failing at startup on older Windows builds.
         try
         {
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
             {
-                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
-                BootLog("OnLaunched: MicaBackdrop set");
+                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop
+                {
+                    Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt
+                };
+                BootLog("OnLaunched: MicaAltBackdrop set");
             }
             else if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
             {
@@ -188,10 +190,6 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         {
             BootLog("OnLaunched: backdrop set failed");
         }
-#endif
-
-#if DEBUG
-        // MainWindow.UseStudio(); // Requires Uno Studio configuration
 #endif
 
         if (MainWindow.Content is not Frame rootFrame)
