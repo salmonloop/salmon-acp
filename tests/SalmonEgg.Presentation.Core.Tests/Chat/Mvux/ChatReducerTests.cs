@@ -121,6 +121,10 @@ public class ChatReducerTests
             HydratedConversationId: "conv-1",
             Transcript: ImmutableList.Create(new ConversationMessageSnapshot { Id = "m-1", TextContent = "hello", ContentType = "text" }),
             PlanEntries: ImmutableList.Create(new ConversationPlanEntrySnapshot { Content = "step-1" }),
+            AvailableModes: ImmutableList.Create(new ConversationModeOptionSnapshot { ModeId = "agent", ModeName = "Agent" }),
+            SelectedModeId: "agent",
+            ConfigOptions: ImmutableList.Create(new ConversationConfigOptionSnapshot { Id = "mode", Name = "Mode", SelectedValue = "agent" }),
+            ShowConfigOptionsPanel: true,
             ShowPlanPanel: true,
             PlanTitle: "plan");
 
@@ -130,8 +134,81 @@ public class ChatReducerTests
         Assert.Equal("conv-2", newState.HydratedConversationId);
         Assert.Null(newState.Transcript);
         Assert.Null(newState.PlanEntries);
+        Assert.Null(newState.AvailableModes);
+        Assert.Null(newState.SelectedModeId);
+        Assert.Null(newState.ConfigOptions);
+        Assert.False(newState.ShowConfigOptionsPanel);
         Assert.False(newState.ShowPlanPanel);
         Assert.Null(newState.PlanTitle);
+    }
+
+    [Fact]
+    public void SetConversationSessionState_ProjectsOnlyForHydratedConversation()
+    {
+        var initialState = ChatState.Empty with
+        {
+            HydratedConversationId = "conv-1",
+            Generation = 11
+        };
+
+        var action = new SetConversationSessionStateAction(
+            "conv-1",
+            ImmutableList.Create(new ConversationModeOptionSnapshot { ModeId = "agent", ModeName = "Agent" }),
+            "agent",
+            ImmutableList.Create(new ConversationConfigOptionSnapshot { Id = "mode", Name = "Mode", SelectedValue = "agent" }),
+            true);
+
+        var projected = ChatReducer.Reduce(initialState, action);
+        Assert.Equal(12, projected.Generation);
+        Assert.Single(projected.AvailableModes!);
+        Assert.Equal("agent", projected.SelectedModeId);
+        Assert.Single(projected.ConfigOptions!);
+        Assert.True(projected.ShowConfigOptionsPanel);
+
+        var stale = ChatReducer.Reduce(initialState, action with { ConversationId = "conv-2" });
+        Assert.Equal(initialState.Generation, stale.Generation);
+        Assert.Null(stale.AvailableModes);
+        Assert.Null(stale.ConfigOptions);
+    }
+
+    [Fact]
+    public void MergeConversationSessionState_PreservesExistingValuesForPartialDelta()
+    {
+        var initialState = ChatState.Empty with
+        {
+            HydratedConversationId = "conv-1",
+            Generation = 21,
+            AvailableModes = ImmutableList.Create(
+                new ConversationModeOptionSnapshot { ModeId = "agent", ModeName = "Agent" },
+                new ConversationModeOptionSnapshot { ModeId = "plan", ModeName = "Plan" }),
+            SelectedModeId = "agent",
+            ConfigOptions = ImmutableList.Create(
+                new ConversationConfigOptionSnapshot { Id = "mode", Name = "Mode", SelectedValue = "agent" }),
+            ShowConfigOptionsPanel = true
+        };
+
+        var projected = ChatReducer.Reduce(initialState, new MergeConversationSessionStateAction(
+            "conv-1",
+            SelectedModeId: "plan",
+            HasSelectedModeId: true));
+
+        Assert.Equal(22, projected.Generation);
+        Assert.NotNull(projected.AvailableModes);
+        Assert.Equal(2, projected.AvailableModes!.Count);
+        Assert.Equal("plan", projected.SelectedModeId);
+        Assert.NotNull(projected.ConfigOptions);
+        Assert.Single(projected.ConfigOptions!);
+        Assert.True(projected.ShowConfigOptionsPanel);
+
+        var cleared = ChatReducer.Reduce(projected, new MergeConversationSessionStateAction(
+            "conv-1",
+            AvailableModes: ImmutableList<ConversationModeOptionSnapshot>.Empty,
+            SelectedModeId: null,
+            HasSelectedModeId: true));
+
+        Assert.Empty(cleared.AvailableModes!);
+        Assert.Null(cleared.SelectedModeId);
+        Assert.Single(cleared.ConfigOptions!);
     }
 
     [Fact]

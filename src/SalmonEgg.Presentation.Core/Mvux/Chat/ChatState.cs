@@ -14,6 +14,10 @@ public record ChatState(
     string? AgentVersion = null,
     IImmutableList<ConversationMessageSnapshot>? Transcript = null,
     IImmutableList<ConversationPlanEntrySnapshot>? PlanEntries = null,
+    IImmutableList<ConversationModeOptionSnapshot>? AvailableModes = null,
+    string? SelectedModeId = null,
+    IImmutableList<ConversationConfigOptionSnapshot>? ConfigOptions = null,
+    bool ShowConfigOptionsPanel = false,
     bool ShowPlanPanel = false,
     string? PlanTitle = null,
     string DraftText = "")

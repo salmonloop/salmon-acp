@@ -35,7 +35,50 @@ namespace SalmonEgg.Domain.Models.Conversation
 
         public string? BoundProfileId { get; set; }
 
+        public List<ConversationModeOptionSnapshot> AvailableModes { get; set; } = new();
+
+        public string? SelectedModeId { get; set; }
+
+        public List<ConversationConfigOptionSnapshot> ConfigOptions { get; set; } = new();
+
+        public bool ShowConfigOptionsPanel { get; set; }
+
         public List<ConversationMessageSnapshot> Messages { get; set; } = new();
+    }
+
+    public sealed class ConversationModeOptionSnapshot
+    {
+        public string ModeId { get; set; } = string.Empty;
+
+        public string ModeName { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public sealed class ConversationConfigOptionSnapshot
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        public string? Category { get; set; }
+
+        public string? ValueType { get; set; }
+
+        public string? SelectedValue { get; set; }
+
+        public List<ConversationConfigOptionChoiceSnapshot> Options { get; set; } = new();
+    }
+
+    public sealed class ConversationConfigOptionChoiceSnapshot
+    {
+        public string Value { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
     }
 
     public sealed class ConversationMessageSnapshot

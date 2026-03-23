@@ -240,6 +240,47 @@ public class ChatViewModelTests
                         LastUpdatedAt = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
                         RemoteSessionId = "remote-1",
                         BoundProfileId = "profile-a",
+                        SelectedModeId = "agent",
+                        ShowConfigOptionsPanel = true,
+                        AvailableModes =
+                        {
+                            new ConversationModeOptionSnapshot
+                            {
+                                ModeId = "agent",
+                                ModeName = "Agent",
+                                Description = "Default agent mode"
+                            },
+                            new ConversationModeOptionSnapshot
+                            {
+                                ModeId = "plan",
+                                ModeName = "Plan",
+                                Description = "Planning mode"
+                            }
+                        },
+                        ConfigOptions =
+                        {
+                            new ConversationConfigOptionSnapshot
+                            {
+                                Id = "mode",
+                                Name = "Mode",
+                                Category = "mode",
+                                ValueType = "select",
+                                SelectedValue = "agent",
+                                Options =
+                                {
+                                    new ConversationConfigOptionChoiceSnapshot
+                                    {
+                                        Value = "agent",
+                                        Name = "Agent"
+                                    },
+                                    new ConversationConfigOptionChoiceSnapshot
+                                    {
+                                        Value = "plan",
+                                        Name = "Plan"
+                                    }
+                                }
+                            }
+                        },
                         Messages =
                         {
                             new ConversationMessageSnapshot
@@ -262,8 +303,16 @@ public class ChatViewModelTests
         var restoreTask = fixture.ViewModel.RestoreAsync();
         await syncContext.RunUntilCompletedAsync(restoreTask);
         syncContext.RunAll();
-        await Task.Delay(50);
-        syncContext.RunAll();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                string.Equals(fixture.ViewModel.CurrentSessionId, "session-1", StringComparison.Ordinal)
+                && fixture.ViewModel.MessageHistory.Count == 1
+                && fixture.ViewModel.AvailableModes.Count == 2
+                && string.Equals(fixture.ViewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal)
+                && fixture.ViewModel.ConfigOptions.Count == 1);
+        });
 
         conversationStore.Verify(s => s.LoadAsync(It.IsAny<CancellationToken>()), Times.Once);
         Assert.Equal(new[] { "session-1" }, fixture.Workspace.GetKnownConversationIds());
@@ -284,10 +333,19 @@ public class ChatViewModelTests
         Assert.NotNull(state.Transcript);
         Assert.Single(state.Transcript!);
         Assert.Equal("hello from restore", state.Transcript[0].TextContent);
+        Assert.NotNull(state.AvailableModes);
+        Assert.Equal(2, state.AvailableModes!.Count);
+        Assert.Equal("agent", state.SelectedModeId);
+        Assert.NotNull(state.ConfigOptions);
+        Assert.Single(state.ConfigOptions!);
+        Assert.True(state.ShowConfigOptionsPanel);
         Assert.Equal("session-1", fixture.ViewModel.CurrentSessionId);
         Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
         Assert.Single(fixture.ViewModel.MessageHistory);
         Assert.Equal("hello from restore", fixture.ViewModel.MessageHistory[0].TextContent);
+        Assert.Equal(2, fixture.ViewModel.AvailableModes.Count);
+        Assert.Equal("agent", fixture.ViewModel.SelectedMode?.ModeId);
+        Assert.Single(fixture.ViewModel.ConfigOptions);
     }
 
     [Fact]
@@ -2125,5 +2183,44 @@ public class ChatViewModelTests
         Assert.Equal("plan", capturedParams.Value);
         Assert.Equal("plan", viewModel.SelectedMode?.ModeId);
         Assert.Equal("plan", viewModel.ConfigOptions[0].Value);
+    }
+
+    [Fact]
+    public async Task DisconnectCommand_DoesNotClearPersistedConversationSessionState()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var commands = new Mock<IAcpConnectionCommands>();
+        await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            AvailableModes = ImmutableList.Create(
+                new ConversationModeOptionSnapshot { ModeId = "agent", ModeName = "Agent" },
+                new ConversationModeOptionSnapshot { ModeId = "plan", ModeName = "Plan" }),
+            SelectedModeId = "agent",
+            ConfigOptions = ImmutableList.Create(
+                new ConversationConfigOptionSnapshot { Id = "mode", Name = "Mode", SelectedValue = "agent" }),
+            ShowConfigOptionsPanel = true
+        });
+
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)
+                && fixture.ViewModel.AvailableModes.Count == 2
+                && string.Equals(fixture.ViewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal));
+        });
+
+        await fixture.ViewModel.DisconnectCommand.ExecuteAsync(null);
+
+        var state = await fixture.GetStateAsync();
+        Assert.NotNull(state.AvailableModes);
+        Assert.Equal(2, state.AvailableModes!.Count);
+        Assert.Equal("agent", state.SelectedModeId);
+        Assert.NotNull(state.ConfigOptions);
+        Assert.Single(state.ConfigOptions!);
+        Assert.True(state.ShowConfigOptionsPanel);
     }
 }

@@ -125,9 +125,24 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             .Select(ClonePlanEntrySnapshot)
             .OfType<ConversationPlanEntrySnapshot>()
             .ToArray();
+        var availableModes = (state.AvailableModes ?? ImmutableList<ConversationModeOptionSnapshot>.Empty)
+            .Select(CloneModeOptionSnapshot)
+            .ToArray();
+        var configOptions = (state.ConfigOptions ?? ImmutableList<ConversationConfigOptionSnapshot>.Empty)
+            .Select(CloneConfigOptionSnapshot)
+            .ToArray();
         var existingSnapshot = _workspace.GetConversationSnapshot(conversationId);
         var lastUpdatedAt = existingSnapshot != null
-            && SnapshotContentMatches(existingSnapshot, transcript, planEntries, state.ShowPlanPanel, state.PlanTitle)
+            && SnapshotContentMatches(
+                existingSnapshot,
+                transcript,
+                planEntries,
+                availableModes,
+                state.SelectedModeId,
+                configOptions,
+                state.ShowConfigOptionsPanel,
+                state.ShowPlanPanel,
+                state.PlanTitle)
             ? existingSnapshot.LastUpdatedAt
             : DateTime.UtcNow;
 
@@ -138,7 +153,11 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             state.ShowPlanPanel,
             state.PlanTitle,
             default,
-            lastUpdatedAt);
+            lastUpdatedAt,
+            availableModes,
+            state.SelectedModeId,
+            configOptions,
+            state.ShowConfigOptionsPanel);
 
         return new PendingWrite(snapshot, scheduleSave);
     }
@@ -225,13 +244,61 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
         ConversationWorkspaceSnapshot existingSnapshot,
         IReadOnlyList<ConversationMessageSnapshot> transcript,
         IReadOnlyList<ConversationPlanEntrySnapshot> planEntries,
+        IReadOnlyList<ConversationModeOptionSnapshot> availableModes,
+        string? selectedModeId,
+        IReadOnlyList<ConversationConfigOptionSnapshot> configOptions,
+        bool showConfigOptionsPanel,
         bool showPlanPanel,
         string? planTitle)
     {
-        return existingSnapshot.ShowPlanPanel == showPlanPanel
+        return existingSnapshot.ShowConfigOptionsPanel == showConfigOptionsPanel
+            && string.Equals(existingSnapshot.SelectedModeId, selectedModeId, StringComparison.Ordinal)
+            && existingSnapshot.ShowPlanPanel == showPlanPanel
             && string.Equals(existingSnapshot.PlanTitle, planTitle, StringComparison.Ordinal)
+            && ModeSequencesEqual(existingSnapshot.AvailableModes ?? Array.Empty<ConversationModeOptionSnapshot>(), availableModes)
+            && ConfigOptionSequencesEqual(existingSnapshot.ConfigOptions ?? Array.Empty<ConversationConfigOptionSnapshot>(), configOptions)
             && MessageSequencesEqual(existingSnapshot.Transcript, transcript)
             && PlanSequencesEqual(existingSnapshot.Plan, planEntries);
+    }
+
+    private static bool ModeSequencesEqual(
+        IReadOnlyList<ConversationModeOptionSnapshot> left,
+        IReadOnlyList<ConversationModeOptionSnapshot> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!ModeOptionEquals(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ConfigOptionSequencesEqual(
+        IReadOnlyList<ConversationConfigOptionSnapshot> left,
+        IReadOnlyList<ConversationConfigOptionSnapshot> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!ConfigOptionEquals(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool MessageSequencesEqual(
@@ -306,6 +373,51 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             && left.Priority == right.Priority;
     }
 
+    private static bool ModeOptionEquals(ConversationModeOptionSnapshot left, ConversationModeOptionSnapshot right)
+    {
+        return string.Equals(left.ModeId, right.ModeId, StringComparison.Ordinal)
+            && string.Equals(left.ModeName, right.ModeName, StringComparison.Ordinal)
+            && string.Equals(left.Description, right.Description, StringComparison.Ordinal);
+    }
+
+    private static bool ConfigOptionEquals(ConversationConfigOptionSnapshot left, ConversationConfigOptionSnapshot right)
+    {
+        return string.Equals(left.Id, right.Id, StringComparison.Ordinal)
+            && string.Equals(left.Name, right.Name, StringComparison.Ordinal)
+            && string.Equals(left.Description, right.Description, StringComparison.Ordinal)
+            && string.Equals(left.Category, right.Category, StringComparison.Ordinal)
+            && string.Equals(left.ValueType, right.ValueType, StringComparison.Ordinal)
+            && string.Equals(left.SelectedValue, right.SelectedValue, StringComparison.Ordinal)
+            && ConfigOptionChoiceSequencesEqual(left.Options ?? [], right.Options ?? []);
+    }
+
+    private static bool ConfigOptionChoiceSequencesEqual(
+        IReadOnlyList<ConversationConfigOptionChoiceSnapshot> left,
+        IReadOnlyList<ConversationConfigOptionChoiceSnapshot> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!ConfigOptionChoiceEquals(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ConfigOptionChoiceEquals(ConversationConfigOptionChoiceSnapshot left, ConversationConfigOptionChoiceSnapshot right)
+    {
+        return string.Equals(left.Value, right.Value, StringComparison.Ordinal)
+            && string.Equals(left.Name, right.Name, StringComparison.Ordinal)
+            && string.Equals(left.Description, right.Description, StringComparison.Ordinal);
+    }
+
     private static ConversationMessageSnapshot CloneMessageSnapshot(ConversationMessageSnapshot snapshot)
         => new()
         {
@@ -341,6 +453,36 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             Priority = snapshot.Priority
         };
     }
+
+    private static ConversationModeOptionSnapshot CloneModeOptionSnapshot(ConversationModeOptionSnapshot snapshot)
+        => new()
+        {
+            ModeId = snapshot.ModeId,
+            ModeName = snapshot.ModeName,
+            Description = snapshot.Description
+        };
+
+    private static ConversationConfigOptionSnapshot CloneConfigOptionSnapshot(ConversationConfigOptionSnapshot snapshot)
+        => new()
+        {
+            Id = snapshot.Id,
+            Name = snapshot.Name,
+            Description = snapshot.Description,
+            Category = snapshot.Category,
+            ValueType = snapshot.ValueType,
+            SelectedValue = snapshot.SelectedValue,
+            Options = (snapshot.Options ?? [])
+                .Select(CloneConfigOptionChoiceSnapshot)
+                .ToList()
+        };
+
+    private static ConversationConfigOptionChoiceSnapshot CloneConfigOptionChoiceSnapshot(ConversationConfigOptionChoiceSnapshot snapshot)
+        => new()
+        {
+            Value = snapshot.Value,
+            Name = snapshot.Name,
+            Description = snapshot.Description
+        };
 
     private sealed class PendingWrite
     {

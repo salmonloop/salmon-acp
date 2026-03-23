@@ -19,6 +19,10 @@ public static class ChatReducer
                 HydratedConversationId = selectConversation.ConversationId,
                 Transcript = null,
                 PlanEntries = null,
+                AvailableModes = null,
+                SelectedModeId = null,
+                ConfigOptions = null,
+                ShowConfigOptionsPanel = false,
                 ShowPlanPanel = false,
                 PlanTitle = null,
                 IsPromptInFlight = false,
@@ -84,6 +88,24 @@ public static class ChatReducer
             UpsertTranscriptMessageAction upsertMessage => Mutate(current, current with
             {
                 Transcript = UpsertTranscript(current.Transcript, upsertMessage.Message)
+            }),
+            SetConversationSessionStateAction setSessionState when !string.Equals(setSessionState.ConversationId, current.HydratedConversationId, StringComparison.Ordinal)
+                => current,
+            SetConversationSessionStateAction setSessionState => Mutate(current, current with
+            {
+                AvailableModes = setSessionState.AvailableModes,
+                SelectedModeId = setSessionState.SelectedModeId,
+                ConfigOptions = setSessionState.ConfigOptions,
+                ShowConfigOptionsPanel = setSessionState.ShowConfigOptionsPanel
+            }),
+            MergeConversationSessionStateAction mergeSessionState when !string.Equals(mergeSessionState.ConversationId, current.HydratedConversationId, StringComparison.Ordinal)
+                => current,
+            MergeConversationSessionStateAction mergeSessionState => Mutate(current, current with
+            {
+                AvailableModes = mergeSessionState.AvailableModes ?? current.AvailableModes,
+                SelectedModeId = mergeSessionState.HasSelectedModeId ? mergeSessionState.SelectedModeId : current.SelectedModeId,
+                ConfigOptions = mergeSessionState.ConfigOptions ?? current.ConfigOptions,
+                ShowConfigOptionsPanel = mergeSessionState.ShowConfigOptionsPanel ?? current.ShowConfigOptionsPanel
             }),
             UpdateMessageAction updateMessage => Mutate(current, current with
             {

@@ -43,6 +43,36 @@ public sealed class ChatConversationWorkspaceTests
                         Cwd = @"C:\repo\one",
                         RemoteSessionId = "remote-1",
                         BoundProfileId = "profile-a",
+                        SelectedModeId = "agent",
+                        ShowConfigOptionsPanel = true,
+                        AvailableModes =
+                        {
+                            new ConversationModeOptionSnapshot
+                            {
+                                ModeId = "agent",
+                                ModeName = "Agent",
+                                Description = "Default agent mode"
+                            }
+                        },
+                        ConfigOptions =
+                        {
+                            new ConversationConfigOptionSnapshot
+                            {
+                                Id = "mode",
+                                Name = "Mode",
+                                Category = "mode",
+                                ValueType = "select",
+                                SelectedValue = "agent",
+                                Options =
+                                {
+                                    new ConversationConfigOptionChoiceSnapshot
+                                    {
+                                        Value = "agent",
+                                        Name = "Agent"
+                                    }
+                                }
+                            }
+                        },
                         Messages =
                         {
                             CreateTextMessage("m-1", "hello")
@@ -79,6 +109,10 @@ public sealed class ChatConversationWorkspaceTests
         Assert.NotNull(snapshot);
         Assert.Single(snapshot!.Transcript);
         Assert.Equal("hello", snapshot.Transcript[0].TextContent);
+        Assert.Single(snapshot.AvailableModes!);
+        Assert.Equal("agent", snapshot.SelectedModeId);
+        Assert.Single(snapshot.ConfigOptions!);
+        Assert.True(snapshot.ShowConfigOptionsPanel);
         var remoteBinding = workspace.GetRemoteBinding("session-1");
         Assert.NotNull(remoteBinding);
         Assert.Equal("remote-1", remoteBinding!.RemoteSessionId);
@@ -88,6 +122,71 @@ public sealed class ChatConversationWorkspaceTests
         Assert.NotNull(session);
         Assert.Equal("Session One", session!.DisplayName);
         Assert.Equal(@"C:\repo\one", session.Cwd);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsConversationSessionState()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1", "hello")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc),
+            AvailableModes:
+            [
+                new ConversationModeOptionSnapshot
+                {
+                    ModeId = "plan",
+                    ModeName = "Plan",
+                    Description = "Planning mode"
+                }
+            ],
+            SelectedModeId: "plan",
+            ConfigOptions:
+            [
+                new ConversationConfigOptionSnapshot
+                {
+                    Id = "mode",
+                    Name = "Mode",
+                    Category = "mode",
+                    ValueType = "select",
+                    SelectedValue = "plan",
+                    Options =
+                    [
+                        new ConversationConfigOptionChoiceSnapshot
+                        {
+                            Value = "plan",
+                            Name = "Plan",
+                            Description = "Planning mode"
+                        }
+                    ]
+                }
+            ],
+            ShowConfigOptionsPanel: true));
+
+        await workspace.SaveAsync();
+
+        var saved = Assert.IsType<ConversationDocument>(store.LastSavedDocument);
+        var conversation = Assert.Single(saved.Conversations);
+        Assert.Equal("plan", conversation.SelectedModeId);
+        Assert.True(conversation.ShowConfigOptionsPanel);
+        Assert.Single(conversation.AvailableModes);
+        Assert.Equal("plan", conversation.AvailableModes[0].ModeId);
+        Assert.Single(conversation.ConfigOptions);
+        Assert.Equal("mode", conversation.ConfigOptions[0].Id);
+        Assert.Equal("plan", conversation.ConfigOptions[0].SelectedValue);
     }
 
     [Fact]

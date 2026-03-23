@@ -579,6 +579,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             AuthenticationHintMessage = projection.AuthenticationHintMessage;
             AgentName = projection.AgentName;
             AgentVersion = projection.AgentVersion;
+            ApplySessionStateProjection(
+                projection.AvailableModes,
+                projection.SelectedModeId,
+                projection.ConfigOptions,
+                projection.ShowConfigOptionsPanel);
             ShowPlanPanel = projection.ShowPlanPanel;
             CurrentPlanTitle = projection.PlanTitle;
             SyncPlanEntries(projection.PlanEntries);
@@ -627,6 +632,122 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 _suppressAcpProfileConnect = false;
             }
         }
+    }
+
+    private void ApplySessionStateProjection(
+        IReadOnlyList<ConversationModeOptionSnapshot> availableModes,
+        string? selectedModeId,
+        IReadOnlyList<ConversationConfigOptionSnapshot> configOptions,
+        bool showConfigOptionsPanel)
+    {
+        if (!ModeCollectionMatches(AvailableModes, availableModes))
+        {
+            AvailableModes.Clear();
+            foreach (var mode in availableModes)
+            {
+                AvailableModes.Add(new SessionModeViewModel
+                {
+                    ModeId = mode.ModeId,
+                    ModeName = mode.ModeName,
+                    Description = mode.Description
+                });
+            }
+        }
+
+        if (!ConfigOptionCollectionMatches(ConfigOptions, configOptions))
+        {
+            ConfigOptions.Clear();
+            foreach (var option in configOptions)
+            {
+                ConfigOptions.Add(MapConfigOption(option));
+            }
+        }
+
+        ShowConfigOptionsPanel = showConfigOptionsPanel;
+
+        if (ConfigOptions.Count == 0)
+        {
+            _modeConfigId = null;
+        }
+        else
+        {
+            SyncModesFromConfigOptions();
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedModeId) && AvailableModes.Count > 0)
+        {
+            SetSelectedModeWithoutDispatch(
+                AvailableModes.FirstOrDefault(m => m.ModeId == selectedModeId) ?? AvailableModes[0]);
+            return;
+        }
+
+        SetSelectedModeWithoutDispatch(AvailableModes.FirstOrDefault());
+    }
+
+    private static bool ModeCollectionMatches(
+        IReadOnlyList<SessionModeViewModel> current,
+        IReadOnlyList<ConversationModeOptionSnapshot> projected)
+    {
+        if (current.Count != projected.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!string.Equals(current[i].ModeId, projected[i].ModeId, StringComparison.Ordinal)
+                || !string.Equals(current[i].ModeName, projected[i].ModeName, StringComparison.Ordinal)
+                || !string.Equals(current[i].Description, projected[i].Description, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ConfigOptionCollectionMatches(
+        IReadOnlyList<ConfigOptionViewModel> current,
+        IReadOnlyList<ConversationConfigOptionSnapshot> projected)
+    {
+        if (current.Count != projected.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < current.Count; i++)
+        {
+            var left = current[i];
+            var right = projected[i];
+            if (!string.Equals(left.Id, right.Id, StringComparison.Ordinal)
+                || !string.Equals(left.Name, right.Name, StringComparison.Ordinal)
+                || !string.Equals(left.Description, right.Description, StringComparison.Ordinal)
+                || !string.Equals(left.Category, right.Category, StringComparison.Ordinal)
+                || !string.Equals(left.ValueType, right.ValueType ?? "string", StringComparison.Ordinal)
+                || !string.Equals(left.Value?.ToString(), right.SelectedValue ?? string.Empty, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (left.Options.Count != right.Options.Count)
+            {
+                return false;
+            }
+
+            for (var optionIndex = 0; optionIndex < left.Options.Count; optionIndex++)
+            {
+                var leftOption = left.Options[optionIndex];
+                var rightOption = right.Options[optionIndex];
+                if (!string.Equals(leftOption.Value, rightOption.Value, StringComparison.Ordinal)
+                    || !string.Equals(leftOption.Name, rightOption.Name, StringComparison.Ordinal)
+                    || !string.Equals(leftOption.Description, rightOption.Description, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private void OnAcpProfilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1520,10 +1641,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
         }
 
-    private void ApplySessionNewResponse(SessionNewResponse response)
+    private async Task ApplySessionNewResponseAsync(string conversationId, SessionNewResponse response)
     {
-        ApplySessionUpdateDelta(_acpSessionUpdateProjector.ProjectSessionNew(response));
-        Logger.LogInformation("Session modes loaded: {Count}", AvailableModes.Count);
+        var delta = _acpSessionUpdateProjector.ProjectSessionNew(response);
+        await ApplySessionUpdateDeltaAsync(conversationId, delta).ConfigureAwait(true);
+        Logger.LogInformation(
+            "Session modes loaded: {Count}",
+            delta.AvailableModes?.Count ?? 0);
     }
 
     [RelayCommand]
@@ -1630,19 +1754,27 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
             else if (e.Update is PlanUpdate planUpdate)
             {
-                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, planUpdate)));
+                await ApplySessionUpdateDeltaAsync(
+                    activeConversationId!,
+                    _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, planUpdate))).ConfigureAwait(true);
             }
             else if (e.Update is CurrentModeUpdate modeChange)
             {
-                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, modeChange)));
+                await ApplySessionUpdateDeltaAsync(
+                    activeConversationId!,
+                    _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, modeChange))).ConfigureAwait(true);
             }
             else if (e.Update is ConfigUpdateUpdate configUpdate)
             {
-                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, configUpdate)));
+                await ApplySessionUpdateDeltaAsync(
+                    activeConversationId!,
+                    _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, configUpdate))).ConfigureAwait(true);
             }
             else if (e.Update is ConfigOptionUpdate optionUpdate)
             {
-                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, optionUpdate)));
+                await ApplySessionUpdateDeltaAsync(
+                    activeConversationId!,
+                    _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, optionUpdate))).ConfigureAwait(true);
             }
             else if (e.Update is SessionInfoUpdate)
             {
@@ -2278,55 +2410,49 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         })).ConfigureAwait(false);
     }
 
-    private void ApplySessionUpdateDelta(AcpSessionUpdateDelta delta)
+    private async Task ApplySessionUpdateDeltaAsync(string conversationId, AcpSessionUpdateDelta delta)
     {
-        if (delta.AvailableModes != null)
+        if (string.IsNullOrWhiteSpace(conversationId))
         {
-            AvailableModes.Clear();
-            foreach (var mode in delta.AvailableModes)
-            {
-                AvailableModes.Add(new SessionModeViewModel
-                {
-                    ModeId = mode.ModeId,
-                    ModeName = mode.ModeName,
-                    Description = mode.Description
-                });
-            }
+            return;
         }
 
-        if (delta.ConfigOptions != null)
+        var nextModes = delta.AvailableModes != null
+            ? delta.AvailableModes.Select(ToConversationModeOptionSnapshot).ToImmutableList()
+            : null;
+        var nextConfigOptions = delta.ConfigOptions != null
+            ? delta.ConfigOptions.Select(ToConversationConfigOptionSnapshot).ToImmutableList()
+            : null;
+        var hasSelectedModeId = !string.IsNullOrWhiteSpace(delta.SelectedModeId)
+            || delta.AvailableModes is { Count: 0 };
+        var nextSelectedModeId = !string.IsNullOrWhiteSpace(delta.SelectedModeId)
+            ? delta.SelectedModeId
+            : null;
+        var nextShowConfigOptionsPanel = delta.ShowConfigOptionsPanel;
+        if (nextShowConfigOptionsPanel is null && nextConfigOptions != null)
         {
-            ConfigOptions.Clear();
-            foreach (var option in delta.ConfigOptions)
-            {
-                ConfigOptions.Add(MapConfigOption(option));
-            }
+            nextShowConfigOptionsPanel = nextConfigOptions.Count > 0;
+        }
 
-            ShowConfigOptionsPanel = delta.ShowConfigOptionsPanel ?? ConfigOptions.Count > 0;
-            SyncModesFromConfigOptions();
-        }
-        else if (delta.ShowConfigOptionsPanel.HasValue)
-        {
-            ShowConfigOptionsPanel = delta.ShowConfigOptionsPanel.Value;
-        }
-
-        if (!string.IsNullOrWhiteSpace(delta.SelectedModeId) && AvailableModes.Count > 0)
-        {
-            SetSelectedModeWithoutDispatch(
-                AvailableModes.FirstOrDefault(m => m.ModeId == delta.SelectedModeId) ?? AvailableModes[0]);
-        }
+        await _chatStore.Dispatch(new MergeConversationSessionStateAction(
+            conversationId,
+            nextModes,
+            nextSelectedModeId,
+            hasSelectedModeId,
+            nextConfigOptions,
+            nextShowConfigOptionsPanel)).ConfigureAwait(true);
 
         if (delta.PlanEntries != null)
         {
-            _ = _chatStore.Dispatch(new ReplacePlanEntriesAction(
-                CurrentSessionId,
+            await _chatStore.Dispatch(new ReplacePlanEntriesAction(
+                conversationId,
                 delta.PlanEntries.ToImmutableList(),
                 delta.ShowPlanPanel ?? true,
-                delta.PlanTitle));
+                delta.PlanTitle)).ConfigureAwait(true);
         }
     }
 
-    private static ConfigOptionViewModel MapConfigOption(AcpConfigOptionSnapshot option)
+    private static ConfigOptionViewModel MapConfigOption(ConversationConfigOptionSnapshot option)
     {
         var viewModel = new ConfigOptionViewModel
         {
@@ -2354,6 +2480,33 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         return viewModel;
     }
+
+    private static ConversationModeOptionSnapshot ToConversationModeOptionSnapshot(AcpModeOption option)
+        => new()
+        {
+            ModeId = option.ModeId,
+            ModeName = option.ModeName,
+            Description = option.Description
+        };
+
+    private static ConversationConfigOptionSnapshot ToConversationConfigOptionSnapshot(AcpConfigOptionSnapshot option)
+        => new()
+        {
+            Id = option.Id,
+            Name = option.Name,
+            Description = option.Description,
+            Category = option.Category,
+            ValueType = option.ValueType,
+            SelectedValue = option.SelectedValue,
+            Options = option.Options
+                .Select(static item => new ConversationConfigOptionChoiceSnapshot
+                {
+                    Value = item.Value,
+                    Name = item.Name,
+                    Description = item.Description
+                })
+                .ToList()
+        };
 
     private void SyncModesFromConfigOptions()
     {
@@ -2403,33 +2556,39 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    private void ApplySessionConfigOptionResponse(SessionSetConfigOptionResponse response, string remoteSessionId)
+    private async Task ApplySessionConfigOptionResponseAsync(
+        string conversationId,
+        SessionSetConfigOptionResponse response,
+        string remoteSessionId)
     {
         if (response?.ConfigOptions == null)
         {
             return;
         }
 
-        ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(
+        await ApplySessionUpdateDeltaAsync(conversationId, _acpSessionUpdateProjector.Project(
             new SessionUpdateEventArgs(
                 remoteSessionId,
                 new ConfigOptionUpdate
                 {
                     ConfigOptions = response.ConfigOptions
-                })));
+                }))).ConfigureAwait(true);
     }
 
-    private void ApplySessionModeResponse(SessionSetModeResponse response, string remoteSessionId)
+    private async Task ApplySessionModeResponseAsync(
+        string conversationId,
+        SessionSetModeResponse response,
+        string remoteSessionId)
     {
         if (response is null || string.IsNullOrWhiteSpace(response.ModeId))
         {
             return;
         }
 
-        ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(
+        await ApplySessionUpdateDeltaAsync(conversationId, _acpSessionUpdateProjector.Project(
             new SessionUpdateEventArgs(
                 remoteSessionId,
-                new CurrentModeUpdate(response.ModeId))));
+                new CurrentModeUpdate(response.ModeId)))).ConfigureAwait(true);
     }
 
    [RelayCommand]
@@ -2547,48 +2706,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
 
             await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
-            ApplySessionNewResponse(response);
-
-            // Load available modes (deprecated in favor of configOptions).
-            if (response.Modes?.AvailableModes != null)
-            {
-                AvailableModes.Clear();
-                foreach (var mode in response.Modes.AvailableModes)
-                {
-                    if (mode != null)
-                    {
-                        AvailableModes.Add(new SessionModeViewModel
-                        {
-                            ModeId = mode.Id ?? string.Empty,
-                            ModeName = mode.Name ?? string.Empty,
-                            Description = mode.Description ?? string.Empty
-                        });
-                    }
-                }
-
-                // Select the first mode as default
-                if (AvailableModes.Count > 0)
-                {
-                    var currentModeId = response.Modes.CurrentModeId;
-                    SetSelectedModeWithoutDispatch(
-                        string.IsNullOrWhiteSpace(currentModeId)
-                            ? AvailableModes[0]
-                            : AvailableModes.FirstOrDefault(m => m.ModeId == currentModeId) ?? AvailableModes[0]);
-                }
-            }
-
-
-            // Load configuration options
-            if (response.ConfigOptions != null)
-            {
-                ConfigOptions.Clear();
-                foreach (var option in response.ConfigOptions)
-                {
-                    ConfigOptions.Add(ConfigOptionViewModel.CreateFromAcp(option));
-                }
-                ShowConfigOptionsPanel = ConfigOptions.Count > 0;
-                SyncModesFromConfigOptions();
-            }
+            await ApplySessionNewResponseAsync(localConversationId, response).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -2650,7 +2768,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
                 if (!sessionResult.UsedExistingBinding)
                 {
-                    ApplySessionNewResponse(sessionResult.Session);
+                    await ApplySessionNewResponseAsync(conversationId, sessionResult.Session).ConfigureAwait(true);
                 }
 
                 // Step 2: Advance phase to waiting for agent response
@@ -2840,7 +2958,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                         _modeConfigId,
                         mode.ModeId ?? string.Empty);
                     var response = await _chatService.SetSessionConfigOptionAsync(setParams).ConfigureAwait(true);
-                    ApplySessionConfigOptionResponse(response, activeBinding.RemoteSessionId!);
+                    await ApplySessionConfigOptionResponseAsync(
+                        activeBinding.ConversationId,
+                        response,
+                        activeBinding.RemoteSessionId!).ConfigureAwait(true);
                 }
                 else
                 {
@@ -2850,7 +2971,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                         ModeId = mode.ModeId
                     };
                     var response = await _chatService.SetSessionModeAsync(modeParams).ConfigureAwait(true);
-                    ApplySessionModeResponse(response, activeBinding.RemoteSessionId!);
+                    await ApplySessionModeResponseAsync(
+                        activeBinding.ConversationId,
+                        response,
+                        activeBinding.RemoteSessionId!).ConfigureAwait(true);
                 }
             }
         }
@@ -2858,6 +2982,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         {
             Logger.LogError(ex, "Failed to switch mode");
             SetError($"Failed to switch mode: {ex.Message}");
+            await ApplyCurrentStoreProjectionAsync().ConfigureAwait(true);
         }
         finally
         {
@@ -2925,8 +3050,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             IsBusy = true;
             ClearError();
             await _acpConnectionCommands.DisconnectAsync(this);
-            AvailableModes.Clear();
-            SetSelectedModeWithoutDispatch(null);
         }
         catch (Exception ex)
         {

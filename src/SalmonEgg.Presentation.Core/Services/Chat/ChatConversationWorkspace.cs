@@ -221,7 +221,11 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             binding.ShowPlanPanel,
             binding.PlanTitle,
             binding.CreatedAt,
-            binding.LastUpdatedAt);
+            binding.LastUpdatedAt,
+            binding.AvailableModes.Select(CloneModeOption).ToArray(),
+            binding.SelectedModeId,
+            binding.ConfigOptions.Select(CloneConfigOption).ToArray(),
+            binding.ShowConfigOptionsPanel);
     }
 
     public ConversationRemoteBindingState? GetRemoteBinding(string? conversationId)
@@ -252,6 +256,12 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         binding.Transcript.AddRange(snapshot.Transcript.Select(CloneMessage));
         binding.Plan.Clear();
         binding.Plan.AddRange(snapshot.Plan.Select(ClonePlanEntry));
+        binding.AvailableModes.Clear();
+        binding.AvailableModes.AddRange((snapshot.AvailableModes ?? Array.Empty<ConversationModeOptionSnapshot>()).Select(CloneModeOption));
+        binding.SelectedModeId = snapshot.SelectedModeId;
+        binding.ConfigOptions.Clear();
+        binding.ConfigOptions.AddRange((snapshot.ConfigOptions ?? Array.Empty<ConversationConfigOptionSnapshot>()).Select(CloneConfigOption));
+        binding.ShowConfigOptionsPanel = snapshot.ShowConfigOptionsPanel;
         binding.ShowPlanPanel = snapshot.ShowPlanPanel;
         binding.PlanTitle = snapshot.PlanTitle;
     }
@@ -347,8 +357,13 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 LastAccessedAt = binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt,
                 Cwd = session?.Cwd,
                 RemoteSessionId = binding.RemoteSessionId,
-                BoundProfileId = binding.BoundProfileId
+                BoundProfileId = binding.BoundProfileId,
+                SelectedModeId = binding.SelectedModeId,
+                ShowConfigOptionsPanel = binding.ShowConfigOptionsPanel
             };
+
+            record.AvailableModes.AddRange(binding.AvailableModes.Select(CloneModeOption));
+            record.ConfigOptions.AddRange(binding.ConfigOptions.Select(CloneConfigOption));
 
             foreach (var message in binding.Transcript)
             {
@@ -391,6 +406,12 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             binding.Transcript.Clear();
             binding.Transcript.AddRange(conversation.Messages.Select(CloneMessage));
             binding.Plan.Clear();
+            binding.AvailableModes.Clear();
+            binding.AvailableModes.AddRange((conversation.AvailableModes ?? []).Select(CloneModeOption));
+            binding.SelectedModeId = conversation.SelectedModeId;
+            binding.ConfigOptions.Clear();
+            binding.ConfigOptions.AddRange((conversation.ConfigOptions ?? []).Select(CloneConfigOption));
+            binding.ShowConfigOptionsPanel = conversation.ShowConfigOptionsPanel;
             binding.ShowPlanPanel = false;
             binding.PlanTitle = null;
             binding.RemoteSessionId = conversation.RemoteSessionId;
@@ -540,6 +561,36 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             Priority = source.Priority
         };
 
+    private static ConversationModeOptionSnapshot CloneModeOption(ConversationModeOptionSnapshot source)
+        => new()
+        {
+            ModeId = source.ModeId,
+            ModeName = source.ModeName,
+            Description = source.Description
+        };
+
+    private static ConversationConfigOptionSnapshot CloneConfigOption(ConversationConfigOptionSnapshot source)
+        => new()
+        {
+            Id = source.Id,
+            Name = source.Name,
+            Description = source.Description,
+            Category = source.Category,
+            ValueType = source.ValueType,
+            SelectedValue = source.SelectedValue,
+            Options = (source.Options ?? [])
+                .Select(CloneConfigOptionChoice)
+                .ToList()
+        };
+
+    private static ConversationConfigOptionChoiceSnapshot CloneConfigOptionChoice(ConversationConfigOptionChoiceSnapshot source)
+        => new()
+        {
+            Value = source.Value,
+            Name = source.Name,
+            Description = source.Description
+        };
+
     private Task PostToContextAsync(Action action, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -599,6 +650,14 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
         public DateTime LastAccessedAt { get; set; }
 
+        public string? SelectedModeId { get; set; }
+
+        public List<ConversationModeOptionSnapshot> AvailableModes { get; } = new();
+
+        public List<ConversationConfigOptionSnapshot> ConfigOptions { get; } = new();
+
+        public bool ShowConfigOptionsPanel { get; set; }
+
         public List<ConversationMessageSnapshot> Transcript { get; } = new();
 
         public List<ConversationPlanEntrySnapshot> Plan { get; } = new();
@@ -616,7 +675,11 @@ public sealed record ConversationWorkspaceSnapshot(
     bool ShowPlanPanel,
     string? PlanTitle,
     DateTime CreatedAt,
-    DateTime LastUpdatedAt);
+    DateTime LastUpdatedAt,
+    IReadOnlyList<ConversationModeOptionSnapshot>? AvailableModes = null,
+    string? SelectedModeId = null,
+    IReadOnlyList<ConversationConfigOptionSnapshot>? ConfigOptions = null,
+    bool ShowConfigOptionsPanel = false);
 
 public sealed record ConversationRemoteBindingState(
     string ConversationId,

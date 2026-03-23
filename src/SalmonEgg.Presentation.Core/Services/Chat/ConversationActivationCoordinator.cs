@@ -63,6 +63,12 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
                     snapshot?.Plan.ToImmutableList() ?? ImmutableList<ConversationPlanEntrySnapshot>.Empty,
                     snapshot?.ShowPlanPanel ?? false,
                     snapshot?.PlanTitle)).ConfigureAwait(false);
+                await _chatStore.Dispatch(new SetConversationSessionStateAction(
+                    sessionId,
+                    snapshot?.AvailableModes?.ToImmutableList() ?? ImmutableList<ConversationModeOptionSnapshot>.Empty,
+                    snapshot?.SelectedModeId,
+                    snapshot?.ConfigOptions?.ToImmutableList() ?? ImmutableList<ConversationConfigOptionSnapshot>.Empty,
+                    snapshot?.ShowConfigOptionsPanel ?? false)).ConfigureAwait(false);
             }
 
             await NormalizeBindingForSelectedProfileAsync(sessionId).ConfigureAwait(false);

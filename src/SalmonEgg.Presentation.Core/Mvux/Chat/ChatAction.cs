@@ -79,6 +79,21 @@ public sealed record HydrateConversationAction(
 
 public sealed record UpsertTranscriptMessageAction(string? ConversationId, ConversationMessageSnapshot Message) : ChatAction;
 
+public sealed record SetConversationSessionStateAction(
+    string? ConversationId,
+    IImmutableList<ConversationModeOptionSnapshot> AvailableModes,
+    string? SelectedModeId,
+    IImmutableList<ConversationConfigOptionSnapshot> ConfigOptions,
+    bool ShowConfigOptionsPanel) : ChatAction;
+
+public sealed record MergeConversationSessionStateAction(
+    string? ConversationId,
+    IImmutableList<ConversationModeOptionSnapshot>? AvailableModes = null,
+    string? SelectedModeId = null,
+    bool HasSelectedModeId = false,
+    IImmutableList<ConversationConfigOptionSnapshot>? ConfigOptions = null,
+    bool? ShowConfigOptionsPanel = null) : ChatAction;
+
 public sealed record ReplacePlanEntriesAction(
     string? ConversationId,
     IImmutableList<ConversationPlanEntrySnapshot> PlanEntries,
