@@ -38,9 +38,13 @@ public sealed partial class ConversationCatalogPresenter : ObservableObject, ICo
     }
 }
 
+/// <summary>
+/// Read-only data for a single conversation in the navigation catalog.
+/// </summary>
 public sealed record ConversationCatalogItem(
     string ConversationId,
     string DisplayName,
     string? Cwd,
     DateTime CreatedAt,
-    DateTime LastUpdatedAt);
+    DateTime LastUpdatedAt,
+    DateTime LastAccessedAt);

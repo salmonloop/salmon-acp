@@ -170,12 +170,16 @@ public sealed class MainNavigationViewModelPaneTests
         public string[] GetKnownConversationIds() => _conversationIds.ToArray();
 
         public IReadOnlyList<ConversationCatalogItem> CreateSnapshot()
-            => _conversationIds.ConvertAll(id => new ConversationCatalogItem(
+        {
+            var now = DateTime.UtcNow;
+            return _conversationIds.ConvertAll(id => new ConversationCatalogItem(
                 id,
                 id,
                 @"C:\repo\demo",
-                DateTime.UtcNow,
-                DateTime.UtcNow));
+                now,
+                now,
+                now));
+        }
 
         public Task RestoreAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 

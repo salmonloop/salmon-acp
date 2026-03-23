@@ -4,6 +4,7 @@ using SalmonEgg.Domain.Models.JsonRpc;
 using SalmonEgg.Domain.Models.Content;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Plan;
+using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Infrastructure.Serialization;
 
 namespace SalmonEgg.Infrastructure.Tests.Serialization;
@@ -76,6 +77,57 @@ public class MessageParserTests
 
         Assert.Contains("\"result\":null", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"error\"", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("end_turn", StopReason.EndTurn)]
+    [InlineData("max_tokens", StopReason.MaxTokens)]
+    [InlineData("max_turn_requests", StopReason.MaxTurnRequests)]
+    [InlineData("refusal", StopReason.Refusal)]
+    [InlineData("cancelled", StopReason.Cancelled)]
+    public void Options_ShouldDeserialize_SessionPromptResponse_WithOfficialStopReasons(string stopReason, StopReason expected)
+    {
+        var parser = new MessageParser();
+        var json = $$"""
+        {
+          "stopReason": "{{stopReason}}"
+        }
+        """;
+
+        var response = JsonSerializer.Deserialize<SessionPromptResponse>(json, parser.Options);
+
+        Assert.NotNull(response);
+        Assert.Equal(expected, response!.StopReason);
+    }
+
+    [Fact]
+    public void Options_ShouldDeserialize_UsageUpdate_ExtensionPayload()
+    {
+        var json = """
+        {
+          "sessionId": "sess_usage",
+          "update": {
+            "sessionUpdate": "usage_update",
+            "used": 717,
+            "size": 200000,
+            "cost": {
+              "amount": 0.16861,
+              "currency": "USD"
+            }
+          }
+        }
+        """;
+
+        var parser = new MessageParser();
+        var updateParams = JsonSerializer.Deserialize<SessionUpdateParams>(json, parser.Options);
+
+        Assert.NotNull(updateParams);
+        var usage = Assert.IsType<UsageUpdate>(updateParams!.Update);
+        Assert.Equal(717, usage.Used);
+        Assert.Equal(200000, usage.Size);
+        Assert.NotNull(usage.Cost);
+        Assert.Equal(0.16861m, usage.Cost!.Amount);
+        Assert.Equal("USD", usage.Cost.Currency);
     }
 }
 

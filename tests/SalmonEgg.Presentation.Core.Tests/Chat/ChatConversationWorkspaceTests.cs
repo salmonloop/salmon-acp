@@ -434,6 +434,56 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public void UpdateRemoteBinding_ExistingConversation_DoesNotReorderCatalogOrAdvanceListVersion()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-old",
+            Transcript:
+            [
+                CreateTextMessage("m-old", "older")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-new",
+            Transcript:
+            [
+                CreateTextMessage("m-new", "newer")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc)));
+
+        var versionBeforeBindingUpdate = workspace.ConversationListVersion;
+        var oldCatalogBefore = workspace.GetCatalog().Single(item => item.ConversationId == "session-old");
+
+        workspace.UpdateRemoteBinding("session-old", "remote-new", "profile-new");
+
+        var knownIds = workspace.GetKnownConversationIds();
+        var oldCatalogAfter = workspace.GetCatalog().Single(item => item.ConversationId == "session-old");
+        var remoteBinding = workspace.GetRemoteBinding("session-old");
+
+        Assert.Equal(new[] { "session-new", "session-old" }, knownIds);
+        Assert.Equal(versionBeforeBindingUpdate, workspace.ConversationListVersion);
+        Assert.Equal(oldCatalogBefore.LastUpdatedAt, oldCatalogAfter.LastUpdatedAt);
+        Assert.NotNull(remoteBinding);
+        Assert.Equal("remote-new", remoteBinding!.RemoteSessionId);
+        Assert.Equal("profile-new", remoteBinding.BoundProfileId);
+    }
+
+    [Fact]
     public async Task ConversationCatalogFacade_DeleteConversation_DoesNotBlockUiThread()
     {
         var syncContext = new ImmediateSynchronizationContext();

@@ -60,4 +60,38 @@ public sealed class ChatStateProjectorTests
         Assert.True(projection.IsTurnStatusRunning);
         Assert.Equal(ChatTurnPhase.Thinking, projection.TurnPhase);
     }
+
+    [Fact]
+    public void Apply_HidesTurnStatusWhenActiveTurnBelongsToDifferentConversation()
+    {
+        var projector = new ChatStateProjector();
+        var storeState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Thinking, DateTime.UtcNow, DateTime.UtcNow)
+        };
+
+        var projection = projector.Apply(storeState, ChatConnectionState.Empty, "conv-2", null);
+
+        Assert.False(projection.IsTurnStatusVisible);
+        Assert.False(projection.IsTurnStatusRunning);
+        Assert.Null(projection.TurnPhase);
+        Assert.Equal(string.Empty, projection.TurnStatusText);
+    }
+
+    [Fact]
+    public void Apply_PreservesCancelledTurnVisibility()
+    {
+        var projector = new ChatStateProjector();
+        var storeState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Cancelled, DateTime.UtcNow, DateTime.UtcNow)
+        };
+
+        var projection = projector.Apply(storeState, ChatConnectionState.Empty, "conv-1", null);
+
+        Assert.True(projection.IsTurnStatusVisible);
+        Assert.False(projection.IsTurnStatusRunning);
+        Assert.Equal(ChatTurnPhase.Cancelled, projection.TurnPhase);
+        Assert.Equal("Cancelled", projection.TurnStatusText);
+    }
 }

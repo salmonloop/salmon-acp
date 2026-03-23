@@ -34,19 +34,23 @@ public static class ChatReducer
             {
                 ActiveTurn = new ActiveTurnState(begin.ConversationId, begin.TurnId, begin.InitialPhase, DateTime.UtcNow, DateTime.UtcNow)
             }),
-            AdvanceTurnPhaseAction advance when current.ActiveTurn?.TurnId == advance.TurnId => Mutate(current, current with
+            AdvanceTurnPhaseAction advance when MatchesActiveTurn(current.ActiveTurn, advance.ConversationId, advance.TurnId)
+                && !IsTerminalPhase(current.ActiveTurn!.Phase) => Mutate(current, current with
             {
                 ActiveTurn = current.ActiveTurn with { Phase = advance.NewPhase, ToolCallId = advance.ToolCallId, ToolTitle = advance.ToolTitle, LastUpdatedAtUtc = DateTime.UtcNow }
             }),
-            CompleteTurnAction complete when current.ActiveTurn?.TurnId == complete.TurnId => Mutate(current, current with
+            CompleteTurnAction complete when MatchesActiveTurn(current.ActiveTurn, complete.ConversationId, complete.TurnId)
+                && !IsTerminalPhase(current.ActiveTurn!.Phase) => Mutate(current, current with
             {
                 ActiveTurn = current.ActiveTurn with { Phase = ChatTurnPhase.Completed, LastUpdatedAtUtc = DateTime.UtcNow }
             }),
-            FailTurnAction fail when current.ActiveTurn?.TurnId == fail.TurnId => Mutate(current, current with
+            FailTurnAction fail when MatchesActiveTurn(current.ActiveTurn, fail.ConversationId, fail.TurnId)
+                && !IsTerminalPhase(current.ActiveTurn!.Phase) => Mutate(current, current with
             {
                 ActiveTurn = current.ActiveTurn with { Phase = ChatTurnPhase.Failed, FailureMessage = fail.ErrorMessage, LastUpdatedAtUtc = DateTime.UtcNow }
             }),
-            CancelTurnAction cancel when current.ActiveTurn?.TurnId == cancel.TurnId => Mutate(current, current with
+            CancelTurnAction cancel when MatchesActiveTurn(current.ActiveTurn, cancel.ConversationId, cancel.TurnId)
+                && !IsTerminalPhase(current.ActiveTurn!.Phase) => Mutate(current, current with
             {
                 ActiveTurn = current.ActiveTurn with { Phase = ChatTurnPhase.Cancelled, LastUpdatedAtUtc = DateTime.UtcNow }
             }),
@@ -112,6 +116,14 @@ public static class ChatReducer
             Generation = checked(current.Generation + 1)
         };
     }
+
+    private static bool MatchesActiveTurn(ActiveTurnState? activeTurn, string conversationId, string turnId)
+        => activeTurn is not null
+            && string.Equals(activeTurn.ConversationId, conversationId, StringComparison.Ordinal)
+            && string.Equals(activeTurn.TurnId, turnId, StringComparison.Ordinal);
+
+    private static bool IsTerminalPhase(ChatTurnPhase phase)
+        => phase is ChatTurnPhase.Completed or ChatTurnPhase.Failed or ChatTurnPhase.Cancelled;
 
     private static IImmutableDictionary<string, ConversationBindingSlice>? UpdateBindings(
         IImmutableDictionary<string, ConversationBindingSlice>? bindings,

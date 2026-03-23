@@ -58,21 +58,21 @@ namespace SalmonEgg.Domain.Models.Session
         MaxTokens,
 
         /// <summary>
-        /// 遇到了停止序列。
+        /// 在一次回合中超出了最大请求次数。
         /// </summary>
-        [JsonPropertyName("stop_sequence")]
-        StopSequence,
+        [JsonPropertyName("max_turn_requests")]
+        MaxTurnRequests,
 
         /// <summary>
-        /// 用户取消了请求。
+        /// Agent 拒绝回答问题。
         /// </summary>
-        [JsonPropertyName("user_cancelled")]
-        UserCancelled,
+        [JsonPropertyName("refusal")]
+        Refusal,
 
         /// <summary>
-        /// 发生错误导致停止。
+        /// 用户或客户端取消了回合。
         /// </summary>
-        [JsonPropertyName("error")]
-        Error
+        [JsonPropertyName("cancelled")]
+        Cancelled
     }
 }

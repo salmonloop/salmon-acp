@@ -234,6 +234,7 @@ public sealed class MainNavigationViewModelSelectionTests
                     "Catalog Session",
                     @"C:\repo\demo",
                     new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
                     new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc))
             ]);
 
@@ -255,6 +256,93 @@ public sealed class MainNavigationViewModelSelectionTests
             var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
             var session = Assert.Single(project.Children.OfType<SessionNavItemViewModel>());
             Assert.Equal("Catalog Session", session.Title);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public void RebuildTree_HonorsLastUpdatedOrderingEvenWhenAccessTimesChange()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            var sessionManager = CreateSessionManager(
+                new Session("session-new", @"C:\repo\demo"),
+                new Session("session-old", @"C:\repo\demo"));
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog("session-new", "session-old");
+
+            var presenter = new ConversationCatalogPresenter();
+            presenter.SetLoading(false);
+            var oldUpdated = new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc);
+            var newUpdated = new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc);
+
+            var snapshot = new[]
+            {
+                new ConversationCatalogItem(
+                    "session-old",
+                    "Old Session",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                    oldUpdated,
+                    oldUpdated),
+                new ConversationCatalogItem(
+                    "session-new",
+                    "New Session",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc),
+                    newUpdated,
+                    newUpdated)
+            };
+            presenter.Refresh(snapshot);
+
+            using var navVm = new MainNavigationViewModel(
+                chatCatalog,
+                CreateProjectPreferences(preferences),
+                new Mock<IUiInteractionService>().Object,
+                new Mock<IShellNavigationService>().Object,
+                new StubNavigationCoordinator(),
+                new Mock<ILogger<MainNavigationViewModel>>().Object,
+                navState,
+                new Mock<IShellLayoutMetricsSink>().Object,
+                new NavigationSelectionProjector(),
+                new ShellSelectionStateStore(),
+                presenter);
+
+            navVm.RebuildTree();
+
+            var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
+            var orderedBeforeAccess = project.Children
+                .OfType<SessionNavItemViewModel>()
+                .Select(child => child.SessionId)
+                .ToArray();
+            Assert.Equal(new[] { "session-new", "session-old" }, orderedBeforeAccess);
+
+            var accessedSnapshot = new[]
+            {
+                new ConversationCatalogItem(
+                    "session-old",
+                    "Old Session",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                    oldUpdated,
+                    new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)),
+                snapshot[1]
+            };
+            presenter.Refresh(accessedSnapshot);
+            navVm.RebuildTree();
+
+            var orderedAfterAccess = project.Children
+                .OfType<SessionNavItemViewModel>()
+                .Select(child => child.SessionId)
+                .ToArray();
+            Assert.Equal(new[] { "session-new", "session-old" }, orderedAfterAccess);
         }
         finally
         {
@@ -328,12 +416,16 @@ public sealed class MainNavigationViewModelSelectionTests
         => new(conversationIds);
 
     private static IReadOnlyList<ConversationCatalogItem> CreateSnapshot(IEnumerable<string> conversationIds)
-        => conversationIds.Select(id => new ConversationCatalogItem(
+    {
+        var now = DateTime.UtcNow;
+        return conversationIds.Select(id => new ConversationCatalogItem(
             id,
             id,
             @"C:\repo\demo",
-            DateTime.UtcNow,
-            DateTime.UtcNow)).ToArray();
+            now,
+            now,
+            now)).ToArray();
+    }
 
     private static INavigationProjectPreferences CreateProjectPreferences(AppPreferencesViewModel preferences)
         => new NavigationProjectPreferencesAdapter(preferences);

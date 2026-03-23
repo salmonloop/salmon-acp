@@ -166,6 +166,32 @@ public sealed class AcpChatCoordinatorTests
         service.Verify(x => x.SendPromptAsync(It.Is<SessionPromptParams>(p => p.SessionId == "remote-123"), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData(StopReason.Refusal)]
+    [InlineData(StopReason.Cancelled)]
+    public async Task DispatchPromptToRemoteSessionAsync_PreservesPromptStopReason(StopReason expected)
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            IsConnected = true,
+            IsInitialized = true
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        service
+            .Setup(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SessionPromptResponse(expected));
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        var result = await sut.DispatchPromptToRemoteSessionAsync("remote-123", "hi", sink, _ => Task.FromResult(true));
+
+        Assert.Equal(expected, result.Response.StopReason);
+    }
+
     [Fact]
     public async Task DispatchPromptToRemoteSessionAsync_RemoteSessionNotFound_RecreatesSessionAndRetriesOnce()
     {

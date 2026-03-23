@@ -73,6 +73,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private bool _suppressStoreProfileProjection;
     private bool _suppressStorePromptProjection;
     private bool _suppressProfileSyncFromStore;
+    private bool _suppressModeSelectionDispatch;
     private string? _selectedProfileIdFromStore;
     private int _storeProjectionSequence;
     private readonly object _restoreSync = new();
@@ -131,8 +132,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     [ObservableProperty]
     private ChatTurnPhase? _turnPhase;
-
-    private string? _currentTurnId;
 
     [ObservableProperty]
     private bool _isConversationListLoading = true;
@@ -653,6 +652,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         QueueSelectedProfileConnection(value);
+    }
+
+    partial void OnSelectedModeChanged(SessionModeViewModel? value)
+    {
+        if (_suppressModeSelectionDispatch || value is null || _disposed)
+        {
+            return;
+        }
+
+        _ = SetModeAsync(value);
     }
 
     private void QueueSelectedProfileConnection(ServerConfiguration profile)
@@ -1572,56 +1581,52 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
             // SECURITY/PROTOCOL CHECK: Only the store-authoritative binding for the active
             // conversation may mutate the visible transcript.
-            var activeBinding = await ResolveActiveConversationBindingAsync().ConfigureAwait(true);
+            var storeState = await _chatStore.State ?? ChatState.Empty;
+            var activeConversationId = storeState.HydratedConversationId;
+            var activeBinding = storeState.ResolveBinding(activeConversationId);
             if (string.IsNullOrWhiteSpace(activeBinding?.RemoteSessionId)
                 || !string.Equals(e.SessionId, activeBinding.RemoteSessionId, StringComparison.Ordinal))
             {
                 return;
             }
 
+            var activeTurn = ResolveSessionUpdateTurn(storeState, activeConversationId, e.SessionId);
+
             if (e.Update is AgentMessageUpdate messageUpdate && messageUpdate.Content != null)
             {
-                if (_currentTurnId != null)
-                {
-                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, ChatTurnPhase.Responding));
-                }
-                HandleAgentContentChunk(messageUpdate.Content);
+                await AdvanceActiveTurnPhaseAsync(activeTurn, ChatTurnPhase.Responding).ConfigureAwait(true);
+                await HandleAgentContentChunkAsync(activeConversationId, messageUpdate.Content).ConfigureAwait(true);
             }
             else if (e.Update is AgentThoughtUpdate)
             {
                 // Thought chunks are transient states; they trigger 'thinking' UI feedback.
-                if (_currentTurnId != null)
-                {
-                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, ChatTurnPhase.Thinking));
-                }
+                await AdvanceActiveTurnPhaseAsync(activeTurn, ChatTurnPhase.Thinking).ConfigureAwait(true);
             }
             else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
             {
-                AddMessageToHistory(userMessageUpdate.Content, isOutgoing: true);
+                await AddMessageToHistoryAsync(activeConversationId, userMessageUpdate.Content, isOutgoing: true).ConfigureAwait(true);
             }
             else if (e.Update is ToolCallUpdate toolCallUpdate)
             {
-                if (_currentTurnId != null)
-                {
-                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, ChatTurnPhase.ToolPending, ToolCallId: toolCallUpdate.ToolCallId, ToolTitle: toolCallUpdate.Title));
-                }
+                await AdvanceActiveTurnPhaseAsync(
+                    activeTurn,
+                    ChatTurnPhase.ToolPending,
+                    toolCallUpdate.ToolCallId,
+                    toolCallUpdate.Title).ConfigureAwait(true);
 
-                _ = UpsertTranscriptSnapshotAsync(CreateToolCallSnapshot(toolCallUpdate));
+                await UpsertTranscriptSnapshotAsync(activeConversationId, CreateToolCallSnapshot(toolCallUpdate)).ConfigureAwait(true);
             }
             else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
             {
-                if (_currentTurnId != null)
+                var phase = toolCallStatusUpdate.Status switch
                 {
-                    var phase = toolCallStatusUpdate.Status switch
-                    {
-                        Domain.Models.Tool.ToolCallStatus.InProgress => ChatTurnPhase.ToolRunning,
-                        Domain.Models.Tool.ToolCallStatus.Completed => ChatTurnPhase.WaitingForAgent,
-                        Domain.Models.Tool.ToolCallStatus.Failed => ChatTurnPhase.Failed,
-                        _ => ChatTurnPhase.ToolPending
-                    };
-                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, phase, ToolCallId: toolCallStatusUpdate.ToolCallId));
-                }
-                _ = UpdateToolCallStatusAsync(toolCallStatusUpdate);
+                    Domain.Models.Tool.ToolCallStatus.InProgress => ChatTurnPhase.ToolRunning,
+                    Domain.Models.Tool.ToolCallStatus.Completed => ChatTurnPhase.WaitingForAgent,
+                    Domain.Models.Tool.ToolCallStatus.Failed => ChatTurnPhase.Failed,
+                    _ => ChatTurnPhase.ToolPending
+                };
+                await AdvanceActiveTurnPhaseAsync(activeTurn, phase, toolCallStatusUpdate.ToolCallId).ConfigureAwait(true);
+                await UpdateToolCallStatusAsync(activeConversationId, toolCallStatusUpdate).ConfigureAwait(true);
             }
             else if (e.Update is PlanUpdate planUpdate)
             {
@@ -1643,6 +1648,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 // Session metadata currently projects through the workspace/catalog pipeline.
             }
+            else if (e.Update is UsageUpdate)
+            {
+                // Known protocol extension: usage telemetry does not currently drive visible turn or transcript state.
+            }
             else if (e.Update is AvailableCommandsUpdate commandsUpdate)
             {
                 UpdateSlashCommands(commandsUpdate);
@@ -1659,27 +1668,85 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    private void HandleAgentContentChunk(ContentBlock content)
+    private static ActiveTurnState? ResolveSessionUpdateTurn(ChatState storeState, string? activeConversationId, string remoteSessionId)
+    {
+        if (storeState.ActiveTurn is not { } activeTurn
+            || string.IsNullOrWhiteSpace(activeConversationId)
+            || !string.Equals(activeTurn.ConversationId, activeConversationId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var turnBinding = storeState.ResolveBinding(activeTurn.ConversationId);
+        return string.Equals(turnBinding?.RemoteSessionId, remoteSessionId, StringComparison.Ordinal)
+            ? activeTurn
+            : null;
+    }
+
+    private async Task AdvanceActiveTurnPhaseAsync(
+        ActiveTurnState? activeTurn,
+        ChatTurnPhase phase,
+        string? toolCallId = null,
+        string? toolTitle = null)
+    {
+        if (activeTurn is null)
+        {
+            return;
+        }
+
+        await _chatStore.Dispatch(
+            new AdvanceTurnPhaseAction(
+                activeTurn.ConversationId,
+                activeTurn.TurnId,
+                phase,
+                ToolCallId: toolCallId,
+                ToolTitle: toolTitle)).ConfigureAwait(true);
+    }
+
+    private async Task ApplyPromptDispatchResultAsync(
+        string conversationId,
+        string turnId,
+        SessionPromptResponse response)
+    {
+        switch (response.StopReason)
+        {
+            case StopReason.Cancelled:
+                await _chatStore.Dispatch(new CancelTurnAction(conversationId, turnId)).ConfigureAwait(true);
+                break;
+
+            case StopReason.Refusal:
+                await _chatStore.Dispatch(new FailTurnAction(conversationId, turnId, StopReason.Refusal.ToString())).ConfigureAwait(true);
+                break;
+
+            case StopReason.EndTurn:
+            case StopReason.MaxTokens:
+            case StopReason.MaxTurnRequests:
+                await _chatStore.Dispatch(new CompleteTurnAction(conversationId, turnId)).ConfigureAwait(true);
+                break;
+        }
+    }
+
+    private async Task HandleAgentContentChunkAsync(string? conversationId, ContentBlock content)
     {
         // ACP streams response content as an array of blocks. We coalesce adjacent text blocks
         // into a single UI element to mimic a natural typing effect.
         if (content is TextContentBlock text)
         {
-            AppendAgentTextChunk(text.Text ?? string.Empty);
+            await AppendAgentTextChunkAsync(conversationId, text.Text ?? string.Empty).ConfigureAwait(true);
             return;
         }
 
-        AddMessageToHistory(content, isOutgoing: false);
+        await AddMessageToHistoryAsync(conversationId, content, isOutgoing: false).ConfigureAwait(true);
     }
 
-    private void AppendAgentTextChunk(string chunk)
+    private async Task AppendAgentTextChunkAsync(string? conversationId, string chunk)
     {
-        if (string.IsNullOrWhiteSpace(chunk))
+        if (string.IsNullOrWhiteSpace(chunk) || string.IsNullOrWhiteSpace(conversationId))
         {
             return;
         }
 
-        _ = _chatStore.Dispatch(new AppendTextDeltaAction(CurrentSessionId, chunk));
+        await _chatStore.Dispatch(new AppendTextDeltaAction(conversationId, chunk)).ConfigureAwait(false);
     }
 
     private async Task<bool> ActivateConversationAsync(string sessionId, CancellationToken cancellationToken = default)
@@ -2087,9 +2154,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private static bool IsAuthenticationRequiredError(Exception ex) =>
         ex is AcpException acp && acp.ErrorCode == JsonRpcErrorCode.AuthenticationRequired;
 
-    private void AddMessageToHistory(ContentBlock content, bool isOutgoing)
+    private Task AddMessageToHistoryAsync(string? conversationId, ContentBlock content, bool isOutgoing)
     {
-        _ = UpsertTranscriptSnapshotAsync(CreateContentSnapshot(content, isOutgoing));
+        return UpsertTranscriptSnapshotAsync(conversationId, CreateContentSnapshot(content, isOutgoing));
     }
 
     private ConversationMessageSnapshot CreateContentSnapshot(ContentBlock content, bool isOutgoing)
@@ -2151,19 +2218,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         };
     }
 
-    private async Task UpsertTranscriptSnapshotAsync(ConversationMessageSnapshot snapshot)
+    private async Task UpsertTranscriptSnapshotAsync(string? conversationId, ConversationMessageSnapshot snapshot)
     {
-        if (string.IsNullOrWhiteSpace(CurrentSessionId))
+        if (string.IsNullOrWhiteSpace(conversationId))
         {
             return;
         }
 
-        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(CurrentSessionId, snapshot)).ConfigureAwait(false);
+        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(conversationId, snapshot)).ConfigureAwait(false);
     }
 
-    private async Task UpdateToolCallStatusAsync(ToolCallStatusUpdate toolCallStatusUpdate)
+    private async Task UpdateToolCallStatusAsync(string? conversationId, ToolCallStatusUpdate toolCallStatusUpdate)
     {
-        if (string.IsNullOrWhiteSpace(CurrentSessionId) || string.IsNullOrEmpty(toolCallStatusUpdate.ToolCallId))
+        if (string.IsNullOrWhiteSpace(conversationId) || string.IsNullOrEmpty(toolCallStatusUpdate.ToolCallId))
         {
             return;
         }
@@ -2190,7 +2257,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
         }
 
-        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(CurrentSessionId, new ConversationMessageSnapshot
+        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(conversationId, new ConversationMessageSnapshot
         {
             Id = existing.Id,
             Timestamp = DateTime.UtcNow,
@@ -2245,7 +2312,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         if (!string.IsNullOrWhiteSpace(delta.SelectedModeId) && AvailableModes.Count > 0)
         {
-            SelectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == delta.SelectedModeId) ?? AvailableModes[0];
+            SetSelectedModeWithoutDispatch(
+                AvailableModes.FirstOrDefault(m => m.ModeId == delta.SelectedModeId) ?? AvailableModes[0]);
         }
 
         if (delta.PlanEntries != null)
@@ -2317,8 +2385,51 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         var current = modeOption.SelectedOption?.Value ?? modeOption.TextValue;
         if (!string.IsNullOrWhiteSpace(current) && AvailableModes.Count > 0)
         {
-            SelectedMode = AvailableModes.FirstOrDefault(m => m.ModeId == current) ?? SelectedMode ?? AvailableModes[0];
+            SetSelectedModeWithoutDispatch(
+                AvailableModes.FirstOrDefault(m => m.ModeId == current) ?? AvailableModes[0]);
         }
+    }
+
+    private void SetSelectedModeWithoutDispatch(SessionModeViewModel? mode)
+    {
+        _suppressModeSelectionDispatch = true;
+        try
+        {
+            SelectedMode = mode;
+        }
+        finally
+        {
+            _suppressModeSelectionDispatch = false;
+        }
+    }
+
+    private void ApplySessionConfigOptionResponse(SessionSetConfigOptionResponse response, string remoteSessionId)
+    {
+        if (response?.ConfigOptions == null)
+        {
+            return;
+        }
+
+        ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(
+            new SessionUpdateEventArgs(
+                remoteSessionId,
+                new ConfigOptionUpdate
+                {
+                    ConfigOptions = response.ConfigOptions
+                })));
+    }
+
+    private void ApplySessionModeResponse(SessionSetModeResponse response, string remoteSessionId)
+    {
+        if (response is null || string.IsNullOrWhiteSpace(response.ModeId))
+        {
+            return;
+        }
+
+        ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(
+            new SessionUpdateEventArgs(
+                remoteSessionId,
+                new CurrentModeUpdate(response.ModeId))));
     }
 
    [RelayCommand]
@@ -2414,11 +2525,28 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
 
             var localConversationId = Guid.NewGuid().ToString("N");
+            await _sessionManager.CreateSessionAsync(localConversationId, sessionParams.Cwd).ConfigureAwait(false);
+            await _conversationWorkspace.RegisterConversationAsync(
+                localConversationId,
+                createdAt: DateTime.UtcNow,
+                lastUpdatedAt: DateTime.UtcNow).ConfigureAwait(false);
+
             var switched = await ActivateConversationAsync(localConversationId).ConfigureAwait(false);
             if (!switched)
             {
                 throw new InvalidOperationException("Failed to activate local conversation before applying session response.");
             }
+
+            var bindingResult = await _bindingCommands
+                .UpdateBindingAsync(localConversationId, response.SessionId, SelectedProfileId)
+                .ConfigureAwait(false);
+            if (bindingResult.Status is not BindingUpdateStatus.Success)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to bind new conversation ({bindingResult.Status}): {bindingResult.ErrorMessage ?? "UnknownError"}");
+            }
+
+            await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
             ApplySessionNewResponse(response);
 
             // Load available modes (deprecated in favor of configOptions).
@@ -2442,9 +2570,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 if (AvailableModes.Count > 0)
                 {
                     var currentModeId = response.Modes.CurrentModeId;
-                    SelectedMode = string.IsNullOrWhiteSpace(currentModeId)
-                        ? AvailableModes[0]
-                        : AvailableModes.FirstOrDefault(m => m.ModeId == currentModeId) ?? AvailableModes[0];
+                    SetSelectedModeWithoutDispatch(
+                        string.IsNullOrWhiteSpace(currentModeId)
+                            ? AvailableModes[0]
+                            : AvailableModes.FirstOrDefault(m => m.ModeId == currentModeId) ?? AvailableModes[0]);
                 }
             }
 
@@ -2492,21 +2621,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         var promptText = CurrentPrompt;
+        var conversationId = CurrentSessionId!;
+        var turnId = Guid.NewGuid().ToString();
 
         try
         {
             ClearError();
             await _chatStore.Dispatch(new SetPromptInFlightAction(true));
-            
-            _currentTurnId = Guid.NewGuid().ToString();
-            await _chatStore.Dispatch(new BeginTurnAction(CurrentSessionId!, _currentTurnId, ChatTurnPhase.CreatingRemoteSession));
+            await _chatStore.Dispatch(new BeginTurnAction(conversationId, turnId, ChatTurnPhase.CreatingRemoteSession));
 
             // Clear input immediately for better UX
             CurrentPrompt = string.Empty;
 
             // Add user message to history
             var userContent = new TextContentBlock { Text = promptText };
-            AddMessageToHistory(userContent, isOutgoing: true);
+            await AddMessageToHistoryAsync(conversationId, userContent, isOutgoing: true).ConfigureAwait(true);
 
             if (_chatService != null)
             {
@@ -2519,32 +2648,33 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                     .EnsureRemoteSessionAsync(this, TryAuthenticateAsync, token)
                     .ConfigureAwait(false);
 
+                if (!sessionResult.UsedExistingBinding)
+                {
+                    ApplySessionNewResponse(sessionResult.Session);
+                }
+
                 // Step 2: Advance phase to waiting for agent response
-                await _chatStore.Dispatch(new AdvanceTurnPhaseAction(CurrentSessionId!, _currentTurnId, ChatTurnPhase.WaitingForAgent));
+                await _chatStore.Dispatch(new AdvanceTurnPhaseAction(conversationId, turnId, ChatTurnPhase.WaitingForAgent));
 
                 // Step 3: Dispatch the prompt to the identified remote session
-                await _acpConnectionCommands
+                var promptDispatchResult = await _acpConnectionCommands
                     .DispatchPromptToRemoteSessionAsync(sessionResult.RemoteSessionId, promptText, this, TryAuthenticateAsync, token)
                     .ConfigureAwait(false);
+
+                await ApplyPromptDispatchResultAsync(conversationId, turnId, promptDispatchResult.Response).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
             // User-cancelled; keep input cleared.
-            if (_currentTurnId != null)
-            {
-                await _chatStore.Dispatch(new CancelTurnAction(CurrentSessionId!, _currentTurnId));
-            }
+            await _chatStore.Dispatch(new CancelTurnAction(conversationId, turnId));
         }
         catch (TimeoutException ex)
         {
             Logger.LogError(ex, "SendPrompt timed out");
             SetError("Send timed out: Agent did not respond for a long time.");
 
-            if (_currentTurnId != null)
-            {
-                await _chatStore.Dispatch(new FailTurnAction(CurrentSessionId!, _currentTurnId, "Timed out"));
-            }
+            await _chatStore.Dispatch(new FailTurnAction(conversationId, turnId, "Timed out"));
 
             if (string.IsNullOrWhiteSpace(CurrentPrompt))
             {
@@ -2558,10 +2688,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             Logger.LogError(ex, "SendPrompt failed");
             SetError($"Send failed: {ex.Message}");
 
-            if (_currentTurnId != null)
-            {
-                await _chatStore.Dispatch(new FailTurnAction(CurrentSessionId!, _currentTurnId, ex.Message));
-            }
+            await _chatStore.Dispatch(new FailTurnAction(conversationId, turnId, ex.Message));
 
             // Restore text so the user can retry quickly.
             if (string.IsNullOrWhiteSpace(CurrentPrompt))
@@ -2576,12 +2703,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             try { _sendPromptCts?.Dispose(); } catch { }
             _sendPromptCts = null;
             await _chatStore.Dispatch(new SetPromptInFlightAction(false));
-            
-            if (_currentTurnId != null)
-            {
-                await _chatStore.Dispatch(new CompleteTurnAction(CurrentSessionId!, _currentTurnId));
-                _currentTurnId = null;
-            }
         }
     }
 
@@ -2718,7 +2839,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                         activeBinding.RemoteSessionId!,
                         _modeConfigId,
                         mode.ModeId ?? string.Empty);
-                    await _chatService.SetSessionConfigOptionAsync(setParams);
+                    var response = await _chatService.SetSessionConfigOptionAsync(setParams).ConfigureAwait(true);
+                    ApplySessionConfigOptionResponse(response, activeBinding.RemoteSessionId!);
                 }
                 else
                 {
@@ -2727,10 +2849,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                         SessionId = activeBinding.RemoteSessionId!,
                         ModeId = mode.ModeId
                     };
-                    await _chatService.SetSessionModeAsync(modeParams);
+                    var response = await _chatService.SetSessionModeAsync(modeParams).ConfigureAwait(true);
+                    ApplySessionModeResponse(response, activeBinding.RemoteSessionId!);
                 }
             }
-            SelectedMode = mode;
         }
         catch (Exception ex)
         {
@@ -2804,7 +2926,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ClearError();
             await _acpConnectionCommands.DisconnectAsync(this);
             AvailableModes.Clear();
-            SelectedMode = null;
+            SetSelectedModeWithoutDispatch(null);
         }
         catch (Exception ex)
         {
@@ -3026,7 +3148,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _selectedProfileConnectTask = null;
             _pendingSelectedProfileConnect = null;
             _sendPromptCts = null;
-            _transientNotificationCts = null;
+       _transientNotificationCts = null;
        }
 }
 

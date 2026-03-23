@@ -187,6 +187,22 @@ public class ChatReducerTests
     }
 
     [Fact]
+    public void AdvanceTurnPhase_IgnoresConversationMismatchEvenWhenTurnIdMatches()
+    {
+        var initialState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Thinking, DateTime.UtcNow, DateTime.UtcNow),
+            Generation = 4
+        };
+        var action = new AdvanceTurnPhaseAction("conv-remote", "turn-1", ChatTurnPhase.Responding);
+
+        var newState = ChatReducer.Reduce(initialState, action);
+
+        Assert.Equal(4, newState.Generation);
+        Assert.Equal(ChatTurnPhase.Thinking, newState.ActiveTurn!.Phase);
+    }
+
+    [Fact]
     public void SelectConversation_ClearsActiveTurnForPreviousConversation()
     {
         var initialState = ChatState.Empty with
@@ -200,5 +216,42 @@ public class ChatReducerTests
 
         Assert.Null(newState.ActiveTurn);
         Assert.Equal("conv-2", newState.HydratedConversationId);
+    }
+
+    [Fact]
+    public void CompleteTurn_DoesNotOverride_FailedOrCancelled()
+    {
+        var failedState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Failed, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        var action = new CompleteTurnAction("conv-1", "turn-1");
+
+        var newState = ChatReducer.Reduce(failedState, action);
+
+        Assert.Equal(ChatTurnPhase.Failed, newState.ActiveTurn!.Phase);
+
+        var cancelledState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Cancelled, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        var newState2 = ChatReducer.Reduce(cancelledState, action);
+
+        Assert.Equal(ChatTurnPhase.Cancelled, newState2.ActiveTurn!.Phase);
+    }
+
+    [Fact]
+    public void AdvanceTurnPhase_DoesNotOverrideTerminalPhase()
+    {
+        var completedState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Completed, DateTime.UtcNow, DateTime.UtcNow)
+        };
+
+        var newState = ChatReducer.Reduce(
+            completedState,
+            new AdvanceTurnPhaseAction("conv-1", "turn-1", ChatTurnPhase.Responding));
+
+        Assert.Equal(ChatTurnPhase.Completed, newState.ActiveTurn!.Phase);
     }
 }

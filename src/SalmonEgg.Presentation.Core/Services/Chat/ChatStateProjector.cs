@@ -32,10 +32,13 @@ public sealed class ChatStateProjector : IChatStateProjector
         var isAuthenticationRequired = connectionState.IsAuthenticationRequired;
         var authenticationHintMessage = connectionState.AuthenticationHintMessage;
 
-        var activeTurn = storeState.ActiveTurn;
-        var isTurnStatusVisible = activeTurn != null && activeTurn.Phase != ChatTurnPhase.Completed && activeTurn.Phase != ChatTurnPhase.Cancelled;
+        var activeTurn = GetVisibleActiveTurn(storeState.ActiveTurn, currentConversationId);
+        var isTurnStatusVisible = activeTurn is not null && activeTurn.Phase != ChatTurnPhase.Completed;
         var turnStatusText = GetTurnStatusText(activeTurn);
-        var isTurnStatusRunning = isTurnStatusVisible && activeTurn?.Phase != ChatTurnPhase.Failed;
+        var isTurnStatusRunning = activeTurn is not null
+            && activeTurn.Phase is not ChatTurnPhase.Completed
+            && activeTurn.Phase is not ChatTurnPhase.Failed
+            && activeTurn.Phase is not ChatTurnPhase.Cancelled;
 
         return new ChatUiProjection(
             SelectedConversationId: currentConversationId,
@@ -62,6 +65,18 @@ public sealed class ChatStateProjector : IChatStateProjector
             TurnStatusText: turnStatusText,
             IsTurnStatusRunning: isTurnStatusRunning,
             TurnPhase: activeTurn?.Phase);
+    }
+
+    private static ActiveTurnState? GetVisibleActiveTurn(ActiveTurnState? activeTurn, string? currentConversationId)
+    {
+        if (activeTurn is null || string.IsNullOrWhiteSpace(currentConversationId))
+        {
+            return null;
+        }
+
+        return string.Equals(activeTurn.ConversationId, currentConversationId, StringComparison.Ordinal)
+            ? activeTurn
+            : null;
     }
 
     private static string GetTurnStatusText(ActiveTurnState? turn)

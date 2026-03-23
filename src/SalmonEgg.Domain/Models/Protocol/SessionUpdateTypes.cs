@@ -66,6 +66,7 @@ namespace SalmonEgg.Domain.Models.Protocol
     [JsonDerivedType(typeof(AvailableCommandsUpdate), "available_commands_update")]
     [JsonDerivedType(typeof(ConfigOptionUpdate), "config_option_update")]
     [JsonDerivedType(typeof(SessionInfoUpdate), "session_info_update")]
+    [JsonDerivedType(typeof(UsageUpdate), "usage_update")]
     public class SessionUpdate
     {
         // Keep unknown fields so we can safely ignore newer protocol updates without crashing.
@@ -74,14 +75,36 @@ namespace SalmonEgg.Domain.Models.Protocol
     }
 
     /// <summary>
+    /// Usage update extension.
+    /// Represents resource usage or other telemetry sent by the agent.
+    /// </summary>
+    public class UsageUpdate : SessionUpdate
+    {
+        [JsonPropertyName("used")]
+        public int? Used { get; set; }
+
+        [JsonPropertyName("size")]
+        public int? Size { get; set; }
+
+        [JsonPropertyName("cost")]
+        public UsageCost? Cost { get; set; }
+    }
+
+    public class UsageCost
+    {
+        [JsonPropertyName("amount")]
+        public decimal? Amount { get; set; }
+
+        [JsonPropertyName("currency")]
+        public string? Currency { get; set; }
+    }
+
+    /// <summary>
     /// Agent 消息片段更新。
     /// 用于流式传输 Agent 的文本响应。
     /// </summary>
     public class AgentMessageUpdate : SessionUpdate
     {
-        /// <summary>
-        /// 消息内容块。
-        /// </summary>
         [JsonPropertyName("content")]
         public ContentBlock? Content { get; set; }
 

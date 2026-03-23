@@ -294,6 +294,64 @@ public sealed class ConversationActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task ActivateSessionAsync_ProfileMismatch_DoesNotReorderCatalog()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences(syncContext);
+        var workspaceStore = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        await sessionManager.CreateSessionAsync("session-old", @"C:\repo\one");
+        await sessionManager.CreateSessionAsync("session-new", @"C:\repo\one");
+        using var workspace = CreateWorkspace(workspaceStore, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-old",
+            Transcript:
+            [
+                CreateTextMessage("m-old", "older")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-new",
+            Transcript:
+            [
+                CreateTextMessage("m-new", "newer")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc)));
+        workspace.UpdateRemoteBinding("session-old", "remote-1", "profile-a");
+
+        var versionBeforeActivation = workspace.ConversationListVersion;
+        var state = State.Value(new object(), () => ChatState.Empty with
+        {
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
+                "session-old",
+                new ConversationBindingSlice("session-old", "remote-1", "profile-a"))
+        });
+        var chatStore = CreateChatStore(state);
+        var connectionStore = CreateConnectionStore("profile-b");
+        var bindingCommands = new BindingCoordinator(workspace, chatStore);
+        var coordinator = new ConversationActivationCoordinator(
+            workspace,
+            bindingCommands,
+            chatStore,
+            connectionStore,
+            Mock.Of<ILogger<ConversationActivationCoordinator>>());
+
+        var result = await coordinator.ActivateSessionAsync("session-old");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(new[] { "session-new", "session-old" }, workspace.GetKnownConversationIds());
+        Assert.Equal(versionBeforeActivation, workspace.ConversationListVersion);
+    }
+
+    [Fact]
     public async Task ArchiveConversation_CurrentSession_ClearsVisibleSelection_ThroughCoordinatorOnly()
     {
         var syncContext = new ImmediateSynchronizationContext();

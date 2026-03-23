@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Moq;
 using SalmonEgg.Domain.Interfaces.Transport;
+using SalmonEgg.Domain.Models.Content;
 using SalmonEgg.Domain.Models.JsonRpc;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Models.Protocol;
@@ -142,6 +143,41 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.Contains("method=session/new", ex.Message);
             Assert.Contains("timeout=", ex.Message);
             Assert.Contains("lastRx=", ex.Message);
+        }
+
+        [Theory]
+        [InlineData(StopReason.MaxTurnRequests)]
+        [InlineData(StopReason.Refusal)]
+        [InlineData(StopReason.Cancelled)]
+        public async Task SendPromptAsync_ParsesOfficialStopReasonValues(StopReason expected)
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var createResponseTrigger = Task.Run(async () => {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var createResult = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            await createResponseTrigger;
+
+            var promptResponseTrigger = Task.Run(async () => {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(3, JsonSerializer.SerializeToElement(new SessionPromptResponse(expected), parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var promptResult = await client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
+            await promptResponseTrigger;
+
+            Assert.Equal(expected, promptResult.StopReason);
         }
     }
 }

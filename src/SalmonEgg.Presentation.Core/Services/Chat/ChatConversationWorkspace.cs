@@ -131,7 +131,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 ResolveSessionDisplayName(binding.ConversationId),
                 _sessionManager.GetSession(binding.ConversationId)?.Cwd,
                 binding.CreatedAt,
-                binding.LastUpdatedAt))
+                binding.LastUpdatedAt,
+                binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt))
             .ToArray();
 
     public void RenameConversation(string conversationId, string newDisplayName)
@@ -263,7 +264,11 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             return;
         }
 
-        var binding = RegisterConversation(conversationId, default, DateTime.UtcNow, bumpVersion: true);
+        if (!_conversationBindings.TryGetValue(conversationId, out var binding))
+        {
+            binding = RegisterConversation(conversationId, default, DateTime.UtcNow, bumpVersion: true);
+        }
+
         binding.RemoteSessionId = remoteSessionId;
         binding.BoundProfileId = boundProfileId;
     }
