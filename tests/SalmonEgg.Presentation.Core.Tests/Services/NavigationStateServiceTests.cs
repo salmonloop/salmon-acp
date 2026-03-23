@@ -13,7 +13,7 @@ public class NavigationStateServiceTests
     [Fact]
     public async Task IsPaneOpen_ShouldChangeStateAndNotify()
     {
-        using var store = new TestShellLayoutStore();
+        await using var store = new TestShellLayoutStore();
         using var service = new NavigationStateService(store);
         using var signal = new ManualResetEventSlim(false);
         var changedCount = 0;
@@ -31,7 +31,7 @@ public class NavigationStateServiceTests
     [Fact]
     public async Task IsPaneOpen_ShouldNotNotifyIfValueIsSame()
     {
-        using var store = new TestShellLayoutStore();
+        await using var store = new TestShellLayoutStore();
         using var service = new NavigationStateService(store);
         using var signal = new ManualResetEventSlim(false);
         service.PaneStateChanged += (_, _) => signal.Set();
@@ -50,9 +50,9 @@ public class NavigationStateServiceTests
     }
 
     [Fact]
-    public void Constructor_SeedsCurrentSnapshotImmediately()
+    public async Task Constructor_SeedsCurrentSnapshotImmediately()
     {
-        using var store = new TestShellLayoutStore(
+        await using var store = new TestShellLayoutStore(
             ShellLayoutState.Default with
             {
                 WindowMetrics = new WindowMetrics(800, 720, 800, 720),
@@ -63,7 +63,29 @@ public class NavigationStateServiceTests
         Assert.False(service.IsPaneOpen);
     }
 
-    private sealed class TestShellLayoutStore : IShellLayoutStore, IDisposable
+    [Fact]
+    public async Task DisposePath_ShouldNotBlockAfterConstructorOnlyUse()
+    {
+        var store = new TestShellLayoutStore(
+            ShellLayoutState.Default with
+            {
+                WindowMetrics = new WindowMetrics(800, 720, 800, 720),
+                UserNavOpenIntent = false
+            });
+        var service = new NavigationStateService(store);
+
+        Assert.False(service.IsPaneOpen);
+
+        service.Dispose();
+
+        var disposeTask = store.DisposeAsync().AsTask();
+        var completedTask = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        Assert.Same(disposeTask, completedTask);
+        await disposeTask;
+    }
+
+    private sealed class TestShellLayoutStore : IShellLayoutStore, IAsyncDisposable
     {
         private readonly IState<ShellLayoutState> _state;
         private readonly IState<ShellLayoutSnapshot> _snapshot;
@@ -101,10 +123,10 @@ public class NavigationStateServiceTests
             await _snapshot.Update(_ => reduced.Snapshot, default);
         }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
-            _snapshot.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            _state.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await _snapshot.DisposeAsync();
+            await _state.DisposeAsync();
         }
     }
 }
