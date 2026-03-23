@@ -28,15 +28,14 @@ public sealed class BindingCoordinator : IConversationBindingCommands
             var conversationExists = _workspace
                 .GetKnownConversationIds()
                 .Contains(conversationId, StringComparer.Ordinal);
-            if (!conversationExists)
-            {
-                return BindingUpdateResult.NotFound();
-            }
 
             var binding = new ConversationBindingSlice(conversationId, remoteSessionId, boundProfileId);
             await _chatStore.Dispatch(new SetBindingSliceAction(binding)).ConfigureAwait(false);
-            _workspace.UpdateRemoteBinding(conversationId, remoteSessionId, boundProfileId);
-            _workspace.ScheduleSave();
+            if (conversationExists)
+            {
+                _workspace.UpdateRemoteBinding(conversationId, remoteSessionId, boundProfileId);
+                _workspace.ScheduleSave();
+            }
             return BindingUpdateResult.Success();
         }
         catch (Exception ex)

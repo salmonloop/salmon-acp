@@ -99,8 +99,16 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             static (workspace, id) => workspace.DeleteConversation(id),
             cancellationToken);
 
-    private async Task NormalizeBindingForSelectedProfileAsync(string conversationId)
+    public async Task NormalizeBindingForSelectedProfileAsync(
+        string conversationId,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
         var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
         var selectedProfileId = connectionState.SelectedProfileId;
         if (string.IsNullOrWhiteSpace(selectedProfileId))
@@ -109,12 +117,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
         }
 
         var currentState = await _chatStore.State ?? ChatState.Empty;
-        if (!string.Equals(currentState.HydratedConversationId, conversationId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var binding = currentState.Binding;
+        var binding = currentState.ResolveBinding(conversationId);
         if (binding is null || !string.Equals(binding.ConversationId, conversationId, StringComparison.Ordinal))
         {
             return;

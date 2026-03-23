@@ -304,7 +304,8 @@ public static class DependencyInjection
                 CreateStartCwdResolver(
                     sp.GetRequiredService<MainNavigationViewModel>(),
                     sp.GetRequiredService<AppPreferencesViewModel>()),
-                sp.GetRequiredService<ILogger<ChatLaunchWorkflow>>()));
+                sp.GetRequiredService<ILogger<ChatLaunchWorkflow>>(),
+                sp.GetRequiredService<ConversationCatalogFacade>()));
 
         // App preferences used by General/Appearance settings and window behaviors.
         services.AddSingleton<AppPreferencesViewModel>();

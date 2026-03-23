@@ -148,7 +148,7 @@
                               VerticalAlignment="Center"
                               ItemsSource="{x:Bind ViewModel.AcpProfileList, Mode=OneWay}"
                               SelectedItem="{x:Bind ViewModel.SelectedAcpProfile, Mode=TwoWay}"
-                              PlaceholderText="选择 ACP">
+                              PlaceholderText="Select ACP profile">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="domain:ServerConfiguration">
                                 <TextBlock Text="{x:Bind Name, Mode=OneTime}"

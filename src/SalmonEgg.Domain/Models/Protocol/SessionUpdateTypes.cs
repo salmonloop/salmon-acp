@@ -65,6 +65,7 @@ namespace SalmonEgg.Domain.Models.Protocol
     [JsonDerivedType(typeof(ConfigUpdateUpdate), "config_options_update")]
     [JsonDerivedType(typeof(AvailableCommandsUpdate), "available_commands_update")]
     [JsonDerivedType(typeof(ConfigOptionUpdate), "config_option_update")]
+    [JsonDerivedType(typeof(SessionInfoUpdate), "session_info_update")]
     public class SessionUpdate
     {
         // Keep unknown fields so we can safely ignore newer protocol updates without crashing.
@@ -270,8 +271,15 @@ namespace SalmonEgg.Domain.Models.Protocol
         [JsonPropertyName("currentModeId")]
         public string? CurrentModeId { get; set; }
 
+        [JsonPropertyName("modeId")]
+        public string? LegacyModeId { get; set; }
+
         [JsonPropertyName("title")]
         public string? Title { get; set; }
+
+        [JsonIgnore]
+        public string? NormalizedModeId =>
+            !string.IsNullOrWhiteSpace(CurrentModeId) ? CurrentModeId : LegacyModeId;
 
         public CurrentModeUpdate()
         {
@@ -347,6 +355,36 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// 配置选项列表。
         /// </summary>
         [JsonPropertyName("configOptions")]
-        public object? ConfigOptions { get; set; }
+        public List<ConfigOption>? ConfigOptions { get; set; }
+    }
+
+    /// <summary>
+    /// 会话信息更新（session_info_update）。
+    /// </summary>
+    public class SessionInfoUpdate : SessionUpdate
+    {
+        /// <summary>
+        /// 会话标题（可选）。
+        /// </summary>
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        /// <summary>
+        /// 最近更新时间（UTC iso8601）。
+        /// </summary>
+        [JsonPropertyName("updatedAt")]
+        public string? UpdatedAt { get; set; }
+
+        /// <summary>
+        /// 工作目录（只读，客户端不得修改）。
+        /// </summary>
+        [JsonPropertyName("cwd")]
+        public string? Cwd { get; set; }
+
+        /// <summary>
+        /// 会话 ID（可选）。
+        /// </summary>
+        [JsonPropertyName("sessionId")]
+        public string? SessionId { get; set; }
     }
 }

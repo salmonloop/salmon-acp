@@ -41,6 +41,22 @@ public sealed class ConversationCatalogFacade : IConversationCatalog, IDisposabl
     public Task RestoreAsync(CancellationToken cancellationToken = default)
         => _workspace.RestoreAsync(cancellationToken);
 
+    public async Task RegisterConversationAsync(
+        string conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        var timestamp = DateTime.UtcNow;
+        await _workspace
+            .RegisterConversationAsync(conversationId, timestamp, timestamp, cancellationToken)
+            .ConfigureAwait(false);
+        _workspace.ScheduleSave();
+    }
+
     public void RenameConversation(string conversationId, string newDisplayName)
         => _workspace.RenameConversation(conversationId, newDisplayName);
 
@@ -66,6 +82,11 @@ public sealed class ConversationCatalogFacade : IConversationCatalog, IDisposabl
         _ = RunMutationAsync(() => _activationCoordinator.DeleteConversationAsync(
             conversationId,
             GetActiveConversationId()));
+    }
+
+    public Task RegisterConversationAsync(string conversationId)
+    {
+        return RegisterConversationAsync(conversationId, CancellationToken.None);
     }
 
     public void Dispose()

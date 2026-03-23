@@ -556,6 +556,9 @@ public sealed class NavigationCoordinatorTests
         public Task<ConversationMutationResult> ArchiveConversationAsync(string conversationId, string? activeConversationId, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConversationMutationResult(true, string.Equals(conversationId, activeConversationId, StringComparison.Ordinal), null));
 
+        public Task NormalizeBindingForSelectedProfileAsync(string conversationId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
         public Task<ConversationMutationResult> DeleteConversationAsync(string conversationId, string? activeConversationId, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConversationMutationResult(true, string.Equals(conversationId, activeConversationId, StringComparison.Ordinal), null));
     }

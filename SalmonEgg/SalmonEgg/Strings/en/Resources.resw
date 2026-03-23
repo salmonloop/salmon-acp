@@ -145,7 +145,7 @@
     <value>Choose mode</value>
   </data>
   <data name="ChatAcpProfileSelector.PlaceholderText" xml:space="preserve">
-    <value>Select ACP</value>
+    <value>Select ACP profile</value>
   </data>
   <data name="MarryHerButton.Content" xml:space="preserve">
     <value>Marry her</value>
@@ -199,7 +199,7 @@
     <value>Output</value>
   </data>
   <data name="ChatAcpProfileSelector.PlaceholderText" xml:space="preserve">
-    <value>Select ACP</value>
+    <value>Select ACP profile</value>
   </data>
   <data name="Diagnostics_OpenLiveLog.Content" xml:space="preserve">
     <value>View live logs</value>

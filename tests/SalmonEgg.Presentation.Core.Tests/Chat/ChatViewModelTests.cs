@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Immutable;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
 using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
+using SalmonEgg.Domain.Models.Content;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
@@ -690,6 +692,82 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task SelectedAcpProfile_Change_ClearsActiveRemoteBindingBeforeReconnect()
+    {
+        var connectGate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var commands = new Mock<IAcpConnectionCommands>();
+        commands
+            .Setup(x => x.ConnectToProfileAsync(
+                It.IsAny<ServerConfiguration>(),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ServerConfiguration, IAcpTransportConfiguration, IAcpChatCoordinatorSink, CancellationToken>(async (_, _, _, _) =>
+            {
+                connectStarted.TrySetResult(null);
+                await connectGate.Task;
+                return new AcpTransportApplyResult(Mock.Of<IChatService>(), new InitializeResponse());
+            });
+
+        await using var fixture = CreateViewModel(acpConnectionCommands: commands.Object);
+        var profileA = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+        var profileB = new ServerConfiguration { Id = "profile-b", Name = "Profile B", Transport = TransportType.Stdio };
+        fixture.Profiles.Profiles.Add(profileA);
+        fixture.Profiles.Profiles.Add(profileB);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "session-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
+                "session-1",
+                new ConversationBindingSlice("session-1", "remote-1", "profile-a"))
+        });
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return state.ResolveBinding("session-1") == new ConversationBindingSlice("session-1", "remote-1", "profile-a");
+        });
+
+        fixture.ViewModel.SelectedAcpProfile = profileB;
+        await connectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return state.ResolveBinding("session-1") == new ConversationBindingSlice("session-1", null, "profile-b")
+                && fixture.ViewModel.CurrentRemoteSessionId is null;
+        });
+
+        var state = await fixture.GetStateAsync();
+        Assert.Equal(new ConversationBindingSlice("session-1", null, "profile-b"), state.ResolveBinding("session-1"));
+        Assert.Null(fixture.ViewModel.CurrentRemoteSessionId);
+
+        connectGate.TrySetResult(null);
+    }
+
+    [Fact]
+    public async Task SelectedAcpProfile_Change_SurfacesConnectionFailure()
+    {
+        var commands = new Mock<IAcpConnectionCommands>();
+        commands
+            .Setup(x => x.ConnectToProfileAsync(
+                It.IsAny<ServerConfiguration>(),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("profile switch failed"));
+
+        await using var fixture = CreateViewModel(acpConnectionCommands: commands.Object);
+        var profile = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+        fixture.Profiles.Profiles.Add(profile);
+
+        fixture.ViewModel.SelectedAcpProfile = profile;
+        await Task.Delay(100);
+
+        Assert.Contains("profile switch failed", fixture.ViewModel.ConnectionErrorMessage ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SelectedProfileId_DoesNotFallBackToUiSelection_WhenStoreSelectionIsMissing()
     {
         await using var fixture = CreateViewModel();
@@ -697,8 +775,12 @@ public class ChatViewModelTests
         fixture.Profiles.Profiles.Add(profile);
         var suppressField = typeof(ChatViewModel)
             .GetField("_suppressStoreProfileProjection", BindingFlags.Instance | BindingFlags.NonPublic);
+        var suppressConnectField = typeof(ChatViewModel)
+            .GetField("_suppressAcpProfileConnect", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(suppressField);
+        Assert.NotNull(suppressConnectField);
         suppressField!.SetValue(fixture.ViewModel, true);
+        suppressConnectField!.SetValue(fixture.ViewModel, true);
 
         try
         {
@@ -708,9 +790,128 @@ public class ChatViewModelTests
         finally
         {
             suppressField.SetValue(fixture.ViewModel, false);
+            suppressConnectField.SetValue(fixture.ViewModel, false);
         }
 
         Assert.Null(fixture.ViewModel.SelectedProfileId);
+    }
+
+    [Fact]
+    public async Task SessionUpdate_AfterBindingChange_UsesStoreBindingInsteadOfStaleProjectedRemoteSessionId()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var chatService = CreateConnectedChatService();
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "session-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
+                "session-1",
+                new ConversationBindingSlice("session-1", "remote-new", "profile-a"))
+        });
+        await Task.Delay(50);
+        SetPrivateField(fixture.ViewModel, "_currentRemoteSessionId", "remote-old");
+
+        chatService.Raise(
+            x => x.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs(
+                "remote-new",
+                new AgentMessageUpdate(new TextContentBlock { Text = "fresh reply" })));
+
+        await Task.Delay(50);
+
+        var message = Assert.Single(fixture.ViewModel.MessageHistory);
+        Assert.Equal("fresh reply", message.TextContent);
+    }
+
+    [Fact]
+    public async Task SessionUpdate_UnrelatedRemoteSession_IsIgnored_WhenStoreBindingTargetsDifferentSession()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var chatService = CreateConnectedChatService();
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "session-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
+                "session-1",
+                new ConversationBindingSlice("session-1", "remote-good", "profile-a"))
+        });
+        await Task.Delay(50);
+        SetPrivateField(fixture.ViewModel, "_currentRemoteSessionId", "remote-stale");
+
+        chatService.Raise(
+            x => x.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs(
+                "remote-other",
+                new AgentMessageUpdate(new TextContentBlock { Text = "ignore me" })));
+
+        await Task.Delay(50);
+
+        Assert.Empty(fixture.ViewModel.MessageHistory);
+    }
+
+    [Fact]
+    public async Task SetModeCommand_UsesStoreBindingInsteadOfStaleProjectedRemoteSessionId()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var chatService = CreateConnectedChatService();
+        chatService
+            .Setup(x => x.SetSessionModeAsync(It.IsAny<SessionSetModeParams>()))
+            .ReturnsAsync(new SessionSetModeResponse("plan"));
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "session-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
+                "session-1",
+                new ConversationBindingSlice("session-1", "remote-fresh", "profile-a"))
+        });
+        await Task.Delay(50);
+        SetPrivateField(fixture.ViewModel, "_currentRemoteSessionId", "remote-stale");
+
+        await fixture.ViewModel.SetModeCommand.ExecuteAsync(new SessionModeViewModel { ModeId = "plan", ModeName = "Plan" });
+
+        chatService.Verify(
+            x => x.SetSessionModeAsync(
+                It.Is<SessionSetModeParams>(parameters =>
+                    parameters.SessionId == "remote-fresh" &&
+                    parameters.ModeId == "plan")),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelSessionCommand_UsesStoreBindingInsteadOfStaleProjectedRemoteSessionId()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var chatService = CreateConnectedChatService();
+        chatService
+            .Setup(x => x.CancelSessionAsync(It.IsAny<SessionCancelParams>()))
+            .ReturnsAsync(new SessionCancelResponse(true));
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "session-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
+                "session-1",
+                new ConversationBindingSlice("session-1", "remote-fresh", "profile-a"))
+        });
+        await Task.Delay(50);
+        SetPrivateField(fixture.ViewModel, "_currentRemoteSessionId", "remote-stale");
+
+        await fixture.ViewModel.CancelSessionCommand.ExecuteAsync(null);
+
+        chatService.Verify(
+            x => x.CancelSessionAsync(It.Is<SessionCancelParams>(parameters => parameters.SessionId == "remote-fresh")),
+            Times.Once);
     }
 
     [Fact]
@@ -1237,6 +1438,41 @@ public class ChatViewModelTests
 
         Assert.DoesNotContain(dispatchedActions, action =>
             legacyActionTypeNames.Contains(action.GetType().Name, StringComparer.Ordinal));
+    }
+
+    private static async Task WaitForConditionAsync(
+        Func<Task<bool>> predicate,
+        int timeoutMilliseconds = 2000,
+        int pollDelayMilliseconds = 10)
+    {
+        var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+        while (DateTime.UtcNow < timeoutAt)
+        {
+            if (await predicate().ConfigureAwait(false))
+            {
+                return;
+            }
+
+            await Task.Delay(pollDelayMilliseconds).ConfigureAwait(false);
+        }
+
+        Assert.True(await predicate().ConfigureAwait(false), "Timed out waiting for expected asynchronous condition.");
+    }
+
+    private static Mock<IChatService> CreateConnectedChatService()
+    {
+        var chatService = new Mock<IChatService>();
+        chatService.SetupGet(service => service.IsConnected).Returns(true);
+        chatService.SetupGet(service => service.IsInitialized).Returns(true);
+        chatService.SetupGet(service => service.SessionHistory).Returns(Array.Empty<SessionUpdateEntry>());
+        return chatService;
+    }
+
+    private static void SetPrivateField(object instance, string fieldName, object? value)
+    {
+        var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(instance, value);
     }
 
     private sealed class ViewModelFixture : IDisposable, IAsyncDisposable

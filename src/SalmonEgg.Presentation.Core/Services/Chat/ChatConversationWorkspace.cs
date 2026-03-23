@@ -183,7 +183,11 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         await _sessionSwitchGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await PostToContextAsync(() => LastActiveConversationId = sessionId, cancellationToken).ConfigureAwait(false);
+            await PostToContextAsync(() =>
+            {
+                LastActiveConversationId = sessionId;
+                UpdateLastAccessedAt(sessionId, DateTime.UtcNow);
+            }, cancellationToken).ConfigureAwait(false);
 
             return true;
         }
@@ -242,9 +246,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             return;
         }
 
-        var binding = GetOrCreateConversationBinding(snapshot.ConversationId);
-        binding.CreatedAt = snapshot.CreatedAt == default ? binding.CreatedAt : snapshot.CreatedAt;
-        binding.LastUpdatedAt = snapshot.LastUpdatedAt == default ? DateTime.UtcNow : snapshot.LastUpdatedAt;
+        var binding = RegisterConversation(snapshot.ConversationId, snapshot.CreatedAt, snapshot.LastUpdatedAt, bumpVersion: true);
         binding.Transcript.Clear();
         binding.Transcript.AddRange(snapshot.Transcript.Select(CloneMessage));
         binding.Plan.Clear();
@@ -261,9 +263,31 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             return;
         }
 
-        var binding = GetOrCreateConversationBinding(conversationId);
+        var binding = RegisterConversation(conversationId, default, DateTime.UtcNow, bumpVersion: true);
         binding.RemoteSessionId = remoteSessionId;
         binding.BoundProfileId = boundProfileId;
+    }
+
+    public Task RegisterConversationAsync(
+        string conversationId,
+        DateTime? createdAt = null,
+        DateTime? lastUpdatedAt = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return Task.CompletedTask;
+        }
+
+        var trimmedId = conversationId.Trim();
+        var actualCreatedAt = createdAt ?? default;
+        var actualLastUpdatedAt = lastUpdatedAt ?? DateTime.UtcNow;
+
+        return PostToContextAsync(() =>
+        {
+            RegisterConversation(trimmedId, actualCreatedAt, actualLastUpdatedAt, bumpVersion: true);
+        }, cancellationToken);
     }
 
     public void ScheduleSave()
@@ -301,7 +325,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         ThrowIfDisposed();
         var document = new ConversationDocument
         {
-            Version = 2,
+            Version = 3,
             LastActiveConversationId = null
         };
 
@@ -315,6 +339,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 DisplayName = ResolveSessionDisplayName(binding.ConversationId),
                 CreatedAt = binding.CreatedAt,
                 LastUpdatedAt = binding.LastUpdatedAt,
+                LastAccessedAt = binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt,
                 Cwd = session?.Cwd,
                 RemoteSessionId = binding.RemoteSessionId,
                 BoundProfileId = binding.BoundProfileId
@@ -354,9 +379,10 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 continue;
             }
 
-            var binding = GetOrCreateConversationBinding(conversation.ConversationId);
-            binding.CreatedAt = conversation.CreatedAt == default ? DateTime.UtcNow : conversation.CreatedAt;
-            binding.LastUpdatedAt = conversation.LastUpdatedAt == default ? DateTime.UtcNow : conversation.LastUpdatedAt;
+            var binding = RegisterConversation(conversation.ConversationId, conversation.CreatedAt, conversation.LastUpdatedAt, bumpVersion: false);
+            binding.LastAccessedAt = conversation.LastAccessedAt == default
+                ? binding.LastUpdatedAt
+                : conversation.LastAccessedAt;
             binding.Transcript.Clear();
             binding.Transcript.AddRange(conversation.Messages.Select(CloneMessage));
             binding.Plan.Clear();
@@ -375,7 +401,9 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 {
                     session.DisplayName = displayName;
                     session.CreatedAt = binding.CreatedAt;
-                    session.LastActivityAt = binding.LastUpdatedAt;
+                    session.LastActivityAt = binding.LastAccessedAt > binding.LastUpdatedAt
+                        ? binding.LastAccessedAt
+                        : binding.LastUpdatedAt;
                     if (!string.IsNullOrWhiteSpace(conversation.Cwd))
                     {
                         session.Cwd = conversation.Cwd;
@@ -392,7 +420,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         }
 
         LastActiveConversationId = _conversationBindings.Values
-            .OrderByDescending(binding => binding.LastUpdatedAt)
+            .OrderByDescending(binding => binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt)
+            .ThenByDescending(binding => binding.LastUpdatedAt)
             .Select(binding => binding.ConversationId)
             .FirstOrDefault();
     }
@@ -419,6 +448,38 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
     private void NotifyConversationListChanged()
     {
         ConversationListVersion++;
+    }
+
+    private void UpdateLastAccessedAt(string conversationId, DateTime accessedAt)
+    {
+        if (!_conversationBindings.TryGetValue(conversationId, out var binding))
+        {
+            return;
+        }
+
+        binding.LastAccessedAt = accessedAt;
+        ScheduleSave();
+    }
+
+    private ConversationBinding RegisterConversation(string conversationId, DateTime createdAt, DateTime lastUpdatedAt, bool bumpVersion)
+    {
+        var existed = _conversationBindings.ContainsKey(conversationId);
+        var binding = GetOrCreateConversationBinding(conversationId);
+        var previousLastUpdated = binding.LastUpdatedAt;
+        if (createdAt != default)
+        {
+            binding.CreatedAt = createdAt;
+        }
+
+        var actualLastUpdated = lastUpdatedAt == default ? DateTime.UtcNow : lastUpdatedAt;
+        binding.LastUpdatedAt = actualLastUpdated;
+
+        if (bumpVersion && (!existed || actualLastUpdated != previousLastUpdated))
+        {
+            NotifyConversationListChanged();
+        }
+
+        return binding;
     }
 
     private string ResolveSessionDisplayName(string conversationId)
@@ -518,6 +579,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             ConversationId = conversationId;
             CreatedAt = DateTime.UtcNow;
             LastUpdatedAt = DateTime.UtcNow;
+            LastAccessedAt = DateTime.UtcNow;
         }
 
         public string ConversationId { get; }
@@ -529,6 +591,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         public DateTime CreatedAt { get; set; }
 
         public DateTime LastUpdatedAt { get; set; }
+
+        public DateTime LastAccessedAt { get; set; }
 
         public List<ConversationMessageSnapshot> Transcript { get; } = new();
 

@@ -328,7 +328,7 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.True(result.Succeeded);
         Assert.True(result.ClearedActiveConversation);
         Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
-        var currentState = await state;
+        var currentState = await state ?? ChatState.Empty;
         Assert.Null(currentState.HydratedConversationId);
         Assert.Null(currentState.SelectedConversationId);
     }
@@ -368,7 +368,7 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.True(result.Succeeded);
         Assert.True(result.ClearedActiveConversation);
         Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
-        var currentState = await state;
+        var currentState = await state ?? ChatState.Empty;
         Assert.Null(currentState.HydratedConversationId);
         Assert.Null(currentState.SelectedConversationId);
     }
@@ -382,15 +382,9 @@ public sealed class ConversationActivationCoordinatorTests
     {
         var state = State.Value(new object(), () => ChatConnectionState.Empty with
         {
-            SelectedProfileId = null
+            SelectedProfileId = selectedProfileId
         });
-        var store = new ChatConnectionStore(state);
-        if (!string.IsNullOrWhiteSpace(selectedProfileId))
-        {
-            store.Dispatch(new SetSelectedProfileAction(selectedProfileId)).AsTask().GetAwaiter().GetResult();
-        }
-
-        return store;
+        return new ChatConnectionStore(state);
     }
 
     private static ChatConversationWorkspace CreateWorkspace(
@@ -536,6 +530,9 @@ public sealed class ConversationActivationCoordinatorTests
 
         public Task<ConversationMutationResult> ArchiveConversationAsync(string conversationId, string? activeConversationId, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConversationMutationResult(true, string.Equals(conversationId, activeConversationId, StringComparison.Ordinal), null));
+
+        public Task NormalizeBindingForSelectedProfileAsync(string conversationId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
 
         public Task<ConversationMutationResult> DeleteConversationAsync(string conversationId, string? activeConversationId, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConversationMutationResult(true, string.Equals(conversationId, activeConversationId, StringComparison.Ordinal), null));

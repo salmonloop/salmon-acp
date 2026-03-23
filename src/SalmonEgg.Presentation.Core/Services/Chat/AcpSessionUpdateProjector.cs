@@ -28,8 +28,9 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
                 ShowPlanPanel: true,
                 PlanTitle: string.IsNullOrWhiteSpace(planUpdate.Title) ? null : planUpdate.Title.Trim()),
             CurrentModeUpdate modeUpdate => new AcpSessionUpdateDelta(
-                SelectedModeId: string.IsNullOrWhiteSpace(modeUpdate.CurrentModeId) ? null : modeUpdate.CurrentModeId),
+                SelectedModeId: string.IsNullOrWhiteSpace(modeUpdate.NormalizedModeId) ? null : modeUpdate.NormalizedModeId),
             ConfigUpdateUpdate configUpdate => BuildConfigDelta(configUpdate.ConfigOptions),
+            ConfigOptionUpdate optionUpdate => BuildConfigDelta(optionUpdate.ConfigOptions),
             _ => AcpSessionUpdateDelta.Empty
         };
     }
@@ -39,22 +40,22 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
         ArgumentNullException.ThrowIfNull(response);
 
         var configDelta = BuildConfigDelta(response.ConfigOptions);
-        var availableModes = response.Modes?.AvailableModes?
-            .Where(static mode => mode is not null)
-            .Select(mode => new AcpModeOption(
-                mode!.Id ?? string.Empty,
-                mode.Name ?? string.Empty,
-                mode.Description ?? string.Empty))
-            .ToArray() ?? Array.Empty<AcpModeOption>();
+        var hasConfigOptions = response.ConfigOptions?.Count > 0;
+        var availableModes = hasConfigOptions
+            ? configDelta.AvailableModes?.ToArray() ?? Array.Empty<AcpModeOption>()
+            : response.Modes?.AvailableModes?
+                .Where(static mode => mode is not null)
+                .Select(mode => new AcpModeOption(
+                    mode!.Id ?? string.Empty,
+                    mode.Name ?? string.Empty,
+                    mode.Description ?? string.Empty))
+                .ToArray() ?? Array.Empty<AcpModeOption>();
 
-        if (availableModes.Length == 0 && configDelta.AvailableModes is { Count: > 0 })
-        {
-            availableModes = configDelta.AvailableModes.ToArray();
-        }
-
-        var selectedModeId = string.IsNullOrWhiteSpace(response.Modes?.CurrentModeId)
+        var selectedModeId = hasConfigOptions
             ? configDelta.SelectedModeId ?? availableModes.FirstOrDefault()?.ModeId
-            : response.Modes!.CurrentModeId;
+            : string.IsNullOrWhiteSpace(response.Modes?.CurrentModeId)
+                ? configDelta.SelectedModeId ?? availableModes.FirstOrDefault()?.ModeId
+                : response.Modes!.CurrentModeId;
 
         return configDelta with
         {

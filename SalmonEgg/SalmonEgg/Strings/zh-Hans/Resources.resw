@@ -512,7 +512,7 @@
     <value>选择模式</value>
   </data>
   <data name="ChatAcpProfileSelector.PlaceholderText" xml:space="preserve">
-    <value>选择 ACP</value>
+    <value>选择 ACP 配置文件</value>
   </data>
   <data name="MarryHerButton.Content" xml:space="preserve">
     <value>娶她</value>
@@ -566,6 +566,6 @@
     <value>输出</value>
   </data>
   <data name="ChatAcpProfileSelector.PlaceholderText" xml:space="preserve">
-    <value>选择 ACP</value>
+    <value>选择 ACP 配置文件</value>
   </data>
 </root>

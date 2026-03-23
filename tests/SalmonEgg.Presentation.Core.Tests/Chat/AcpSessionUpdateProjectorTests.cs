@@ -48,6 +48,74 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
+    public void ProjectSessionNew_ConfigOptionsTakePrecedence()
+    {
+        var projector = new AcpSessionUpdateProjector();
+        var response = new SessionNewResponse(
+            sessionId: "remote-1",
+            modes: new SessionModesState
+            {
+                CurrentModeId = "legacy-mode",
+                AvailableModes = new List<SessionMode>
+                {
+                    new() { Id = "legacy-mode", Name = "Legacy" },
+                }
+            },
+            configOptions: new List<ConfigOption>
+            {
+                new()
+                {
+                    Id = "mode",
+                    Category = "mode",
+                    CurrentValue = "config-mode",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "config-mode", Name = "Config Mode" },
+                        new() { Value = "legacy-mode", Name = "Legacy Mode" }
+                    }
+                }
+            });
+
+        var delta = projector.ProjectSessionNew(response);
+
+        Assert.Equal("config-mode", delta.SelectedModeId);
+        Assert.Equal(2, delta.AvailableModes?.Count);
+        Assert.True(delta.ShowConfigOptionsPanel);
+        Assert.NotNull(delta.ConfigOptions);
+        Assert.All(
+            delta.AvailableModes!,
+            mode => Assert.Contains(mode.ModeId, new[] { "config-mode", "legacy-mode" }));
+    }
+
+    [Fact]
+    public void Project_ConfigOptionUpdate_MapsFullState()
+    {
+        var projector = new AcpSessionUpdateProjector();
+        var update = new ConfigOptionUpdate
+        {
+            ConfigOptions = new List<ConfigOption>
+            {
+                new()
+                {
+                    Id = "mode",
+                    Category = "mode",
+                    CurrentValue = "config-mode",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "config-mode", Name = "Config Mode" }
+                    }
+                }
+            }
+        };
+
+        var delta = projector.Project(new SessionUpdateEventArgs("remote-1", update));
+
+        Assert.NotNull(delta.ConfigOptions);
+        Assert.True(delta.ShowConfigOptionsPanel);
+        Assert.Equal("config-mode", delta.SelectedModeId);
+    }
+
+    [Fact]
     public void Project_MapsPlanUpdateToPlanPanelProjection()
     {
         var projector = new AcpSessionUpdateProjector();

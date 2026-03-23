@@ -7,6 +7,8 @@ public interface IConversationActivationCoordinator
 {
     Task<ConversationActivationResult> ActivateSessionAsync(string sessionId, CancellationToken cancellationToken = default);
 
+    Task NormalizeBindingForSelectedProfileAsync(string conversationId, CancellationToken cancellationToken = default);
+
     Task<ConversationMutationResult> ArchiveConversationAsync(
         string conversationId,
         string? activeConversationId,

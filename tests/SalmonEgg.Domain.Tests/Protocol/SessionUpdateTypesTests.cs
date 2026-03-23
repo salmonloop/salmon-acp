@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json;
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Protocol;
@@ -39,5 +40,13 @@ public sealed class SessionUpdateTypesTests
         // Then: update should be present in JSON
         Assert.That(parsed.RootElement.TryGetProperty("update", out var update), Is.True);
         Assert.That(update.ValueKind, Is.EqualTo(JsonValueKind.Object));
+    }
+
+    [Test]
+    public void ConfigOptionUpdate_ConfigOptions_ShouldBe_ListOfConfigOption()
+    {
+        var property = typeof(ConfigOptionUpdate).GetProperty("ConfigOptions");
+        Assert.That(property, Is.Not.Null);
+        Assert.That(property!.PropertyType, Is.EqualTo(typeof(List<ConfigOption>)));
     }
 }

@@ -24,6 +24,8 @@ namespace SalmonEgg.Domain.Models.Conversation
 
         public DateTime LastUpdatedAt { get; set; } = DateTime.UtcNow;
 
+        public DateTime LastAccessedAt { get; set; } = DateTime.UtcNow;
+
         /// <summary>
         /// 会话的工作目录，用于会话重启后正确分类到对应项目。
         /// </summary>

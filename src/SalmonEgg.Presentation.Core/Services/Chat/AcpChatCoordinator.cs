@@ -113,7 +113,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             var wrappedService = WrapChatService(createdService, sink, cancellationToken);
             sink.ReplaceChatService(wrappedService);
             _activeChatServiceAdapter = wrappedService;
-            TryMarkHydratedForCurrentState(sink, wrappedService);
+            await TryMarkHydratedForCurrentStateAsync(sink, wrappedService, cancellationToken).ConfigureAwait(false);
 
             var initializeResponse = await wrappedService
                 .InitializeAsync(CreateDefaultInitializeParams())
@@ -170,11 +170,12 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             throw new InvalidOperationException("No active local conversation is available for ACP session creation.");
         }
 
-        if (!string.IsNullOrWhiteSpace(sink.CurrentRemoteSessionId))
+        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId))
         {
             return new AcpRemoteSessionResult(
-                sink.CurrentRemoteSessionId!,
-                new SessionNewResponse(sink.CurrentRemoteSessionId!),
+                currentBinding.RemoteSessionId!,
+                new SessionNewResponse(currentBinding.RemoteSessionId!),
                 UsedExistingBinding: true);
         }
 
@@ -231,10 +232,11 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             }
         }
 
-        var remoteSession = !string.IsNullOrWhiteSpace(sink.CurrentRemoteSessionId)
+        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        var remoteSession = !string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId)
             ? new AcpRemoteSessionResult(
-                sink.CurrentRemoteSessionId!,
-                new SessionNewResponse(sink.CurrentRemoteSessionId!),
+                currentBinding.RemoteSessionId!,
+                new SessionNewResponse(currentBinding.RemoteSessionId!),
                 UsedExistingBinding: true)
             : await EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken).ConfigureAwait(false);
 
@@ -279,14 +281,15 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         ArgumentNullException.ThrowIfNull(sink);
 
         var chatService = sink.CurrentChatService;
-        if (chatService == null || string.IsNullOrWhiteSpace(sink.CurrentRemoteSessionId))
+        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        if (chatService == null || string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId))
         {
             return;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         await chatService.CancelSessionAsync(
-            new SessionCancelParams(sink.CurrentRemoteSessionId!, reason)).ConfigureAwait(false);
+            new SessionCancelParams(currentBinding.RemoteSessionId!, reason)).ConfigureAwait(false);
     }
 
     public async Task DisconnectAsync(
@@ -335,9 +338,10 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         IAcpChatCoordinatorSink sink,
         CancellationToken cancellationToken)
     {
+        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
         _logger.LogWarning(
             "ACP update stream requested resync. remoteSessionId={RemoteSessionId}",
-            sink.CurrentRemoteSessionId);
+            currentBinding?.RemoteSessionId);
 
         await _connectionCoordinator.ResyncAsync(sink, cancellationToken).ConfigureAwait(false);
     }
@@ -386,11 +390,13 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             .ConfigureAwait(false);
     }
 
-    private void TryMarkHydratedForCurrentState(
+    private static async Task TryMarkHydratedForCurrentStateAsync(
         IAcpChatCoordinatorSink sink,
-        AcpChatServiceAdapter wrappedService)
+        AcpChatServiceAdapter wrappedService,
+        CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(sink.CurrentRemoteSessionId) && sink.IsSessionActive)
+        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId) && sink.IsSessionActive)
         {
             wrappedService.MarkHydrated();
             return;

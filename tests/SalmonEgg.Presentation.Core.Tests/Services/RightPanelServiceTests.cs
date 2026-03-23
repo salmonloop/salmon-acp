@@ -8,6 +8,7 @@ using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Services;
 
+[Collection("NonParallel")]
 public class RightPanelServiceTests
 {
     [Fact]

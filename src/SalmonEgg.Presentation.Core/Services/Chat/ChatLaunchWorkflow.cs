@@ -37,6 +37,7 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
     private readonly AppPreferencesViewModel _preferences;
     private readonly INavigationCoordinator _navigationCoordinator;
     private readonly Func<string?> _resolveDefaultCwd;
+    private readonly ConversationCatalogFacade? _catalogFacade;
     private readonly ILogger<ChatLaunchWorkflow> _logger;
 
     public ChatLaunchWorkflow(
@@ -45,7 +46,8 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
         AppPreferencesViewModel preferences,
         INavigationCoordinator navigationCoordinator,
         Func<string?> resolveDefaultCwd,
-        ILogger<ChatLaunchWorkflow>? logger = null)
+        ILogger<ChatLaunchWorkflow>? logger = null,
+        ConversationCatalogFacade? catalogFacade = null)
     {
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
@@ -53,6 +55,7 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
         _resolveDefaultCwd = resolveDefaultCwd ?? throw new ArgumentNullException(nameof(resolveDefaultCwd));
         _logger = logger ?? NullLogger<ChatLaunchWorkflow>.Instance;
+        _catalogFacade = catalogFacade;
     }
 
     public async Task StartSessionAndSendAsync(string promptText, CancellationToken cancellationToken = default)
@@ -74,6 +77,11 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
         {
             sessionId = Guid.NewGuid().ToString("N");
             await _sessionManager.CreateSessionAsync(sessionId, cwd).ConfigureAwait(true);
+        }
+
+        if (_catalogFacade != null)
+        {
+            await _catalogFacade.RegisterConversationAsync(sessionId, cancellationToken).ConfigureAwait(true);
         }
 
         // Navigation owns the session switch for the Start path.

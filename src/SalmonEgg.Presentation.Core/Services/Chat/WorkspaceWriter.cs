@@ -117,7 +117,6 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             return null;
         }
 
-        var existing = ReadFromContext(() => _workspace.GetConversationSnapshot(conversationId));
         var transcript = (state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty)
             .Where(static message => !IsThinkingPlaceholder(message))
             .Select(CloneMessageSnapshot)
@@ -126,6 +125,11 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             .Select(ClonePlanEntrySnapshot)
             .OfType<ConversationPlanEntrySnapshot>()
             .ToArray();
+        var existingSnapshot = _workspace.GetConversationSnapshot(conversationId);
+        var lastUpdatedAt = existingSnapshot != null
+            && SnapshotContentMatches(existingSnapshot, transcript, planEntries, state.ShowPlanPanel, state.PlanTitle)
+            ? existingSnapshot.LastUpdatedAt
+            : DateTime.UtcNow;
 
         var snapshot = new ConversationWorkspaceSnapshot(
             conversationId,
@@ -133,8 +137,8 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             planEntries,
             state.ShowPlanPanel,
             state.PlanTitle,
-            existing?.CreatedAt ?? DateTime.UtcNow,
-            DateTime.UtcNow);
+            default,
+            lastUpdatedAt);
 
         return new PendingWrite(snapshot, scheduleSave);
     }
@@ -177,29 +181,6 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
         _flushCts = null;
     }
 
-    private T? ReadFromContext<T>(Func<T?> func)
-    {
-        if (SynchronizationContext.Current == _syncContext)
-        {
-            return func();
-        }
-
-        var tcs = new TaskCompletionSource<T?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(_ =>
-        {
-            try
-            {
-                tcs.TrySetResult(func());
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
-        }, null);
-
-        return tcs.Task.GetAwaiter().GetResult();
-    }
-
     private Task PostToContextAsync(Action action, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -239,6 +220,91 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
 
     private static bool IsThinkingPlaceholder(ConversationMessageSnapshot message)
         => string.Equals(message.ContentType, "thinking", StringComparison.OrdinalIgnoreCase);
+
+    private static bool SnapshotContentMatches(
+        ConversationWorkspaceSnapshot existingSnapshot,
+        IReadOnlyList<ConversationMessageSnapshot> transcript,
+        IReadOnlyList<ConversationPlanEntrySnapshot> planEntries,
+        bool showPlanPanel,
+        string? planTitle)
+    {
+        return existingSnapshot.ShowPlanPanel == showPlanPanel
+            && string.Equals(existingSnapshot.PlanTitle, planTitle, StringComparison.Ordinal)
+            && MessageSequencesEqual(existingSnapshot.Transcript, transcript)
+            && PlanSequencesEqual(existingSnapshot.Plan, planEntries);
+    }
+
+    private static bool MessageSequencesEqual(
+        IReadOnlyList<ConversationMessageSnapshot> left,
+        IReadOnlyList<ConversationMessageSnapshot> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!MessageEquals(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool PlanSequencesEqual(
+        IReadOnlyList<ConversationPlanEntrySnapshot> left,
+        IReadOnlyList<ConversationPlanEntrySnapshot> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!PlanEntryEquals(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool MessageEquals(ConversationMessageSnapshot left, ConversationMessageSnapshot right)
+    {
+        return string.Equals(left.Id, right.Id, StringComparison.Ordinal)
+            && left.Timestamp == right.Timestamp
+            && left.IsOutgoing == right.IsOutgoing
+            && string.Equals(left.ContentType, right.ContentType, StringComparison.Ordinal)
+            && string.Equals(left.Title, right.Title, StringComparison.Ordinal)
+            && string.Equals(left.TextContent, right.TextContent, StringComparison.Ordinal)
+            && string.Equals(left.ImageData, right.ImageData, StringComparison.Ordinal)
+            && string.Equals(left.ImageMimeType, right.ImageMimeType, StringComparison.Ordinal)
+            && string.Equals(left.AudioData, right.AudioData, StringComparison.Ordinal)
+            && string.Equals(left.AudioMimeType, right.AudioMimeType, StringComparison.Ordinal)
+            && string.Equals(left.ToolCallId, right.ToolCallId, StringComparison.Ordinal)
+            && left.ToolCallKind == right.ToolCallKind
+            && left.ToolCallStatus == right.ToolCallStatus
+            && string.Equals(left.ToolCallJson, right.ToolCallJson, StringComparison.Ordinal)
+            && string.Equals(left.ModeId, right.ModeId, StringComparison.Ordinal)
+            && PlanEntryEquals(left.PlanEntry, right.PlanEntry);
+    }
+
+    private static bool PlanEntryEquals(ConversationPlanEntrySnapshot? left, ConversationPlanEntrySnapshot? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return string.Equals(left.Content, right.Content, StringComparison.Ordinal)
+            && left.Status == right.Status
+            && left.Priority == right.Priority;
+    }
 
     private static ConversationMessageSnapshot CloneMessageSnapshot(ConversationMessageSnapshot snapshot)
         => new()

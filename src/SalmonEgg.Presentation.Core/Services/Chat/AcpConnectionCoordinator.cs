@@ -87,7 +87,8 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
         ArgumentNullException.ThrowIfNull(sink);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var sessionId = sink.CurrentRemoteSessionId;
+        var binding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        var sessionId = binding?.RemoteSessionId;
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             _logger.LogDebug("Skipping ACP resync because no remote session binding is available.");

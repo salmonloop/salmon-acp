@@ -25,22 +25,34 @@ function Test-IsAdmin {
 
 function Get-SignToolPath {
     $kitsBin = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
-    $candidates = @()
-
-    if (Test-Path $kitsBin) {
-        $versionDirs = Get-ChildItem -Path $kitsBin -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
-
-        $preferred = @($versionDirs | Where-Object { $_.Name -eq '10.0.22621.0' } |
-            ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
-            Where-Object { Test-Path $_ })
-
-        if ($preferred.Count -gt 0) {
-            return ($preferred | Select-Object -First 1)
-        }
+    if (-not (Test-Path $kitsBin)) {
+        throw "Windows SDK bin directory not found at '$kitsBin'. Install the Windows 10/11 SDK."
     }
 
-    throw "signtool.exe not found at Windows SDK 10.0.22621.0. Install that SDK version to keep the toolchain locked."
+    $versionDirs = Get-ChildItem -Path $kitsBin -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
+
+    $preferred = @($versionDirs | Where-Object { $_.Name -eq '10.0.22621.0' } |
+        ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
+        Where-Object { Test-Path $_ })
+    if ($preferred.Count -gt 0) {
+        return ($preferred | Select-Object -First 1)
+    }
+
+    $latestInstalled = @($versionDirs |
+        Sort-Object { [version]$_.Name } -Descending |
+        ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
+        Where-Object { Test-Path $_ })
+    if ($latestInstalled.Count -gt 0) {
+        return ($latestInstalled | Select-Object -First 1)
+    }
+
+    $sdkRootTool = Join-Path $kitsBin 'x64\signtool.exe'
+    if (Test-Path $sdkRootTool) {
+        return $sdkRootTool
+    }
+
+    throw "signtool.exe not found under Windows SDK bin directory '$kitsBin'. Install the Windows 10/11 SDK."
 }
 
 function Get-MSBuildPath {

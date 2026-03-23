@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +11,9 @@ using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Plan;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
@@ -141,6 +144,56 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task TrySwitchToSessionAsync_UpdatesLastAccessedAt_WithoutChangingLastUpdatedOrder()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-old",
+            Transcript:
+            [
+                CreateTextMessage("m-old", "older")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-new",
+            Transcript:
+            [
+                CreateTextMessage("m-new", "newer")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc)));
+
+        await workspace.SaveAsync();
+        var beforeAccessedAt = Assert.IsType<ConversationDocument>(store.LastSavedDocument)
+            .Conversations
+            .Single(c => c.ConversationId == "session-old")
+            .LastAccessedAt;
+
+        await workspace.TrySwitchToSessionAsync("session-old");
+        await workspace.SaveAsync();
+
+        Assert.Equal(new[] { "session-new", "session-old" }, workspace.GetKnownConversationIds());
+        var updatedRecord = Assert.IsType<ConversationDocument>(store.LastSavedDocument)
+            .Conversations
+            .Single(c => c.ConversationId == "session-old");
+        Assert.True(updatedRecord.LastAccessedAt > beforeAccessedAt);
+        Assert.Equal(new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc), updatedRecord.LastUpdatedAt);
+    }
+
+    [Fact]
     public async Task SaveAsync_PersistsDisplayNameCwdAndTranscriptInMostRecentOrder()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -199,6 +252,36 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task SaveAsync_PersistsLastAccessedAt_SeparatelyFromLastUpdatedAt()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1", "hello")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+
+        await workspace.TrySwitchToSessionAsync("session-1");
+        await workspace.SaveAsync();
+
+        var saved = Assert.IsType<ConversationDocument>(store.LastSavedDocument);
+        var conversation = Assert.Single(saved.Conversations);
+        Assert.True(conversation.LastAccessedAt >= conversation.LastUpdatedAt);
+        Assert.Equal(new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc), conversation.LastUpdatedAt);
+    }
+
+    [Fact]
     public async Task SaveAsync_DoesNotPersistSemanticVisibleSelection()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -225,6 +308,46 @@ public sealed class ChatConversationWorkspaceTests
 
         var saved = Assert.IsType<ConversationDocument>(store.LastSavedDocument);
         Assert.Null(saved.LastActiveConversationId);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_WithoutLastActiveConversationId_UsesMostRecentlyAccessedConversation()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore
+        {
+            LoadResult = new ConversationDocument
+            {
+                Conversations =
+                {
+                    new ConversationRecord
+                    {
+                        ConversationId = "session-updated",
+                        DisplayName = "Updated",
+                        CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                        LastUpdatedAt = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                        LastAccessedAt = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                    },
+                    new ConversationRecord
+                    {
+                        ConversationId = "session-accessed",
+                        DisplayName = "Accessed",
+                        CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                        LastUpdatedAt = new DateTime(2026, 3, 1, 0, 30, 0, DateTimeKind.Utc),
+                        LastAccessedAt = new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+                    }
+                }
+            }
+        };
+
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        await workspace.RestoreAsync();
+
+        Assert.Equal("session-accessed", workspace.LastActiveConversationId);
+        Assert.Equal(new[] { "session-updated", "session-accessed" }, workspace.GetKnownConversationIds());
     }
 
     [Fact]
@@ -258,6 +381,183 @@ public sealed class ChatConversationWorkspaceTests
         var catalog = Assert.Single(workspace.GetCatalog());
         Assert.Equal("Renamed Session", catalog.DisplayName);
         Assert.Equal("Renamed Session", sessionManager.GetSession("session-1")!.DisplayName);
+    }
+
+    [Fact]
+    public async Task UpsertConversationSnapshot_ExistingConversation_ReordersCatalog()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1", "alpha")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-2",
+            Transcript:
+            [
+                CreateTextMessage("m-2", "beta")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1-2", "alpha-updated")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 5, 0, DateTimeKind.Utc)));
+
+        var knownIds = workspace.GetKnownConversationIds();
+        Assert.Equal(new[] { "session-1", "session-2" }, knownIds);
+        Assert.Equal(3, workspace.ConversationListVersion);
+    }
+
+    [Fact]
+    public async Task ConversationCatalogFacade_DeleteConversation_DoesNotBlockUiThread()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        var tcs = new TaskCompletionSource<ConversationMutationResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activationCoordinator = new Mock<IConversationActivationCoordinator>();
+        activationCoordinator
+            .Setup(a => a.DeleteConversationAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(tcs.Task);
+
+        var selection = new Mock<IShellSelectionReadModel>();
+        selection.SetupGet(s => s.CurrentSelection)
+            .Returns(new NavigationSelectionState.Session("session-1"));
+
+        var facade = new ConversationCatalogFacade(
+            workspace,
+            activationCoordinator.Object,
+            selection.Object,
+            Mock.Of<ILogger<ConversationCatalogFacade>>());
+
+        var deleteTask = Task.Run(() => facade.DeleteConversation("session-1"));
+        var completed = await Task.WhenAny(deleteTask, Task.Delay(100));
+        Assert.True(completed == deleteTask, "DeleteConversation must not wait for the backend task.");
+
+        tcs.SetResult(new ConversationMutationResult(true, false, null));
+        await deleteTask;
+    }
+
+    [Fact]
+    public async Task UpsertConversationSnapshot_NewConversation_BumpsConversationListVersion()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        var beforeVersion = workspace.ConversationListVersion;
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-new",
+            Transcript:
+            [
+                CreateTextMessage("m-new", "hello")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 5, 0, DateTimeKind.Utc)));
+
+        Assert.Equal(beforeVersion + 1, workspace.ConversationListVersion);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-new",
+            Transcript:
+            [
+                CreateTextMessage("m-new-2", "again")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 10, 0, DateTimeKind.Utc)));
+
+        Assert.Equal(beforeVersion + 2, workspace.ConversationListVersion);
+    }
+
+    [Fact]
+    public void UpsertConversationSnapshot_ExistingConversation_ReordersCatalogAndBumpsVersion()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-old",
+            Transcript:
+            [
+                CreateTextMessage("m-old", "older")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-new",
+            Transcript:
+            [
+                CreateTextMessage("m-new", "newer")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc)));
+
+        Assert.Equal(new[] { "session-new", "session-old" }, workspace.GetKnownConversationIds());
+        var versionAfterInitialUpserts = workspace.ConversationListVersion;
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-old",
+            Transcript:
+            [
+                CreateTextMessage("m-old-2", "newer now")
+            ],
+            Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 4, 0, DateTimeKind.Utc)));
+
+        Assert.Equal(versionAfterInitialUpserts + 1, workspace.ConversationListVersion);
+        Assert.Equal(new[] { "session-old", "session-new" }, workspace.GetKnownConversationIds());
     }
 
     private static ChatConversationWorkspace CreateWorkspace(

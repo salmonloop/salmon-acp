@@ -675,10 +675,35 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 await ConnectToAcpProfileCoreAsync(profile, CancellationToken.None).ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.LogWarning(ex, "Queued ACP profile switch failed (ProfileId={ProfileId})", profile.Id);
             }
         }
+    }
+
+    private async Task PrepareSelectedProfileConnectionAsync(
+        ServerConfiguration profile,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        await _chatConnectionStore
+            .Dispatch(new SetSelectedProfileAction(profile.Id))
+            .ConfigureAwait(false);
+        await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var conversationId = ResolveActiveConversationId(state);
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        await _conversationActivationCoordinator
+            .NormalizeBindingForSelectedProfileAsync(conversationId!, cancellationToken)
+            .ConfigureAwait(false);
+        await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
     }
 
     // Partial method implementations called by source-generated code.
@@ -1138,6 +1163,48 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 binding.RemoteSessionId,
                 binding.ProfileId);
 
+    private static string? ResolveActiveConversationId(ChatState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (!string.IsNullOrWhiteSpace(state.HydratedConversationId))
+        {
+            return state.HydratedConversationId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.SelectedConversationId))
+        {
+            return state.SelectedConversationId;
+        }
+
+        return null;
+    }
+
+    private async ValueTask<ConversationRemoteBindingState?> ResolveActiveConversationBindingAsync(
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var conversationId = ResolveActiveConversationId(state);
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return null;
+        }
+
+        var binding = state.ResolveBinding(conversationId);
+        if (binding != null)
+        {
+            return ToBindingState(binding);
+        }
+
+        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        return new ConversationRemoteBindingState(
+            conversationId,
+            null,
+            connectionState.SelectedProfileId);
+    }
+
     private string ResolveSessionDisplayName(string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
@@ -1374,6 +1441,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         try
         {
+            await PrepareSelectedProfileConnectionAsync(profile, cancellationToken).ConfigureAwait(false);
             _suppressAutoConnectFromPreferenceChange = true;
             _acpProfiles.MarkLastConnected(profile);
             _acpProfiles.SelectedProfile = profile;
@@ -1392,6 +1460,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
         catch (Exception ex)
         {
+            await _chatConnectionStore
+                .Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Disconnected, ex.Message))
+                .ConfigureAwait(false);
+            await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
             Logger.LogError(ex, "Failed to connect to ACP profile {ProfileId}", profile.Id);
             throw;
         }
@@ -1486,77 +1558,86 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private void OnSessionUpdateReceived(object? sender, SessionUpdateEventArgs e)
     {
-        _syncContext.Post(_ =>
+        _syncContext.Post(_ => _ = ProcessSessionUpdateAsync(e), null);
+    }
+
+    private async Task ProcessSessionUpdateAsync(SessionUpdateEventArgs e)
+    {
+        try
         {
-            try
+            if (_suppressSessionUpdatesToUi)
             {
-                if (_suppressSessionUpdatesToUi)
-                {
-                    return;
-                }
-
-                // SECURITY/PROTOCOL CHECK: Ensure updates only affect the currently active remote session.
-                // This prevents cross-talk if multiple agents or sessions are running.
-                var activeRemoteSessionId = _currentRemoteSessionId;
-
-                if (!string.IsNullOrWhiteSpace(activeRemoteSessionId) &&
-                    !string.Equals(e.SessionId, activeRemoteSessionId, StringComparison.Ordinal))
-                {
-                    return;
-                }
-
-                if (e.Update is AgentMessageUpdate messageUpdate && messageUpdate.Content != null)
-                {
-                    _ = _chatStore.Dispatch(new SetIsThinkingAction(false));
-                    HandleAgentContentChunk(messageUpdate.Content);
-                }
-                else if (e.Update is AgentThoughtUpdate)
-                {
-                    // Thought chunks are transient states; they trigger 'thinking' UI feedback.
-                    _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
-                }
-                else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
-                {
-                    AddMessageToHistory(userMessageUpdate.Content, isOutgoing: true);
-                }
-                else if (e.Update is ToolCallUpdate toolCallUpdate)
-                {
-                    _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
-
-                    _ = UpsertTranscriptSnapshotAsync(CreateToolCallSnapshot(toolCallUpdate));
-                }
-                else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
-                {
-                    _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
-                    _ = UpdateToolCallStatusAsync(toolCallStatusUpdate);
-                }
-                else if (e.Update is PlanUpdate planUpdate)
-                {
-                    ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, planUpdate)));
-                }
-                else if (e.Update is CurrentModeUpdate modeChange)
-                {
-                    ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, modeChange)));
-                }
-                else if (e.Update is ConfigUpdateUpdate configUpdate)
-                {
-                    ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, configUpdate)));
-                }
-                else if (e.Update is AvailableCommandsUpdate commandsUpdate)
-                {
-                    UpdateSlashCommands(commandsUpdate);
-                }
-                else if (e.Update != null)
-                {
-                    // FUTURE-PROOFING: Log unknown protocol extensions to detect agent version mismatches.
-                    Logger.LogInformation("Unhandled session update type: {UpdateType}", e.Update.GetType().Name);
-                }
+                return;
             }
-            catch (Exception ex)
+
+            // SECURITY/PROTOCOL CHECK: Only the store-authoritative binding for the active
+            // conversation may mutate the visible transcript.
+            var activeBinding = await ResolveActiveConversationBindingAsync().ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(activeBinding?.RemoteSessionId)
+                || !string.Equals(e.SessionId, activeBinding.RemoteSessionId, StringComparison.Ordinal))
             {
-                Logger.LogError(ex, "Error processing session update");
+                return;
             }
-        }, null);
+
+            if (e.Update is AgentMessageUpdate messageUpdate && messageUpdate.Content != null)
+            {
+                _ = _chatStore.Dispatch(new SetIsThinkingAction(false));
+                HandleAgentContentChunk(messageUpdate.Content);
+            }
+            else if (e.Update is AgentThoughtUpdate)
+            {
+                // Thought chunks are transient states; they trigger 'thinking' UI feedback.
+                _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
+            }
+            else if (e.Update is UserMessageUpdate userMessageUpdate && userMessageUpdate.Content != null)
+            {
+                AddMessageToHistory(userMessageUpdate.Content, isOutgoing: true);
+            }
+            else if (e.Update is ToolCallUpdate toolCallUpdate)
+            {
+                _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
+
+                _ = UpsertTranscriptSnapshotAsync(CreateToolCallSnapshot(toolCallUpdate));
+            }
+            else if (e.Update is ToolCallStatusUpdate toolCallStatusUpdate)
+            {
+                _ = _chatStore.Dispatch(new SetIsThinkingAction(true));
+                _ = UpdateToolCallStatusAsync(toolCallStatusUpdate);
+            }
+            else if (e.Update is PlanUpdate planUpdate)
+            {
+                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, planUpdate)));
+            }
+            else if (e.Update is CurrentModeUpdate modeChange)
+            {
+                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, modeChange)));
+            }
+            else if (e.Update is ConfigUpdateUpdate configUpdate)
+            {
+                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, configUpdate)));
+            }
+            else if (e.Update is ConfigOptionUpdate optionUpdate)
+            {
+                ApplySessionUpdateDelta(_acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, optionUpdate)));
+            }
+            else if (e.Update is SessionInfoUpdate)
+            {
+                // Session metadata currently projects through the workspace/catalog pipeline.
+            }
+            else if (e.Update is AvailableCommandsUpdate commandsUpdate)
+            {
+                UpdateSlashCommands(commandsUpdate);
+            }
+            else if (e.Update != null)
+            {
+                // FUTURE-PROOFING: Log unknown protocol extensions to detect agent version mismatches.
+                Logger.LogInformation("Unhandled session update type: {UpdateType}", e.Update.GetType().Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing session update");
+        }
     }
 
     private void HandleAgentContentChunk(ContentBlock content)
@@ -2565,7 +2646,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [RelayCommand]
     private async Task SetModeAsync(SessionModeViewModel? mode)
     {
-        if (mode == null || !IsSessionActive || string.IsNullOrWhiteSpace(_currentRemoteSessionId))
+        if (mode == null)
             return;
 
         try
@@ -2573,12 +2654,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             IsBusy = true;
             ClearError();
 
+            var activeBinding = await ResolveActiveConversationBindingAsync().ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(activeBinding?.RemoteSessionId))
+            {
+                return;
+            }
+
             if (_chatService != null)
             {
                 if (!string.IsNullOrWhiteSpace(_modeConfigId))
                 {
                     var setParams = new SessionSetConfigOptionParams(
-                        _currentRemoteSessionId!,
+                        activeBinding.RemoteSessionId!,
                         _modeConfigId,
                         mode.ModeId ?? string.Empty);
                     await _chatService.SetSessionConfigOptionAsync(setParams);
@@ -2587,7 +2674,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 {
                     var modeParams = new SessionSetModeParams
                     {
-                        SessionId = _currentRemoteSessionId!,
+                        SessionId = activeBinding.RemoteSessionId!,
                         ModeId = mode.ModeId
                     };
                     await _chatService.SetSessionModeAsync(modeParams);
@@ -2609,17 +2696,20 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [RelayCommand]
     private async Task CancelSessionAsync()
     {
-        if (!IsSessionActive || string.IsNullOrWhiteSpace(_currentRemoteSessionId))
-            return;
-
         try
         {
             IsBusy = true;
             ClearError();
 
+            var activeBinding = await ResolveActiveConversationBindingAsync().ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(activeBinding?.RemoteSessionId))
+            {
+                return;
+            }
+
             var cancelParams = new SessionCancelParams
             {
-                SessionId = _currentRemoteSessionId!,
+                SessionId = activeBinding.RemoteSessionId!,
                 Reason = "User cancelled"
             };
 
@@ -2720,6 +2810,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     public SynchronizationContext SessionUpdateSynchronizationContext => _syncContext;
 
     public IConversationBindingCommands ConversationBindingCommands => _bindingCommands;
+
+    public ValueTask<ConversationRemoteBindingState?> GetCurrentRemoteBindingAsync(CancellationToken cancellationToken = default)
+        => ResolveActiveConversationBindingAsync(cancellationToken);
 
     public bool IsInitialized => IsConnected && !IsInitializing;
 

@@ -47,6 +47,7 @@ namespace SalmonEgg.Infrastructure.Client
         private AgentCapabilities? _agentCapabilities;
         private long _nextMessageId;
         private long _lastReceivedUnixMs;
+        private bool SupportsSessionList => _agentCapabilities?.SessionCapabilities?.List != null;
 
         /// <summary>
         /// 初始化事件。
@@ -1000,6 +1001,17 @@ namespace SalmonEgg.Infrastructure.Client
         public async Task<ListSessionsResponse> ListSessionsAsync(ListSessionsParams @params, CancellationToken cancellationToken = default)
         {
             EnsureInitialized();
+
+            if (!SupportsSessionList)
+            {
+                _errorLogger.LogError(new ErrorLogEntry(
+                    "SESSION_LIST_UNSUPPORTED",
+                    "Agent does not support session/list capability",
+                    ErrorSeverity.Info,
+                    nameof(ListSessionsAsync)));
+
+                return new ListSessionsResponse();
+            }
 
             var request = new JsonRpcRequest(
                 Interlocked.Increment(ref _nextMessageId),

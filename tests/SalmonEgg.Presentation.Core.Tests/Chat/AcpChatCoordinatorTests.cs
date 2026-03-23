@@ -200,6 +200,7 @@ public sealed class AcpChatCoordinatorTests
         var sink = new FakeSink
         {
             CurrentChatService = service.Object,
+            CurrentSessionId = "local-session-1",
             CurrentRemoteSessionId = "remote-session-9"
         };
         var factory = new Mock<IAcpChatServiceFactory>();
@@ -218,6 +219,66 @@ public sealed class AcpChatCoordinatorTests
         Assert.NotNull(captured);
         Assert.Equal("remote-session-9", captured!.SessionId);
         Assert.Equal("User cancelled", captured.Reason);
+    }
+
+    [Fact]
+    public async Task SendPromptAsync_UsesAuthoritativeResolvedBinding_WhenProjectedRemoteSessionIdIsStale()
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            IsConnected = true,
+            IsInitialized = true,
+            IsSessionActive = true,
+            CurrentSessionId = "local-session-1",
+            CurrentRemoteSessionId = "remote-stale",
+            ResolvedBinding = new ConversationRemoteBindingState("local-session-1", "remote-fresh", "profile-1")
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        service
+            .Setup(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()))
+            .Returns<SessionPromptParams, CancellationToken>((parameters, _) =>
+            {
+                Assert.Equal("remote-fresh", parameters.SessionId);
+                return Task.FromResult(new SessionPromptResponse());
+            });
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        var result = await sut.SendPromptAsync("hello", sink, _ => Task.FromResult(true));
+
+        Assert.Equal("remote-fresh", result.RemoteSessionId);
+        service.Verify(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelPromptAsync_UsesAuthoritativeResolvedBinding_WhenProjectedRemoteSessionIdIsStale()
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            CurrentRemoteSessionId = "remote-stale",
+            ResolvedBinding = new ConversationRemoteBindingState("local-session-1", "remote-fresh", "profile-1")
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        SessionCancelParams? captured = null;
+
+        service
+            .Setup(x => x.CancelSessionAsync(It.IsAny<SessionCancelParams>()))
+            .Callback<SessionCancelParams>(parameters => captured = parameters)
+            .ReturnsAsync(new SessionCancelResponse(true));
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        await sut.CancelPromptAsync(sink, "User cancelled");
+
+        Assert.NotNull(captured);
+        Assert.Equal("remote-fresh", captured!.SessionId);
     }
 
     [Fact]
@@ -393,9 +454,16 @@ public sealed class AcpChatCoordinatorTests
         public SynchronizationContext SessionUpdateSynchronizationContext { get; set; } = new ImmediateSynchronizationContext();
         public long ConnectionGeneration { get; set; }
         public string ActiveSessionCwd { get; set; } = string.Empty;
+        public ConversationRemoteBindingState? ResolvedBinding { get; set; }
         public int ClearedRemoteSessionBindings { get; private set; }
         public List<(string RemoteSessionId, string? ProfileId, bool PreserveConversation)> BoundRemoteSessions { get; } = new();
         public FakeBindingCommands BindingCommands { get; }
+
+        public ValueTask<ConversationRemoteBindingState?> GetCurrentRemoteBindingAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(ResolvedBinding ?? (
+                string.IsNullOrWhiteSpace(CurrentSessionId)
+                    ? null
+                    : new ConversationRemoteBindingState(CurrentSessionId!, CurrentRemoteSessionId, SelectedProfileId)));
 
         public void SelectProfile(ServerConfiguration profile)
         {

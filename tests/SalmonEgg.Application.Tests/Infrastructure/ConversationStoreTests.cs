@@ -47,6 +47,7 @@ public sealed class ConversationStoreTests
                 {
                     ConversationId = "c1",
                     DisplayName = "My Session",
+                    LastAccessedAt = new DateTime(2026, 3, 23, 10, 0, 0, DateTimeKind.Utc),
                     Messages =
                     {
                         new ConversationMessageSnapshot
@@ -77,6 +78,7 @@ public sealed class ConversationStoreTests
         Assert.Equal("c1", loaded.LastActiveConversationId);
         Assert.Single(loaded.Conversations);
         Assert.Equal("My Session", loaded.Conversations[0].DisplayName);
+        Assert.Equal(new DateTime(2026, 3, 23, 10, 0, 0, DateTimeKind.Utc), loaded.Conversations[0].LastAccessedAt);
         Assert.Equal(2, loaded.Conversations[0].Messages.Count);
         Assert.Equal("hi", loaded.Conversations[0].Messages[0].TextContent);
         Assert.Equal("tc1", loaded.Conversations[0].Messages[1].ToolCallId);
