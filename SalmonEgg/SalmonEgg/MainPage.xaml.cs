@@ -59,7 +59,6 @@ public sealed partial class MainPage : Page
     private double _leftNavResizeStartX;
     private double _leftNavResizeStartWidth;
 
-    private bool _isMotionSubscribed;
     private bool _isNavItemsSubscribed;
     private readonly List<ObservableCollection<MainNavItemViewModel>> _projectChildCollections = new();
     private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
@@ -109,14 +108,6 @@ public sealed partial class MainPage : Page
         Unloaded += OnMainPageUnloaded;
         ContentFrame.Navigated += OnContentFrameNavigated;
 
-#if !WINDOWS
-        // Cross-platform fallback "Mica-like" backdrop.
-        if (Microsoft.UI.Xaml.Application.Current.Resources.TryGetValue("AppBackdropBrush", out var brush) && brush is Brush b)
-        {
-            Background = b;
-        }
-#endif
-
         // 2. Listen for global preference changes (animations, theme, backdrop)
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
@@ -125,10 +116,6 @@ public sealed partial class MainPage : Page
         // 3. Initialize theme and motion state
         ApplyTheme();
         ApplyBackdrop();
-        UpdateNavigationTransitions();
-        BootLogDebug("MainPage: transitions updated");
-
-        SubscribeMotion();
         SubscribeNavItems();
         // NavVM.PropertyChanged registration removed as layout is now driven by LayoutVM SSOT
 
@@ -147,7 +134,6 @@ public sealed partial class MainPage : Page
     private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
     {
         UnsubscribeNavItems();
-        UnsubscribeMotion();
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         NavVM.PropertyChanged -= OnNavigationViewModelPropertyChanged;
@@ -183,12 +169,6 @@ public sealed partial class MainPage : Page
 
     private void OnPreferencesPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Preferences.IsAnimationEnabled))
-        {
-            UpdateNavigationTransitions();
-            ApplyNavItemTransitionsDeferred();
-        }
-
         if (e.PropertyName == nameof(Preferences.Theme))
         {
             ApplyTheme();
@@ -258,57 +238,13 @@ public sealed partial class MainPage : Page
         catch
         {
         }
-#endif
-    }
-
-    private void UpdateNavigationTransitions()
-    {
-        // Dynamically enable/disable Frame transitions based on global settings
-        if (UiMotion.Current.IsAnimationEnabled)
-        {
-            ContentFrame.ContentTransitions = new TransitionCollection
-            {
-#if WINDOWS
-                new NavigationThemeTransition { DefaultNavigationTransitionInfo = new EntranceNavigationTransitionInfo() }
 #else
-                new EntranceThemeTransition()
+        // Cross-platform fallback "Mica-like" backdrop.
+        if (Microsoft.UI.Xaml.Application.Current.Resources.TryGetValue("AppBackdropBrush", out var brush) && brush is Brush b)
+        {
+            Background = b;
+        }
 #endif
-            };
-        }
-        else
-        {
-            ContentFrame.ContentTransitions = null;
-        }
-    }
-
-    private void SubscribeMotion()
-    {
-        if (_isMotionSubscribed)
-        {
-            return;
-        }
-
-        UiMotion.Current.PropertyChanged += OnUiMotionPropertyChanged;
-        _isMotionSubscribed = true;
-    }
-
-    private void UnsubscribeMotion()
-    {
-        if (!_isMotionSubscribed)
-        {
-            return;
-        }
-
-        UiMotion.Current.PropertyChanged -= OnUiMotionPropertyChanged;
-        _isMotionSubscribed = false;
-    }
-
-    private void OnUiMotionPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(UiMotion.NavItemTransitions))
-        {
-            ApplyNavItemTransitionsDeferred();
-        }
     }
 
     private void SubscribeNavItems()
@@ -337,14 +273,12 @@ public sealed partial class MainPage : Page
 
     private void OnNavItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        ApplyNavItemTransitionsDeferred();
         RefreshProjectChildSubscriptions();
         _mainNavigationViewAdapter.ApplySelectionDeferred();
     }
 
     private void OnProjectChildrenChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        ApplyNavItemTransitionsDeferred();
         _mainNavigationViewAdapter.ApplySelectionDeferred();
     }
 
@@ -369,52 +303,7 @@ public sealed partial class MainPage : Page
         _projectChildCollections.Clear();
     }
 
-    private void ApplyNavItemTransitionsDeferred()
-    {
-        _ = DispatcherQueue.TryEnqueue(ApplyNavItemTransitions);
-    }
-
-    private void ApplyNavItemTransitions()
-    {
-        if (MainNavView == null)
-        {
-            return;
-        }
-
-        var transitions = UiMotion.Current.NavItemTransitions;
-        foreach (var item in FindVisualChildren<NavigationViewItem>(MainNavView))
-        {
-            item.ContentTransitions = transitions;
-        }
-    }
-
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T typed)
-            {
-                yield return typed;
-            }
-
-            foreach (var descendant in FindVisualChildren<T>(child))
-            {
-                yield return descendant;
-            }
-        }
-    }
-
-    private void NavigateTo(Type pageType)
-    {
-        var transition = UiMotion.Current.IsAnimationEnabled
-            ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
-            : new SuppressNavigationTransitionInfo();
-        ContentFrame.Navigate(pageType, null, transition);
-    }
-
-    private void NavigateTo(Type pageType, object? parameter)
+    private void NavigateTo(Type pageType, object? parameter = null)
     {
         var transition = UiMotion.Current.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
@@ -661,7 +550,6 @@ public sealed partial class MainPage : Page
         NavVM.RebuildTree();
         _mainNavigationViewAdapter.ApplySelection();
         _mainNavigationViewAdapter.ApplySelectionDeferred();
-        ApplyNavItemTransitionsDeferred();
 #if WINDOWS
         InitializeTray();
 #endif

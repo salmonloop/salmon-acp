@@ -93,6 +93,27 @@ public class UiConventionsTests
         Assert.Contains("AddSingleton<AcpConnectionSettingsViewModel>(sp =>", text);
     }
 
+    [Theory]
+    [InlineData("src", "SalmonEgg.Domain", "SalmonEgg.Domain.csproj")]
+    [InlineData("src", "SalmonEgg.Infrastructure", "SalmonEgg.Infrastructure.csproj")]
+    public void MultiTargetLibraries_ShouldScopeSystemTextJsonPackageToNetstandard(
+        string projectRoot,
+        string projectDirectory,
+        string projectFileName)
+    {
+        var repoRoot = FindRepoRoot();
+        var projectFile = Path.Combine(repoRoot, projectRoot, projectDirectory, projectFileName);
+        var text = File.ReadAllText(projectFile);
+
+        Assert.Contains("<TargetFrameworks>netstandard2.1;net10.0</TargetFrameworks>", text);
+        Assert.Contains(
+            "<ItemGroup Condition=\"'$(TargetFramework)' == 'netstandard2.1'\">",
+            text);
+        Assert.Matches(
+            "Condition=\"'\\$\\(TargetFramework\\)' == 'netstandard2\\.1'\"[\\s\\S]*<PackageReference Include=\"System\\.Text\\.Json\"",
+            text);
+    }
+
     [Fact]
     public void Xaml_ShouldAvoidLegacySystemControlHighlightBrushes()
     {

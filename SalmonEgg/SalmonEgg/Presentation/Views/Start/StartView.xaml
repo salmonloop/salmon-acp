@@ -9,7 +9,7 @@
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:local_vm="using:SalmonEgg.Presentation.ViewModels.Start"
     mc:Ignorable="d"
-    Background="Transparent">
+    Background="{ThemeResource LayerFillColorDefaultBrush}">
 
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
@@ -99,7 +99,9 @@
                       ItemsSource="{x:Bind ViewModel.Suggestions, Mode=OneWay}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="16"
+                                HorizontalAlignment="Center" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>

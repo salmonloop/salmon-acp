@@ -203,7 +203,54 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("Foreground=\"White\"", xaml);
     }
 
+    [Fact]
+    public void AppXaml_DoesNotDeclareASecondUiMotionInstance()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\App.xaml");
+
+        Assert.DoesNotContain("<models:UiMotion x:Key=\"UiMotion\"", xaml);
+    }
+
+    [Fact]
+    public void DirectoryBuildProps_DoesNotSuppressUno0001()
+    {
+        var props = LoadText(@"SalmonEgg\Directory.Build.props");
+
+        Assert.DoesNotContain("UNO0001", props);
+    }
+
+    [Fact]
+    public void ChatView_DoesNotUseListViewItemContainerTransitions()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+
+        Assert.DoesNotContain("ItemContainerTransitions=", xaml);
+    }
+
+    [Fact]
+    public void StartView_ItemsPanelTemplate_DoesNotUseXBind()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
+
+        Assert.DoesNotContain("ChildrenTransitions=\"{x:Bind", xaml);
+    }
+
+    [Fact]
+    public void ChatStyles_XBindTemplate_UsesCompiledResourceDictionary()
+    {
+        var appXaml = LoadXaml(@"SalmonEgg\SalmonEgg\App.xaml");
+        var chatStylesXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Styles\ChatStyles.xaml");
+
+        Assert.DoesNotContain("Source=\"ms-appx:///Styles/ChatStyles.xaml\"", appXaml);
+        Assert.Contains("x:Class=\"SalmonEgg.Styles.ChatStyles\"", chatStylesXaml);
+    }
+
     private static string LoadXaml(string relativePath)
+    {
+        return LoadText(relativePath);
+    }
+
+    private static string LoadText(string relativePath)
     {
         var root = FindRepoRoot();
         var fullPath = Path.Combine(root, relativePath);

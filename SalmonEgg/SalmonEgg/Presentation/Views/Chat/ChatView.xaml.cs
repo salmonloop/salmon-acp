@@ -22,7 +22,6 @@ namespace SalmonEgg.Presentation.Views.Chat
         private bool _isViewLoaded;
         private bool _isTrackingMessages;
         private readonly InitialScrollGate _initialScrollGate = new();
-        private bool _isMotionSubscribed;
         private bool _autoScroll = true;
         private const double BottomThreshold = 10;
         private const int MaxInitialScrollAttempts = 8;
@@ -45,7 +44,6 @@ namespace SalmonEgg.Presentation.Views.Chat
             _isViewLoaded = true;
             _autoScroll = true;
             _initialScrollGate.MarkPending();
-            SubscribeMotion();
             EnsureMessageTracking();
             RequestInitialScroll();
             try
@@ -62,7 +60,6 @@ namespace SalmonEgg.Presentation.Views.Chat
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             _isViewLoaded = false;
-            UnsubscribeMotion();
             DetachScrollViewer();
             _initialScrollGate.CancelInFlight();
             if (_isTrackingMessages)
@@ -71,47 +68,6 @@ namespace SalmonEgg.Presentation.Views.Chat
                 ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
                 _isTrackingMessages = false;
             }
-        }
-
-        private void SubscribeMotion()
-        {
-            if (_isMotionSubscribed)
-            {
-                return;
-            }
-
-            UiMotion.Current.PropertyChanged += OnUiMotionPropertyChanged;
-            _isMotionSubscribed = true;
-            ApplyListTransitions();
-        }
-
-        private void UnsubscribeMotion()
-        {
-            if (!_isMotionSubscribed)
-            {
-                return;
-            }
-
-            UiMotion.Current.PropertyChanged -= OnUiMotionPropertyChanged;
-            _isMotionSubscribed = false;
-        }
-
-        private void OnUiMotionPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(UiMotion.ListItemTransitions))
-            {
-                ApplyListTransitions();
-            }
-        }
-
-        private void ApplyListTransitions()
-        {
-#if WINDOWS
-            if (MessagesList != null)
-            {
-                MessagesList.ItemContainerTransitions = UiMotion.Current.ListItemTransitions;
-            }
-#endif
         }
 
         private void EnsureMessageTracking()
