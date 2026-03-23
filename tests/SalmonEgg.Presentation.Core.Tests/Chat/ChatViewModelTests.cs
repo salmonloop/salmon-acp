@@ -17,6 +17,7 @@ using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services.Chat;
@@ -1593,7 +1594,87 @@ public class ChatViewModelTests
         syncContext.RunAll();
 
         state = await fixture.GetStateAsync();
-        Assert.NotNull(state.ActiveTurn);
         Assert.Equal(ChatTurnPhase.Completed, state.ActiveTurn!.Phase);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_AgentThoughtUpdate_AdvancesTurnToThinking()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        
+        var initialState = (await fixture.GetStateAsync()) with 
+        { 
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.WaitingForAgent, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        SetPrivateField(viewModel, "_currentTurnId", "turn-1");
+        
+        var update = new AgentThoughtUpdate { Content = new TextContentBlock("thinking...") };
+        InvokePrivateMethod(viewModel, "OnSessionUpdateReceived", null, new SessionUpdateEventArgs("remote-1", update));
+        syncContext.RunAll();
+        
+        var state = await fixture.GetStateAsync();
+        Assert.Equal(ChatTurnPhase.Thinking, state.ActiveTurn!.Phase);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_ToolCallUpdate_AdvancesTurnToToolPending()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        
+        var initialState = (await fixture.GetStateAsync()) with 
+        { 
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.WaitingForAgent, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        SetPrivateField(viewModel, "_currentTurnId", "turn-1");
+        
+        var update = new ToolCallUpdate(toolCallId: "call-1", kind: ToolCallKind.Read, title: "title");
+        InvokePrivateMethod(viewModel, "OnSessionUpdateReceived", null, new SessionUpdateEventArgs("remote-1", update));
+        syncContext.RunAll();
+        
+        var state = await fixture.GetStateAsync();
+        Assert.Equal(ChatTurnPhase.ToolPending, state.ActiveTurn!.Phase);
+        Assert.Equal("call-1", state.ActiveTurn.ToolCallId);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_AgentMessageUpdate_AdvancesTurnToResponding()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        
+        var initialState = (await fixture.GetStateAsync()) with 
+        { 
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.WaitingForAgent, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        SetPrivateField(viewModel, "_currentTurnId", "turn-1");
+        
+        InvokePrivateMethod(viewModel, "OnSessionUpdateReceived", null, new SessionUpdateEventArgs("remote-1", new AgentMessageUpdate(new TextContentBlock("hello"))));
+        syncContext.RunAll();
+        
+        var state = await fixture.GetStateAsync();
+        Assert.Equal(ChatTurnPhase.Responding, state.ActiveTurn!.Phase);
+    }
+
+    private void InvokePrivateMethod(object obj, string name, params object?[] parameters)
+    {
+        var method = obj.GetType().GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance);
+        method?.Invoke(obj, parameters);
     }
 }

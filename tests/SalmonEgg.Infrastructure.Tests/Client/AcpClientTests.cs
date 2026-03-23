@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Text.Json;
 using SalmonEgg.Infrastructure.Serialization;
 using System.Threading;
@@ -33,9 +34,16 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         {
             var parser = new MessageParser(); // Use real parser for serialization
             
-            var client = timeouts == null 
-                ? new AcpClient(_transportMock.Object, parser, null, _errorLoggerMock.Object)
-                : new AcpClient(_transportMock.Object, parser, null, _errorLoggerMock.Object, timeouts);
+            var initTimeouts = timeouts ?? new AcpClient.AcpRequestTimeouts(
+                DefaultTimeout: TimeSpan.FromSeconds(5),
+                SessionNewTimeout: TimeSpan.FromSeconds(5),
+                SessionPromptTimeout: TimeSpan.FromSeconds(5));
+            if (initTimeouts.DefaultTimeout < TimeSpan.FromSeconds(5))
+            {
+                initTimeouts = initTimeouts with { DefaultTimeout = TimeSpan.FromSeconds(5) };
+            }
+
+            var client = new AcpClient(_transportMock.Object, parser, null, _errorLoggerMock.Object, initTimeouts);
 
             // Mock InitializeAsync response
             var initResponse = new InitializeResponse(
@@ -55,6 +63,13 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             await client.InitializeAsync(new InitializeParams(new ClientInfo("Test", "1.0.0"), new ClientCapabilities()));
             await initTrigger;
+
+            if (timeouts != null)
+            {
+                typeof(AcpClient).GetField("_timeouts", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.SetValue(client, timeouts);
+            }
+
             return client;
         }
 

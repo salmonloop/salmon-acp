@@ -32,12 +32,6 @@
                                Visibility="{x:Bind HasTitle, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                Margin="0,0,0,4"/>
 
-                    <!-- Loading / Thinking 状态 -->
-                    <StackPanel Visibility="{x:Bind IsThinkingPlaceholder, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                 Orientation="Horizontal" Spacing="8" Margin="0,4">
-                        <ProgressRing IsActive="True" Width="16" Height="16" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
-                        <TextBlock Text="思考中..." Opacity="0.6" Foreground="{ThemeResource TextFillColorPrimaryBrush}" VerticalAlignment="Center" FontSize="12"/>
-                    </StackPanel>
 
                     <!-- 正文 -->
                     <TextBlock Text="{x:Bind TextContent, Mode=OneWay}"

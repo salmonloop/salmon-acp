@@ -90,10 +90,27 @@
                   MinWidth="0"
                   Loaded="OnMessagesListLoaded" />
 
+        <!-- Turn Status Bar -->
+        <Border Grid.Row="2"
+                Visibility="{x:Bind ViewModel.IsTurnStatusVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                Padding="20,0,20,8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ProgressRing IsActive="{x:Bind ViewModel.IsTurnStatusRunning, Mode=OneWay}"
+                              Width="14" Height="14"
+                              Visibility="{x:Bind ViewModel.IsTurnStatusRunning, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE783;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                          Visibility="{x:Bind ViewModel.IsTurnStatusRunning, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                <TextBlock Text="{x:Bind ViewModel.TurnStatusText, Mode=OneWay}"
+                           FontSize="11"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+        </Border>
+
         <!-- Unified Input Area -->
         <Border x:Name="InputBorder"
-                Grid.Row="2"
-                Grid.RowSpan="2"
+                Grid.Row="3"
                 Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                 BorderThickness="0"
                 Padding="12,10,12,16">

@@ -21,7 +21,6 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private bool _isOutgoing;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(IsThinkingPlaceholder))]
         private string _contentType = string.Empty;
 
         [ObservableProperty]
@@ -210,18 +209,6 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
            };
        }
 
-        public static ChatMessageViewModel CreateThinkingPlaceholder(string id)
-        {
-            return new ChatMessageViewModel
-            {
-                Id = id,
-                IsOutgoing = false,
-                ContentType = "thinking",
-                Title = "思考中",
-                TextContent = string.Empty,
-                Timestamp = DateTime.Now
-            };
-        }
 
         public bool HasTitle => !string.IsNullOrEmpty(Title);
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
@@ -233,7 +220,6 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
        public bool HasResourceContent => ResourceViewModel?.IsResourceContent == true;
        public bool HasResourceLink => ResourceViewModel?.IsResourceLink == true;
 
-       public bool IsThinkingPlaceholder => string.Equals(ContentType, "thinking", StringComparison.Ordinal);
 
        public string ToolCallStatusDisplayName => ToolCallStatus switch
        {

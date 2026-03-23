@@ -1603,7 +1603,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 if (_currentTurnId != null)
                 {
-                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, ChatTurnPhase.ToolRunning, ToolCallId: toolCallUpdate.ToolCallId, ToolTitle: toolCallUpdate.Title));
+                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, ChatTurnPhase.ToolPending, ToolCallId: toolCallUpdate.ToolCallId, ToolTitle: toolCallUpdate.Title));
                 }
 
                 _ = UpsertTranscriptSnapshotAsync(CreateToolCallSnapshot(toolCallUpdate));
@@ -1612,7 +1612,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 if (_currentTurnId != null)
                 {
-                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, ChatTurnPhase.ToolRunning, ToolCallId: toolCallStatusUpdate.ToolCallId));
+                    var phase = toolCallStatusUpdate.Status switch
+                    {
+                        Domain.Models.Tool.ToolCallStatus.InProgress => ChatTurnPhase.ToolRunning,
+                        Domain.Models.Tool.ToolCallStatus.Completed => ChatTurnPhase.WaitingForAgent,
+                        Domain.Models.Tool.ToolCallStatus.Failed => ChatTurnPhase.Failed,
+                        _ => ChatTurnPhase.ToolPending
+                    };
+                    _ = _chatStore.Dispatch(new AdvanceTurnPhaseAction(e.SessionId, _currentTurnId, phase, ToolCallId: toolCallStatusUpdate.ToolCallId));
                 }
                 _ = UpdateToolCallStatusAsync(toolCallStatusUpdate);
             }

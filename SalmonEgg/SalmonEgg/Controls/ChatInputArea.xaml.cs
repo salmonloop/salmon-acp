@@ -136,7 +136,7 @@ public sealed partial class ChatInputArea : UserControl
         {
             case nameof(ChatViewModel.CurrentPrompt):
             case nameof(ChatViewModel.IsPromptInFlight):
-            case nameof(ChatViewModel.IsThinking):
+            case nameof(ChatViewModel.TurnPhase):
             case nameof(ChatViewModel.IsSessionActive):
             case nameof(ChatViewModel.IsConnected):
             case nameof(ChatViewModel.CanSendPromptUi):
