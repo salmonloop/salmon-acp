@@ -22,7 +22,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         private bool _isViewLoaded;
         private bool _isTrackingMessages;
         private readonly InitialScrollGate _initialScrollGate = new();
-        private bool _autoScroll = true;
+        private bool _userScrolledUp;
         private const double BottomThreshold = 10;
         private const int MaxInitialScrollAttempts = 8;
         private ScrollViewer? _scrollViewer;
@@ -42,7 +42,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             _isViewLoaded = true;
-            _autoScroll = true;
+            _userScrolledUp = false;
             _initialScrollGate.MarkPending();
             EnsureMessageTracking();
             RequestInitialScroll();
@@ -89,7 +89,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            if (_initialScrollGate.HasPending && !_autoScroll)
+            if (_initialScrollGate.HasPending && _userScrolledUp)
             {
                 _initialScrollGate.ClearPending();
                 return;
@@ -100,7 +100,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            if (_autoScroll)
+            if (!_userScrolledUp)
             {
                 RequestScrollToBottom();
             }
@@ -129,13 +129,21 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            // If user is at the bottom, enable auto-scroll.
-            // Otherwise, if they scrolled up, disable it.
+            // Only evaluate at-bottom when the scroll has settled (not intermediate).
+            // During virtualization layout changes, intermediate frames have transient
+            // ScrollableHeight values that cause false at-bottom detection.
+            if (e.IsIntermediate)
+            {
+                return;
+            }
+
             var verticalOffset = _scrollViewer.VerticalOffset;
             var maxOffset = _scrollViewer.ScrollableHeight;
 
-            // Use a small threshold to account for precision issues.
-            _autoScroll = verticalOffset >= maxOffset - BottomThreshold;
+            if (verticalOffset >= maxOffset - BottomThreshold)
+            {
+                _userScrolledUp = false;
+            }
         }
 
         private void ScrollViewer_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -146,6 +154,12 @@ namespace SalmonEgg.Presentation.Views.Chat
         private void ScrollViewer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
             StopInitialScrollForManualInteraction();
+
+            var point = e.GetCurrentPoint(_scrollViewer);
+            if (point.Properties.MouseWheelDelta > 0)
+            {
+                _userScrolledUp = true;
+            }
         }
 
         private static ScrollViewer? FindScrollViewer(DependencyObject element)
@@ -231,7 +245,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            if (!_autoScroll)
+            if (_userScrolledUp)
             {
                 _initialScrollGate.ClearPending();
                 return;
@@ -248,7 +262,7 @@ namespace SalmonEgg.Presentation.Views.Chat
 
             var outcome = InitialScrollAttemptPolicy.Decide(
                 hasMessages: count > 0,
-                autoScrollEnabled: _autoScroll,
+                autoScrollEnabled: !_userScrolledUp,
                 reachedBottom: reachedBottom,
                 attempt: attempt,
                 maxAttempts: MaxInitialScrollAttempts);
@@ -261,7 +275,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                     break;
                 case InitialScrollAttemptOutcome.Retry:
                     _initialScrollGate.CancelInFlight();
-                    _autoScroll = true;
+                    _userScrolledUp = false;
                     RequestInitialScroll(attempt + 1);
                     break;
                 default:
@@ -278,7 +292,8 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return false;
             }
 
-            MessagesList.UpdateLayout();
+            // Avoid synchronous UpdateLayout(); rely on virtualizer's async layout pass
+            // and the retry mechanism in InitialScrollAttemptPolicy.
             _scrollViewer.ChangeView(null, _scrollViewer.ScrollableHeight, null);
             return IsInitialScrollReadyAndAtBottom(itemCount);
         }
@@ -324,7 +339,7 @@ namespace SalmonEgg.Presentation.Views.Chat
             }
 
             _suspendAutoScrollTracking = false;
-            _autoScroll = false;
+            _userScrolledUp = true;
             _initialScrollGate.ClearPending();
         }
 

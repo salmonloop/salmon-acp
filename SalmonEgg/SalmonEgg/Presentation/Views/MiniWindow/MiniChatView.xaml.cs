@@ -17,7 +17,7 @@ public sealed partial class MiniChatView : Page
     private bool _isMessagesListLoaded;
     private bool _isTrackingViewModel;
     private ScrollViewer? _scrollViewer;
-    private bool _autoScroll = true;
+    private bool _userScrolledUp;
     private readonly InitialScrollGate _initialScrollGate = new();
     private const double BottomThreshold = 10;
     private const int MaxInitialScrollAttempts = 8;
@@ -35,7 +35,7 @@ public sealed partial class MiniChatView : Page
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _isLoaded = true;
-        _autoScroll = true;
+        _userScrolledUp = false;
         _initialScrollGate.MarkPending();
         EnsureViewModelTracking();
         RequestInitialScroll();
@@ -103,9 +103,21 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
+        // Only evaluate at-bottom when the scroll has settled (not intermediate).
+        // During virtualization layout changes, intermediate frames have transient
+        // ScrollableHeight values that cause false at-bottom detection.
+        if (e.IsIntermediate)
+        {
+            return;
+        }
+
         var verticalOffset = _scrollViewer.VerticalOffset;
         var maxOffset = _scrollViewer.ScrollableHeight;
-        _autoScroll = verticalOffset >= maxOffset - BottomThreshold;
+
+        if (verticalOffset >= maxOffset - BottomThreshold)
+        {
+            _userScrolledUp = false;
+        }
     }
 
     private void OnScrollViewerPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -116,6 +128,12 @@ public sealed partial class MiniChatView : Page
     private void OnScrollViewerPointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
         StopInitialScrollForManualInteraction();
+
+        var point = e.GetCurrentPoint(_scrollViewer);
+        if (point.Properties.MouseWheelDelta > 0)
+        {
+            _userScrolledUp = true;
+        }
     }
 
     private void OnMessageHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -125,7 +143,7 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (_initialScrollGate.HasPending && !_autoScroll)
+        if (_initialScrollGate.HasPending && _userScrolledUp)
         {
             _initialScrollGate.ClearPending();
             return;
@@ -136,7 +154,7 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (_autoScroll)
+        if (!_userScrolledUp)
         {
             RequestScrollToBottom();
         }
@@ -196,7 +214,7 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (!_autoScroll)
+        if (_userScrolledUp)
         {
             _initialScrollGate.ClearPending();
             return;
@@ -212,7 +230,7 @@ public sealed partial class MiniChatView : Page
 
         var outcome = InitialScrollAttemptPolicy.Decide(
             hasMessages: count > 0,
-            autoScrollEnabled: _autoScroll,
+            autoScrollEnabled: !_userScrolledUp,
             reachedBottom: reachedBottom,
             attempt: attempt,
             maxAttempts: MaxInitialScrollAttempts);
@@ -225,7 +243,7 @@ public sealed partial class MiniChatView : Page
                 break;
             case InitialScrollAttemptOutcome.Retry:
                 _initialScrollGate.CancelInFlight();
-                _autoScroll = true;
+                _userScrolledUp = false;
                 RequestInitialScroll(attempt + 1);
                 break;
             default:
@@ -254,7 +272,8 @@ public sealed partial class MiniChatView : Page
             return false;
         }
         
-        MessagesList.UpdateLayout();
+        // Avoid synchronous UpdateLayout(); rely on virtualizer's async layout pass
+        // and the retry mechanism in InitialScrollAttemptPolicy.
         _scrollViewer.ChangeView(null, _scrollViewer.ScrollableHeight, null);
         return _scrollViewer.VerticalOffset >= _scrollViewer.ScrollableHeight - BottomThreshold;
     }
@@ -343,7 +362,7 @@ public sealed partial class MiniChatView : Page
         }
 
         _suspendAutoScrollTracking = false;
-        _autoScroll = false;
+        _userScrolledUp = true;
         _initialScrollGate.ClearPending();
     }
 
