@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\SalmonEgg.Domain\SalmonEgg.Domain.csproj" />
@@ -26,5 +26,9 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SalmonEgg.Infrastructure.Tests" />
+  </ItemGroup>
 
 </Project>

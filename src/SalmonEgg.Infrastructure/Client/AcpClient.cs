@@ -24,6 +24,12 @@ namespace SalmonEgg.Infrastructure.Client
     /// </summary>
     public class AcpClient : IAcpClient, IDisposable
     {
+        internal sealed record AcpRequestTimeouts(
+            TimeSpan DefaultTimeout,
+            TimeSpan SessionNewTimeout,
+            TimeSpan SessionPromptTimeout);
+
+        private readonly AcpRequestTimeouts _timeouts;
         private readonly ITransport _transport;
         private readonly IMessageParser _parser;
         private readonly IMessageValidator _validator;
@@ -123,6 +129,22 @@ namespace SalmonEgg.Infrastructure.Client
             // 注册传输层事件
             _transport.MessageReceived += OnMessageReceived;
             _transport.ErrorOccurred += OnTransportError;
+
+            _timeouts = new AcpRequestTimeouts(
+                DefaultRequestTimeout,
+                TimeSpan.FromMinutes(2),  // session/new timeout
+                TimeSpan.FromMinutes(2)); // session/prompt timeout
+        }
+
+        internal AcpClient(
+            ITransport transport,
+            IMessageParser? parser,
+            IMessageValidator? validator,
+            IErrorLogger? errorLogger,
+            AcpRequestTimeouts timeouts)
+            : this(transport, parser, validator, errorLogger)
+        {
+            _timeouts = timeouts ?? throw new ArgumentNullException(nameof(timeouts));
         }
 
         /// <summary>
@@ -279,7 +301,7 @@ namespace SalmonEgg.Infrastructure.Client
             try
             {
                 // session/prompt can be long-running (agents may take time before responding or streaming updates).
-                response = await SendRequestAsync(request, cancellationToken, timeout: TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+                response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -531,7 +553,12 @@ namespace SalmonEgg.Infrastructure.Client
 
             try
             {
-                var effectiveTimeout = timeout ?? DefaultRequestTimeout;
+                var effectiveTimeout = timeout ?? request.Method switch
+                {
+                    "session/new" => _timeouts.SessionNewTimeout,
+                    "session/prompt" => _timeouts.SessionPromptTimeout,
+                    _ => _timeouts.DefaultTimeout
+                };
 
                 var json = _parser.SerializeMessage(request);
                 _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 请求已序列化，长度={json.Length}, json={json.Substring(0, Math.Min(200, json.Length))}...", ErrorSeverity.Info, nameof(SendRequestAsync)));
@@ -558,9 +585,7 @@ namespace SalmonEgg.Infrastructure.Client
                                 ? "never"
                                 : $"{TimeSpan.FromMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastRxMs).TotalSeconds:0.0}s ago";
 
-                        var msg =
-                            $"Request timed out (id={requestIdStr}, method={request.Method}, timeout={effectiveTimeout.TotalSeconds:0}s, lastRx={lastRxAge}). " +
-                            "If the agent process doesn't speak ACP-over-stdio (e.g. it only supports MCP), it may never reply to ACP JSON-RPC requests.";
+                        var msg = $"Request timed out (method={request.Method}, id={requestIdStr}, timeout={effectiveTimeout.TotalSeconds:0}s, lastRx={lastRxAge}).";
                         _errorLogger.LogError(new ErrorLogEntry("REQ_TIMEOUT", msg, ErrorSeverity.Warning, nameof(SendRequestAsync)));
                         throw new TimeoutException(msg);
                     }
