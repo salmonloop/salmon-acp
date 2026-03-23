@@ -1096,7 +1096,7 @@ public class ChatViewModelTests
             syncContext);
 
         syncContext.RunAll();
-        Assert.False(viewModel.IsThinking);
+        Assert.False(viewModel.IsTurnStatusVisible);
 
         viewModel.Dispose();
 
@@ -1104,7 +1104,7 @@ public class ChatViewModelTests
         await state.Update(_ => newState, CancellationToken.None);
 
         syncContext.RunAll();
-        Assert.False(viewModel.IsThinking);
+        Assert.False(viewModel.IsTurnStatusVisible);
     }
 
     [Fact]
@@ -1185,13 +1185,13 @@ public class ChatViewModelTests
             syncContext);
 
         syncContext.RunAll();
-        Assert.False(viewModel.IsThinking);
+        Assert.False(viewModel.IsTurnStatusVisible);
 
         await state.Update(_ => initialState with { ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.Thinking, DateTime.UtcNow, DateTime.UtcNow) }, CancellationToken.None);
         viewModel.Dispose();
 
         syncContext.RunAll();
-        Assert.False(viewModel.IsThinking);
+        Assert.False(viewModel.IsTurnStatusVisible);
     }
 
     [Fact]
@@ -1537,5 +1537,63 @@ public class ChatViewModelTests
         {
             DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
+    }
+
+    [Fact]
+    public async Task SendPromptAsync_WithoutBinding_BeginsTurnAsCreatingRemoteSession()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        var tcsSession = new TaskCompletionSource<AcpRemoteSessionResult>();
+        var tcsPrompt = new TaskCompletionSource<AcpPromptDispatchResult>();
+        
+        commands.Setup(x => x.EnsureRemoteSessionAsync(It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns(tcsSession.Task);
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns(tcsPrompt.Task);
+
+        await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+        var viewModel = fixture.ViewModel;
+        
+        var chatService = new Mock<IChatService>();
+        SetPrivateField(viewModel, "_chatService", chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1", Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty });
+        syncContext.RunAll();
+        // Wait for projection
+        await Task.Delay(50);
+        syncContext.RunAll();
+        
+        Assert.True(viewModel.IsSessionActive);
+        viewModel.CurrentPrompt = "hi";
+        syncContext.RunAll();
+
+        var sendTask = viewModel.SendPromptCommand.ExecuteAsync(null);
+        
+        // At this point, it should have dispatched BeginTurnAction with CreatingRemoteSession
+        syncContext.RunAll();
+        
+        var state = await fixture.GetStateAsync();
+        Assert.NotNull(state.ActiveTurn);
+        Assert.Equal("conv-1", state.ActiveTurn!.ConversationId);
+        Assert.Equal(ChatTurnPhase.CreatingRemoteSession, state.ActiveTurn.Phase);
+
+        // Complete EnsureRemoteSessionAsync
+        tcsSession.SetResult(new AcpRemoteSessionResult("remote-1", new SessionNewResponse("remote-1"), false));
+        syncContext.RunAll();
+        
+        state = await fixture.GetStateAsync();
+        Assert.Equal(ChatTurnPhase.WaitingForAgent, state.ActiveTurn!.Phase);
+
+        // Now complete the prompt dispatch
+        tcsPrompt.SetResult(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(), false));
+        await sendTask;
+        
+        // Ensure finally block runs and dispatches CompleteTurn
+        syncContext.RunAll();
+
+        state = await fixture.GetStateAsync();
+        Assert.NotNull(state.ActiveTurn);
+        Assert.Equal(ChatTurnPhase.Completed, state.ActiveTurn!.Phase);
     }
 }

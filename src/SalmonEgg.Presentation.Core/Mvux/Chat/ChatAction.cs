@@ -63,8 +63,6 @@ public sealed record CancelTurnAction(string ConversationId, string TurnId) : Ch
 
 public sealed record ClearTurnAction(string ConversationId) : ChatAction;
 
-[Obsolete("Use BeginTurn/AdvanceTurnPhase instead")]
-public sealed record SetIsThinkingAction(bool IsThinking) : ChatAction;
 
 
 /// <summary>

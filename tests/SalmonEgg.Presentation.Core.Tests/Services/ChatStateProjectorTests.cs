@@ -59,6 +59,5 @@ public sealed class ChatStateProjectorTests
         Assert.Equal("Thinking...", projection.TurnStatusText);
         Assert.True(projection.IsTurnStatusRunning);
         Assert.Equal(ChatTurnPhase.Thinking, projection.TurnPhase);
-        Assert.True(projection.IsThinking);
     }
 }

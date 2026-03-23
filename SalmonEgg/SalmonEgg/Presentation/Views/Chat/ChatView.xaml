@@ -161,7 +161,7 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="1" RowDefinitions="*,Auto">
+            <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto">
                 <!-- 消息列表 -->
                 <controls:ResponsiveContentHost Grid.Row="0"
                                                 MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}">
@@ -186,8 +186,28 @@
                     </controls:ResponsiveContentHost.Child>
                 </controls:ResponsiveContentHost>
 
-                <!-- 输入区域（属于聊天区域） -->
+                <!-- Turn Status Bar -->
                 <controls:ResponsiveContentHost Grid.Row="1"
+                                                MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}"
+                                                Visibility="{x:Bind ViewModel.IsTurnStatusVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <controls:ResponsiveContentHost.Child>
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="24,0,24,8">
+                            <ProgressRing IsActive="{x:Bind ViewModel.IsTurnStatusRunning, Mode=OneWay}"
+                                          Width="16" Height="16"
+                                          Visibility="{x:Bind ViewModel.IsTurnStatusRunning, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <FontIcon Glyph="&#xE783;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                      Visibility="{x:Bind ViewModel.IsTurnStatusRunning, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                            <TextBlock Text="{x:Bind ViewModel.TurnStatusText, Mode=OneWay}"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </controls:ResponsiveContentHost.Child>
+                </controls:ResponsiveContentHost>
+
+                <!-- 输入区域 -->
+                <controls:ResponsiveContentHost Grid.Row="2"
                                                 MaxContentWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}">
                     <controls:ResponsiveContentHost.Child>
                         <controls:ChatInputArea ViewModel="{x:Bind ViewModel, Mode=OneWay}"
