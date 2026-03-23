@@ -49,6 +49,13 @@ public interface IAcpConnectionCommands
         System.Func<CancellationToken, Task<bool>> authenticateAsync,
         CancellationToken cancellationToken = default);
 
+    Task<AcpPromptDispatchResult> DispatchPromptToRemoteSessionAsync(
+        string remoteSessionId,
+        string promptText,
+        IAcpChatCoordinatorSink sink,
+        System.Func<CancellationToken, Task<bool>> authenticateAsync,
+        CancellationToken cancellationToken = default);
+
     Task CancelPromptAsync(
         IAcpChatCoordinatorSink sink,
         string? reason = null,

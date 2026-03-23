@@ -220,8 +220,6 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         ArgumentNullException.ThrowIfNull(sink);
         ArgumentNullException.ThrowIfNull(authenticateAsync);
 
-        var chatService = RequireReadyChatService(sink);
-
         if (sink.IsAuthenticationRequired)
         {
             var authenticated = await authenticateAsync(cancellationToken).ConfigureAwait(false);
@@ -233,15 +231,37 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         }
 
         var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
-        var remoteSession = !string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId)
-            ? new AcpRemoteSessionResult(
-                currentBinding.RemoteSessionId!,
-                new SessionNewResponse(currentBinding.RemoteSessionId!),
-                UsedExistingBinding: true)
-            : await EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken).ConfigureAwait(false);
+        var remoteSessionId = !string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId)
+            ? currentBinding.RemoteSessionId!
+            : (await EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken).ConfigureAwait(false)).RemoteSessionId;
+
+        return await DispatchPromptToRemoteSessionAsync(
+            remoteSessionId,
+            promptText,
+            sink,
+            authenticateAsync,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AcpPromptDispatchResult> DispatchPromptToRemoteSessionAsync(
+        string remoteSessionId,
+        string promptText,
+        IAcpChatCoordinatorSink sink,
+        Func<CancellationToken, Task<bool>> authenticateAsync,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(promptText))
+        {
+            throw new ArgumentException("Prompt text must not be empty.", nameof(promptText));
+        }
+
+        ArgumentNullException.ThrowIfNull(sink);
+        ArgumentNullException.ThrowIfNull(authenticateAsync);
+
+        var chatService = RequireReadyChatService(sink);
 
         var promptParams = new SessionPromptParams(
-            remoteSession.RemoteSessionId,
+            remoteSessionId,
             new List<ContentBlock> { new TextContentBlock { Text = promptText } });
 
         try
@@ -264,12 +284,17 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         }
         catch (Exception ex) when (IsRemoteSessionNotFound(ex))
         {
+            _logger.LogWarning(ex, "Remote session {RemoteSessionId} not found. Attempting recovery...", remoteSessionId);
             await ClearBindingForCurrentConversationAsync(sink).ConfigureAwait(false);
             var recreated = await EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken).ConfigureAwait(false);
-            promptParams.SessionId = recreated.RemoteSessionId;
+            var retryParams = new SessionPromptParams(
+                recreated.RemoteSessionId,
+                promptParams.Prompt,
+                promptParams.MaxTokens,
+                promptParams.StopSequences);
 
-            var response = await chatService.SendPromptAsync(promptParams, cancellationToken).ConfigureAwait(false);
-            return new AcpPromptDispatchResult(promptParams.SessionId, response, RetriedAfterSessionRecovery: true);
+            var response = await chatService.SendPromptAsync(retryParams, cancellationToken).ConfigureAwait(false);
+            return new AcpPromptDispatchResult(retryParams.SessionId, response, RetriedAfterSessionRecovery: true);
         }
     }
 

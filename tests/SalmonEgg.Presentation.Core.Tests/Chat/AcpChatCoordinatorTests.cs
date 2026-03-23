@@ -143,7 +143,31 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
-    public async Task SendPromptAsync_RemoteSessionNotFound_ClearsBindingRecreatesSessionAndRetriesOnce()
+    public async Task DispatchPromptToRemoteSessionAsync_UsesProvidedRemoteSessionId()
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            IsConnected = true,
+            IsInitialized = true
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        service
+            .Setup(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SessionPromptResponse());
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        await sut.DispatchPromptToRemoteSessionAsync("remote-123", "hi", sink, _ => Task.FromResult(true));
+
+        service.Verify(x => x.SendPromptAsync(It.Is<SessionPromptParams>(p => p.SessionId == "remote-123"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DispatchPromptToRemoteSessionAsync_RemoteSessionNotFound_RecreatesSessionAndRetriesOnce()
     {
         var service = CreateChatService();
         var sink = new FakeSink
@@ -152,45 +176,70 @@ public sealed class AcpChatCoordinatorTests
             IsConnected = true,
             IsInitialized = true,
             IsSessionActive = true,
-            CurrentSessionId = "local-session-1",
-            CurrentRemoteSessionId = "remote-stale",
+            CurrentSessionId = "local-1",
             ActiveSessionCwd = @"C:\repo\demo",
             SelectedProfileId = "profile-1"
         };
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
-        var firstPrompt = true;
+        var first = true;
 
         service
             .Setup(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()))
-            .Returns<SessionPromptParams, CancellationToken>((parameters, _) =>
-            {
-                if (firstPrompt)
-                {
-                    firstPrompt = false;
-                    Assert.Equal("remote-stale", parameters.SessionId);
-                    throw new AcpException(JsonRpcErrorCode.ResourceNotFound, "session not found");
+            .Returns<SessionPromptParams, CancellationToken>((p, _) => {
+                if (first) {
+                    first = false;
+                    throw new AcpException(JsonRpcErrorCode.ResourceNotFound, "Not found");
                 }
-
-                Assert.Equal("remote-session-2", parameters.SessionId);
                 return Task.FromResult(new SessionPromptResponse());
             });
 
         service
             .Setup(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()))
-            .ReturnsAsync(new SessionNewResponse("remote-session-2"));
+            .ReturnsAsync(new SessionNewResponse("remote-new"));
 
         var sut = new AcpChatCoordinator(factory.Object, logger.Object);
 
-        var result = await sut.SendPromptAsync("hello", sink, _ => Task.FromResult(true));
+        var result = await sut.DispatchPromptToRemoteSessionAsync("remote-stale", "hi", sink, _ => Task.FromResult(true));
 
         Assert.True(result.RetriedAfterSessionRecovery);
-        Assert.Equal("remote-session-2", result.RemoteSessionId);
-        Assert.Equal("remote-session-2", sink.CurrentRemoteSessionId);
-        Assert.Equal(2, sink.BindingCommands.Updates.Count);
-        Assert.Null(sink.BindingCommands.Updates[0].RemoteSessionId);
-        Assert.Equal("remote-session-2", sink.BindingCommands.Updates[1].RemoteSessionId);
-        service.Verify(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        Assert.Equal("remote-new", result.RemoteSessionId);
+        service.Verify(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()), Times.Once);
+        service.Verify(x => x.SendPromptAsync(It.Is<SessionPromptParams>(p => p.SessionId == "remote-new"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendPromptAsync_DelegatesToEnsureAndDispatchFlow()
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            IsConnected = true,
+            IsInitialized = true,
+            IsSessionActive = true,
+            CurrentSessionId = "local-1",
+            ActiveSessionCwd = @"C:\repo\demo",
+            SelectedProfileId = "profile-1"
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        service
+            .Setup(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()))
+            .ReturnsAsync(new SessionNewResponse("remote-1"));
+
+        service
+            .Setup(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SessionPromptResponse());
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        var result = await sut.SendPromptAsync("hi", sink, _ => Task.FromResult(true));
+
+        Assert.Equal("remote-1", result.RemoteSessionId);
+        service.Verify(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()), Times.Once);
+        service.Verify(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
