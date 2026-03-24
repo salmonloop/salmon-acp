@@ -40,8 +40,10 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
         ArgumentNullException.ThrowIfNull(response);
 
         var configDelta = BuildConfigDelta(response.ConfigOptions);
-        var hasConfigOptions = response.ConfigOptions?.Count > 0;
-        var availableModes = hasConfigOptions
+        var hasModeConfigProjection =
+            (configDelta.AvailableModes?.Count ?? 0) > 0
+            || !string.IsNullOrWhiteSpace(configDelta.SelectedModeId);
+        var availableModes = hasModeConfigProjection
             ? configDelta.AvailableModes?.ToArray() ?? Array.Empty<AcpModeOption>()
             : response.Modes?.AvailableModes?
                 .Where(static mode => mode is not null)
@@ -51,7 +53,7 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
                     mode.Description ?? string.Empty))
                 .ToArray() ?? Array.Empty<AcpModeOption>();
 
-        var selectedModeId = hasConfigOptions
+        var selectedModeId = hasModeConfigProjection
             ? configDelta.SelectedModeId ?? availableModes.FirstOrDefault()?.ModeId
             : string.IsNullOrWhiteSpace(response.Modes?.CurrentModeId)
                 ? configDelta.SelectedModeId ?? availableModes.FirstOrDefault()?.ModeId

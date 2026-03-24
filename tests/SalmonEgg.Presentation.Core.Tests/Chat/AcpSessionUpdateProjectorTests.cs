@@ -88,6 +88,57 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
+    public void ProjectSessionNew_FallsBackToLegacyModes_WhenConfigOptionsDoNotExposeModeSelector()
+    {
+        var projector = new AcpSessionUpdateProjector();
+        var response = new SessionNewResponse(
+            sessionId: "remote-1",
+            modes: new SessionModesState
+            {
+                CurrentModeId = "yolo",
+                AvailableModes = new List<SessionMode>
+                {
+                    new() { Id = "interactive", Name = "Interactive" },
+                    new() { Id = "yolo", Name = "YOLO" }
+                }
+            },
+            configOptions: new List<ConfigOption>
+            {
+                new()
+                {
+                    Id = "_salmonloop_permission_policy",
+                    Name = "Permission policy",
+                    CurrentValue = "ask",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "ask", Name = "Ask user" },
+                        new() { Value = "deny_all", Name = "Deny all" }
+                    }
+                },
+                new()
+                {
+                    Id = "_salmonloop_mode",
+                    Name = "Session Mode",
+                    CurrentValue = "yolo",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "interactive", Name = "Interactive" },
+                        new() { Value = "yolo", Name = "YOLO" }
+                    }
+                }
+            });
+
+        var delta = projector.ProjectSessionNew(response);
+
+        Assert.Equal("yolo", delta.SelectedModeId);
+        Assert.Equal(2, delta.AvailableModes?.Count);
+        Assert.Contains(delta.AvailableModes!, mode => mode.ModeId == "interactive");
+        Assert.Contains(delta.AvailableModes!, mode => mode.ModeId == "yolo");
+        Assert.True(delta.ShowConfigOptionsPanel);
+        Assert.Equal(2, delta.ConfigOptions?.Count);
+    }
+
+    [Fact]
     public void Project_ConfigOptionUpdate_MapsFullState()
     {
         var projector = new AcpSessionUpdateProjector();

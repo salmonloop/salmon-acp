@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using System.Threading;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models;
@@ -93,6 +94,12 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
 
     void UpdateAgentIdentity(string? agentName, string? agentVersion)
     {
+    }
+
+    Task ResetHydratedConversationForResyncAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
     }
 
     string GetActiveSessionCwdOrDefault() => Environment.CurrentDirectory;

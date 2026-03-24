@@ -3185,6 +3185,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _ = _chatStore.Dispatch(new SetAgentIdentityAction(agentName, agentVersion));
     }
 
+    public async Task ResetHydratedConversationForResyncAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(CurrentSessionId))
+        {
+            return;
+        }
+
+        var conversationId = CurrentSessionId!;
+        await _chatStore.Dispatch(new ClearTurnAction(conversationId)).ConfigureAwait(false);
+        await _chatStore.Dispatch(new HydrateConversationAction(
+            conversationId,
+            ImmutableList<ConversationMessageSnapshot>.Empty,
+            ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+            ShowPlanPanel: false,
+            PlanTitle: null)).ConfigureAwait(false);
+        await _chatStore.Dispatch(new SetConversationSessionStateAction(
+            conversationId,
+            ImmutableList<ConversationModeOptionSnapshot>.Empty,
+            SelectedModeId: null,
+            ImmutableList<ConversationConfigOptionSnapshot>.Empty,
+            ShowConfigOptionsPanel: false)).ConfigureAwait(false);
+    }
+
     private sealed class NoopAcpConnectionCoordinator : IAcpConnectionCoordinator
     {
         public static NoopAcpConnectionCoordinator Instance { get; } = new();

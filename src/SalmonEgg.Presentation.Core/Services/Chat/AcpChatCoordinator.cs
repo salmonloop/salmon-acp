@@ -113,7 +113,6 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             var wrappedService = WrapChatService(createdService, sink, cancellationToken);
             sink.ReplaceChatService(wrappedService);
             _activeChatServiceAdapter = wrappedService;
-            await TryMarkHydratedForCurrentStateAsync(sink, wrappedService, cancellationToken).ConfigureAwait(false);
 
             var initializeResponse = await wrappedService
                 .InitializeAsync(CreateDefaultInitializeParams())
@@ -121,6 +120,18 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             sink.UpdateAgentIdentity(initializeResponse.AgentInfo?.Name, initializeResponse.AgentInfo?.Version);
             await _connectionCoordinator.SetConnectedAsync(sink.SelectedProfileId, cancellationToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(cancellationToken).ConfigureAwait(false);
+
+            var hasExistingRemoteBinding = await HasExistingRemoteBindingAsync(sink, cancellationToken).ConfigureAwait(false);
+            if (preserveConversation
+                && hasExistingRemoteBinding
+                && wrappedService.AgentCapabilities?.LoadSession == true)
+            {
+                await _connectionCoordinator.ResyncAsync(sink, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await TryMarkHydratedForCurrentStateAsync(sink, wrappedService, cancellationToken).ConfigureAwait(false);
+            }
 
             _logger.LogInformation(
                 "ACP transport applied. transport={TransportType} preserveConversation={PreserveConversation}",
@@ -369,6 +380,14 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             currentBinding?.RemoteSessionId);
 
         await _connectionCoordinator.ResyncAsync(sink, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> HasExistingRemoteBindingAsync(
+        IAcpChatCoordinatorSink sink,
+        CancellationToken cancellationToken)
+    {
+        var binding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        return !string.IsNullOrWhiteSpace(binding?.RemoteSessionId);
     }
 
     private static async Task UpdateBindingForCurrentConversationAsync(

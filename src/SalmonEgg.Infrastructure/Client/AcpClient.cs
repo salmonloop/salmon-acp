@@ -291,38 +291,15 @@ namespace SalmonEgg.Infrastructure.Client
                 throw new AcpException(JsonRpcErrorCode.SessionNotFound, $"Session '{@params.SessionId}' not found");
             }
 
-            var promptStartUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var request = new JsonRpcRequest(
                 Interlocked.Increment(ref _nextMessageId),
                 "session/prompt",
                 JsonSerializer.SerializeToElement(@params, typeof(SessionPromptParams), _parser.Options));
 
-            JsonRpcResponse response;
-            try
-            {
-                // session/prompt can be long-running (agents may take time before responding or streaming updates).
-                response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
-            }
-            catch (TimeoutException)
-            {
-                // Some agents stream session/update events but never send a JSON-RPC response for session/prompt.
-                // If we observed any incoming traffic after the prompt started, assume a streaming-only agent
-                // and don't fail the UX.
-                var lastRx = Interlocked.Read(ref _lastReceivedUnixMs);
-                if (lastRx > promptStartUnixMs)
-                {
-                    _errorLogger.LogError(new ErrorLogEntry(
-                        "PROMPT_NO_RESPONSE",
-                        $"No JSON-RPC response for session/prompt (id={request.Id}). Received session traffic after prompt; assuming streaming-only agent.",
-                        ErrorSeverity.Warning,
-                        nameof(SendPromptAsync),
-                        @params.SessionId));
-
-                    return new SessionPromptResponse(StopReason.EndTurn);
-                }
-
-                throw;
-            }
+            // ACP requires a real session/prompt response with a protocol stopReason.
+            // If the agent only streams session/update traffic and never replies, surface the timeout
+            // instead of fabricating a terminal stop reason on the client's behalf.
+            var response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
 
             if (response.IsError)
             {

@@ -101,15 +101,26 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
             return;
         }
 
+        if (sink.CurrentChatService.AgentCapabilities?.LoadSession != true)
+        {
+            _logger.LogDebug("Skipping ACP resync because agent does not advertise loadSession capability.");
+            return;
+        }
+
+        var adapter = sink.CurrentChatService as AcpChatServiceAdapter;
+
         try
         {
             await sink.CurrentChatService.LoadSessionAsync(
                 new SessionLoadParams(sessionId, sink.GetActiveSessionCwdOrDefault())).ConfigureAwait(false);
+            await sink.ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
+            adapter?.MarkHydrated();
 
             _logger.LogInformation("ACP resync completed. sessionId={SessionId}", sessionId);
         }
         catch (Exception ex)
         {
+            adapter?.MarkHydrated(lowTrust: true, reason: "LoadSessionFailed");
             _logger.LogWarning(ex, "ACP resync failed. sessionId={SessionId}", sessionId);
         }
     }

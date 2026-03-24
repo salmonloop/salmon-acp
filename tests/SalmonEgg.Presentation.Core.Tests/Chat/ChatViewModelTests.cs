@@ -309,9 +309,9 @@ public class ChatViewModelTests
             return Task.FromResult(
                 string.Equals(fixture.ViewModel.CurrentSessionId, "session-1", StringComparison.Ordinal)
                 && fixture.ViewModel.MessageHistory.Count == 1
-                && fixture.ViewModel.AvailableModes.Count == 2
-                && string.Equals(fixture.ViewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal)
-                && fixture.ViewModel.ConfigOptions.Count == 1);
+                && fixture.ViewModel.AvailableModes.Count == 0
+                && fixture.ViewModel.SelectedMode is null
+                && fixture.ViewModel.ConfigOptions.Count == 0);
         });
 
         conversationStore.Verify(s => s.LoadAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -334,18 +334,18 @@ public class ChatViewModelTests
         Assert.Single(state.Transcript!);
         Assert.Equal("hello from restore", state.Transcript[0].TextContent);
         Assert.NotNull(state.AvailableModes);
-        Assert.Equal(2, state.AvailableModes!.Count);
-        Assert.Equal("agent", state.SelectedModeId);
+        Assert.Empty(state.AvailableModes!);
+        Assert.Null(state.SelectedModeId);
         Assert.NotNull(state.ConfigOptions);
-        Assert.Single(state.ConfigOptions!);
-        Assert.True(state.ShowConfigOptionsPanel);
+        Assert.Empty(state.ConfigOptions!);
+        Assert.False(state.ShowConfigOptionsPanel);
         Assert.Equal("session-1", fixture.ViewModel.CurrentSessionId);
         Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
         Assert.Single(fixture.ViewModel.MessageHistory);
         Assert.Equal("hello from restore", fixture.ViewModel.MessageHistory[0].TextContent);
-        Assert.Equal(2, fixture.ViewModel.AvailableModes.Count);
-        Assert.Equal("agent", fixture.ViewModel.SelectedMode?.ModeId);
-        Assert.Single(fixture.ViewModel.ConfigOptions);
+        Assert.Empty(fixture.ViewModel.AvailableModes);
+        Assert.Null(fixture.ViewModel.SelectedMode);
+        Assert.Empty(fixture.ViewModel.ConfigOptions);
     }
 
     [Fact]
@@ -1605,6 +1605,35 @@ public class ChatViewModelTests
             }
         };
 
+    private static List<ConfigOption> CreateNonCanonicalModeConfigOptions(string currentValue)
+        => new()
+        {
+            new ConfigOption
+            {
+                Id = "_salmonloop_permission_policy",
+                Name = "Permission policy",
+                Type = "select",
+                CurrentValue = "ask",
+                Options = new List<ConfigOptionValue>
+                {
+                    new() { Value = "ask", Name = "Ask user" },
+                    new() { Value = "deny_all", Name = "Deny all" }
+                }
+            },
+            new ConfigOption
+            {
+                Id = "_salmonloop_mode",
+                Name = "Session Mode",
+                Type = "select",
+                CurrentValue = currentValue,
+                Options = new List<ConfigOptionValue>
+                {
+                    new() { Value = "interactive", Name = "Interactive", Description = "Default interactive mode" },
+                    new() { Value = "yolo", Name = "YOLO", Description = "Aggressive mode" }
+                }
+            }
+        };
+
     private static void SetPrivateField(object instance, string fieldName, object? value)
     {
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -1850,6 +1879,74 @@ public class ChatViewModelTests
         Assert.Contains(viewModel.AvailableModes, mode => string.Equals(mode.ModeId, "plan", StringComparison.Ordinal));
         Assert.Equal("mode", viewModel.ConfigOptions[0].Id);
         Assert.Equal("agent", viewModel.ConfigOptions[0].Value);
+    }
+
+    [Fact]
+    public async Task SendPromptAsync_WhenSessionNewUsesLegacyModesAndNonCanonicalConfigOptions_StillProjectsModeList()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        commands.Setup(x => x.EnsureRemoteSessionAsync(
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AcpRemoteSessionResult(
+                "remote-1",
+                new SessionNewResponse(
+                    "remote-1",
+                    modes: new SessionModesState
+                    {
+                        CurrentModeId = "yolo",
+                        AvailableModes = new List<SalmonEgg.Domain.Models.Protocol.SessionMode>
+                        {
+                            new() { Id = "interactive", Name = "Interactive" },
+                            new() { Id = "yolo", Name = "YOLO" }
+                        }
+                    },
+                    configOptions: CreateNonCanonicalModeConfigOptions("yolo")),
+                UsedExistingBinding: false));
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
+                "remote-1",
+                "show modes",
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(), false));
+
+        await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+        var viewModel = fixture.ViewModel;
+        viewModel.ReplaceChatService(CreateConnectedChatService().Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+        });
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        viewModel.CurrentPrompt = "show modes";
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                viewModel.AvailableModes.Count == 2
+                && string.Equals(viewModel.SelectedMode?.ModeId, "yolo", StringComparison.Ordinal)
+                && viewModel.ConfigOptions.Count == 2);
+        });
+
+        Assert.Contains(viewModel.AvailableModes, mode => string.Equals(mode.ModeId, "interactive", StringComparison.Ordinal));
+        Assert.Contains(viewModel.AvailableModes, mode => string.Equals(mode.ModeId, "yolo", StringComparison.Ordinal));
+        Assert.Equal("yolo", viewModel.SelectedMode?.ModeId);
+        Assert.Equal(2, viewModel.ConfigOptions.Count);
     }
 
     [Fact]

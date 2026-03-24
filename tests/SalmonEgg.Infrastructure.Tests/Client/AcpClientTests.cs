@@ -179,5 +179,84 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             Assert.Equal(expected, promptResult.StopReason);
         }
+
+        [Fact]
+        public async Task SendPromptAsync_TimeoutAfterOtherSessionTraffic_PropagatesTimeout()
+        {
+            var parser = new MessageParser();
+            var timeouts = new AcpClient.AcpRequestTimeouts(
+                DefaultTimeout: TimeSpan.FromMilliseconds(50),
+                SessionNewTimeout: TimeSpan.FromMilliseconds(50),
+                SessionPromptTimeout: TimeSpan.FromMilliseconds(50));
+
+            var client = await CreateInitializedClientAsync(timeouts);
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var createResponseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var createResult = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            await createResponseTrigger;
+
+            var promptTask = client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
+
+            await Task.Delay(20);
+            var unrelatedUpdate = new JsonRpcNotification(
+                "session/update",
+                JsonSerializer.SerializeToElement(new SessionUpdateParams("other-session", new UsageUpdate { Used = 1 }), parser.Options));
+            _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(unrelatedUpdate)));
+
+            await Assert.ThrowsAsync<TimeoutException>(() => promptTask);
+        }
+
+        [Fact]
+        public async Task SendPromptAsync_TimeoutAfterSameSessionTraffic_StillPropagatesTimeout()
+        {
+            var parser = new MessageParser();
+            var timeouts = new AcpClient.AcpRequestTimeouts(
+                DefaultTimeout: TimeSpan.FromMilliseconds(50),
+                SessionNewTimeout: TimeSpan.FromMilliseconds(50),
+                SessionPromptTimeout: TimeSpan.FromMilliseconds(50));
+
+            var client = await CreateInitializedClientAsync(timeouts);
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var createResponseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var createResult = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            await createResponseTrigger;
+
+            var promptTask = client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
+
+            await Task.Delay(20);
+            var sameSessionUpdate = new JsonRpcNotification(
+                "session/update",
+                JsonSerializer.SerializeToElement(new SessionUpdateParams(
+                    createResult.SessionId,
+                    new AgentThoughtUpdate
+                    {
+                        Content = new TextContentBlock("thinking")
+                    }), parser.Options));
+            _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(sameSessionUpdate)));
+
+            await Assert.ThrowsAsync<TimeoutException>(() => promptTask);
+        }
     }
 }

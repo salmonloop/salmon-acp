@@ -216,7 +216,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
         return new ConversationWorkspaceSnapshot(
             binding.ConversationId,
-            binding.Transcript.Select(CloneMessage).ToArray(),
+            CloneMessages(binding.Transcript).ToArray(),
             binding.Plan.Select(ClonePlanEntry).ToArray(),
             binding.ShowPlanPanel,
             binding.PlanTitle,
@@ -253,7 +253,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
         var binding = RegisterConversation(snapshot.ConversationId, snapshot.CreatedAt, snapshot.LastUpdatedAt, bumpVersion: true);
         binding.Transcript.Clear();
-        binding.Transcript.AddRange(snapshot.Transcript.Select(CloneMessage));
+        binding.Transcript.AddRange(CloneMessages(snapshot.Transcript));
         binding.Plan.Clear();
         binding.Plan.AddRange(snapshot.Plan.Select(ClonePlanEntry));
         binding.AvailableModes.Clear();
@@ -357,18 +357,10 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 LastAccessedAt = binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt,
                 Cwd = session?.Cwd,
                 RemoteSessionId = binding.RemoteSessionId,
-                BoundProfileId = binding.BoundProfileId,
-                SelectedModeId = binding.SelectedModeId,
-                ShowConfigOptionsPanel = binding.ShowConfigOptionsPanel
+                BoundProfileId = binding.BoundProfileId
             };
 
-            record.AvailableModes.AddRange(binding.AvailableModes.Select(CloneModeOption));
-            record.ConfigOptions.AddRange(binding.ConfigOptions.Select(CloneConfigOption));
-
-            foreach (var message in binding.Transcript)
-            {
-                record.Messages.Add(CloneMessage(message));
-            }
+            record.Messages.AddRange(CloneMessages(binding.Transcript));
 
             document.Conversations.Add(record);
         }
@@ -404,14 +396,12 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 ? binding.LastUpdatedAt
                 : conversation.LastAccessedAt;
             binding.Transcript.Clear();
-            binding.Transcript.AddRange(conversation.Messages.Select(CloneMessage));
+            binding.Transcript.AddRange(CloneMessages(conversation.Messages));
             binding.Plan.Clear();
             binding.AvailableModes.Clear();
-            binding.AvailableModes.AddRange((conversation.AvailableModes ?? []).Select(CloneModeOption));
-            binding.SelectedModeId = conversation.SelectedModeId;
+            binding.SelectedModeId = null;
             binding.ConfigOptions.Clear();
-            binding.ConfigOptions.AddRange((conversation.ConfigOptions ?? []).Select(CloneConfigOption));
-            binding.ShowConfigOptionsPanel = conversation.ShowConfigOptionsPanel;
+            binding.ShowConfigOptionsPanel = false;
             binding.ShowPlanPanel = false;
             binding.PlanTitle = null;
             binding.RemoteSessionId = conversation.RemoteSessionId;
@@ -552,6 +542,19 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             PlanEntry = source.PlanEntry is null ? null : ClonePlanEntry(source.PlanEntry),
             ModeId = source.ModeId
         };
+
+    private static IEnumerable<ConversationMessageSnapshot> CloneMessages(IEnumerable<ConversationMessageSnapshot> source)
+    {
+        foreach (var message in source)
+        {
+            if (message is null)
+            {
+                continue;
+            }
+
+            yield return CloneMessage(message);
+        }
+    }
 
     private static ConversationPlanEntrySnapshot ClonePlanEntry(ConversationPlanEntrySnapshot source)
         => new()
