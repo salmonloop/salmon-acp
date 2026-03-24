@@ -284,7 +284,6 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.Equal("session-1", result.ConversationId);
         var currentState = await state;
         Assert.Equal("session-1", currentState.HydratedConversationId);
-        Assert.Null(currentState.SelectedConversationId);
         Assert.Equal(new ConversationBindingSlice("session-1", null, "profile-b"), currentState.Binding);
 
         var workspaceBinding = workspace.GetRemoteBinding("session-1");
@@ -388,7 +387,6 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
         var currentState = await state ?? ChatState.Empty;
         Assert.Null(currentState.HydratedConversationId);
-        Assert.Null(currentState.SelectedConversationId);
     }
 
     [Fact]
@@ -428,7 +426,6 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
         var currentState = await state ?? ChatState.Empty;
         Assert.Null(currentState.HydratedConversationId);
-        Assert.Null(currentState.SelectedConversationId);
     }
 
     private static IChatStore CreateChatStore(IState<ChatState> state)

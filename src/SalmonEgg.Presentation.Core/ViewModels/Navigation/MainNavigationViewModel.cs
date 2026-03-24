@@ -592,7 +592,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         return sessions
             .GroupBy(s => ProjectSessionClassifier.ClassifyProjectId(s.Cwd, normalizedRoots, UnclassifiedProjectId), StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastUpdatedAt).ToList(), StringComparer.Ordinal);
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(GetNavigationSortTimestamp)
+                    .ThenByDescending(s => s.LastUpdatedAt)
+                    .ToList(),
+                StringComparer.Ordinal);
     }
 
     private void NormalizeSelectionAfterRebuild()
@@ -792,7 +797,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         var sessions = GetConversationCatalogSnapshot()
             .Where(s => string.Equals(ProjectSessionClassifier.ClassifyProjectId(s.Cwd, normalizedRoots, UnclassifiedProjectId), projectId, StringComparison.Ordinal))
-            .OrderByDescending(s => s.LastUpdatedAt)
+            .OrderByDescending(GetNavigationSortTimestamp)
+            .ThenByDescending(s => s.LastUpdatedAt)
             .ToList();
 
         if (limit.HasValue)
@@ -827,6 +833,9 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         return _conversationCatalogPresenter.Snapshot;
     }
+
+    private static DateTime GetNavigationSortTimestamp(ConversationCatalogItem item)
+        => item.LastAccessedAt == default ? item.LastUpdatedAt : item.LastAccessedAt;
 
     private IEnumerable<string> GetKnownConversationIds()
         => _conversationCatalogPresenter.Snapshot.Select(static item => item.ConversationId);

@@ -15,7 +15,6 @@ public static class ChatReducer
         {
             SelectConversationAction selectConversation => Mutate(current, current with
             {
-                SelectedConversationId = null,
                 HydratedConversationId = selectConversation.ConversationId,
                 Transcript = null,
                 PlanEntries = null,

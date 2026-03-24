@@ -1,6 +1,7 @@
 using System.Text.Json;
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Protocol;
+using SalmonEgg.Infrastructure.Serialization;
 
 namespace SalmonEgg.Domain.Tests.Protocol;
 
@@ -21,10 +22,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new MessageParser().Options);
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.SessionId, Is.EqualTo("s1"));
@@ -48,10 +46,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, CreateJsonOptions());
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.Update, Is.TypeOf<ConfigUpdateUpdate>());
@@ -81,10 +76,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, CreateJsonOptions());
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.Update, Is.TypeOf<ConfigOptionUpdate>());
@@ -109,10 +101,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new MessageParser().Options);
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
@@ -145,5 +134,61 @@ public sealed class SessionUpdatePolymorphismTests
 
         var update = (CurrentModeUpdate)parsed.Update!;
         Assert.That(update.NormalizedModeId, Is.EqualTo("legacy-mode"));
+    }
+
+    [Test]
+    public void SessionInfoUpdate_DoesNotExpose_LegacySessionMetadataProperties()
+    {
+        Assert.That(typeof(SessionInfoUpdate).GetProperty("Cwd"), Is.Null);
+        Assert.That(typeof(SessionInfoUpdate).GetProperty("SessionId"), Is.Null);
+    }
+
+    [Test]
+    public void Deserialize_ToolCallStatusUpdate_WithExtendedSchemaFields_Works()
+    {
+        var json = """
+        {
+          "sessionId": "s1",
+          "update": {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call-1",
+            "title": "Switch mode",
+            "kind": "switch_mode",
+            "status": "completed",
+            "rawInput": { "targetMode": "plan" },
+            "rawOutput": { "applied": true }
+          }
+        }
+        """;
+
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.Update, Is.TypeOf<ToolCallStatusUpdate>());
+
+        var update = (ToolCallStatusUpdate)parsed.Update!;
+        Assert.That(update.ToolCallId, Is.EqualTo("call-1"));
+        Assert.That(update.Title, Is.EqualTo("Switch mode"));
+        Assert.That(update.Kind, Is.EqualTo(Domain.Models.Tool.ToolCallKind.SwitchMode));
+        Assert.That(update.Status, Is.EqualTo(Domain.Models.Tool.ToolCallStatus.Completed));
+        Assert.That(update.RawInput.HasValue, Is.True);
+        Assert.That(update.RawOutput.HasValue, Is.True);
+        var rawInput = update.RawInput.GetValueOrDefault();
+        var rawOutput = update.RawOutput.GetValueOrDefault();
+        Assert.That(rawInput.GetProperty("targetMode").GetString(), Is.EqualTo("plan"));
+        Assert.That(rawOutput.GetProperty("applied").GetBoolean(), Is.True);
+    }
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+        options.Converters.Add(new JsonPropertyNameEnumConverterFactory());
+        return options;
     }
 }

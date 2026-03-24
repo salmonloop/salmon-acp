@@ -20,6 +20,8 @@ public interface IChatLaunchWorkflowChatFacade
 
     Task<ChatLaunchConnectionOutcome> EnsureConnectedForLaunchAsync(CancellationToken cancellationToken = default);
 
+    void PrepareDraftForLaunch(string promptText);
+
     bool TrySendPromptForLaunch();
 }
 
@@ -114,6 +116,7 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
                 return;
         }
 
+        _chat.PrepareDraftForLaunch(normalizedPrompt);
         if (_chat.TrySendPromptForLaunch())
         {
             return;
@@ -143,6 +146,11 @@ public sealed class ChatLaunchWorkflowChatFacadeAdapter : IChatLaunchWorkflowCha
     {
         get => _chatViewModel.ShowTransportConfigPanel;
         set => _chatViewModel.ShowTransportConfigPanel = value;
+    }
+
+    public void PrepareDraftForLaunch(string promptText)
+    {
+        _chatViewModel.CurrentPrompt = promptText ?? string.Empty;
     }
 
     public async Task<ChatLaunchConnectionOutcome> EnsureConnectedForLaunchAsync(CancellationToken cancellationToken = default)

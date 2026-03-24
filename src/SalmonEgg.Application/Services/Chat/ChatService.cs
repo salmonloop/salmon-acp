@@ -107,9 +107,9 @@ namespace SalmonEgg.Application.Services.Chat
                             }
                             break;
                         case CurrentModeUpdate modeChange:
-                            if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
+                            if (!string.IsNullOrEmpty(modeChange.NormalizedModeId))
                             {
-                                _currentMode = new SessionModeState { CurrentModeId = modeChange.CurrentModeId };
+                                _currentMode = new SessionModeState { CurrentModeId = modeChange.NormalizedModeId! };
                             }
                             break;
                         case ConfigOptionUpdate configOption:
@@ -167,15 +167,20 @@ namespace SalmonEgg.Application.Services.Chat
                     break;
                 case ToolCallStatusUpdate toolCallStatusUpdate:
                     entry.ToolCallId = toolCallStatusUpdate.ToolCallId;
+                    entry.Kind = toolCallStatusUpdate.Kind;
                     entry.Status = toolCallStatusUpdate.Status;
+                    entry.Title = toolCallStatusUpdate.Title;
                     break;
                 case PlanUpdate planUpdate:
                     entry.Entries = planUpdate.Entries;
                     entry.Title = planUpdate.Title;
                     break;
                 case CurrentModeUpdate modeChange:
-                    entry.ModeId = modeChange.CurrentModeId;
+                    entry.ModeId = modeChange.NormalizedModeId;
                     entry.Title = modeChange.Title;
+                    break;
+                case SessionInfoUpdate sessionInfoUpdate:
+                    entry.Title = sessionInfoUpdate.Title;
                     break;
                 case ConfigUpdateUpdate configUpdate:
                     entry.ConfigOptions = configUpdate.ConfigOptions;
@@ -198,7 +203,10 @@ namespace SalmonEgg.Application.Services.Chat
                 PlanUpdate => "plan",
                 CurrentModeUpdate => "current_mode_update",
                 ConfigUpdateUpdate => "config_options_update",
+                AvailableCommandsUpdate => "available_commands_update",
                 ConfigOptionUpdate => "config_option_update",
+                SessionInfoUpdate => "session_info_update",
+                UsageUpdate => "usage_update",
                 _ => "unknown"
             };
 

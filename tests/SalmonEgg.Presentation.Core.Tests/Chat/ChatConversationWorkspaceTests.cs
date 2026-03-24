@@ -186,10 +186,11 @@ public sealed class ChatConversationWorkspaceTests
 
         var saved = Assert.IsType<ConversationDocument>(store.LastSavedDocument);
         var conversation = Assert.Single(saved.Conversations);
-        Assert.Null(conversation.SelectedModeId);
-        Assert.False(conversation.ShowConfigOptionsPanel);
-        Assert.Empty(conversation.AvailableModes);
-        Assert.Empty(conversation.ConfigOptions);
+        Assert.NotNull(conversation);
+        Assert.Null(typeof(ConversationRecord).GetProperty("SelectedModeId"));
+        Assert.Null(typeof(ConversationRecord).GetProperty("ShowConfigOptionsPanel"));
+        Assert.Null(typeof(ConversationRecord).GetProperty("AvailableModes"));
+        Assert.Null(typeof(ConversationRecord).GetProperty("ConfigOptions"));
     }
 
     [Fact]

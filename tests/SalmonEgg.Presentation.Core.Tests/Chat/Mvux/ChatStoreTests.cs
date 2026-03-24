@@ -28,7 +28,6 @@ public class ChatStoreTests
         // Assert
         var currentState = await WaitForStateAsync(state, current => string.Equals(current?.HydratedConversationId, newConversationId, System.StringComparison.Ordinal));
         Assert.NotNull(currentState);
-        Assert.Null(currentState.SelectedConversationId);
         Assert.Equal(newConversationId, currentState.HydratedConversationId);
     }
 
@@ -49,7 +48,6 @@ public class ChatStoreTests
             current => string.Equals(current?.HydratedConversationId, "conv-1", System.StringComparison.Ordinal) && current.IsPromptInFlight == false);
         Assert.NotNull(currentState);
         Assert.False(currentState.IsPromptInFlight);
-        Assert.Null(currentState.SelectedConversationId);
         Assert.Equal("conv-1", currentState.HydratedConversationId);
     }
 

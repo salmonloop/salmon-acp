@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.ComponentModel;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -1296,18 +1297,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private static string? ResolveActiveConversationId(ChatState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-
-        if (!string.IsNullOrWhiteSpace(state.HydratedConversationId))
-        {
-            return state.HydratedConversationId;
-        }
-
-        if (!string.IsNullOrWhiteSpace(state.SelectedConversationId))
-        {
-            return state.SelectedConversationId;
-        }
-
-        return null;
+        return string.IsNullOrWhiteSpace(state.HydratedConversationId)
+            ? null
+            : state.HydratedConversationId;
     }
 
     private async ValueTask<ConversationRemoteBindingState?> ResolveActiveConversationBindingAsync(
@@ -1747,6 +1739,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                     Domain.Models.Tool.ToolCallStatus.InProgress => ChatTurnPhase.ToolRunning,
                     Domain.Models.Tool.ToolCallStatus.Completed => ChatTurnPhase.WaitingForAgent,
                     Domain.Models.Tool.ToolCallStatus.Failed => ChatTurnPhase.Failed,
+                    Domain.Models.Tool.ToolCallStatus.Cancelled => ChatTurnPhase.Cancelled,
                     _ => ChatTurnPhase.ToolPending
                 };
                 await AdvanceActiveTurnPhaseAsync(activeTurn, phase, toolCallStatusUpdate.ToolCallId).ConfigureAwait(true);
@@ -1778,7 +1771,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
             else if (e.Update is SessionInfoUpdate)
             {
-                // Session metadata currently projects through the workspace/catalog pipeline.
+                await ApplySessionInfoUpdateAsync(activeConversationId!, (SessionInfoUpdate)e.Update).ConfigureAwait(true);
             }
             else if (e.Update is UsageUpdate)
             {
@@ -1843,7 +1836,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         switch (response.StopReason)
         {
             case StopReason.Cancelled:
-                await _chatStore.Dispatch(new CancelTurnAction(conversationId, turnId)).ConfigureAwait(true);
+                await PreemptivelyCancelTurnAsync(conversationId, turnId).ConfigureAwait(true);
                 break;
 
             case StopReason.Refusal:
@@ -1855,6 +1848,34 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             case StopReason.MaxTurnRequests:
                 await _chatStore.Dispatch(new CompleteTurnAction(conversationId, turnId)).ConfigureAwait(true);
                 break;
+        }
+    }
+
+    private async Task ApplySessionInfoUpdateAsync(string conversationId, SessionInfoUpdate update)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId) || update is null)
+        {
+            return;
+        }
+
+        DateTime? updatedAtUtc = null;
+        if (!string.IsNullOrWhiteSpace(update.UpdatedAt)
+            && DateTimeOffset.TryParse(
+                update.UpdatedAt,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsedUpdatedAt))
+        {
+            updatedAtUtc = parsedUpdatedAt.UtcDateTime;
+        }
+
+        await _conversationWorkspace
+            .ApplySessionInfoUpdateAsync(conversationId, update.Title, updatedAtUtc)
+            .ConfigureAwait(true);
+
+        if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
+        {
+            CurrentSessionDisplayName = ResolveSessionDisplayName(conversationId);
         }
     }
 
@@ -2342,11 +2363,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             IsOutgoing = false,
             ContentType = "tool_call",
             Title = toolCall.Title ?? string.Empty,
-            TextContent = toolCall.RawOutput?.GetRawText() ?? string.Empty,
+            TextContent = ResolveToolCallOutput(toolCall.RawOutput, toolCall.Content, string.Empty),
             ToolCallId = toolCall.ToolCallId,
             ToolCallKind = toolCall.Kind,
             ToolCallStatus = toolCall.Status,
-            ToolCallJson = toolCall.RawInput?.GetRawText()
+            ToolCallJson = TryGetRawJson(toolCall.RawInput)
         };
     }
 
@@ -2372,42 +2393,170 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         var existing = currentTranscript.LastOrDefault(message =>
             string.Equals(message.ToolCallId, toolCallStatusUpdate.ToolCallId, StringComparison.Ordinal)
             && string.Equals(message.ContentType, "tool_call", StringComparison.Ordinal));
-        if (existing is null)
+        var merged = existing is null
+            ? CreateToolCallSnapshot(toolCallStatusUpdate)
+            : new ConversationMessageSnapshot
+            {
+                Id = existing.Id,
+                Timestamp = DateTime.UtcNow,
+                IsOutgoing = existing.IsOutgoing,
+                ContentType = existing.ContentType,
+                Title = string.IsNullOrWhiteSpace(toolCallStatusUpdate.Title) ? existing.Title : toolCallStatusUpdate.Title,
+                TextContent = ResolveToolCallOutput(
+                    toolCallStatusUpdate.RawOutput,
+                    toolCallStatusUpdate.Content,
+                    existing.TextContent),
+                ImageData = existing.ImageData,
+                ImageMimeType = existing.ImageMimeType,
+                AudioData = existing.AudioData,
+                AudioMimeType = existing.AudioMimeType,
+                ToolCallId = existing.ToolCallId,
+                ToolCallKind = toolCallStatusUpdate.Kind ?? existing.ToolCallKind,
+                ToolCallStatus = toolCallStatusUpdate.Status ?? existing.ToolCallStatus,
+                ToolCallJson = TryGetRawJson(toolCallStatusUpdate.RawInput) ?? existing.ToolCallJson,
+                PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
+                ModeId = existing.ModeId
+            };
+
+        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(conversationId, merged)).ConfigureAwait(false);
+    }
+
+    private ConversationMessageSnapshot CreateToolCallSnapshot(ToolCallStatusUpdate toolCallStatusUpdate)
+    {
+        return new ConversationMessageSnapshot
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTime.UtcNow,
+            IsOutgoing = false,
+            ContentType = "tool_call",
+            Title = toolCallStatusUpdate.Title ?? string.Empty,
+            TextContent = ResolveToolCallOutput(toolCallStatusUpdate.RawOutput, toolCallStatusUpdate.Content, string.Empty),
+            ToolCallId = toolCallStatusUpdate.ToolCallId,
+            ToolCallKind = toolCallStatusUpdate.Kind,
+            ToolCallStatus = toolCallStatusUpdate.Status,
+            ToolCallJson = TryGetRawJson(toolCallStatusUpdate.RawInput)
+        };
+    }
+
+    private static string? TryGetRawJson(System.Text.Json.JsonElement? element)
+        => element?.GetRawText();
+
+    private static string ResolveToolCallOutput(
+        System.Text.Json.JsonElement? rawOutput,
+        IReadOnlyList<Domain.Models.Tool.ToolCallContent>? content,
+        string? fallback)
+    {
+        var serializedOutput = TryGetRawJson(rawOutput);
+        if (!string.IsNullOrWhiteSpace(serializedOutput))
+        {
+            return serializedOutput;
+        }
+
+        var flattened = FlattenToolCallContent(content);
+        if (!string.IsNullOrWhiteSpace(flattened))
+        {
+            return flattened;
+        }
+
+        return fallback ?? string.Empty;
+    }
+
+    private static string FlattenToolCallContent(IReadOnlyList<Domain.Models.Tool.ToolCallContent>? content)
+    {
+        if (content == null || content.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>(content.Count);
+        foreach (var item in content)
+        {
+            switch (item)
+            {
+                case Domain.Models.Tool.ContentToolCallContent { Content: TextContentBlock textBlock } when !string.IsNullOrWhiteSpace(textBlock.Text):
+                    parts.Add(textBlock.Text);
+                    break;
+                case Domain.Models.Tool.DiffToolCallContent diff when !string.IsNullOrWhiteSpace(diff.NewText):
+                    parts.Add(diff.NewText);
+                    break;
+                case Domain.Models.Tool.DiffToolCallContent diff when !string.IsNullOrWhiteSpace(diff.Path):
+                    parts.Add(diff.Path);
+                    break;
+                case Domain.Models.Tool.TerminalToolCallContent terminal when !string.IsNullOrWhiteSpace(terminal.TerminalId):
+                    parts.Add(terminal.TerminalId);
+                    break;
+            }
+        }
+
+        return parts.Count == 0 ? string.Empty : string.Join(Environment.NewLine, parts);
+    }
+
+    private async Task PreemptivelyCancelTurnAsync(string? expectedConversationId = null, string? expectedTurnId = null)
+    {
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var activeTurn = state.ActiveTurn;
+        if (activeTurn is null)
         {
             return;
         }
 
-        var appendedOutput = existing.TextContent ?? string.Empty;
-        if (toolCallStatusUpdate.Content != null)
+        if (!string.IsNullOrWhiteSpace(expectedConversationId)
+            && !string.Equals(activeTurn.ConversationId, expectedConversationId, StringComparison.Ordinal))
         {
-            foreach (var item in toolCallStatusUpdate.Content.OfType<Domain.Models.Tool.ContentToolCallContent>())
-            {
-                if (item.Content is TextContentBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
-                {
-                    appendedOutput += textBlock.Text;
-                }
-            }
+            return;
         }
 
-        await _chatStore.Dispatch(new UpsertTranscriptMessageAction(conversationId, new ConversationMessageSnapshot
+        if (!string.IsNullOrWhiteSpace(expectedTurnId)
+            && !string.Equals(activeTurn.TurnId, expectedTurnId, StringComparison.Ordinal))
         {
-            Id = existing.Id,
-            Timestamp = DateTime.UtcNow,
-            IsOutgoing = existing.IsOutgoing,
-            ContentType = existing.ContentType,
-            Title = existing.Title,
-            TextContent = appendedOutput,
-            ImageData = existing.ImageData,
-            ImageMimeType = existing.ImageMimeType,
-            AudioData = existing.AudioData,
-            AudioMimeType = existing.AudioMimeType,
-            ToolCallId = existing.ToolCallId,
-            ToolCallKind = existing.ToolCallKind,
-            ToolCallStatus = toolCallStatusUpdate.Status ?? existing.ToolCallStatus,
-            ToolCallJson = existing.ToolCallJson,
-            PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
-            ModeId = existing.ModeId
-        })).ConfigureAwait(false);
+            return;
+        }
+
+        await PreemptivelyCancelOutstandingToolCallsAsync(state, activeTurn).ConfigureAwait(true);
+        await _chatStore.Dispatch(new CancelTurnAction(activeTurn.ConversationId, activeTurn.TurnId)).ConfigureAwait(true);
+    }
+
+    private async Task PreemptivelyCancelOutstandingToolCallsAsync(ChatState state, ActiveTurnState activeTurn)
+    {
+        if (string.IsNullOrWhiteSpace(activeTurn.ConversationId))
+        {
+            return;
+        }
+
+        var transcript = state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        var cutoff = activeTurn.StartedAtUtc == default ? DateTime.MinValue : activeTurn.StartedAtUtc;
+        var pendingToolCalls = transcript
+            .Where(message =>
+                string.Equals(message.ContentType, "tool_call", StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(message.ToolCallId)
+                && message.Timestamp >= cutoff
+                && message.ToolCallStatus is null
+                    or Domain.Models.Tool.ToolCallStatus.Pending
+                    or Domain.Models.Tool.ToolCallStatus.InProgress)
+            .ToArray();
+
+        foreach (var existing in pendingToolCalls)
+        {
+            await _chatStore.Dispatch(new UpsertTranscriptMessageAction(activeTurn.ConversationId, new ConversationMessageSnapshot
+            {
+                Id = existing.Id,
+                Timestamp = DateTime.UtcNow,
+                IsOutgoing = existing.IsOutgoing,
+                ContentType = existing.ContentType,
+                Title = existing.Title,
+                TextContent = existing.TextContent,
+                ImageData = existing.ImageData,
+                ImageMimeType = existing.ImageMimeType,
+                AudioData = existing.AudioData,
+                AudioMimeType = existing.AudioMimeType,
+                ToolCallId = existing.ToolCallId,
+                ToolCallKind = existing.ToolCallKind,
+                ToolCallStatus = Domain.Models.Tool.ToolCallStatus.Cancelled,
+                ToolCallJson = existing.ToolCallJson,
+                PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
+                ModeId = existing.ModeId
+            })).ConfigureAwait(true);
+        }
     }
 
     private async Task ApplySessionUpdateDeltaAsync(string conversationId, AcpSessionUpdateDelta delta)
@@ -2785,7 +2934,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         catch (OperationCanceledException)
         {
             // User-cancelled; keep input cleared.
-            await _chatStore.Dispatch(new CancelTurnAction(conversationId, turnId));
+            await PreemptivelyCancelTurnAsync(conversationId, turnId).ConfigureAwait(true);
         }
         catch (TimeoutException ex)
         {
@@ -2856,6 +3005,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         try
         {
+            await PreemptivelyCancelTurnAsync().ConfigureAwait(false);
             await _acpConnectionCommands.CancelPromptAsync(this, "User cancelled").ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -3012,6 +3162,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
             if (_chatService != null)
             {
+                await PreemptivelyCancelTurnAsync().ConfigureAwait(true);
                 await _chatService.CancelSessionAsync(cancelParams);
             }
         }

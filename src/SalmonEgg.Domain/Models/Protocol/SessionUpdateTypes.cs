@@ -357,6 +357,18 @@ namespace SalmonEgg.Domain.Models.Protocol
         public string? ToolCallId { get; set; }
 
         /// <summary>
+        /// 工具调用类型。
+        /// </summary>
+        [JsonPropertyName("kind")]
+        public ToolCallKind? Kind { get; set; }
+
+        /// <summary>
+        /// 标题（可选）。
+        /// </summary>
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        /// <summary>
         /// 工具调用状态。
         /// </summary>
         [JsonPropertyName("status")]
@@ -367,6 +379,24 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// </summary>
         [JsonPropertyName("content")]
         public List<ToolCallContent>? Content { get; set; }
+
+        /// <summary>
+        /// 文件位置列表，表示工具调用影响的文件。
+        /// </summary>
+        [JsonPropertyName("locations")]
+        public List<ToolCallLocation>? Locations { get; set; }
+
+        /// <summary>
+        /// 原始输入参数。
+        /// </summary>
+        [JsonPropertyName("rawInput")]
+        public JsonElement? RawInput { get; set; }
+
+        /// <summary>
+        /// 原始输出结果。
+        /// </summary>
+        [JsonPropertyName("rawOutput")]
+        public JsonElement? RawOutput { get; set; }
     }
 
     /// <summary>
@@ -397,17 +427,5 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// </summary>
         [JsonPropertyName("updatedAt")]
         public string? UpdatedAt { get; set; }
-
-        /// <summary>
-        /// 工作目录（只读，客户端不得修改）。
-        /// </summary>
-        [JsonPropertyName("cwd")]
-        public string? Cwd { get; set; }
-
-        /// <summary>
-        /// 会话 ID（可选）。
-        /// </summary>
-        [JsonPropertyName("sessionId")]
-        public string? SessionId { get; set; }
     }
 }

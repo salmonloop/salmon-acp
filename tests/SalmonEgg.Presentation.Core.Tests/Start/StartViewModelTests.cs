@@ -31,14 +31,13 @@ public sealed class StartViewModelTests
     {
         var preferences = CreatePreferences();
         using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
-        var chatViewModel = chat.ViewModel;
         var workflow = new Mock<IChatLaunchWorkflow>();
 
         var startLogger = new Mock<ILogger<StartViewModel>>();
         using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
-        var startViewModel = CreateStartViewModel(chatViewModel, preferences, nav, workflow.Object, startLogger.Object);
+        var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object, startLogger.Object);
 
-        chatViewModel.CurrentPrompt = "   ";
+        startViewModel.StartPrompt = "   ";
 
         await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
 
@@ -50,13 +49,12 @@ public sealed class StartViewModelTests
     {
         var preferences = CreatePreferences();
         using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
-        var chatViewModel = chat.ViewModel;
         var workflow = new Mock<IChatLaunchWorkflow>();
 
         using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
-        var startViewModel = CreateStartViewModel(chatViewModel, preferences, nav, workflow.Object);
+        var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
 
-        chatViewModel.CurrentPrompt = "  hello  ";
+        startViewModel.StartPrompt = "  hello  ";
 
         await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
 
@@ -68,20 +66,39 @@ public sealed class StartViewModelTests
     {
         var preferences = CreatePreferences();
         using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
-        var chatViewModel = chat.ViewModel;
         var workflow = new Mock<IChatLaunchWorkflow>();
         workflow.Setup(w => w.StartSessionAndSendAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("boom"));
 
         using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
-        var startViewModel = CreateStartViewModel(chatViewModel, preferences, nav, workflow.Object);
+        var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
 
-        chatViewModel.CurrentPrompt = "hello";
+        startViewModel.StartPrompt = "hello";
 
         await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
 
         Assert.False(startViewModel.IsStarting);
         Assert.True(startViewModel.StartSessionAndSendCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ExecuteSuggestion_DoesNotMutateChatViewModelDraft()
+    {
+        var preferences = CreatePreferences();
+        using var chat = CreateChatViewModel(new SynchronizationContext(), preferences, Mock.Of<ISessionManager>());
+        var workflow = new Mock<IChatLaunchWorkflow>();
+
+        using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+        var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+
+        chat.ViewModel.CurrentPrompt = "chat draft";
+
+        var suggestion = startViewModel.Suggestions[0];
+        startViewModel.ExecuteSuggestionCommand.Execute(suggestion);
+
+        Assert.Equal("chat draft", chat.ViewModel.CurrentPrompt);
+        Assert.Equal(suggestion.Prompt, startViewModel.StartPrompt);
+        workflow.Verify(w => w.StartSessionAndSendAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private static ChatViewModelHarness CreateChatViewModel(

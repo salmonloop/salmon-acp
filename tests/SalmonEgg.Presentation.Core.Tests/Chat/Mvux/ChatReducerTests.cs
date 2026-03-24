@@ -19,8 +19,13 @@ public class ChatReducerTests
         var newState = ChatReducer.Reduce(initialState, action);
 
         // Assert
-        Assert.Null(newState.SelectedConversationId);
         Assert.Equal(conversationId, newState.HydratedConversationId);
+    }
+
+    [Fact]
+    public void ChatState_DoesNotExposeLegacySelectedConversationProperty()
+    {
+        Assert.Null(typeof(ChatState).GetProperty("SelectedConversationId"));
     }
 
     [Fact]
@@ -130,7 +135,6 @@ public class ChatReducerTests
 
         var newState = ChatReducer.Reduce(initialState, new SelectConversationAction("conv-2"));
 
-        Assert.Null(newState.SelectedConversationId);
         Assert.Equal("conv-2", newState.HydratedConversationId);
         Assert.Null(newState.Transcript);
         Assert.Null(newState.PlanEntries);
@@ -224,7 +228,6 @@ public class ChatReducerTests
 
         var newState = ChatReducer.Reduce(initialState, action);
 
-        Assert.Null(newState.SelectedConversationId);
         Assert.Equal("conv-1", newState.HydratedConversationId);
         Assert.True(newState.Transcript is null or { Count: 0 });
         Assert.True(newState.PlanEntries is null or { Count: 0 });

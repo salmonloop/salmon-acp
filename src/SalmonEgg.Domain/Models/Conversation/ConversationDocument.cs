@@ -35,14 +35,6 @@ namespace SalmonEgg.Domain.Models.Conversation
 
         public string? BoundProfileId { get; set; }
 
-        public List<ConversationModeOptionSnapshot> AvailableModes { get; set; } = new();
-
-        public string? SelectedModeId { get; set; }
-
-        public List<ConversationConfigOptionSnapshot> ConfigOptions { get; set; } = new();
-
-        public bool ShowConfigOptionsPanel { get; set; }
-
         public List<ConversationMessageSnapshot> Messages { get; set; } = new();
     }
 

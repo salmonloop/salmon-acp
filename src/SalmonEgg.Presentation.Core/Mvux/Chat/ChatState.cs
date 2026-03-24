@@ -4,7 +4,6 @@ using System.Collections.Immutable;
 namespace SalmonEgg.Presentation.Core.Mvux.Chat;
 
 public record ChatState(
-    string? SelectedConversationId = null,
     string? HydratedConversationId = null,
     IImmutableDictionary<string, ConversationBindingSlice>? Bindings = null,
     ActiveTurnState? ActiveTurn = null,

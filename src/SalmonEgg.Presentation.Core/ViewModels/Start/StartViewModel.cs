@@ -27,14 +27,26 @@ public sealed partial class StartViewModel : ObservableObject
     public bool IsStarting
     {
         get => _isStarting;
-        set => SetProperty(ref _isStarting, value);
+        set
+        {
+            if (SetProperty(ref _isStarting, value))
+            {
+                OnPropertyChanged(nameof(IsInputEnabled));
+                StartSessionAndSendCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
+
+    [ObservableProperty]
+    private string _startPrompt = string.Empty;
 
     public IAsyncRelayCommand StartSessionAndSendCommand { get; }
 
     public System.Collections.ObjectModel.ObservableCollection<QuickSuggestionViewModel> Suggestions { get; } = new();
 
     public IRelayCommand<QuickSuggestionViewModel> ExecuteSuggestionCommand { get; }
+
+    public bool IsInputEnabled => !IsStarting;
 
     public StartViewModel(
         ChatViewModel chatViewModel,
@@ -61,7 +73,7 @@ public sealed partial class StartViewModel : ObservableObject
             navigationCoordinator,
             ResolveDefaultCwd);
 
-        StartSessionAndSendCommand = new AsyncRelayCommand(StartSessionAndSendAsync, () => !IsStarting);
+        StartSessionAndSendCommand = new AsyncRelayCommand(StartSessionAndSendAsync, CanStartSessionAndSend);
         ExecuteSuggestionCommand = new RelayCommand<QuickSuggestionViewModel>(ExecuteSuggestion);
 
         InitializeSuggestions();
@@ -77,13 +89,12 @@ public sealed partial class StartViewModel : ObservableObject
     private void ExecuteSuggestion(QuickSuggestionViewModel? suggestion)
     {
         if (suggestion == null) return;
-        Chat.CurrentPrompt = suggestion.Prompt;
-        StartSessionAndSendCommand.Execute(null);
+        StartPrompt = suggestion.Prompt;
     }
 
     private async Task StartSessionAndSendAsync()
     {
-        var promptText = (Chat.CurrentPrompt ?? string.Empty).Trim();
+        var promptText = (StartPrompt ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(promptText))
         {
             return;
@@ -105,6 +116,14 @@ public sealed partial class StartViewModel : ObservableObject
             StartSessionAndSendCommand.NotifyCanExecuteChanged();
         }
     }
+
+    partial void OnStartPromptChanged(string value)
+    {
+        StartSessionAndSendCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanStartSessionAndSend()
+        => !IsStarting && !string.IsNullOrWhiteSpace(StartPrompt);
 
     private string? ResolveDefaultCwd()
     {

@@ -4,7 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:SalmonEgg.Controls"
     xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:local_vm="using:SalmonEgg.Presentation.ViewModels.Start"
@@ -132,10 +131,51 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- 底部输入区（复用对话页组件） -->
-        <controls:ChatInputArea Grid.Row="2"
-                                ViewModel="{x:Bind ViewModel.Chat, Mode=OneWay}"
-                                SubmitCommand="{x:Bind ViewModel.StartSessionAndSendCommand}" />
+        <!-- 底部输入区：Start 页独立草稿状态，避免复用聊天会话状态 -->
+        <Border Grid.Row="2"
+                Margin="20,0,20,20"
+                HorizontalAlignment="Center"
+                MaxWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}"
+                Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="20"
+                Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBox x:Uid="ChatInputBox"
+                         Text="{x:Bind ViewModel.StartPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         MinHeight="44"
+                         MaxLength="4000"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         TextWrapping="Wrap"
+                         IsEnabled="{x:Bind ViewModel.IsInputEnabled, Mode=OneWay}">
+                    <TextBox.Resources>
+                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                        <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                        <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                    </TextBox.Resources>
+                </TextBox>
+
+                <Button Grid.Column="1"
+                        x:Uid="SendButton"
+                        Content="&#xE724;"
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        Width="44"
+                        Height="44"
+                        MinWidth="44"
+                        MinHeight="44"
+                        Padding="0"
+                        CornerRadius="22"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{x:Bind ViewModel.StartSessionAndSendCommand}" />
+            </Grid>
+        </Border>
 
         <!-- 启动/连接遮罩 -->
         <Grid Grid.RowSpan="3"

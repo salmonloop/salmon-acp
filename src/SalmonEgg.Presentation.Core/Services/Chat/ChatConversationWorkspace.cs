@@ -283,6 +283,66 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         binding.BoundProfileId = boundProfileId;
     }
 
+    public async Task ApplySessionInfoUpdateAsync(
+        string conversationId,
+        string? title,
+        DateTime? updatedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        if (_sessionManager.GetSession(conversationId) == null)
+        {
+            try
+            {
+                await _sessionManager.CreateSessionAsync(conversationId).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to create missing session for session info update (ConversationId={ConversationId})", conversationId);
+            }
+        }
+
+        await PostToContextAsync(() =>
+        {
+            var binding = _conversationBindings.TryGetValue(conversationId, out var existing)
+                ? existing
+                : RegisterConversation(conversationId, default, updatedAtUtc ?? DateTime.UtcNow, bumpVersion: true);
+
+            var metadataChanged = false;
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                var sanitized = SessionNamePolicy.Sanitize(title);
+                var finalName = string.IsNullOrWhiteSpace(sanitized)
+                    ? SessionNamePolicy.CreateDefault(conversationId)
+                    : sanitized;
+
+                if (_sessionManager.UpdateSession(conversationId, session => session.DisplayName = finalName, updateActivity: false))
+                {
+                    metadataChanged = true;
+                }
+            }
+
+            if (updatedAtUtc is DateTime parsedUpdatedAt
+                && parsedUpdatedAt != default
+                && parsedUpdatedAt > binding.LastUpdatedAt)
+            {
+                binding.LastUpdatedAt = parsedUpdatedAt;
+                metadataChanged = true;
+            }
+
+            if (metadataChanged)
+            {
+                NotifyConversationListChanged();
+                ScheduleSave();
+            }
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
     public Task RegisterConversationAsync(
         string conversationId,
         DateTime? createdAt = null,

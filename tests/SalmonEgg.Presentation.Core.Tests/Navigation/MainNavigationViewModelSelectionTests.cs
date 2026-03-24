@@ -264,7 +264,7 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
-    public void RebuildTree_HonorsLastUpdatedOrderingEvenWhenAccessTimesChange()
+    public void RebuildTree_PrefersLastAccessedOrderingWhenAccessTimesChange()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -342,7 +342,73 @@ public sealed class MainNavigationViewModelSelectionTests
                 .OfType<SessionNavItemViewModel>()
                 .Select(child => child.SessionId)
                 .ToArray();
-            Assert.Equal(new[] { "session-new", "session-old" }, orderedAfterAccess);
+            Assert.Equal(new[] { "session-old", "session-new" }, orderedAfterAccess);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task ShowAllSessionsForProjectAsync_UsesLastAccessedOrderingForDialogItems()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog("session-new", "session-old");
+            var ui = new Mock<IUiInteractionService>();
+            IReadOnlyList<SessionNavItemViewModel>? capturedSessions = null;
+            ui.Setup(service => service.ShowSessionsListDialogAsync(
+                    "会话",
+                    It.IsAny<IReadOnlyList<SessionNavItemViewModel>>(),
+                    It.IsAny<Action<string>>()))
+                .Callback<string, IReadOnlyList<SessionNavItemViewModel>, Action<string>>((_, sessions, _) => capturedSessions = sessions)
+                .Returns(Task.CompletedTask);
+
+            var presenter = new ConversationCatalogPresenter();
+            presenter.SetLoading(false);
+            presenter.Refresh(
+            [
+                new ConversationCatalogItem(
+                    "session-old",
+                    "Old Session",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)),
+                new ConversationCatalogItem(
+                    "session-new",
+                    "New Session",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc))
+            ]);
+
+            using var navVm = new MainNavigationViewModel(
+                chatCatalog,
+                CreateProjectPreferences(preferences),
+                ui.Object,
+                new Mock<IShellNavigationService>().Object,
+                new StubNavigationCoordinator(),
+                new Mock<ILogger<MainNavigationViewModel>>().Object,
+                navState,
+                new Mock<IShellLayoutMetricsSink>().Object,
+                new NavigationSelectionProjector(),
+                new ShellSelectionStateStore(),
+                presenter);
+
+            await navVm.ShowAllSessionsForProjectAsync("project-1");
+
+            Assert.NotNull(capturedSessions);
+            Assert.Equal(
+                new[] { "session-old", "session-new" },
+                capturedSessions!.Select(session => session.SessionId).ToArray());
         }
         finally
         {

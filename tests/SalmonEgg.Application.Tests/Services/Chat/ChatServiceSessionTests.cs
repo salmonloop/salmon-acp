@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -99,6 +100,31 @@ public sealed class ChatServiceSessionTests
 
         Assert.Equal("s1", sut.CurrentSessionId);
         Assert.Equal(before, sessionManager.GetSession("s2")!.History.Count);
+
+        sut.Dispose();
+    }
+
+    [Fact]
+    public void SessionUpdate_CurrentModeUpdate_UsesNormalizedModeIdForLegacyPayload()
+    {
+        var acpClient = new Mock<IAcpClient>(MockBehavior.Loose);
+        var errorLogger = new Mock<IErrorLogger>(MockBehavior.Loose);
+        var sessionManager = new SessionManager();
+
+        var sut = new ChatService(acpClient.Object, errorLogger.Object, sessionManager);
+
+        acpClient.Raise(
+            client => client.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("s1", new CurrentModeUpdate
+            {
+                LegacyModeId = "legacy-mode",
+                Title = "Legacy mode"
+            }));
+
+        Assert.Equal("legacy-mode", sut.CurrentMode?.CurrentModeId);
+        var session = sessionManager.GetSession("s1");
+        Assert.NotNull(session);
+        Assert.Equal("legacy-mode", session!.History.Single().ModeId);
 
         sut.Dispose();
     }

@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -240,47 +241,6 @@ public class ChatViewModelTests
                         LastUpdatedAt = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
                         RemoteSessionId = "remote-1",
                         BoundProfileId = "profile-a",
-                        SelectedModeId = "agent",
-                        ShowConfigOptionsPanel = true,
-                        AvailableModes =
-                        {
-                            new ConversationModeOptionSnapshot
-                            {
-                                ModeId = "agent",
-                                ModeName = "Agent",
-                                Description = "Default agent mode"
-                            },
-                            new ConversationModeOptionSnapshot
-                            {
-                                ModeId = "plan",
-                                ModeName = "Plan",
-                                Description = "Planning mode"
-                            }
-                        },
-                        ConfigOptions =
-                        {
-                            new ConversationConfigOptionSnapshot
-                            {
-                                Id = "mode",
-                                Name = "Mode",
-                                Category = "mode",
-                                ValueType = "select",
-                                SelectedValue = "agent",
-                                Options =
-                                {
-                                    new ConversationConfigOptionChoiceSnapshot
-                                    {
-                                        Value = "agent",
-                                        Name = "Agent"
-                                    },
-                                    new ConversationConfigOptionChoiceSnapshot
-                                    {
-                                        Value = "plan",
-                                        Name = "Plan"
-                                    }
-                                }
-                            }
-                        },
                         Messages =
                         {
                             new ConversationMessageSnapshot
@@ -383,7 +343,6 @@ public class ChatViewModelTests
         Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
 
         var state = await fixture.GetStateAsync();
-        Assert.Null(state.SelectedConversationId);
         Assert.Equal(fixture.ViewModel.CurrentSessionId, state.HydratedConversationId);
         Assert.Equal(
             "remote-1",
@@ -421,7 +380,7 @@ public class ChatViewModelTests
     }
 
     [Fact]
-    public async Task CreateNewSessionCommand_DoesNotPromoteConversationSelectionIntoChatState()
+    public async Task CreateNewSessionCommand_ProjectsOnlyHydratedConversationState()
     {
         await using var fixture = CreateViewModel();
         fixture.Preferences.LastSelectedServerId = "profile-1";
@@ -433,11 +392,11 @@ public class ChatViewModelTests
 
         await fixture.ViewModel.CreateNewSessionCommand.ExecuteAsync(null);
 
-        Assert.Null((await fixture.GetStateAsync()).SelectedConversationId);
+        Assert.NotNull((await fixture.GetStateAsync()).HydratedConversationId);
     }
 
     [Fact]
-    public async Task CreateNewSessionCommand_DoesNotOwnStoreSelectedConversationId()
+    public async Task CreateNewSessionCommand_WritesHydratedConversationOnly()
     {
         await using var fixture = CreateViewModel();
         var chatService = new Mock<IChatService>();
@@ -448,27 +407,23 @@ public class ChatViewModelTests
         await fixture.ViewModel.CreateNewSessionCommand.ExecuteAsync(null);
 
         var state = await fixture.GetStateAsync();
-        Assert.Null(state.SelectedConversationId);
+        Assert.NotNull(state.HydratedConversationId);
     }
 
     [Fact]
-    public async Task StoreSelectedConversationId_DoesNotOverrideCurrentSessionIdProjection()
+    public async Task MissingHydratedConversation_KeepsCurrentSessionProjectionEmpty()
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
         syncContext.RunAll();
 
-        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
-        syncContext.RunAll();
-
-        await fixture.UpdateStateAsync(state => state with { SelectedConversationId = "store-selection" });
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = null });
         await Task.Delay(50);
         syncContext.RunAll();
 
         var state = await fixture.GetStateAsync();
-        Assert.Equal("store-selection", state.SelectedConversationId);
-        Assert.Equal("session-1", fixture.ViewModel.CurrentSessionId);
+        Assert.Null(state.HydratedConversationId);
+        Assert.Null(fixture.ViewModel.CurrentSessionId);
     }
 
     [Fact]
@@ -685,7 +640,7 @@ public class ChatViewModelTests
         var state = await fixture.GetStateAsync();
         Assert.Null(fixture.ViewModel.CurrentSessionId);
         Assert.False(fixture.ViewModel.IsSessionActive);
-        Assert.Null(state.SelectedConversationId);
+        Assert.Null(state.HydratedConversationId);
     }
 
     [Fact]
@@ -710,7 +665,7 @@ public class ChatViewModelTests
         var state = await fixture.GetStateAsync();
         Assert.Null(fixture.ViewModel.CurrentSessionId);
         Assert.False(fixture.ViewModel.IsSessionActive);
-        Assert.Null(state.SelectedConversationId);
+        Assert.Null(state.HydratedConversationId);
     }
 
     [Fact]
@@ -1511,7 +1466,16 @@ public class ChatViewModelTests
 
                 try
                 {
-                    callback(state);
+                    var originalContext = Current;
+                    try
+                    {
+                        SetSynchronizationContext(this);
+                        callback(state);
+                    }
+                    finally
+                    {
+                        SetSynchronizationContext(originalContext);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1639,6 +1603,17 @@ public class ChatViewModelTests
         var field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(field);
         field!.SetValue(instance, value);
+    }
+
+    private static async Task InvokePrivateTaskAsync(object instance, string methodName, params object?[] arguments)
+    {
+        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        var result = method!.Invoke(instance, arguments);
+        if (result is Task task)
+        {
+            await task;
+        }
     }
 
     private sealed class ViewModelFixture : IDisposable, IAsyncDisposable
@@ -1991,6 +1966,70 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task CancelPromptCommand_PreemptivelyCancelsOutstandingToolCallsForCurrentTurn()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        commands.Setup(x => x.CancelPromptAsync(It.IsAny<IAcpChatCoordinatorSink>(), "User cancelled"))
+            .Returns(Task.CompletedTask);
+
+        await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+        var viewModel = fixture.ViewModel;
+        viewModel.ReplaceChatService(CreateConnectedChatService().Object);
+
+        var turnStartedAt = new DateTime(2026, 3, 24, 3, 0, 0, DateTimeKind.Utc);
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            Transcript = ImmutableList.Create(
+                new ConversationMessageSnapshot
+                {
+                    Id = "tool-old",
+                    Timestamp = turnStartedAt.AddMinutes(-1),
+                    ContentType = "tool_call",
+                    ToolCallId = "tool-old",
+                    ToolCallStatus = ToolCallStatus.InProgress,
+                    Title = "old"
+                },
+                new ConversationMessageSnapshot
+                {
+                    Id = "tool-current",
+                    Timestamp = turnStartedAt.AddSeconds(5),
+                    ContentType = "tool_call",
+                    ToolCallId = "tool-current",
+                    ToolCallStatus = ToolCallStatus.InProgress,
+                    Title = "current"
+                }),
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.ToolRunning, turnStartedAt, turnStartedAt),
+            IsPromptInFlight = true
+        });
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        await viewModel.CancelPromptCommand.ExecuteAsync(null);
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var state = await fixture.GetStateAsync();
+            var transcript = state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+            return state.ActiveTurn?.Phase == ChatTurnPhase.Cancelled
+                && transcript.Single(message => string.Equals(message.Id, "tool-current", StringComparison.Ordinal)).ToolCallStatus == ToolCallStatus.Cancelled;
+        });
+
+        var finalState = await fixture.GetStateAsync();
+        var finalTranscript = finalState.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        Assert.Equal(ChatTurnPhase.Cancelled, finalState.ActiveTurn!.Phase);
+        Assert.Equal(ToolCallStatus.InProgress, finalTranscript.Single(message => string.Equals(message.Id, "tool-old", StringComparison.Ordinal)).ToolCallStatus);
+        Assert.Equal(ToolCallStatus.Cancelled, finalTranscript.Single(message => string.Equals(message.Id, "tool-current", StringComparison.Ordinal)).ToolCallStatus);
+
+        commands.Verify(x => x.CancelPromptAsync(It.IsAny<IAcpChatCoordinatorSink>(), "User cancelled"), Times.Once);
+    }
+
+    [Fact]
     public async Task SendPromptAsync_WhenPromptResponseIsRefusal_PreservesFailedTurnWithReason()
     {
         var syncContext = new QueueingSynchronizationContext();
@@ -2130,6 +2169,190 @@ public class ChatViewModelTests
 
         var state = await fixture.GetStateAsync();
         Assert.Equal(ChatTurnPhase.Responding, state.ActiveTurn!.Phase);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_ToolCallStatusCancelled_AdvancesStoreBackedTurnToCancelled()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            Transcript = ImmutableList.Create(new ConversationMessageSnapshot
+            {
+                Id = "tool-1",
+                Timestamp = DateTime.UtcNow,
+                ContentType = "tool_call",
+                ToolCallId = "call-1",
+                ToolCallStatus = ToolCallStatus.InProgress,
+                Title = "title"
+            }),
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.ToolRunning, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        syncContext.RunAll();
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new ToolCallStatusUpdate
+            {
+                ToolCallId = "call-1",
+                Status = ToolCallStatus.Cancelled
+            }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var state = await fixture.GetStateAsync();
+            var transcript = state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+            return state.ActiveTurn?.Phase == ChatTurnPhase.Cancelled
+                && transcript.Single(message => string.Equals(message.Id, "tool-1", StringComparison.Ordinal)).ToolCallStatus == ToolCallStatus.Cancelled;
+        });
+
+        var state = await fixture.GetStateAsync();
+        var transcript = state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        Assert.Equal(ChatTurnPhase.Cancelled, state.ActiveTurn!.Phase);
+        Assert.Equal(ToolCallStatus.Cancelled, transcript.Single(message => string.Equals(message.Id, "tool-1", StringComparison.Ordinal)).ToolCallStatus);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_ToolCallStatusUpdate_CreatesTranscriptEntryFromIncrementalSchemaFields()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        var inputJson = JsonDocument.Parse("""{ "targetMode": "plan" }""").RootElement.Clone();
+        var outputJson = JsonDocument.Parse("""{ "applied": true }""").RootElement.Clone();
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", ChatTurnPhase.ToolPending, DateTime.UtcNow, DateTime.UtcNow)
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        syncContext.RunAll();
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new ToolCallStatusUpdate
+            {
+                ToolCallId = "call-1",
+                Title = "Switch mode",
+                Kind = ToolCallKind.SwitchMode,
+                Status = ToolCallStatus.Completed,
+                RawInput = inputJson,
+                RawOutput = outputJson
+            }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var state = await fixture.GetStateAsync();
+            var transcript = state.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+            return transcript.Any(message =>
+                string.Equals(message.ToolCallId, "call-1", StringComparison.Ordinal)
+                && string.Equals(message.Title, "Switch mode", StringComparison.Ordinal)
+                && message.ToolCallKind == ToolCallKind.SwitchMode
+                && message.ToolCallStatus == ToolCallStatus.Completed);
+        });
+
+        var finalState = await fixture.GetStateAsync();
+        var toolCallMessage = Assert.Single((finalState.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty)
+            .Where(message => string.Equals(message.ToolCallId, "call-1", StringComparison.Ordinal)));
+        Assert.Equal("Switch mode", toolCallMessage.Title);
+        Assert.Equal(ToolCallKind.SwitchMode, toolCallMessage.ToolCallKind);
+        Assert.Equal(ToolCallStatus.Completed, toolCallMessage.ToolCallStatus);
+        Assert.Equal("plan", JsonDocument.Parse(toolCallMessage.ToolCallJson!).RootElement.GetProperty("targetMode").GetString());
+        Assert.True(JsonDocument.Parse(toolCallMessage.TextContent).RootElement.GetProperty("applied").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_RefreshesDisplayNameAndCatalogMetadata()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((sessionId, cwd) =>
+            {
+                var session = new Session(sessionId, cwd);
+                sessions[sessionId] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(sessionId => sessions.TryGetValue(sessionId, out var session) ? session : null);
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((sessionId, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(sessionId, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(sessionId => sessions.Remove(sessionId));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\demo");
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1" });
+        await WaitForConditionAsync(() => Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)));
+
+        var conversationId = fixture.ViewModel.CurrentSessionId;
+        Assert.NotNull(conversationId);
+        var updatedAt = "2026-03-24T03:00:00Z";
+
+        await InvokePrivateTaskAsync(
+            fixture.ViewModel,
+            "ApplySessionInfoUpdateAsync",
+            "conv-1",
+            new SessionInfoUpdate
+            {
+                Title = "Renamed by agent",
+                UpdatedAt = updatedAt
+            });
+
+        await WaitForConditionAsync(() =>
+        {
+            var item = fixture.Workspace.GetCatalog().Single(entry => string.Equals(entry.ConversationId, conversationId, StringComparison.Ordinal));
+            return Task.FromResult(
+                string.Equals(fixture.ViewModel.CurrentSessionDisplayName, "Renamed by agent", StringComparison.Ordinal)
+                && string.Equals(item.DisplayName, "Renamed by agent", StringComparison.Ordinal));
+        });
+
+        var expectedUpdatedAt = DateTimeOffset.Parse(updatedAt).UtcDateTime;
+        var catalogItem = fixture.Workspace.GetCatalog().Single(entry => string.Equals(entry.ConversationId, conversationId, StringComparison.Ordinal));
+        Assert.Equal("Renamed by agent", fixture.ViewModel.CurrentSessionDisplayName);
+        Assert.Equal("Renamed by agent", catalogItem.DisplayName);
+        Assert.Equal(expectedUpdatedAt, catalogItem.LastUpdatedAt);
     }
 
     [Fact]

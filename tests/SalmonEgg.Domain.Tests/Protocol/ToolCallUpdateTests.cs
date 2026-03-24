@@ -93,4 +93,20 @@ public sealed class ToolCallUpdateTests
         Assert.That(parsed.RootElement.TryGetProperty("status", out var status), Is.True);
         Assert.That(status.GetString(), Is.EqualTo("pending"));
     }
+
+    [Test]
+    public void ToolCallUpdate_SwitchModeKind_Should_Serialize_ToSchemaValue()
+    {
+        var update = new ToolCallUpdate
+        {
+            ToolCallId = "switch-1",
+            Title = "Switch to plan",
+            Kind = ToolCallKind.SwitchMode
+        };
+
+        var json = JsonSerializer.Serialize(update, _jsonOptions);
+        var parsed = JsonDocument.Parse(json);
+
+        Assert.That(parsed.RootElement.GetProperty("kind").GetString(), Is.EqualTo("switch_mode"));
+    }
 }

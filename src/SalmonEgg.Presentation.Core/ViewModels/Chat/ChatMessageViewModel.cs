@@ -227,6 +227,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
            Domain.Models.Tool.ToolCallStatus.InProgress => "进行中",
            Domain.Models.Tool.ToolCallStatus.Completed => "已完成",
            Domain.Models.Tool.ToolCallStatus.Failed => "失败",
+           Domain.Models.Tool.ToolCallStatus.Cancelled => "已取消",
            _ => "未知"
        };
 
@@ -238,6 +239,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
            Domain.Models.Tool.ToolCallKind.Move => "移动",
            Domain.Models.Tool.ToolCallKind.Search => "搜索",
            Domain.Models.Tool.ToolCallKind.Execute => "执行",
+           Domain.Models.Tool.ToolCallKind.SwitchMode => "切换模式",
            Domain.Models.Tool.ToolCallKind.Think => "思考",
            _ => "工具"
        };

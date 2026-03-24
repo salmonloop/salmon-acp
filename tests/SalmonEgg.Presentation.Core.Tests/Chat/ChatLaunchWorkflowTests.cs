@@ -339,6 +339,8 @@ public sealed class ChatLaunchWorkflowTests
 
         public int SendPromptCount { get; private set; }
 
+        public string? PreparedPrompt { get; private set; }
+
         public Action<FakeChatLaunchWorkflowChatFacade>? AutoConnectAction { get; set; }
 
         public CancellationToken LastAutoConnectToken { get; private set; }
@@ -368,6 +370,11 @@ public sealed class ChatLaunchWorkflowTests
         {
             SendPromptCount++;
             return true;
+        }
+
+        public void PrepareDraftForLaunch(string promptText)
+        {
+            PreparedPrompt = promptText;
         }
 
         public void ApplyActivatedSession(string sessionId)
