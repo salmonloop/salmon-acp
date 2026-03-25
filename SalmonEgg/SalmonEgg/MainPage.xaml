@@ -528,6 +528,7 @@
                              AlwaysShowHeader="False"
                              Padding="{x:Bind LayoutVM.NavViewPadding, Mode=OneWay, Converter={StaticResource PaddingConverter}}"
                              MenuItemsSource="{x:Bind NavVM.Items, Mode=OneWay}"
+                             FooterMenuItemsSource="{x:Bind NavVM.FooterItems, Mode=OneWay}"
                              MenuItemTemplateSelector="{StaticResource MainNavItemTemplateSelector}"
                              ItemInvoked="OnMainNavItemInvoked"
                              SelectionChanged="OnMainNavSelectionChanged"

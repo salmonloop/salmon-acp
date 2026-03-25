@@ -49,6 +49,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private string? _pendingProjectIdForNewSession;
 
     public ObservableCollection<MainNavItemViewModel> Items { get; } = new();
+    public ObservableCollection<MainNavItemViewModel> FooterItems { get; } = new();
 
     public StartNavItemViewModel StartItem { get; }
     public DiscoverSessionsNavItemViewModel DiscoverSessionsItem { get; }
@@ -118,8 +119,9 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         SessionsLabelItem = new SessionsLabelNavItemViewModel(_navigationState);
         AddProjectItem = new AddProjectNavItemViewModel(AddProjectCommand, _navigationState);
 
+        FooterItems.Add(DiscoverSessionsItem);
+
         Items.Add(StartItem);
-        Items.Add(DiscoverSessionsItem);
         Items.Add(SessionsLabelItem);
         Items.Add(AddProjectItem);
 
@@ -387,12 +389,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             try
             {
                 // Ensure we have the base items
-                if (Items.Count < 4)
+                if (Items.Count < 3)
                 {
                     foreach (var item in Items) DisposeItem(item);
                     Items.Clear();
                     Items.Add(StartItem);
-                    Items.Add(DiscoverSessionsItem);
                     Items.Add(SessionsLabelItem);
                     Items.Add(AddProjectItem);
                 }
@@ -403,8 +404,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 var projects = GetProjectDefinitions();
                 var sessionsByProject = GetSessionsByProject(projects);
 
-                // Index of where project items start (after Start, DiscoverSessions, SessionsLabel, AddProject)
-                int itemIndex = 4;
+                // Index of where project items start (after Start, SessionsLabel, AddProject)
+                int itemIndex = 3;
 
                 foreach (var (projectDef, isSystem) in projects)
                 {
