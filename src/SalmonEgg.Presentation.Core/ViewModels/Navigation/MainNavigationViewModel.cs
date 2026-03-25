@@ -51,6 +51,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     public ObservableCollection<MainNavItemViewModel> Items { get; } = new();
 
     public StartNavItemViewModel StartItem { get; }
+    public DiscoverSessionsNavItemViewModel DiscoverSessionsItem { get; }
     public SessionsLabelNavItemViewModel SessionsLabelItem { get; }
     public AddProjectNavItemViewModel AddProjectItem { get; }
 
@@ -113,10 +114,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
 
         StartItem = new StartNavItemViewModel(_navigationState);
+        DiscoverSessionsItem = new DiscoverSessionsNavItemViewModel(_navigationState);
         SessionsLabelItem = new SessionsLabelNavItemViewModel(_navigationState);
         AddProjectItem = new AddProjectNavItemViewModel(AddProjectCommand, _navigationState);
 
         Items.Add(StartItem);
+        Items.Add(DiscoverSessionsItem);
         Items.Add(SessionsLabelItem);
         Items.Add(AddProjectItem);
 
@@ -151,6 +154,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _relativeTimeTimer.Dispose();
 
         DisposeItem(StartItem);
+        DisposeItem(DiscoverSessionsItem);
         DisposeItem(SessionsLabelItem);
         DisposeItem(AddProjectItem);
         foreach (var item in Items)
@@ -202,6 +206,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     public void SelectStart()
     {
         SetSelectionState(NavigationSelectionState.StartSelection);
+    }
+
+    public void SelectDiscoverSessions()
+    {
+        SetSelectionState(NavigationSelectionState.DiscoverSessionsSelection);
     }
 
     public void SelectSettings()
@@ -378,11 +387,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             try
             {
                 // Ensure we have the base items
-                if (Items.Count < 3)
+                if (Items.Count < 4)
                 {
                     foreach (var item in Items) DisposeItem(item);
                     Items.Clear();
                     Items.Add(StartItem);
+                    Items.Add(DiscoverSessionsItem);
                     Items.Add(SessionsLabelItem);
                     Items.Add(AddProjectItem);
                 }
@@ -393,8 +403,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 var projects = GetProjectDefinitions();
                 var sessionsByProject = GetSessionsByProject(projects);
 
-                // Index of where project items start (after Start, SessionsLabel, AddProject)
-                int itemIndex = 3;
+                // Index of where project items start (after Start, DiscoverSessions, SessionsLabel, AddProject)
+                int itemIndex = 4;
 
                 foreach (var (projectDef, isSystem) in projects)
                 {
@@ -642,6 +652,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _projection = _selectionProjector.Project(
             CurrentSelection,
             StartItem,
+            DiscoverSessionsItem,
             _sessionIndex,
             _projectIndex,
             _navigationState.IsPaneOpen);
@@ -655,6 +666,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private void ApplyVisualSelectionState(NavigationViewProjection projection)
     {
         StartItem.IsLogicallySelected = CurrentSelection is NavigationSelectionState.Start;
+        DiscoverSessionsItem.IsLogicallySelected = CurrentSelection is NavigationSelectionState.DiscoverSessions;
         SessionsLabelItem.IsLogicallySelected = false;
         AddProjectItem.IsLogicallySelected = false;
 

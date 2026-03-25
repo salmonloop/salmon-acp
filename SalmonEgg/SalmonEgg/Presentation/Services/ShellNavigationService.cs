@@ -50,6 +50,21 @@ public sealed class ShellNavigationService : IShellNavigationService, IActivatio
     public ValueTask<ShellNavigationResult> NavigateToStart(long activationToken)
         => NavigateToStart();
 
+    public ValueTask<ShellNavigationResult> NavigateToDiscoverSessions()
+    {
+        var shell = GetShell();
+        if (shell is null)
+        {
+            return ValueTask.FromResult(ShellNavigationResult.Failed("ShellUnavailable"));
+        }
+
+        shell.NavigateToDiscoverSessions();
+        return ValueTask.FromResult(ShellNavigationResult.Success());
+    }
+
+    public ValueTask<ShellNavigationResult> NavigateToDiscoverSessions(long activationToken)
+        => NavigateToDiscoverSessions();
+
     private static MainPage? GetShell()
     {
         if (App.MainWindowInstance?.Content is not Frame rootFrame)

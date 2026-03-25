@@ -10,6 +10,7 @@ public sealed class NavigationSelectionProjector
     public NavigationViewProjection Project(
         NavigationSelectionState selection,
         StartNavItemViewModel startItem,
+        DiscoverSessionsNavItemViewModel discoverSessionsItem,
         IReadOnlyDictionary<string, SessionNavItemViewModel> sessionIndex,
         IReadOnlyDictionary<string, ProjectNavItemViewModel> projectIndex,
         bool isPaneOpen)
@@ -22,6 +23,13 @@ public sealed class NavigationSelectionProjector
             case NavigationSelectionState.Start:
                 return new NavigationViewProjection(
                     ControlSelectedItem: startItem,
+                    IsSettingsSelected: false,
+                    ActiveProjectIds: activeProjects,
+                    SelectedSessionIds: selectedSessions);
+
+            case NavigationSelectionState.DiscoverSessions:
+                return new NavigationViewProjection(
+                    ControlSelectedItem: discoverSessionsItem,
                     IsSettingsSelected: false,
                     ActiveProjectIds: activeProjects,
                     SelectedSessionIds: selectedSessions);

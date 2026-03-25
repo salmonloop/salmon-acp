@@ -62,6 +62,23 @@
             </NavigationViewItem>
         </DataTemplate>
         
+        <DataTemplate x:Key="DiscoverSessionsNavTemplate" x:DataType="nav:DiscoverSessionsNavItemViewModel">
+            <NavigationViewItem AutomationProperties.AutomationId="{x:Bind navUi:MainNavigationAutomationIds.DiscoverSessionsItem()}"
+                                Tag="{x:Bind navModels:NavItemTag.DiscoverSessions}">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Find" />
+                </NavigationViewItem.Icon>
+                <NavigationViewItem.Content>
+                    <Grid Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </NavigationViewItem.Content>
+            </NavigationViewItem>
+        </DataTemplate>
+
         <DataTemplate x:Key="SessionsLabelTemplate" x:DataType="nav:SessionsLabelNavItemViewModel">
             <NavigationViewItemHeader Content="{x:Bind Title, Mode=OneWay}"
                                       AutomationProperties.AutomationId="{x:Bind navUi:MainNavigationAutomationIds.SessionsLabel()}" />
@@ -176,6 +193,7 @@
 
         <navViews:MainNavItemTemplateSelector x:Key="MainNavItemTemplateSelector"
                                               StartTemplate="{StaticResource StartNavTemplate}"
+                                              DiscoverSessionsTemplate="{StaticResource DiscoverSessionsNavTemplate}"
                                               LabelTemplate="{StaticResource SessionsLabelTemplate}"
                                               AddProjectTemplate="{StaticResource AddProjectTemplate}"
                                               ProjectTemplate="{StaticResource ProjectNavTemplate}"

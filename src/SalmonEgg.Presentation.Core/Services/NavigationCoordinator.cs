@@ -44,6 +44,22 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         }
     }
 
+    public async Task ActivateDiscoverSessionsAsync()
+    {
+        try
+        {
+            var activationToken = BeginActivation();
+            var navigationResult = await NavigateToDiscoverSessionsAsync(activationToken).ConfigureAwait(true);
+            if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
+            {
+                _selectionSink.SetSelection(NavigationSelectionState.DiscoverSessionsSelection);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     public async Task ActivateSettingsAsync(string settingsKey)
     {
         try
@@ -106,6 +122,10 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 _selectionSink.SetSelection(NavigationSelectionState.StartSelection);
                 return;
 
+            case ShellNavigationContent.DiscoverSessions:
+                _selectionSink.SetSelection(NavigationSelectionState.DiscoverSessionsSelection);
+                return;
+
             case ShellNavigationContent.Settings:
                 _selectionSink.SetSelection(NavigationSelectionState.SettingsSelection);
                 return;
@@ -145,6 +165,13 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             ? tokenAware.NavigateToSettings(key, activationToken)
             : _shellNavigationService.NavigateToSettings(key);
     }
+
+    private ValueTask<ShellNavigationResult> NavigateToDiscoverSessionsAsync(long activationToken)
+    {
+        return _shellNavigationService is IActivationTokenShellNavigationService tokenAware
+            ? tokenAware.NavigateToDiscoverSessions(activationToken)
+            : _shellNavigationService.NavigateToDiscoverSessions();
+    }
 }
 
 public interface IActivationTokenShellNavigationService
@@ -152,4 +179,5 @@ public interface IActivationTokenShellNavigationService
     ValueTask<ShellNavigationResult> NavigateToSettings(string key, long activationToken);
     ValueTask<ShellNavigationResult> NavigateToChat(long activationToken);
     ValueTask<ShellNavigationResult> NavigateToStart(long activationToken);
+    ValueTask<ShellNavigationResult> NavigateToDiscoverSessions(long activationToken);
 }

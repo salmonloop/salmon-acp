@@ -8,4 +8,5 @@ public interface IShellNavigationService
     ValueTask<ShellNavigationResult> NavigateToSettings(string key);
     ValueTask<ShellNavigationResult> NavigateToChat();
     ValueTask<ShellNavigationResult> NavigateToStart();
+    ValueTask<ShellNavigationResult> NavigateToDiscoverSessions();
 }

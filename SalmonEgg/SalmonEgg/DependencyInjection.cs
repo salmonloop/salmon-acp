@@ -293,6 +293,9 @@ public static class DependencyInjection
         // Global search
         services.AddSingleton<GlobalSearchViewModel>();
 
+        // Discover sessions
+        services.AddTransient<SalmonEgg.Presentation.ViewModels.Discover.DiscoverSessionsViewModel>();
+
         // Start page orchestrator (Start creates session and submits)
         services.AddSingleton<StartViewModel>();
         services.AddSingleton<IChatLaunchWorkflow>(sp =>

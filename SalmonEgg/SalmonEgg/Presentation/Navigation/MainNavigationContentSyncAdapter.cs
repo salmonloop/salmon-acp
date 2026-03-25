@@ -49,6 +49,12 @@ public sealed class MainNavigationContentSyncAdapter
             return true;
         }
 
+        if (pageType == typeof(SalmonEgg.Presentation.Views.Discover.DiscoverSessionsPage))
+        {
+            content = ShellNavigationContent.DiscoverSessions;
+            return true;
+        }
+
         if (pageType == typeof(SalmonEgg.Presentation.Views.SettingsShellPage))
         {
             content = ShellNavigationContent.Settings;

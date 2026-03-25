@@ -5,5 +5,6 @@ public enum ShellNavigationContent
     None = 0,
     Start,
     Chat,
-    Settings
+    Settings,
+    DiscoverSessions
 }

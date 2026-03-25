@@ -1,0 +1,108 @@
+<Page
+    x:Class="SalmonEgg.Presentation.Views.Discover.DiscoverSessionsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:SalmonEgg.Presentation.Views.Discover"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewModels="using:SalmonEgg.Presentation.ViewModels.Discover"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid Padding="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock
+            Grid.Row="0"
+            Text="发现更多会话"
+            Style="{ThemeResource TitleTextBlockStyle}"
+            Margin="0,0,0,24" />
+
+        <!-- Controls Area -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="16" Margin="0,0,0,16">
+            <ComboBox
+                Header="选择Agent"
+                ItemsSource="{Binding AvailableAgents}"
+                SelectedItem="{Binding SelectedAgent, Mode=TwoWay}"
+                DisplayMemberPath="Name"
+                Width="300" />
+
+            <Button
+                Content="刷新列表"
+                Command="{Binding LoadAgentsCommand}"
+                VerticalAlignment="Bottom" />
+        </StackPanel>
+
+        <!-- Error Message -->
+        <TextBlock
+            Grid.Row="2"
+            Text="{Binding ErrorMessage}"
+            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+            Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"
+            Margin="0,0,0,16" />
+
+        <!-- Loading Indicator -->
+        <ProgressRing
+            Grid.Row="2"
+            IsActive="{Binding IsLoading}"
+            Width="40"
+            Height="40"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center" />
+
+        <!-- Sessions List -->
+        <ListView
+            Grid.Row="2"
+            ItemsSource="{Binding AgentSessions}"
+            SelectionMode="None"
+            IsItemClickEnabled="True">
+
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:DiscoverSessionItemViewModel">
+                    <Grid Padding="12,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock
+                                Text="{x:Bind Title}"
+                                Style="{ThemeResource SubtitleTextBlockStyle}"
+                                TextWrapping="NoWrap"
+                                TextTrimming="CharacterEllipsis" />
+
+                            <TextBlock
+                                Text="{x:Bind Description}"
+                                Style="{ThemeResource BodyTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Margin="0,4,0,0"
+                                TextWrapping="Wrap"
+                                MaxLines="2"
+                                TextTrimming="CharacterEllipsis" />
+
+                            <TextBlock
+                                Text="{x:Bind FormattedDate}"
+                                Style="{ThemeResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Margin="0,8,0,0" />
+                        </StackPanel>
+
+                        <Button
+                            Grid.Column="1"
+                            Content="加载会话"
+                            Style="{ThemeResource AccentButtonStyle}"
+                            Command="{Binding DataContext.LoadSessionCommand, ElementName=RootGrid}"
+                            CommandParameter="{Binding}"
+                            VerticalAlignment="Center" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>

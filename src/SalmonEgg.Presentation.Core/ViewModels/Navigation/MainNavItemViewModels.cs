@@ -12,7 +12,17 @@ public sealed partial class StartNavItemViewModel : MainNavItemViewModel
 {
     public string Title { get; } = "开始";
 
-    public StartNavItemViewModel(INavigationPaneState navigationState) 
+    public StartNavItemViewModel(INavigationPaneState navigationState)
+        : base(navigationState)
+    {
+    }
+}
+
+public sealed partial class DiscoverSessionsNavItemViewModel : MainNavItemViewModel
+{
+    public string Title { get; } = "发现更多会话";
+
+    public DiscoverSessionsNavItemViewModel(INavigationPaneState navigationState)
         : base(navigationState)
     {
     }

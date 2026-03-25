@@ -96,6 +96,12 @@ public sealed class MainNavigationViewAdapter
             return true;
         }
 
+        if (string.Equals(tag, NavItemTag.DiscoverSessions, StringComparison.Ordinal))
+        {
+            await _navigationCoordinator.ActivateDiscoverSessionsAsync().ConfigureAwait(true);
+            return true;
+        }
+
         if (NavItemTag.TryParseSession(tag, out var sessionId))
         {
             var sessionProjectId = (args.InvokedItemContainer as FrameworkElement)?.DataContext is SessionNavItemViewModel sessionItem

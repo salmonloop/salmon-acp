@@ -6,6 +6,8 @@ public static class MainNavigationAutomationIds
 {
     public static string StartItem() => "MainNav.Start";
 
+    public static string DiscoverSessionsItem() => "MainNav.DiscoverSessions";
+
     public static string SessionsLabel() => "MainNav.SessionsLabel";
 
     public static string AddProject() => "MainNav.AddProject";

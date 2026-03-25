@@ -7,6 +7,7 @@ namespace SalmonEgg.Presentation.Views.Navigation;
 public sealed class MainNavItemTemplateSelector : DataTemplateSelector
 {
     public DataTemplate? StartTemplate { get; set; }
+    public DataTemplate? DiscoverSessionsTemplate { get; set; }
     public DataTemplate? LabelTemplate { get; set; }
     public DataTemplate? AddProjectTemplate { get; set; }
     public DataTemplate? ProjectTemplate { get; set; }
@@ -18,6 +19,7 @@ public sealed class MainNavItemTemplateSelector : DataTemplateSelector
         return item switch
         {
             StartNavItemViewModel => StartTemplate!,
+            DiscoverSessionsNavItemViewModel => DiscoverSessionsTemplate!,
             SessionsLabelNavItemViewModel => LabelTemplate!,
             AddProjectNavItemViewModel => AddProjectTemplate!,
             ProjectNavItemViewModel => ProjectTemplate!,

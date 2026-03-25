@@ -154,6 +154,11 @@ public sealed partial class MainPage : Page
         EnsureStartContent();
     }
 
+    public void NavigateToDiscoverSessions()
+    {
+        EnsureDiscoverSessionsContent();
+    }
+
     public void NavigateToSettingsSubPage(string key)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -373,6 +378,18 @@ public sealed partial class MainPage : Page
     private void ResetChatAuxiliaryPanelsOnChatExit()
     {
         _metricsSink.ReportClearAuxiliaryPanels();
+    }
+
+    private void EnsureDiscoverSessionsContent()
+    {
+        var pageType = typeof(SalmonEgg.Presentation.Views.Discover.DiscoverSessionsPage);
+        if (ContentFrame?.CurrentSourcePageType != pageType)
+        {
+            NavigateTo(pageType);
+        }
+
+        UpdateRightPanelAvailability(false);
+        UpdateBackButtonState();
     }
 
     private void EnsureStartContent()
