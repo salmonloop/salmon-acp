@@ -13,5 +13,13 @@ public sealed partial class DiscoverSessionsPage : Page
         this.InitializeComponent();
         ViewModel = App.ServiceProvider.GetRequiredService<DiscoverSessionsViewModel>();
         DataContext = ViewModel;
+
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        SkeletonPulse?.Begin();
+        await ViewModel.InitializeCommand.ExecuteAsync(null);
     }
 }

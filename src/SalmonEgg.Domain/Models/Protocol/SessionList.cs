@@ -29,6 +29,6 @@ public class AgentSessionInfo
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 
-    [JsonPropertyName("lastModified")]
-    public string? LastModified { get; set; }
+    [JsonPropertyName("updatedAt")]
+    public string? UpdatedAt { get; set; }
 }

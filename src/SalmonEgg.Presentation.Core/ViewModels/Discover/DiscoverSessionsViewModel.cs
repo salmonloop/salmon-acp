@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,6 +26,8 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
     private readonly IConnectionService _connectionService;
     private readonly IChatService _chatService;
     private readonly ISessionManager _sessionManager;
+    private readonly SynchronizationContext _syncContext;
+    private CancellationTokenSource? _loadingCts;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -37,8 +41,17 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
-    [ObservableProperty]
-    private ServerConfiguration? _selectedProfile;
+    public AcpProfilesViewModel ProfilesViewModel => _profilesViewModel;
+
+    public ServerConfiguration? SelectedProfile
+    {
+        get => _profilesViewModel.SelectedProfile;
+        set => _profilesViewModel.SelectedProfile = value;
+    }
+
+    public bool HasSelectedProfile => SelectedProfile != null;
+
+    public bool HasNoSelectedProfile => SelectedProfile == null;
 
     public ObservableCollection<ServerConfiguration> AvailableProfiles => _profilesViewModel.Profiles;
 
@@ -58,31 +71,44 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
         _connectionService = connectionService ?? throw new ArgumentNullException(nameof(connectionService));
         _chatService = chatService ?? throw new ArgumentNullException(nameof(chatService));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
+        _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+
+        _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
+    }
+
+    private void OnProfilesViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AcpProfilesViewModel.SelectedProfile))
+        {
+            OnPropertyChanged(nameof(SelectedProfile));
+            OnPropertyChanged(nameof(HasSelectedProfile));
+            OnPropertyChanged(nameof(HasNoSelectedProfile));
+
+            _ = LoadSessionsForProfileAsync(SelectedProfile);
+        }
     }
 
     [RelayCommand]
     private async Task InitializeAsync()
     {
-        await _profilesViewModel.RefreshAsync();
+        await _profilesViewModel.RefreshAsync().ConfigureAwait(false);
 
-        if (AvailableProfiles.Any())
+        _syncContext.Post(_ =>
         {
-            // Default to the last used profile or the first one
-            SelectedProfile = AvailableProfiles.FirstOrDefault(p => p.Id == _profilesViewModel.SelectedProfile?.Id)
-                              ?? AvailableProfiles.FirstOrDefault();
-        }
-    }
+            OnPropertyChanged(nameof(AvailableProfiles));
+            OnPropertyChanged(nameof(SelectedProfile));
+            OnPropertyChanged(nameof(HasSelectedProfile));
+            OnPropertyChanged(nameof(HasNoSelectedProfile));
 
-    partial void OnSelectedProfileChanged(ServerConfiguration? value)
-    {
-        if (value != null)
-        {
-            _ = LoadSessionsForProfileAsync(value);
-        }
-        else
-        {
-            AgentSessions.Clear();
-        }
+            if (SelectedProfile != null)
+            {
+                _ = LoadSessionsForProfileAsync(SelectedProfile);
+            }
+            else if (AvailableProfiles.Any())
+            {
+                SelectedProfile = AvailableProfiles.First();
+            }
+        }, null);
     }
 
     [RelayCommand]
@@ -90,26 +116,47 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
     {
         if (SelectedProfile != null)
         {
-            await LoadSessionsForProfileAsync(SelectedProfile);
+            await LoadSessionsForProfileAsync(SelectedProfile).ConfigureAwait(false);
         }
     }
 
-    private async Task LoadSessionsForProfileAsync(ServerConfiguration profile)
+    private async Task LoadSessionsForProfileAsync(ServerConfiguration? profile)
     {
-        IsLoading = true;
-        ErrorMessage = null;
-        AgentSessions.Clear();
+        _loadingCts?.Cancel();
+        _loadingCts = new CancellationTokenSource();
+        var token = _loadingCts.Token;
+
+        _syncContext.Post(_ =>
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            AgentSessions.Clear();
+        }, null);
+
+        if (profile == null)
+        {
+            _syncContext.Post(_ => IsLoading = false, null);
+            return;
+        }
 
         try
         {
-            // Ensure we are connected to the selected profile
-            IsConnecting = true;
+            _syncContext.Post(_ => IsConnecting = true, null);
 
-            await _connectionService.ConnectAsync(profile.Id);
+            var connectionResult = await _connectionService.ConnectAsync(profile.Id).ConfigureAwait(false);
+            if (!connectionResult.IsSuccess)
+            {
+                _syncContext.Post(_ =>
+                {
+                    ErrorMessage = $"连接 Agent 失败: {connectionResult.Error}";
+                    IsLoading = false;
+                    IsConnecting = false;
+                }, null);
+                return;
+            }
 
-            IsConnecting = false;
+            _syncContext.Post(_ => IsConnecting = false, null);
 
-            // Initialize chat if needed
             if (!_chatService.IsInitialized)
             {
                 await _chatService.InitializeAsync(new InitializeParams
@@ -117,23 +164,27 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
                     ProtocolVersion = 1,
                     ClientInfo = new ClientInfo { Name = "SalmonEgg", Version = "1.0.0" },
                     ClientCapabilities = new ClientCapabilities()
-                });
+                }).ConfigureAwait(false);
             }
 
-            // Request the session list
-            var listResponse = await _chatService.ListSessionsAsync(new SessionListParams());
+            if (token.IsCancellationRequested) return;
 
+            var listResponse = await _chatService.ListSessionsAsync(new SessionListParams(), token).ConfigureAwait(false);
+
+            if (token.IsCancellationRequested) return;
+
+            var items = new List<DiscoverSessionItemViewModel>();
             if (listResponse?.Sessions != null)
             {
                 foreach (var session in listResponse.Sessions)
                 {
                     DateTime lastModified = DateTime.Now;
-                    if (!string.IsNullOrEmpty(session.LastModified) && DateTime.TryParse(session.LastModified, out var parsed))
+                    if (!string.IsNullOrEmpty(session.UpdatedAt) && DateTime.TryParse(session.UpdatedAt, out var parsed))
                     {
                         lastModified = parsed;
                     }
 
-                    AgentSessions.Add(new DiscoverSessionItemViewModel(
+                    items.Add(new DiscoverSessionItemViewModel(
                         session.SessionId,
                         string.IsNullOrWhiteSpace(session.Title) ? "未命名会话" : session.Title,
                         string.IsNullOrWhiteSpace(session.Description) ? "暂无描述" : session.Description,
@@ -141,20 +192,35 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
                 }
             }
 
-            if (AgentSessions.Count == 0)
+            _syncContext.Post(_ =>
             {
-                ErrorMessage = "未找到任何会话。";
-            }
+                foreach (var item in items)
+                {
+                    AgentSessions.Add(item);
+                }
+
+                if (AgentSessions.Count == 0 && !HasError)
+                {
+                    ErrorMessage = "未找到任何会话。";
+                }
+            }, null);
+        }
+        catch (OperationCanceledException)
+        {
+            // Ignore cancellation
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load sessions for profile {ProfileId}", profile.Id);
-            ErrorMessage = $"无法加载会话列表: {ex.Message}";
+            _syncContext.Post(_ => ErrorMessage = $"无法同步会话列表: {ex.Message}", null);
         }
         finally
         {
-            IsLoading = false;
-            IsConnecting = false;
+            _syncContext.Post(_ =>
+            {
+                IsLoading = false;
+                IsConnecting = false;
+            }, null);
         }
     }
 
@@ -165,28 +231,29 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
         try
         {
-            IsLoading = true;
-            ErrorMessage = null;
+            _syncContext.Post(_ =>
+            {
+                IsLoading = true;
+                ErrorMessage = null;
+            }, null);
 
             _logger.LogInformation("Loading session {SessionId} from profile {ProfileId}", session.Id, SelectedProfile.Id);
 
-            // Import/create local session mapping if necessary
-            // NavigationCoordinator will handle the routing and activation
-            var success = await _navigationCoordinator.ActivateSessionAsync(session.Id, null);
+            var success = await _navigationCoordinator.ActivateSessionAsync(session.Id, null).ConfigureAwait(false);
 
             if (!success)
             {
-                ErrorMessage = "加载会话失败，请重试。";
+                _syncContext.Post(_ => ErrorMessage = "加载会话失败，请尝试重新连接。", null);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load session {SessionId}", session.Id);
-            ErrorMessage = $"加载会话时出错: {ex.Message}";
+            _syncContext.Post(_ => ErrorMessage = $"加载会话时出错: {ex.Message}", null);
         }
         finally
         {
-            IsLoading = false;
+            _syncContext.Post(_ => IsLoading = false, null);
         }
     }
 }

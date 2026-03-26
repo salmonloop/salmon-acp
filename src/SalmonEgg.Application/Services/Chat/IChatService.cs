@@ -100,7 +100,7 @@ namespace SalmonEgg.Application.Services.Chat
         /// <summary>
         /// 列出远端 Agent 支持的会话列表
         /// </summary>
-        Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null);
+        Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 向会话发送提示消息

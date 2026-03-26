@@ -49,22 +49,34 @@ public partial class AcpProfilesViewModel : ObservableObject
         try
         {
             IsLoading = true;
-            var configs = await _configurationService.ListConfigurationsAsync();
+            var configs = await _configurationService.ListConfigurationsAsync().ConfigureAwait(false);
             var ordered = configs.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 
+            var tcs = new TaskCompletionSource<bool>();
             _syncContext.Post(_ =>
             {
-                Profiles.Clear();
-                foreach (var cfg in ordered)
+                try
                 {
-                    Profiles.Add(cfg);
-                }
+                    Profiles.Clear();
+                    foreach (var cfg in ordered)
+                    {
+                        Profiles.Add(cfg);
+                    }
 
-                if (!string.IsNullOrWhiteSpace(_preferences.LastSelectedServerId))
+                    if (!string.IsNullOrWhiteSpace(_preferences.LastSelectedServerId))
+                    {
+                        SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
+                    }
+                    tcs.SetResult(true);
+                }
+                catch (Exception ex)
                 {
-                    SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
+                    _logger.LogError(ex, "Failed to update profiles on UI thread");
+                    tcs.SetException(ex);
                 }
             }, null);
+
+            await tcs.Task.ConfigureAwait(false);
         }
         catch (Exception ex)
         {

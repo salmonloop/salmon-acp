@@ -15,6 +15,10 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <Storyboard x:Name="SkeletonPulse" AutoReverse="True" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="RightSkeletonPanel" Storyboard.TargetProperty="Opacity" From="0.4" To="0.8" Duration="0:0:1.2" />
+            <DoubleAnimation Storyboard.TargetName="LeftSkeletonPanel" Storyboard.TargetProperty="Opacity" From="0.4" To="0.8" Duration="0:0:1.2" />
+        </Storyboard>
     </Page.Resources>
 
     <Grid>
@@ -45,52 +49,126 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
 
-            <ListView
-                Grid.Row="1"
-                ItemsSource="{x:Bind ViewModel.AvailableProfiles, Mode=OneWay}"
-                SelectedItem="{x:Bind ViewModel.SelectedProfile, Mode=TwoWay}"
-                SelectionMode="Single"
-                IsItemClickEnabled="True">
+            <!-- Profiles List Area -->
+            <Grid Grid.Row="1">
+                <!-- Skeleton View for Profiles -->
+                <StackPanel x:Name="LeftSkeletonPanel"
+                    Visibility="{x:Bind ViewModel.ProfilesViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                    Padding="12" Spacing="12">
+                    <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                            <Border Width="120" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                            <Border Width="150" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                            <Border Width="80" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <ListView
+                    ItemsSource="{x:Bind ViewModel.ProfilesViewModel.Profiles, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.ProfilesViewModel.SelectedProfile, Mode=TwoWay}"
+                    Visibility="{x:Bind ViewModel.ProfilesViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter='Invert'}"
+                    SelectionMode="Single"
+                    IsItemClickEnabled="True">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:ServerConfiguration">
-                        <StackPanel Padding="12,8">
-                            <TextBlock Text="{x:Bind Name}" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                            <TextBlock Text="{x:Bind TransportDisplayName}" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
+                        <Grid Padding="12,10" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            
+                            <Border Grid.Column="0"
+                                    Width="36" Height="36"
+                                    CornerRadius="6"
+                                    Background="{ThemeResource SystemControlBackgroundAccentBrush}"
+                                    Opacity="0.8">
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                          Glyph="{x:Bind TransportGlyph}"
+                                          Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                          FontSize="16" />
+                            </Border>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind Name}" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind TransportDisplayName}" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Margin" Value="12,2,12,2" />
+                        <Setter Property="CornerRadius" Value="6" />
+                    </Style>
+                </ListView.ItemContainerStyle>
             </ListView>
         </Grid>
+    </Grid>
 
         <!-- Divider -->
         <Rectangle Grid.Column="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
         <!-- Right Pane: Sessions Details -->
-        <Grid Grid.Column="2" Background="Transparent">
+        <Grid Grid.Column="2" Background="Transparent" CornerRadius="8">
             <!-- Empty State when no profile is selected -->
-            <Grid Visibility="{x:Bind ViewModel.SelectedProfile, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
-                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE716;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    <TextBlock Text="请在左侧选择一个 Agent 节点" Style="{ThemeResource SubtitleTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Grid Visibility="{x:Bind ViewModel.HasNoSelectedProfile, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                    <Grid Width="120" Height="120">
+                        <Ellipse Fill="{ThemeResource CardBackgroundFillColorSecondaryBrush}" />
+                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE716;" FontSize="56" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Grid>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="未选择节点" Style="{ThemeResource TitleTextBlockStyle}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                        <TextBlock Text="请在左侧选择一个 Agent 节点以浏览其可导入的会话" Style="{ThemeResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
             </Grid>
 
             <!-- Sessions Content Area -->
-            <Grid Visibility="{x:Bind ViewModel.SelectedProfile, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" MaxWidth="800" HorizontalAlignment="Left" Margin="48,32,48,32">
+            <Grid Visibility="{x:Bind ViewModel.HasSelectedProfile, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" MaxWidth="800" HorizontalAlignment="Left" Margin="48,32,48,32">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- Header for Selected Profile -->
-                <Grid Grid.Row="0" Margin="0,0,0,24">
+                <Grid Grid.Row="0" Margin="0,0,0,32">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Spacing="4">
-                        <TextBlock Text="{x:Bind ViewModel.SelectedProfile.Name, Mode=OneWay}" Style="{ThemeResource TitleTextBlockStyle}" FontWeight="SemiBold" />
-                        <TextBlock Text="可导入的会话列表" Style="{ThemeResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <StackPanel Grid.Column="0" Spacing="8">
+                        <TextBlock Text="{x:Bind ViewModel.ProfilesViewModel.SelectedProfile.Name, Mode=OneWay}" Style="{ThemeResource TitleTextBlockStyle}" FontWeight="Bold" />
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="6,2">
+                                <TextBlock Text="{x:Bind ViewModel.ProfilesViewModel.SelectedProfile.TransportDisplayName, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Border>
+                            <TextBlock Text="可导入的会话列表" Style="{ThemeResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
                     </StackPanel>
 
                     <Button
@@ -98,49 +176,111 @@
                         VerticalAlignment="Center"
                         Command="{x:Bind ViewModel.RefreshSessionsCommand}"
                         IsEnabled="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
-                        Style="{StaticResource DefaultButtonStyle}"
-                        ToolTipService.ToolTip="刷新会话列表">
+                        Style="{StaticResource AccentButtonStyle}"
+                        Padding="16,8">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE72C;" FontSize="14" />
-                            <TextBlock Text="刷新" />
+                            <TextBlock Text="刷新列表" />
                         </StackPanel>
                     </Button>
                 </Grid>
 
                 <!-- Loading & Error States Overlay -->
                 <Grid Grid.Row="1" Canvas.ZIndex="10">
-                    <Grid
-                        Background="Transparent"
-                        Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center">
-                        <StackPanel Spacing="16">
-                            <ProgressRing IsActive="True" Width="48" Height="48" HorizontalAlignment="Center"/>
-                            <TextBlock Text="正在连接并扫描会话列表..." Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
-
                     <InfoBar
-                        Title="无法加载会话"
+                        Title="服务连接异常"
                         Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
                         Severity="Error"
-                        IsOpen="True"
+                        IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                         IsClosable="False"
                         VerticalAlignment="Top"
-                        Visibility="{x:Bind ViewModel.HasError, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        Margin="0,0,0,16" />
+
+                    <!-- Native Skeleton View (Fishbone) -->
+                    <StackPanel x:Name="RightSkeletonPanel"
+                        Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Spacing="16"
+                        Padding="0,0,0,40">
+
+
+                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                    <Border Width="120" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                    <Border Width="280" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                </StackPanel>
+                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                    <Border Width="150" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                    <Border Width="240" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                </StackPanel>
+                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                    <Border Width="100" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                    <Border Width="200" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                </StackPanel>
+                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                    <Border Width="180" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                    <Border Width="160" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                </StackPanel>
+                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
                 </Grid>
 
-                <!-- Sessions List (Only visible when not loading and no errors) -->
+                <!-- Sessions List (Only visible when no errors) -->
                 <ListView
                     Grid.Row="1"
                     ItemsSource="{x:Bind ViewModel.AgentSessions, Mode=OneWay}"
                     SelectionMode="None"
-                    IsItemClickEnabled="False">
+                    IsItemClickEnabled="False"
+                    Padding="0,0,0,40">
 
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem">
                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Setter Property="Margin" Value="0,0,0,12"/>
+                            <Setter Property="Margin" Value="0,0,0,16"/>
                             <Setter Property="Padding" Value="0"/>
                         </Style>
                     </ListView.ItemContainerStyle>

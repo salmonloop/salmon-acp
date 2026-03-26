@@ -331,11 +331,11 @@ namespace SalmonEgg.Application.Services.Chat
             }
         }
 
-        public async Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null)
+        public async Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
         {
             try
             {
-                var response = await _acpClient.ListSessionsAsync(@params ?? new SessionListParams());
+                var response = await _acpClient.ListSessionsAsync(@params ?? new SessionListParams(), cancellationToken);
                 return response;
             }
             catch (Exception ex)
