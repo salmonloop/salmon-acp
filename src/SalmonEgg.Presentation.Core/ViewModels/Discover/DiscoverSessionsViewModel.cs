@@ -13,7 +13,9 @@ using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.ViewModels.Discover;
@@ -23,8 +25,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly ILogger<DiscoverSessionsViewModel> _logger;
     private readonly INavigationCoordinator _navigationCoordinator;
     private readonly AcpProfilesViewModel _profilesViewModel;
-    private readonly IConnectionService _connectionService;
-    private readonly IChatService _chatService;
+    private readonly IDiscoverSessionsConnectionFacade _connectionFacade;
     private readonly ISessionManager _sessionManager;
     private readonly SynchronizationContext _syncContext;
     private CancellationTokenSource? _loadingCts;
@@ -34,13 +35,17 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private bool _isLoading;
 
     [ObservableProperty]
-    private bool _isConnecting;
+    private string? _loadingStatus;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     private string? _errorMessage;
 
-    public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+    public bool HasError => !string.IsNullOrEmpty(ErrorMessage) || !string.IsNullOrEmpty(_connectionFacade.ConnectionErrorMessage);
+
+    public string? DisplayErrorMessage => ErrorMessage ?? _connectionFacade.ConnectionErrorMessage;
+
+    public bool IsConnecting => _connectionFacade.IsConnecting;
 
     public AcpProfilesViewModel ProfilesViewModel => _profilesViewModel;
 
@@ -62,19 +67,55 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         ILogger<DiscoverSessionsViewModel> logger,
         INavigationCoordinator navigationCoordinator,
         AcpProfilesViewModel profilesViewModel,
-        IConnectionService connectionService,
-        IChatService chatService,
+        IDiscoverSessionsConnectionFacade connectionFacade,
         ISessionManager sessionManager)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
         _profilesViewModel = profilesViewModel ?? throw new ArgumentNullException(nameof(profilesViewModel));
-        _connectionService = connectionService ?? throw new ArgumentNullException(nameof(connectionService));
-        _chatService = chatService ?? throw new ArgumentNullException(nameof(chatService));
+        _connectionFacade = connectionFacade ?? throw new ArgumentNullException(nameof(connectionFacade));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
         _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
+        _connectionFacade.PropertyChanged += OnConnectionFacadePropertyChanged;
+    }
+
+    private void OnConnectionFacadePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IDiscoverSessionsConnectionFacade.IsConnecting) or
+            nameof(IDiscoverSessionsConnectionFacade.IsInitializing) or
+            nameof(IDiscoverSessionsConnectionFacade.IsConnected) or
+            nameof(IDiscoverSessionsConnectionFacade.ConnectionErrorMessage))
+        {
+            _syncContext.Post(_ =>
+            {
+                OnPropertyChanged(nameof(IsConnecting));
+                OnPropertyChanged(nameof(HasError));
+                OnPropertyChanged(nameof(DisplayErrorMessage));
+
+                UpdateLoadingStatus();
+            }, null);
+        }
+    }
+
+    private void UpdateLoadingStatus()
+    {
+        if (_connectionFacade.IsConnecting)
+        {
+            LoadingStatus = "正在连接到 Agent...";
+            IsLoading = true;
+        }
+        else if (_connectionFacade.IsInitializing)
+        {
+            LoadingStatus = "正在初始化 ACP 协议...";
+            IsLoading = true;
+        }
+        else if (IsLoading && string.IsNullOrEmpty(LoadingStatus))
+        {
+            // Keep previous status or default if we are still internally loading (e.g. listing sessions)
+            LoadingStatus = "正在获取会话列表...";
+        }
     }
 
     private void OnProfilesViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -87,7 +128,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                 OnPropertyChanged(nameof(HasSelectedProfile));
                 OnPropertyChanged(nameof(HasNoSelectedProfile));
 
-                _ = LoadSessionsForProfileAsync(SelectedProfile);
+                _ = RefreshSessionsAsync();
             }, null);
         }
     }
@@ -110,7 +151,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                 // If we already have a selection, load it if the session list is empty
                 if (AgentSessions.Count == 0 && !IsLoading)
                 {
-                    _ = LoadSessionsForProfileAsync(SelectedProfile);
+                    _ = RefreshSessionsAsync();
                 }
             }
             else if (AvailableProfiles.Any())
@@ -124,20 +165,12 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     [RelayCommand]
     private async Task RefreshSessionsAsync()
     {
-        if (SelectedProfile != null)
-        {
-            await LoadSessionsForProfileAsync(SelectedProfile).ConfigureAwait(false);
-        }
-    }
-
-    private async Task LoadSessionsForProfileAsync(ServerConfiguration? profile)
-    {
+        var profile = SelectedProfile;
         if (profile == null)
         {
             _syncContext.Post(_ => {
                 AgentSessions.Clear();
                 IsLoading = false;
-                IsConnecting = false;
             }, null);
             return;
         }
@@ -150,45 +183,43 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _syncContext.Post(_ =>
         {
             IsLoading = true;
-            IsConnecting = true;
             ErrorMessage = null;
+            UpdateLoadingStatus();
             AgentSessions.Clear();
         }, null);
 
         try
         {
-            // Connect to the agent
-            var connectionResult = await _connectionService.ConnectAsync(profile.Id).ConfigureAwait(false);
+            // Step 1: Ensure connected using the shared facade (which delegates to ChatViewModel SSOT)
+            await _connectionFacade.ConnectToProfileAsync(profile).ConfigureAwait(false);
+
             if (token.IsCancellationRequested) return;
 
-            if (!connectionResult.IsSuccess)
+            // Wait for initialization to complete if it's currently happening
+            while ((_connectionFacade.IsConnecting || _connectionFacade.IsInitializing) && !token.IsCancellationRequested)
             {
-                _syncContext.Post(_ =>
-                {
-                    ErrorMessage = $"连接 Agent 失败: {connectionResult.Error}";
-                    IsLoading = false;
-                    IsConnecting = false;
-                }, null);
+                await Task.Delay(100, token).ConfigureAwait(false);
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            if (!_connectionFacade.IsConnected)
+            {
+                _syncContext.Post(_ => ErrorMessage = _connectionFacade.ConnectionErrorMessage ?? "连接失败，无法获取会话列表。", null);
                 return;
             }
 
-            _syncContext.Post(_ => IsConnecting = false, null);
-
-            // Initialize chat service if needed
-            if (!_chatService.IsInitialized)
+            var chatService = _connectionFacade.CurrentChatService;
+            if (chatService == null)
             {
-                await _chatService.InitializeAsync(new InitializeParams
-                {
-                    ProtocolVersion = 1,
-                    ClientInfo = new ClientInfo { Name = "SalmonEgg", Version = "1.0.0" },
-                    ClientCapabilities = new ClientCapabilities()
-                }).ConfigureAwait(false);
+                _syncContext.Post(_ => ErrorMessage = "ChatService 实例不可用。", null);
+                return;
             }
 
-            if (token.IsCancellationRequested) return;
+            _syncContext.Post(_ => LoadingStatus = "正在获取会话列表...", null);
 
-            // List sessions
-            var listResponse = await _chatService.ListSessionsAsync(new SessionListParams(), token).ConfigureAwait(false);
+            // Step 2: List sessions
+            var listResponse = await chatService.ListSessionsAsync(new SessionListParams(), token).ConfigureAwait(false);
 
             if (token.IsCancellationRequested) return;
 
@@ -240,7 +271,10 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                 _syncContext.Post(_ =>
                 {
                     IsLoading = false;
-                    IsConnecting = false;
+                    if (string.IsNullOrEmpty(ErrorMessage))
+                    {
+                        LoadingStatus = null;
+                    }
                 }, null);
             }
         }
@@ -283,8 +317,9 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     {
         if (_disposed) return;
         _disposed = true;
-        
+
         _profilesViewModel.PropertyChanged -= OnProfilesViewModelPropertyChanged;
+        _connectionFacade.PropertyChanged -= OnConnectionFacadePropertyChanged;
         _loadingCts?.Cancel();
         _loadingCts?.Dispose();
     }

@@ -169,7 +169,7 @@ public sealed class ChatLaunchWorkflowChatFacadeAdapter : IChatLaunchWorkflowCha
             return ChatLaunchConnectionOutcome.Connected;
         }
 
-        return connectionState.Phase == ConnectionPhase.Connecting
+        return (connectionState.Phase == ConnectionPhase.Connecting || connectionState.Phase == ConnectionPhase.Initializing)
             ? ChatLaunchConnectionOutcome.InProgress
             : ChatLaunchConnectionOutcome.RequiresConfiguration;
     }

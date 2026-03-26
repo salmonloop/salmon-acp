@@ -233,6 +233,8 @@ public static class DependencyInjection
         services.AddSingleton<ChatShellViewModel>();
         services.AddSingleton<ConversationCatalogFacade>();
         services.AddSingleton<IConversationCatalog>(sp => sp.GetRequiredService<ConversationCatalogFacade>());
+        services.AddSingleton<IDiscoverSessionsConnectionFacade>(sp =>
+            new DiscoverSessionsConnectionFacade(sp.GetRequiredService<ChatViewModel>()));
         services.AddSingleton<ISettingsChatConnection>(sp =>
             new SettingsChatConnectionAdapter(sp.GetRequiredService<ChatViewModel>()));
         services.AddSingleton<IChatLaunchWorkflowChatFacade>(sp =>

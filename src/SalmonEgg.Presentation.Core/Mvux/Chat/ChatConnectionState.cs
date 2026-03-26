@@ -4,8 +4,9 @@ public enum ConnectionPhase
 {
     Disconnected = 0,
     Connecting = 1,
-    Connected = 2,
-    Error = 3
+    Initializing = 2,
+    Connected = 3,
+    Error = 4
 }
 
 public sealed record ChatConnectionState(

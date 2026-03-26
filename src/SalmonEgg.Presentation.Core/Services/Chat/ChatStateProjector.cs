@@ -26,8 +26,10 @@ public sealed class ChatStateProjector : IChatStateProjector
         var selectedProfileId = connectionState.SelectedProfileId;
         var isConnecting = connectionState.Phase == ConnectionPhase.Connecting;
         var isConnected = connectionState.Phase == ConnectionPhase.Connected;
-        var isInitializing = connectionState.Phase == ConnectionPhase.Connecting;
-        var connectionStatus = connectionState.Phase == ConnectionPhase.Connected ? "Connected" : "Disconnected";
+        var isInitializing = connectionState.Phase == ConnectionPhase.Initializing;
+        var connectionStatus = connectionState.Phase == ConnectionPhase.Connected ? "Connected" : 
+                               connectionState.Phase == ConnectionPhase.Initializing ? "Initializing..." :
+                               connectionState.Phase == ConnectionPhase.Connecting ? "Connecting..." : "Disconnected";
         var connectionError = connectionState.Error;
         var isAuthenticationRequired = connectionState.IsAuthenticationRequired;
         var authenticationHintMessage = connectionState.AuthenticationHintMessage;

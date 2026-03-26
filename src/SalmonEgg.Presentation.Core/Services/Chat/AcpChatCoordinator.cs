@@ -114,6 +114,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             sink.ReplaceChatService(wrappedService);
             _activeChatServiceAdapter = wrappedService;
 
+            await _connectionCoordinator.SetInitializingAsync(sink.SelectedProfileId, cancellationToken).ConfigureAwait(false);
+
             var initializeResponse = await wrappedService
                 .InitializeAsync(CreateDefaultInitializeParams())
                 .ConfigureAwait(false);
@@ -495,6 +497,9 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         public static NoopAcpConnectionCoordinator Instance { get; } = new();
 
         public Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
         public Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default)

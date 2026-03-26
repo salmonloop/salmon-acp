@@ -343,7 +343,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _acpProfiles.Profiles.CollectionChanged += OnAcpProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _conversationWorkspace.PropertyChanged += OnConversationWorkspacePropertyChanged;
-        PlanEntries.CollectionChanged += OnCurrentPlanCollectionChanged;
 
         IsConversationListLoading = _conversationWorkspace.IsConversationListLoading;
         ConversationListVersion = _conversationWorkspace.ConversationListVersion;
@@ -3364,54 +3363,35 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         public static NoopAcpConnectionCoordinator Instance { get; } = new();
 
-        public Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task SetAuthenticationRequiredAsync(string? hintMessage, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task ClearAuthenticationRequiredAsync(CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task ResetAsync(CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task ResyncAsync(IAcpChatCoordinatorSink sink, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+        public Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetAuthenticationRequiredAsync(string? hintMessage, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ClearAuthenticationRequiredAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ResetAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ResyncAsync(IAcpChatCoordinatorSink sink, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class BottomPanelState
     {
+        public ObservableCollection<BottomPanelTabViewModel> Tabs { get; }
+        public BottomPanelTabViewModel? Selected { get; set; }
+
         public BottomPanelState(ObservableCollection<BottomPanelTabViewModel> tabs)
         {
-            Tabs = tabs ?? throw new ArgumentNullException(nameof(tabs));
+            Tabs = tabs;
+            Selected = tabs.FirstOrDefault();
         }
-
-        public ObservableCollection<BottomPanelTabViewModel> Tabs { get; }
-
-        public BottomPanelTabViewModel? Selected { get; set; }
     }
 
-    private void OnCurrentPlanCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        OnPropertyChanged(nameof(HasPlanEntries));
-        OnPropertyChanged(nameof(ShouldShowPlanList));
-        OnPropertyChanged(nameof(ShouldShowPlanEmpty));
-    }
-
-    public void Dispose()
+       public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
-       protected virtual void Dispose(bool disposing)
+    protected virtual void Dispose(bool disposing)
        {
            if (_disposed)
            {
@@ -3430,7 +3410,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                UnsubscribeFromChatService(_chatService);
            }
 
-           PlanEntries.CollectionChanged -= OnCurrentPlanCollectionChanged;
            _acpProfiles.PropertyChanged -= OnAcpProfilesPropertyChanged;
            _acpProfiles.Profiles.CollectionChanged -= OnAcpProfilesCollectionChanged;
            _preferences.PropertyChanged -= OnPreferencesPropertyChanged;

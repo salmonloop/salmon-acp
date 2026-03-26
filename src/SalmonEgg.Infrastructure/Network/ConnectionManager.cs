@@ -109,12 +109,12 @@ namespace SalmonEgg.Infrastructure.Network
                 if (validationError != null)
                 {
                     _logger.Warning("配置验证失败: {Error}", validationError);
-                    UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl, validationError);
+                    UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl ?? string.Empty, validationError);
                     return ConnectionResult.Failure(validationError);
                 }
 
                 // 更新状态为连接中
-                UpdateConnectionState(ConnectionStatus.Connecting, config.ServerUrl);
+                UpdateConnectionState(ConnectionStatus.Connecting, config.ServerUrl ?? string.Empty);
 
                 // 选择并创建传输层
                 _transport = _transportFactory(config.Transport);
@@ -126,7 +126,7 @@ namespace SalmonEgg.Infrastructure.Network
                 // 使用重试策略建立连接
                 await _retryPolicy.ExecuteAsync(async () =>
                 {
-                    await _transport.ConnectAsync(config.ServerUrl, ct);
+                    await _transport.ConnectAsync(config.ServerUrl ?? string.Empty, ct);
                 });
 
                 // 发送初始化消息
@@ -136,7 +136,7 @@ namespace SalmonEgg.Infrastructure.Network
                 StartHeartbeat(config.HeartbeatInterval);
 
                 // 更新状态为已连接
-                UpdateConnectionState(ConnectionStatus.Connected, config.ServerUrl);
+                UpdateConnectionState(ConnectionStatus.Connected, config.ServerUrl ?? string.Empty);
 
                 _logger.Information("成功连接到服务器: {ServerUrl}", config.ServerUrl);
                 
@@ -147,19 +147,19 @@ namespace SalmonEgg.Infrastructure.Network
             catch (OperationCanceledException)
             {
                 _logger.Information("连接操作被取消");
-                UpdateConnectionState(ConnectionStatus.Disconnected, config.ServerUrl, "连接被取消");
+                UpdateConnectionState(ConnectionStatus.Disconnected, config.ServerUrl ?? string.Empty, "连接被取消");
                 return ConnectionResult.Failure("连接操作被取消");
             }
             catch (ConnectionException ex)
             {
                 _logger.Error(ex, "连接失败: {ErrorType}", ex.ErrorType);
-                UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl, ex.Message);
+                UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl ?? string.Empty, ex.Message);
                 return ConnectionResult.Failure($"连接失败: {ex.Message}");
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "连接时发生意外错误，已达到最大重试次数");
-                UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl, "连接失败，已达到最大重试次数");
+                UpdateConnectionState(ConnectionStatus.Error, config.ServerUrl ?? string.Empty, "连接失败，已达到最大重试次数");
                 return ConnectionResult.Failure($"连接失败: {ex.Message}");
             }
         }
@@ -278,29 +278,41 @@ namespace SalmonEgg.Infrastructure.Network
         /// </summary>
         private string? ValidateConfiguration(ServerConfiguration config)
         {
-            if (string.IsNullOrWhiteSpace(config.ServerUrl))
+            // ServerUrl is only required for remote transports (WebSocket, HttpSse)
+            if (config.Transport != TransportType.Stdio)
             {
-                return "Server URL is required";
-            }
-
-            if (!Uri.TryCreate(config.ServerUrl, UriKind.Absolute, out var uri))
-            {
-                return "Server URL format is invalid";
-            }
-
-            // 验证传输类型对应的 URL 协议
-            if (config.Transport == TransportType.WebSocket)
-            {
-                if (uri.Scheme != "ws" && uri.Scheme != "wss")
+                if (string.IsNullOrWhiteSpace(config.ServerUrl))
                 {
-                    return "WebSocket transport requires ws:// or wss:// protocol";
+                    return "Server URL is required";
+                }
+
+                if (!Uri.TryCreate(config.ServerUrl, UriKind.Absolute, out var uri))
+                {
+                    return "Server URL format is invalid";
+                }
+
+                // Verify protocol for each transport type
+                if (config.Transport == TransportType.WebSocket)
+                {
+                    if (uri.Scheme != "ws" && uri.Scheme != "wss")
+                    {
+                        return "WebSocket transport requires ws:// or wss:// protocol";
+                    }
+                }
+                else if (config.Transport == TransportType.HttpSse)
+                {
+                    if (uri.Scheme != "http" && uri.Scheme != "https")
+                    {
+                        return "HTTP SSE transport requires http:// or https:// protocol";
+                    }
                 }
             }
-            else if (config.Transport == TransportType.HttpSse)
+            else
             {
-                if (uri.Scheme != "http" && uri.Scheme != "https")
+                // Stdio must have a command
+                if (string.IsNullOrWhiteSpace(config.StdioCommand))
                 {
-                    return "HTTP SSE transport requires http:// or https:// protocol";
+                    return "Stdio command is required (e.g. 'node', 'python')";
                 }
             }
 
@@ -443,7 +455,6 @@ namespace SalmonEgg.Infrastructure.Network
             if (_isReconnecting)
             {
                 _logger.Debug("Already reconnecting, skipping this reconnect request");
-                _logger.Debug("已经在重连中，跳过此次重连请求");
                 return;
             }
 
@@ -453,7 +464,7 @@ namespace SalmonEgg.Infrastructure.Network
                 _logger.Information("Reconnecting to server automatically: {ServerUrl}", _currentConfig.ServerUrl);
                 
                 // 更新状态为重连中
-                UpdateConnectionState(ConnectionStatus.Reconnecting, _currentConfig.ServerUrl, "正在自动重连");
+                UpdateConnectionState(ConnectionStatus.Reconnecting, _currentConfig.ServerUrl ?? string.Empty, "正在自动重连");
 
                 // 清理现有连接
                 if (_transport != null)
@@ -478,7 +489,7 @@ namespace SalmonEgg.Infrastructure.Network
                 // 使用重试策略建立连接
                 await _retryPolicy.ExecuteAsync(async () =>
                 {
-                    await _transport.ConnectAsync(_currentConfig.ServerUrl, CancellationToken.None);
+                    await _transport.ConnectAsync(_currentConfig.ServerUrl ?? string.Empty, CancellationToken.None);
                 });
 
                 // 发送初始化消息
@@ -488,7 +499,7 @@ namespace SalmonEgg.Infrastructure.Network
                 StartHeartbeat(_currentConfig.HeartbeatInterval);
 
                 // 更新状态为已连接
-                UpdateConnectionState(ConnectionStatus.Connected, _currentConfig.ServerUrl);
+                UpdateConnectionState(ConnectionStatus.Connected, _currentConfig.ServerUrl ?? string.Empty);
 
                 _logger.Information("Reconnection successful to server: {ServerUrl}", _currentConfig.ServerUrl);
             }
@@ -497,7 +508,7 @@ namespace SalmonEgg.Infrastructure.Network
                 _logger.Error(ex, "Reconnection failed");
                 UpdateConnectionState(
                     ConnectionStatus.Error, 
-                    _currentConfig.ServerUrl, 
+                    _currentConfig.ServerUrl ?? string.Empty, 
                     "Reconnection failed");
             }
             finally

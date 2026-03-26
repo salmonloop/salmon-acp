@@ -10,7 +10,7 @@ namespace SalmonEgg.Presentation.Core.Services.Chat;
 public interface IAcpConnectionCoordinator
 {
     Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default);
-
+    Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default);
     Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default);
 
     Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default);
@@ -42,6 +42,14 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
         cancellationToken.ThrowIfCancellationRequested();
         await UpdateProfileAsync(profileId).ConfigureAwait(false);
         await _store.Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Connecting, Error: null))
+            .ConfigureAwait(false);
+    }
+
+    public async Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await UpdateProfileAsync(profileId).ConfigureAwait(false);
+        await _store.Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Initializing, Error: null))
             .ConfigureAwait(false);
     }
 
