@@ -8,7 +8,7 @@
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:local_vm="using:SalmonEgg.Presentation.ViewModels.Start"
     mc:Ignorable="d"
-    Background="{ThemeResource LayerFillColorDefaultBrush}">
+    Background="Transparent">
 
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>

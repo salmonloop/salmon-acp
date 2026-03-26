@@ -31,7 +31,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Left Pane: Profiles Master List -->
-        <Grid Grid.Column="0" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid Grid.Column="0" Background="Transparent">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
