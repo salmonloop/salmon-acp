@@ -15,11 +15,20 @@ public sealed partial class DiscoverSessionsPage : Page
         DataContext = ViewModel;
 
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private async void OnLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         SkeletonPulse?.Begin();
-        await ViewModel.InitializeCommand.ExecuteAsync(null);
+        if (ViewModel.InitializeCommand.CanExecute(null))
+        {
+            await ViewModel.InitializeCommand.ExecuteAsync(null);
+        }
+    }
+
+    private void OnUnloaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ViewModel.Dispose();
     }
 }

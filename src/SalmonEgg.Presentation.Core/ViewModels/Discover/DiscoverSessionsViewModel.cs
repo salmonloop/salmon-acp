@@ -18,7 +18,7 @@ using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.ViewModels.Discover;
 
-public sealed partial class DiscoverSessionsViewModel : ObservableObject
+public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDisposable
 {
     private readonly ILogger<DiscoverSessionsViewModel> _logger;
     private readonly INavigationCoordinator _navigationCoordinator;
@@ -28,6 +28,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
     private readonly ISessionManager _sessionManager;
     private readonly SynchronizationContext _syncContext;
     private CancellationTokenSource? _loadingCts;
+    private bool _disposed;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -80,18 +81,22 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(AcpProfilesViewModel.SelectedProfile))
         {
-            OnPropertyChanged(nameof(SelectedProfile));
-            OnPropertyChanged(nameof(HasSelectedProfile));
-            OnPropertyChanged(nameof(HasNoSelectedProfile));
+            _syncContext.Post(_ =>
+            {
+                OnPropertyChanged(nameof(SelectedProfile));
+                OnPropertyChanged(nameof(HasSelectedProfile));
+                OnPropertyChanged(nameof(HasNoSelectedProfile));
 
-            _ = LoadSessionsForProfileAsync(SelectedProfile);
+                _ = LoadSessionsForProfileAsync(SelectedProfile);
+            }, null);
         }
     }
 
     [RelayCommand]
     private async Task InitializeAsync()
     {
-        await _profilesViewModel.RefreshAsync().ConfigureAwait(false);
+        // SSOT: Only refresh if list is empty to avoid redundant network calls if already loaded in Settings
+        await _profilesViewModel.RefreshIfEmptyAsync().ConfigureAwait(false);
 
         _syncContext.Post(_ =>
         {
@@ -102,10 +107,15 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
             if (SelectedProfile != null)
             {
-                _ = LoadSessionsForProfileAsync(SelectedProfile);
+                // If we already have a selection, load it if the session list is empty
+                if (AgentSessions.Count == 0 && !IsLoading)
+                {
+                    _ = LoadSessionsForProfileAsync(SelectedProfile);
+                }
             }
             else if (AvailableProfiles.Any())
             {
+                // Default to first profile if nothing selected
                 SelectedProfile = AvailableProfiles.First();
             }
         }, null);
@@ -122,6 +132,17 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
     private async Task LoadSessionsForProfileAsync(ServerConfiguration? profile)
     {
+        if (profile == null)
+        {
+            _syncContext.Post(_ => {
+                AgentSessions.Clear();
+                IsLoading = false;
+                IsConnecting = false;
+            }, null);
+            return;
+        }
+
+        // Cancel any pending load
         _loadingCts?.Cancel();
         _loadingCts = new CancellationTokenSource();
         var token = _loadingCts.Token;
@@ -129,21 +150,17 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
         _syncContext.Post(_ =>
         {
             IsLoading = true;
+            IsConnecting = true;
             ErrorMessage = null;
             AgentSessions.Clear();
         }, null);
 
-        if (profile == null)
-        {
-            _syncContext.Post(_ => IsLoading = false, null);
-            return;
-        }
-
         try
         {
-            _syncContext.Post(_ => IsConnecting = true, null);
-
+            // Connect to the agent
             var connectionResult = await _connectionService.ConnectAsync(profile.Id).ConfigureAwait(false);
+            if (token.IsCancellationRequested) return;
+
             if (!connectionResult.IsSuccess)
             {
                 _syncContext.Post(_ =>
@@ -157,6 +174,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
             _syncContext.Post(_ => IsConnecting = false, null);
 
+            // Initialize chat service if needed
             if (!_chatService.IsInitialized)
             {
                 await _chatService.InitializeAsync(new InitializeParams
@@ -169,6 +187,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
             if (token.IsCancellationRequested) return;
 
+            // List sessions
             var listResponse = await _chatService.ListSessionsAsync(new SessionListParams(), token).ConfigureAwait(false);
 
             if (token.IsCancellationRequested) return;
@@ -201,26 +220,29 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
 
                 if (AgentSessions.Count == 0 && !HasError)
                 {
-                    ErrorMessage = "未找到任何会话。";
+                    ErrorMessage = "未找到任何可用会话。";
                 }
             }, null);
         }
         catch (OperationCanceledException)
         {
-            // Ignore cancellation
+            // Ignore
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load sessions for profile {ProfileId}", profile.Id);
-            _syncContext.Post(_ => ErrorMessage = $"无法同步会话列表: {ex.Message}", null);
+            _syncContext.Post(_ => ErrorMessage = $"无法获取会话列表: {ex.Message}", null);
         }
         finally
         {
-            _syncContext.Post(_ =>
+            if (!token.IsCancellationRequested)
             {
-                IsLoading = false;
-                IsConnecting = false;
-            }, null);
+                _syncContext.Post(_ =>
+                {
+                    IsLoading = false;
+                    IsConnecting = false;
+                }, null);
+            }
         }
     }
 
@@ -237,24 +259,34 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject
                 ErrorMessage = null;
             }, null);
 
-            _logger.LogInformation("Loading session {SessionId} from profile {ProfileId}", session.Id, SelectedProfile.Id);
+            _logger.LogInformation("Importing session {SessionId} from profile {ProfileId}", session.Id, SelectedProfile.Id);
 
             var success = await _navigationCoordinator.ActivateSessionAsync(session.Id, null).ConfigureAwait(false);
 
             if (!success)
             {
-                _syncContext.Post(_ => ErrorMessage = "加载会话失败，请尝试重新连接。", null);
+                _syncContext.Post(_ => ErrorMessage = "加载会话并导入失败，请检查连接状态。", null);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load session {SessionId}", session.Id);
-            _syncContext.Post(_ => ErrorMessage = $"加载会话时出错: {ex.Message}", null);
+            _syncContext.Post(_ => ErrorMessage = $"导入会话时出错: {ex.Message}", null);
         }
         finally
         {
             _syncContext.Post(_ => IsLoading = false, null);
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        
+        _profilesViewModel.PropertyChanged -= OnProfilesViewModelPropertyChanged;
+        _loadingCts?.Cancel();
+        _loadingCts?.Dispose();
     }
 }
 

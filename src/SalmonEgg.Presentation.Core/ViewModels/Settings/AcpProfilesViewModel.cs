@@ -38,6 +38,14 @@ public partial class AcpProfilesViewModel : ObservableObject
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
     }
 
+    public async Task RefreshIfEmptyAsync()
+    {
+        if (Profiles.Count == 0 && !IsLoading)
+        {
+            await RefreshAsync().ConfigureAwait(false);
+        }
+    }
+
     public void MarkLastConnected(ServerConfiguration? profile)
     {
         _preferences.LastSelectedServerId = profile?.Id;
@@ -46,6 +54,8 @@ public partial class AcpProfilesViewModel : ObservableObject
     [RelayCommand]
     public async Task RefreshAsync()
     {
+        if (IsLoading) return;
+
         try
         {
             IsLoading = true;
@@ -53,7 +63,11 @@ public partial class AcpProfilesViewModel : ObservableObject
             var ordered = configs.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 
             var tcs = new TaskCompletionSource<bool>();
-            _syncContext.Post(_ =>
+            
+            // Re-capture current sync context if possible, or use the one from constructor
+            var syncContext = SynchronizationContext.Current ?? _syncContext;
+            
+            syncContext.Post(_ =>
             {
                 try
                 {
@@ -67,12 +81,12 @@ public partial class AcpProfilesViewModel : ObservableObject
                     {
                         SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
                     }
-                    tcs.SetResult(true);
+                    tcs.TrySetResult(true);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to update profiles on UI thread");
-                    tcs.SetException(ex);
+                    tcs.TrySetException(ex);
                 }
             }, null);
 
@@ -99,11 +113,16 @@ public partial class AcpProfilesViewModel : ObservableObject
         try
         {
             await _configurationService.DeleteConfigurationAsync(profile.Id).ConfigureAwait(false);
-            Profiles.Remove(profile);
-            if (SelectedProfile?.Id == profile.Id)
+            
+            var syncContext = SynchronizationContext.Current ?? _syncContext;
+            syncContext.Post(_ =>
             {
-                SelectedProfile = null;
-            }
+                Profiles.Remove(profile);
+                if (SelectedProfile?.Id == profile.Id)
+                {
+                    SelectedProfile = null;
+                }
+            }, null);
         }
         catch (Exception ex)
         {
@@ -152,7 +171,8 @@ public partial class AcpProfilesViewModel : ObservableObject
             return;
         }
 
-        _syncContext.Post(_ =>
+        var syncContext = SynchronizationContext.Current ?? _syncContext;
+        syncContext.Post(_ =>
         {
             SelectedProfile = Profiles.FirstOrDefault(p => p.Id == id);
         }, null);
