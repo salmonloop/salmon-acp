@@ -331,6 +331,27 @@ namespace SalmonEgg.Application.Services.Chat
             }
         }
 
+        public async Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null)
+        {
+            try
+            {
+                var response = await _acpClient.ListSessionsAsync(@params ?? new SessionListParams());
+                return response;
+            }
+            catch (Exception ex)
+            {
+                var entry = new ErrorLogEntry(
+                    "ListSessionsAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(ListSessionsAsync),
+                    _currentSessionId,
+                    ex);
+                _errorLogger.LogError(entry);
+                throw;
+            }
+        }
+
         public async Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)
         {
             try

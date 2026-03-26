@@ -95,6 +95,15 @@ namespace SalmonEgg.Domain.Services
         Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 列出远端 Agent 支持的会话列表。
+        /// 发送 session/list 请求并等待 Agent 响应。
+        /// </summary>
+        /// <param name="params">列表参数</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>会话列表响应</returns>
+        Task<SessionListResponse> ListSessionsAsync(SessionListParams @params, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 向会话发送提示。
         /// 发送 session/prompt 请求并等待 Agent 响应。
         /// </summary>

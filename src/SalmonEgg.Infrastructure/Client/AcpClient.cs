@@ -278,6 +278,34 @@ namespace SalmonEgg.Infrastructure.Client
         }
 
         /// <summary>
+        /// 列出远端 Agent 支持的会话列表
+        /// </summary>
+        public async Task<SessionListResponse> ListSessionsAsync(SessionListParams @params, CancellationToken cancellationToken = default)
+        {
+            EnsureInitialized();
+
+            var request = new JsonRpcRequest(
+                Interlocked.Increment(ref _nextMessageId),
+                "session/list",
+                JsonSerializer.SerializeToElement(@params, typeof(SessionListParams), _parser.Options));
+
+            var response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
+
+            if (response.IsError)
+            {
+                throw new AcpException(response.Error!.Code, response.Error.Message, response.Error.Data);
+            }
+
+            var listResponse = JsonSerializer.Deserialize<SessionListResponse>(response.Result!.Value.GetRawText(), _parser.Options);
+            if (listResponse == null)
+            {
+                throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to parse session/list response");
+            }
+
+            return listResponse;
+        }
+
+        /// <summary>
         /// 向会话发送提示。
         /// </summary>
         public async Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)

@@ -98,6 +98,11 @@ namespace SalmonEgg.Application.Services.Chat
         Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params);
 
         /// <summary>
+        /// 列出远端 Agent 支持的会话列表
+        /// </summary>
+        Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null);
+
+        /// <summary>
         /// 向会话发送提示消息
         /// </summary>
         Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default);
