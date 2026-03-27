@@ -166,4 +166,13 @@ public sealed class InitializeTypesTests
         Assert.That(((JsonElement)response.Meta["source"]!).GetString(), Is.EqualTo("unit-test"));
         Assert.That(((JsonElement)response.Meta["flag"]!).ValueKind, Is.EqualTo(JsonValueKind.True));
     }
+
+    [Test]
+    public void ClientCapabilityDefaults_Should_Not_Advertise_FileSystem_Or_Terminal()
+    {
+        var capabilities = ClientCapabilityDefaults.Create();
+
+        Assert.That(capabilities.Terminal, Is.Null);
+        Assert.That(capabilities.Fs, Is.Null);
+    }
 }

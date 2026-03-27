@@ -68,7 +68,9 @@ public sealed class AcpChatCoordinatorTests
         Assert.Equal("agent", sink.AgentName);
         Assert.Equal("1.0.0", sink.AgentVersion);
         Assert.IsType<AcpChatServiceAdapter>(result.ChatService);
-        service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        service.Verify(x => x.InitializeAsync(It.Is<InitializeParams>(p =>
+            p.ClientCapabilities.Terminal == null
+            && p.ClientCapabilities.Fs == null)), Times.Once);
         connectionCoordinator.Verify(
             x => x.SetConnectingAsync("profile-1", It.IsAny<CancellationToken>()),
             Times.Once);

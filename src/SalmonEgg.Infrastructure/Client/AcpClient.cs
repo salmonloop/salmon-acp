@@ -37,6 +37,7 @@ namespace SalmonEgg.Infrastructure.Client
         private readonly ISessionManager _sessionManager;
         private readonly IPathValidator _pathValidator;
         private readonly IPermissionManager _permissionManager;
+        private readonly ITerminalSessionManager _terminalSessionManager;
         private readonly IErrorLogger _errorLogger;
 
         
@@ -124,6 +125,7 @@ namespace SalmonEgg.Infrastructure.Client
             _sessionManager = new Services.SessionManager();
             _pathValidator = new Services.Security.PathValidator();
             _permissionManager = new Services.Security.PermissionManager();
+            _terminalSessionManager = new Services.TerminalSessionManager();
             _errorLogger = errorLogger ?? new Logging.ErrorLogger();
 
             // 注册传输层事件
@@ -725,7 +727,7 @@ namespace SalmonEgg.Infrastructure.Client
                         _pendingInboundRequestMethods[requestIdStr] = request.Method;
                         ScheduleInboundRequestTimeout(request.Id, TimeSpan.FromSeconds(30), defaultKind: "terminal");
                     }
-                    HandleTerminalRequest(request);
+                    _ = HandleTerminalRequestAsync(request);
                     break;
                 default:
                     // Best-effort: respond with "method not found" so the agent doesn't hang waiting.
@@ -939,7 +941,7 @@ namespace SalmonEgg.Infrastructure.Client
         /// <summary>
         /// 处理终端请求。
         /// </summary>
-        private void HandleTerminalRequest(JsonRpcRequest request)
+        private async Task HandleTerminalRequestAsync(JsonRpcRequest request)
         {
             try
             {
@@ -959,39 +961,99 @@ namespace SalmonEgg.Infrastructure.Client
                 }
 
                 var sessionId = sessionIdProp.GetString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(sessionId))
+                {
+                    _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidParams("Missing sessionId")));
+                    return;
+                }
+
                 string? terminalId = null;
                 if (rawParams.TryGetProperty("terminalId", out var terminalIdProp))
                 {
                     terminalId = terminalIdProp.GetString();
                 }
 
-                var terminalResponseFunc = new Func<object, Task<bool>>(async (result) =>
-                {
-                    _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
-                    return await SendResponseAsync(new JsonRpcResponse(request.Id, JsonSerializer.SerializeToElement(result, _parser.Options))).ConfigureAwait(false);
-                });
+                TerminalRequestReceived?.Invoke(
+                    this,
+                    new TerminalRequestEventArgs(
+                        request.Id,
+                        sessionId,
+                        terminalId,
+                        request.Method,
+                        rawParams,
+                        _ => Task.FromResult(false)));
 
-                var eventArgs = new TerminalRequestEventArgs(
-                    request.Id,
-                    sessionId,
-                    terminalId,
-                    request.Method,
-                    rawParams,
-                    terminalResponseFunc);
-
-                if (TerminalRequestReceived == null)
+                switch (request.Method)
                 {
-                    // No UI hooked up; deny to avoid deadlock.
-                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateMethodNotFound(request.Method)));
-                    return;
+                    case "terminal/create":
+                        var createRequest = JsonSerializer.Deserialize<TerminalCreateRequest>(rawParams.GetRawText(), _parser.Options)
+                            ?? throw new InvalidOperationException("Failed to deserialize terminal/create request.");
+                        await SendTerminalSuccessResponseAsync(
+                            request.Id,
+                            await _terminalSessionManager.CreateAsync(createRequest).ConfigureAwait(false)).ConfigureAwait(false);
+                        break;
+
+                    case "terminal/output":
+                        var outputRequest = JsonSerializer.Deserialize<TerminalOutputRequest>(rawParams.GetRawText(), _parser.Options)
+                            ?? throw new InvalidOperationException("Failed to deserialize terminal/output request.");
+                        await SendTerminalSuccessResponseAsync(
+                            request.Id,
+                            await _terminalSessionManager.GetOutputAsync(outputRequest).ConfigureAwait(false)).ConfigureAwait(false);
+                        break;
+
+                    case "terminal/wait_for_exit":
+                        var waitRequest = JsonSerializer.Deserialize<TerminalWaitForExitRequest>(rawParams.GetRawText(), _parser.Options)
+                            ?? throw new InvalidOperationException("Failed to deserialize terminal/wait_for_exit request.");
+                        await SendTerminalSuccessResponseAsync(
+                            request.Id,
+                            await _terminalSessionManager.WaitForExitAsync(waitRequest).ConfigureAwait(false)).ConfigureAwait(false);
+                        break;
+
+                    case "terminal/kill":
+                        var killRequest = JsonSerializer.Deserialize<TerminalKillRequest>(rawParams.GetRawText(), _parser.Options)
+                            ?? throw new InvalidOperationException("Failed to deserialize terminal/kill request.");
+                        await SendTerminalSuccessResponseAsync(
+                            request.Id,
+                            await _terminalSessionManager.KillAsync(killRequest).ConfigureAwait(false)).ConfigureAwait(false);
+                        break;
+
+                    case "terminal/release":
+                        var releaseRequest = JsonSerializer.Deserialize<TerminalReleaseRequest>(rawParams.GetRawText(), _parser.Options)
+                            ?? throw new InvalidOperationException("Failed to deserialize terminal/release request.");
+                        await SendTerminalSuccessResponseAsync(
+                            request.Id,
+                            await _terminalSessionManager.ReleaseAsync(releaseRequest).ConfigureAwait(false)).ConfigureAwait(false);
+                        break;
+
+                    default:
+                        _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                        await SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateMethodNotFound(request.Method))).ConfigureAwait(false);
+                        break;
                 }
-
-                TerminalRequestReceived.Invoke(this, eventArgs);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                await SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidParams(ex.Message))).ConfigureAwait(false);
+            }
+            catch (ArgumentException ex)
+            {
+                _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                await SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidParams(ex.Message))).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 OnErrorOccurred($"Failed to process terminal request: {ex.Message}");
+                _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                await SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInternalError(ex.Message))).ConfigureAwait(false);
             }
+        }
+
+        private async Task SendTerminalSuccessResponseAsync(object? messageId, object result)
+        {
+            _pendingInboundRequestMethods.TryRemove(messageId?.ToString() ?? string.Empty, out _);
+            await SendResponseAsync(new JsonRpcResponse(messageId, JsonSerializer.SerializeToElement(result, _parser.Options))).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -1091,6 +1153,7 @@ namespace SalmonEgg.Infrastructure.Client
 
             _disposed = true;
             _messageLoopCts?.Cancel();
+            _terminalSessionManager.Dispose();
             _transport.DisconnectAsync().Wait();
             _transport.MessageReceived -= OnMessageReceived;
             _transport.ErrorOccurred -= OnTransportError;

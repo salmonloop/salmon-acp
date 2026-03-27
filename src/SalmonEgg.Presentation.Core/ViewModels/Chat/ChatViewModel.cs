@@ -2793,14 +2793,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                    Title = "SalmonEgg",
                    Version = "1.0.0"
                },
-               ClientCapabilities = new ClientCapabilities
-               {
-                   Fs = new FsCapability
-                   {
-                       ReadTextFile = true,
-                       WriteTextFile = true
-                   }
-               }
+               ClientCapabilities = ClientCapabilityDefaults.Create()
            };
 
            if (_chatService == null)

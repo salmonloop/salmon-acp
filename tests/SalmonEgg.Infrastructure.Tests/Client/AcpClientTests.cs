@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using SalmonEgg.Infrastructure.Serialization;
@@ -296,6 +297,160 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var update = Assert.IsType<ToolCallStatusUpdate>(published.Update);
             Assert.Equal("call-runtime-1", update.ToolCallId);
             Assert.Equal(Domain.Models.Tool.ToolCallStatus.Completed, update.Status);
+        }
+
+        [Fact]
+        public async Task TerminalRequests_WhenNoUiSubscriber_ExecuteAndRespond()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+            var sentMessages = new ConcurrentQueue<string>();
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
+                .ReturnsAsync(true);
+
+            var createRequest = new JsonRpcRequest(
+                99,
+                "terminal/create",
+                JsonSerializer.SerializeToElement(
+                    new TerminalCreateRequest
+                    {
+                        SessionId = "session-1",
+                        Command = "dotnet",
+                        Args = new List<string> { "--version" },
+                        OutputByteLimit = 4096
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(createRequest)));
+
+            var createResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 99);
+            Assert.False(createResponse.IsError);
+            var createResult = JsonSerializer.Deserialize<TerminalCreateResponse>(
+                createResponse.Result!.Value.GetRawText(),
+                parser.Options);
+            Assert.NotNull(createResult);
+            Assert.False(string.IsNullOrWhiteSpace(createResult!.TerminalId));
+
+            var waitRequest = new JsonRpcRequest(
+                100,
+                "terminal/wait_for_exit",
+                JsonSerializer.SerializeToElement(
+                    new TerminalWaitForExitRequest
+                    {
+                        SessionId = "session-1",
+                        TerminalId = createResult.TerminalId
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(waitRequest)));
+
+            var waitResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 100);
+            Assert.False(waitResponse.IsError);
+            var waitResult = JsonSerializer.Deserialize<TerminalWaitForExitResponse>(
+                waitResponse.Result!.Value.GetRawText(),
+                parser.Options);
+            Assert.NotNull(waitResult);
+            Assert.Equal(0, waitResult!.ExitCode);
+
+            var outputRequest = new JsonRpcRequest(
+                101,
+                "terminal/output",
+                JsonSerializer.SerializeToElement(
+                    new TerminalOutputRequest
+                    {
+                        SessionId = "session-1",
+                        TerminalId = createResult.TerminalId
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(outputRequest)));
+
+            var outputResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 101);
+            Assert.False(outputResponse.IsError);
+            var outputResult = JsonSerializer.Deserialize<TerminalOutputResponse>(
+                outputResponse.Result!.Value.GetRawText(),
+                parser.Options);
+            Assert.NotNull(outputResult);
+            Assert.Contains(".", outputResult!.Output);
+            Assert.NotNull(outputResult.ExitStatus);
+            Assert.Equal(0, outputResult.ExitStatus!.ExitCode);
+
+            var releaseRequest = new JsonRpcRequest(
+                102,
+                "terminal/release",
+                JsonSerializer.SerializeToElement(
+                    new TerminalReleaseRequest
+                    {
+                        SessionId = "session-1",
+                        TerminalId = createResult.TerminalId
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(releaseRequest)));
+
+            var releaseResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 102);
+            Assert.False(releaseResponse.IsError);
+        }
+
+        private static async Task<JsonRpcResponse> WaitForResponseAsync(
+            MessageParser parser,
+            ConcurrentQueue<string> sentMessages,
+            long responseId,
+            int timeoutMilliseconds = 5000)
+        {
+            var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                while (sentMessages.TryDequeue(out var message))
+                {
+                    if (parser.ParseMessage(message) is JsonRpcResponse response
+                        && response.Id is not null
+                        && TryGetResponseId(response.Id, out var actualResponseId)
+                        && actualResponseId == responseId)
+                    {
+                        return response;
+                    }
+                }
+
+                await Task.Delay(20);
+            }
+
+            throw new TimeoutException($"Timed out waiting for JSON-RPC response {responseId}.");
+        }
+
+        private static bool TryGetResponseId(object responseId, out long value)
+        {
+            switch (responseId)
+            {
+                case JsonElement { ValueKind: JsonValueKind.Number } jsonNumber when jsonNumber.TryGetInt64(out value):
+                    return true;
+                case byte byteValue:
+                    value = byteValue;
+                    return true;
+                case short shortValue:
+                    value = shortValue;
+                    return true;
+                case int intValue:
+                    value = intValue;
+                    return true;
+                case long longValue:
+                    value = longValue;
+                    return true;
+                default:
+                    value = 0;
+                    return false;
+            }
         }
     }
 }

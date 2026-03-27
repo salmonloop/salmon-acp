@@ -19,11 +19,7 @@ namespace SalmonEgg.Infrastructure.Services
         public CapabilityManager()
         {
             // 默认声明客户端支持文件系统能力
-            _clientCapabilities = new ClientCapabilities
-            {
-                Fs = new FsCapability(readTextFile: true, writeTextFile: true),
-                Terminal = true
-            };
+            _clientCapabilities = ClientCapabilityDefaults.Create();
         }
 
         /// <summary>

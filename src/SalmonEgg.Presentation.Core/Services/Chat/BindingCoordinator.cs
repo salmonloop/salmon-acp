@@ -31,6 +31,12 @@ public sealed class BindingCoordinator : IConversationBindingCommands
 
             var binding = new ConversationBindingSlice(conversationId, remoteSessionId, boundProfileId);
             await _chatStore.Dispatch(new SetBindingSliceAction(binding)).ConfigureAwait(false);
+            var projectionVisible = await WaitForProjectedBindingAsync(binding).ConfigureAwait(false);
+            if (!projectionVisible)
+            {
+                return BindingUpdateResult.Error("BindingProjectionTimeout");
+            }
+
             if (conversationExists)
             {
                 _workspace.UpdateRemoteBinding(conversationId, remoteSessionId, boundProfileId);
@@ -42,5 +48,29 @@ public sealed class BindingCoordinator : IConversationBindingCommands
         {
             return BindingUpdateResult.Error(ex.Message);
         }
+    }
+
+    private async Task<bool> WaitForProjectedBindingAsync(
+        ConversationBindingSlice expectedBinding,
+        int timeoutMilliseconds = 500,
+        int pollDelayMilliseconds = 10)
+    {
+        var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+        while (DateTime.UtcNow < timeoutAt)
+        {
+            var state = await _chatStore.State;
+            var currentState = state ?? ChatState.Empty;
+            var actualBinding = currentState.ResolveBinding(expectedBinding.ConversationId);
+            if (actualBinding == expectedBinding)
+            {
+                return true;
+            }
+
+            await Task.Delay(pollDelayMilliseconds).ConfigureAwait(false);
+        }
+
+        var finalStateValue = await _chatStore.State;
+        var finalState = finalStateValue ?? ChatState.Empty;
+        return finalState.ResolveBinding(expectedBinding.ConversationId) == expectedBinding;
     }
 }

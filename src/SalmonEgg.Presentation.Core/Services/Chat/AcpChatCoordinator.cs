@@ -531,13 +531,6 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
                 Title = "Uno Acp Client",
                 Version = "1.0.0"
             },
-            ClientCapabilities = new ClientCapabilities
-            {
-                Fs = new FsCapability
-                {
-                    ReadTextFile = true,
-                    WriteTextFile = true
-                }
-            }
+            ClientCapabilities = ClientCapabilityDefaults.Create()
         };
 }
