@@ -214,4 +214,26 @@ public sealed class InitializeTypesTests
         Assert.That(extensionMap.TryGetValue(ClientCapabilityMetadata.AskUserExtensionMethod, out var isSupported), Is.True);
         Assert.That(isSupported, Is.EqualTo(true));
     }
+
+    [Test]
+    public void ClientCapabilities_SupportsExtension_Should_Return_True_For_Default_AskUser_Metadata()
+    {
+        var capabilities = ClientCapabilityDefaults.Create();
+
+        Assert.That(
+            capabilities.SupportsExtension(ClientCapabilityMetadata.AskUserExtensionMethod),
+            Is.True);
+    }
+
+    [Test]
+    public void ClientCapabilities_SupportsExtension_Should_Return_True_After_Json_RoundTrip()
+    {
+        var json = JsonSerializer.Serialize(ClientCapabilityDefaults.Create());
+        var capabilities = JsonSerializer.Deserialize<ClientCapabilities>(json);
+
+        Assert.That(capabilities, Is.Not.Null);
+        Assert.That(
+            capabilities!.SupportsExtension(ClientCapabilityMetadata.AskUserExtensionMethod),
+            Is.True);
+    }
 }

@@ -447,6 +447,34 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAndConnectCommand_UsesSharedDefaultInitializeRequest()
+    {
+        await using var fixture = CreateViewModel();
+        var chatService = CreateConnectedChatService();
+
+        chatService
+            .Setup(service => service.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(
+                1,
+                new AgentInfo("agent", "1.0.0"),
+                new AgentCapabilities()));
+
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.ViewModel.InitializeAndConnectCommand.ExecuteAsync(null);
+
+        chatService.Verify(service => service.InitializeAsync(It.Is<InitializeParams>(parameters =>
+            parameters.ProtocolVersion == 1
+            && string.Equals(parameters.ClientInfo.Name, "SalmonEgg", StringComparison.Ordinal)
+            && string.Equals(parameters.ClientInfo.Title, "SalmonEgg", StringComparison.Ordinal)
+            && string.Equals(parameters.ClientInfo.Version, "1.0.0", StringComparison.Ordinal)
+            && parameters.ClientCapabilities.Terminal == null
+            && parameters.ClientCapabilities.Fs == null
+            && parameters.ClientCapabilities.SupportsExtension(ClientCapabilityMetadata.AskUserExtensionMethod))),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task CreateNewSessionCommand_LiveUpdatesFromCreatedRemoteSession_ProjectIntoMessageHistory()
     {
         var syncContext = new ImmediateSynchronizationContext();

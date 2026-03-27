@@ -2925,18 +2925,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
        {
            ClearError();
 
-           // Initialize ACP client.
-           var initParams = new InitializeParams
-           {
-               ProtocolVersion = 1,
-               ClientInfo = new ClientInfo
-               {
-                   Name = "SalmonEgg",
-                   Title = "SalmonEgg",
-                   Version = "1.0.0"
-               },
-               ClientCapabilities = ClientCapabilityDefaults.Create()
-           };
+            var initParams = AcpInitializeRequestFactory.CreateDefault();
 
            if (_chatService == null)
            {

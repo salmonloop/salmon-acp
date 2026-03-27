@@ -522,15 +522,5 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
     }
 
     private static InitializeParams CreateDefaultInitializeParams()
-        => new()
-        {
-            ProtocolVersion = 1,
-            ClientInfo = new ClientInfo
-            {
-                Name = "SalmonEgg",
-                Title = "Uno Acp Client",
-                Version = "1.0.0"
-            },
-            ClientCapabilities = ClientCapabilityDefaults.Create()
-        };
+        => AcpInitializeRequestFactory.CreateDefault();
 }

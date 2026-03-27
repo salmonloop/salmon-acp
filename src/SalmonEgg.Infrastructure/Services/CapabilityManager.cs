@@ -18,7 +18,7 @@ namespace SalmonEgg.Infrastructure.Services
         /// </summary>
         public CapabilityManager()
         {
-            // 默认声明客户端支持文件系统能力
+            // 统一复用初始化路径的默认客户端能力声明，避免内部查询与外部协商漂移。
             _clientCapabilities = ClientCapabilityDefaults.Create();
         }
 
@@ -70,11 +70,18 @@ namespace SalmonEgg.Infrastructure.Services
         /// </summary>
         public bool IsClientCapabilitySupported(string capabilityName)
         {
-            return capabilityName.ToLower() switch
+            if (string.IsNullOrWhiteSpace(capabilityName))
             {
-                "fs" => _clientCapabilities.Fs != null,
-                "terminal" => _clientCapabilities.Terminal ?? false,
-                _ => false
+                return false;
+            }
+
+            return capabilityName switch
+            {
+                var name when string.Equals(name, "fs", StringComparison.OrdinalIgnoreCase) =>
+                    _clientCapabilities.Fs != null,
+                var name when string.Equals(name, "terminal", StringComparison.OrdinalIgnoreCase) =>
+                    _clientCapabilities.Terminal ?? false,
+                _ => _clientCapabilities.SupportsExtension(capabilityName)
             };
         }
 
@@ -83,17 +90,25 @@ namespace SalmonEgg.Infrastructure.Services
         /// </summary>
         public bool IsAgentCapabilitySupported(string capabilityName)
         {
-            if (_agentCapabilities == null)
-                return false;
-
-            return capabilityName.ToLower() switch
+            if (_agentCapabilities == null || string.IsNullOrWhiteSpace(capabilityName))
             {
-                "image" => _agentCapabilities.SupportsImage,
-                "audio" => _agentCapabilities.SupportsAudio,
-                "embeddedcontext" => _agentCapabilities.SupportsEmbeddedContext,
-                "loadsession" => _agentCapabilities.SupportsSessionLoading,
-                "http" => _agentCapabilities.SupportsHttp,
-                "sse" => _agentCapabilities.SupportsSse,
+                return false;
+            }
+
+            return capabilityName switch
+            {
+                var name when string.Equals(name, "image", StringComparison.OrdinalIgnoreCase) =>
+                    _agentCapabilities.SupportsImage,
+                var name when string.Equals(name, "audio", StringComparison.OrdinalIgnoreCase) =>
+                    _agentCapabilities.SupportsAudio,
+                var name when string.Equals(name, "embeddedcontext", StringComparison.OrdinalIgnoreCase) =>
+                    _agentCapabilities.SupportsEmbeddedContext,
+                var name when string.Equals(name, "loadsession", StringComparison.OrdinalIgnoreCase) =>
+                    _agentCapabilities.SupportsSessionLoading,
+                var name when string.Equals(name, "http", StringComparison.OrdinalIgnoreCase) =>
+                    _agentCapabilities.SupportsHttp,
+                var name when string.Equals(name, "sse", StringComparison.OrdinalIgnoreCase) =>
+                    _agentCapabilities.SupportsSse,
                 _ => false
             };
         }

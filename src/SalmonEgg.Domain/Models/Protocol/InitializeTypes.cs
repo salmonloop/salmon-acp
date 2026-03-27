@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using SalmonEgg.Domain.Models.Session;
 
@@ -144,6 +146,50 @@ namespace SalmonEgg.Domain.Models.Protocol
             Terminal = terminal;
             Meta = meta;
         }
+
+        /// <summary>
+        /// 判断是否声明支持指定的扩展能力。
+        /// </summary>
+        /// <param name="extensionName">扩展能力名称</param>
+        /// <returns>如果声明支持返回 true，否则返回 false</returns>
+        public bool SupportsExtension(string extensionName)
+        {
+            if (string.IsNullOrWhiteSpace(extensionName)
+                || Meta == null
+                || !Meta.TryGetValue(ClientCapabilityMetadata.ExtensionsMetaKey, out var extensions))
+            {
+                return false;
+            }
+
+            return TryReadDeclaredExtensionSupport(extensions, extensionName);
+        }
+
+        private static bool TryReadDeclaredExtensionSupport(object? extensions, string extensionName)
+        {
+            if (extensions is Dictionary<string, object?> extensionMap
+                && extensionMap.TryGetValue(extensionName, out var declaredSupport))
+            {
+                return TryReadBoolean(declaredSupport);
+            }
+
+            if (extensions is JsonElement element
+                && element.ValueKind == JsonValueKind.Object
+                && element.TryGetProperty(extensionName, out var declaredElement))
+            {
+                return TryReadBoolean(declaredElement);
+            }
+
+            return false;
+        }
+
+        private static bool TryReadBoolean(object? rawValue)
+            => rawValue switch
+            {
+                bool value => value,
+                JsonElement { ValueKind: JsonValueKind.True } => true,
+                JsonElement { ValueKind: JsonValueKind.False } => false,
+                _ => false
+            };
     }
 
     /// <summary>
