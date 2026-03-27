@@ -258,5 +258,44 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             await Assert.ThrowsAsync<TimeoutException>(() => promptTask);
         }
+
+        [Fact]
+        public async Task SessionUpdateReceived_WhenMetaPrecedesDiscriminator_PublishesUpdate()
+        {
+            var client = await CreateInitializedClientAsync();
+            SessionUpdateEventArgs? published = null;
+            client.SessionUpdateReceived += (_, args) => published = args;
+
+            const string notificationJson = """
+            {
+              "jsonrpc": "2.0",
+              "method": "session/update",
+              "params": {
+                "sessionId": "sess-meta-runtime",
+                "update": {
+                  "_meta": {
+                    "claudeCode": {
+                      "toolName": "Bash"
+                    }
+                  },
+                  "toolCallId": "call-runtime-1",
+                  "sessionUpdate": "tool_call_update",
+                  "status": "completed",
+                  "title": "Run command"
+                }
+              }
+            }
+            """;
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(notificationJson));
+
+            Assert.NotNull(published);
+            Assert.Equal("sess-meta-runtime", published!.SessionId);
+            var update = Assert.IsType<ToolCallStatusUpdate>(published.Update);
+            Assert.Equal("call-runtime-1", update.ToolCallId);
+            Assert.Equal(Domain.Models.Tool.ToolCallStatus.Completed, update.Status);
+        }
     }
 }

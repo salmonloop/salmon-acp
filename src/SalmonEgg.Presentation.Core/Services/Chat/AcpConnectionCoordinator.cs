@@ -119,15 +119,18 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
 
         try
         {
+            await sink.SetIsHydratingAsync(true, cancellationToken).ConfigureAwait(false);
             await sink.CurrentChatService.LoadSessionAsync(
                 new SessionLoadParams(sessionId, sink.GetActiveSessionCwdOrDefault())).ConfigureAwait(false);
             await sink.ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
             adapter?.MarkHydrated();
+            await sink.SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation("ACP resync completed. sessionId={SessionId}", sessionId);
         }
         catch (Exception ex)
         {
+            await sink.SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);
             adapter?.MarkHydrated(lowTrust: true, reason: "LoadSessionFailed");
             _logger.LogWarning(ex, "ACP resync failed. sessionId={SessionId}", sessionId);
         }

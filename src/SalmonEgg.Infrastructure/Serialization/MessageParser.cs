@@ -42,6 +42,8 @@ namespace SalmonEgg.Infrastructure.Serialization
                     new JsonPropertyNameEnumConverterFactory()
                 }
             };
+
+            EnableOutOfOrderMetadataProperties(_options);
         }
 
         /// <summary>
@@ -51,6 +53,8 @@ namespace SalmonEgg.Infrastructure.Serialization
         public MessageParser(JsonSerializerOptions options)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
+
+            EnableOutOfOrderMetadataProperties(_options);
 
             // 确保添加了必要的转换器
             if (!_options.Converters.OfType<JsonRpcMessageConverter>().Any())
@@ -194,6 +198,25 @@ namespace SalmonEgg.Infrastructure.Serialization
                     JsonRpcErrorCode.InternalError,
                     $"Failed to serialize message: {ex.Message}",
                     ex);
+            }
+        }
+
+        private static void EnableOutOfOrderMetadataProperties(JsonSerializerOptions options)
+        {
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
+            // ACP session/update payloads may place protocol extension fields like `_meta`
+            // before the polymorphic discriminator (`sessionUpdate`).
+            // Newer System.Text.Json versions expose an opt-in switch for this, but our
+            // infrastructure library still multi-targets netstandard2.1, so enable it
+            // reflectively when the runtime supports it.
+            var property = typeof(JsonSerializerOptions).GetProperty("AllowOutOfOrderMetadataProperties");
+            if (property?.CanWrite == true && property.PropertyType == typeof(bool))
+            {
+                property.SetValue(options, true);
             }
         }
     }

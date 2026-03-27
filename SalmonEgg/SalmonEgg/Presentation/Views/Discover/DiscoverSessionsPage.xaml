@@ -15,9 +15,17 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
-        <Storyboard x:Name="SkeletonPulse" AutoReverse="True" RepeatBehavior="Forever">
-            <DoubleAnimation Storyboard.TargetName="RightSkeletonPanel" Storyboard.TargetProperty="Opacity" From="0.4" To="0.8" Duration="0:0:1.2" />
-            <DoubleAnimation Storyboard.TargetName="LeftSkeletonPanel" Storyboard.TargetProperty="Opacity" From="0.4" To="0.8" Duration="0:0:1.2" />
+        <Storyboard x:Name="SkeletonPulse" RepeatBehavior="Forever">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RightSkeletonPanel" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0.4" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.6" Value="0.8" />
+                <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="0.4" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LeftSkeletonPanel" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0.4" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.6" Value="0.8" />
+                <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="0.4" />
+            </DoubleAnimationUsingKeyFrames>
         </Storyboard>
     </Page.Resources>
 
@@ -196,6 +204,25 @@
                         VerticalAlignment="Top"
                         Margin="0,0,0,16" />
 
+                    <Grid Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                      Glyph="&#xE8B7;"
+                                      FontSize="48"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="当前节点没有可导入的会话"
+                                       Style="{ThemeResource TitleTextBlockStyle}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Text="可以稍后刷新列表，或确认该 Agent 是否支持列出历史会话。"
+                                       Style="{ThemeResource BodyTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       MaxWidth="360" />
+                        </StackPanel>
+                    </Grid>
+
                     <!-- Native Skeleton View (Fishbone) -->
                     <StackPanel x:Name="RightSkeletonPanel"
                         Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -282,6 +309,7 @@
                 <!-- Sessions List (Only visible when no errors) -->
                 <ListView
                     Grid.Row="1"
+                    Visibility="{x:Bind ViewModel.IsListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                     ItemsSource="{x:Bind ViewModel.AgentSessions, Mode=OneWay}"
                     SelectionMode="None"
                     IsItemClickEnabled="False"
@@ -369,8 +397,8 @@
                                         Content="导入会话"
                                         Style="{StaticResource AccentButtonStyle}"
                                         VerticalAlignment="Center"
-                                        Command="{Binding ViewModel.LoadSessionCommand, ElementName=RootPage}"
-                                        CommandParameter="{Binding}" />
+                                        Click="OnLoadSessionClick"
+                                        CommandParameter="{x:Bind}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>

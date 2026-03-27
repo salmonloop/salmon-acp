@@ -31,6 +31,7 @@ public static class ChatReducer
             {
                 Bindings = UpdateBindings(current.Bindings, setBinding.Binding)
             }),
+            SetIsHydratingAction setIsHydrating => Mutate(current, current with { IsHydrating = setIsHydrating.IsHydrating }),
             SetDraftTextAction draftText => Mutate(current, current with { DraftText = draftText.Text }),
             SetPromptInFlightAction setPromptInFlight => Mutate(current, current with { IsPromptInFlight = setPromptInFlight.IsInFlight }),
             BeginTurnAction begin => Mutate(current, current with

@@ -33,6 +33,8 @@ public interface IAcpConnectionState : INotifyPropertyChanged
     string? AgentVersion { get; }
 
     string? CurrentSessionId { get; }
+
+    bool IsHydrating { get; }
 }
 
 /// <summary>
@@ -103,4 +105,10 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
     }
 
     string GetActiveSessionCwdOrDefault() => Environment.CurrentDirectory;
+
+    Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
+    }
 }

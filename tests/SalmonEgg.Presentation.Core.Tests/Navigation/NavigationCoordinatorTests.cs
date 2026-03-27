@@ -567,6 +567,8 @@ public sealed class NavigationCoordinatorTests
     {
         public Task ActivateStartAsync() => Task.CompletedTask;
 
+        public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
+
         public Task ActivateSettingsAsync(string settingsKey) => Task.CompletedTask;
 
         public Task<bool> ActivateSessionAsync(string sessionId, string? projectId) => Task.FromResult(false);
@@ -624,6 +626,12 @@ public sealed class NavigationCoordinatorTests
         shellNavigation
             .Setup(s => s.NavigateToStart())
             .Returns(ValueTask.FromResult(ShellNavigationResult.Success()));
+        tokenNavigation
+            .Setup(s => s.NavigateToDiscoverSessions(It.IsAny<long>()))
+            .Returns(ValueTask.FromResult(ShellNavigationResult.Success()));
+        shellNavigation
+            .Setup(s => s.NavigateToDiscoverSessions())
+            .Returns(ValueTask.FromResult(ShellNavigationResult.Success()));
         shellNavigation
             .Setup(s => s.NavigateToSettings(It.IsAny<string>()))
             .Returns(ValueTask.FromResult(ShellNavigationResult.Success()));
@@ -665,6 +673,9 @@ public sealed class NavigationCoordinatorTests
         public ValueTask<ShellNavigationResult> NavigateToStart()
             => ValueTask.FromResult(ShellNavigationResult.Success());
 
+        public ValueTask<ShellNavigationResult> NavigateToDiscoverSessions()
+            => ValueTask.FromResult(ShellNavigationResult.Success());
+
         public ValueTask<ShellNavigationResult> NavigateToSettings(string key, long activationToken)
             => NavigateToSettings(key);
 
@@ -688,6 +699,9 @@ public sealed class NavigationCoordinatorTests
 
         public ValueTask<ShellNavigationResult> NavigateToStart(long activationToken)
             => NavigateToStart();
+
+        public ValueTask<ShellNavigationResult> NavigateToDiscoverSessions(long activationToken)
+            => NavigateToDiscoverSessions();
 
         public void CompleteFirst(ShellNavigationResult result)
             => _firstCompletion.TrySetResult(result);

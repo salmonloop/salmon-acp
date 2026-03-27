@@ -206,6 +206,8 @@ public sealed class MainNavigationViewModelPaneTests
     {
         public Task ActivateStartAsync() => Task.CompletedTask;
 
+        public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
+
         public Task ActivateSettingsAsync(string settingsKey) => Task.CompletedTask;
 
         public Task<bool> ActivateSessionAsync(string sessionId, string? projectId) => Task.FromResult(false);

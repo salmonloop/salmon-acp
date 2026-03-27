@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models;
@@ -20,6 +21,8 @@ public interface IDiscoverSessionsConnectionFacade : INotifyPropertyChanged
     IChatService? CurrentChatService { get; }
 
     Task ConnectToProfileAsync(ServerConfiguration profile);
+
+    Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class DiscoverSessionsConnectionFacade : IDiscoverSessionsConnectionFacade
@@ -52,4 +55,7 @@ public sealed class DiscoverSessionsConnectionFacade : IDiscoverSessionsConnecti
         ArgumentNullException.ThrowIfNull(profile);
         return _chatViewModel.ConnectToAcpProfileCommand.ExecuteAsync(profile);
     }
+
+    public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default)
+        => _chatViewModel.HydrateActiveConversationAsync(cancellationToken);
 }

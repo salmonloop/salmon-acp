@@ -601,6 +601,7 @@ public sealed class AcpChatCoordinatorTests
         public bool IsConnecting { get; private set; }
         public bool IsInitializing { get; private set; }
         public bool IsSessionActive { get; set; }
+        public bool IsHydrating { get; private set; }
         public bool IsAuthenticationRequired { get; private set; }
         public string? ConnectionErrorMessage { get; private set; }
         public string? AuthenticationHintMessage { get; private set; }
@@ -663,6 +664,13 @@ public sealed class AcpChatCoordinatorTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ResetHydratedConversationForResyncCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IsHydrating = isHydrating;
             return Task.CompletedTask;
         }
 

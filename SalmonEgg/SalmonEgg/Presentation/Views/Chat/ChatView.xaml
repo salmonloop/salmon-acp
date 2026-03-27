@@ -225,8 +225,14 @@
             <!-- 加载遮罩 -->
             <Grid Grid.RowSpan="3"
                   Background="{ThemeResource AppOverlayScrimBrush}"
-                  Visibility="{x:Bind ViewModel.IsConnecting, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                <ProgressRing IsActive="True" Width="48" Height="48"/>
+                  Visibility="{x:Bind ViewModel.IsOverlayVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16">
+                    <ProgressRing IsActive="True" Width="48" Height="48"/>
+                    <TextBlock Text="{x:Bind ViewModel.OverlayStatusText, Mode=OneWay}"
+                               FontSize="14"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
             </Grid>
         </Grid>
     </Grid>

@@ -19,7 +19,8 @@ public record ChatState(
     bool ShowConfigOptionsPanel = false,
     bool ShowPlanPanel = false,
     string? PlanTitle = null,
-    string DraftText = "")
+    string DraftText = "",
+    bool IsHydrating = false)
 {
     public static ChatState Empty { get; } = new();
 

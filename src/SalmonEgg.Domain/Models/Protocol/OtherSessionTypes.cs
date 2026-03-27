@@ -163,10 +163,11 @@ namespace SalmonEgg.Domain.Models.Protocol
         public string Cwd { get; set; } = string.Empty;
 
         /// <summary>
-        /// MCP 服务器配置列表（可选）。
+        /// MCP 服务器配置列表。
+        /// ACP session/load 要求该字段始终为数组，即使当前没有任何 MCP server 也必须发送 []。
         /// </summary>
         [JsonPropertyName("mcpServers")]
-        public List<McpServer>? McpServers { get; set; }
+        public List<McpServer> McpServers { get; set; } = new List<McpServer>();
 
         /// <summary>
         /// 创建新的 SessionLoadParams 实例。
@@ -185,7 +186,7 @@ namespace SalmonEgg.Domain.Models.Protocol
         {
             SessionId = sessionId;
             Cwd = cwd;
-            McpServers = mcpServers;
+            McpServers = mcpServers ?? new List<McpServer>();
         }
     }
 

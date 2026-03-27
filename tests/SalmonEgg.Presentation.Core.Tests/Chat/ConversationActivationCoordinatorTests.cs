@@ -233,7 +233,7 @@ public sealed class ConversationActivationCoordinatorTests
     }
 
     [Fact]
-    public async Task ActivateSessionAsync_ProfileMismatch_NormalizesStoreOwnedBinding_UsingConnectionStoreProfile()
+    public async Task ActivateSessionAsync_ProfileMismatch_PreservesRemoteBinding_AndSwitchesSelectedProfileToConversationBinding()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var preferences = CreatePreferences(syncContext);
@@ -284,12 +284,15 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.Equal("session-1", result.ConversationId);
         var currentState = await state;
         Assert.Equal("session-1", currentState.HydratedConversationId);
-        Assert.Equal(new ConversationBindingSlice("session-1", null, "profile-b"), currentState.Binding);
+        Assert.Equal(new ConversationBindingSlice("session-1", "remote-1", "profile-a"), currentState.Binding);
 
         var workspaceBinding = workspace.GetRemoteBinding("session-1");
         Assert.NotNull(workspaceBinding);
-        Assert.Equal("profile-b", workspaceBinding!.BoundProfileId);
-        Assert.Null(workspaceBinding.RemoteSessionId);
+        Assert.Equal("profile-a", workspaceBinding!.BoundProfileId);
+        Assert.Equal("remote-1", workspaceBinding.RemoteSessionId);
+
+        var currentConnectionState = await connectionStore.State;
+        Assert.Equal("profile-a", currentConnectionState!.SelectedProfileId);
     }
 
     [Fact]
@@ -619,6 +622,9 @@ public sealed class ConversationActivationCoordinatorTests
             => ValueTask.FromResult(_chatResult);
 
         public ValueTask<ShellNavigationResult> NavigateToStart()
+            => ValueTask.FromResult(ShellNavigationResult.Success());
+
+        public ValueTask<ShellNavigationResult> NavigateToDiscoverSessions()
             => ValueTask.FromResult(ShellNavigationResult.Success());
     }
 }

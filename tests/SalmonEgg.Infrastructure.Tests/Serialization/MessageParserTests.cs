@@ -129,5 +129,36 @@ public class MessageParserTests
         Assert.Equal(0.16861m, usage.Cost!.Amount);
         Assert.Equal("USD", usage.Cost.Currency);
     }
+
+    [Fact]
+    public void Options_ShouldDeserialize_SessionUpdate_WhenMetaPrecedesDiscriminator()
+    {
+        var json = """
+        {
+          "sessionId": "sess_meta",
+          "update": {
+            "_meta": {
+              "claudeCode": {
+                "toolName": "Bash"
+              }
+            },
+            "toolCallId": "call-meta-1",
+            "sessionUpdate": "tool_call_update",
+            "status": "completed",
+            "title": "Run command"
+          }
+        }
+        """;
+
+        var parser = new MessageParser();
+
+        var updateParams = JsonSerializer.Deserialize<SessionUpdateParams>(json, parser.Options);
+
+        Assert.NotNull(updateParams);
+        var update = Assert.IsType<ToolCallStatusUpdate>(updateParams!.Update);
+        Assert.Equal("call-meta-1", update.ToolCallId);
+        Assert.Equal("Run command", update.Title);
+        Assert.Equal(Domain.Models.Tool.ToolCallStatus.Completed, update.Status);
+    }
 }
 

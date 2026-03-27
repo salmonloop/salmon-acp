@@ -36,6 +36,7 @@ public sealed class NavigationSelectionProjectorTests
         var projection = projector.Project(
             new NavigationSelectionState.Session("session-1"),
             start,
+            new DiscoverSessionsNavItemViewModel(navState),
             new Dictionary<string, SessionNavItemViewModel> { ["session-1"] = session },
             new Dictionary<string, ProjectNavItemViewModel> { ["project-1"] = project },
             isPaneOpen: true);
@@ -69,6 +70,7 @@ public sealed class NavigationSelectionProjectorTests
         var projection = projector.Project(
             new NavigationSelectionState.Session("session-1"),
             start,
+            new DiscoverSessionsNavItemViewModel(navState),
             new Dictionary<string, SessionNavItemViewModel> { ["session-1"] = session },
             new Dictionary<string, ProjectNavItemViewModel> { ["project-1"] = project },
             isPaneOpen: false);

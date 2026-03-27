@@ -29,7 +29,7 @@ public sealed class AcpConnectionCoordinatorTests
         {
             AgentCapabilities = new AgentCapabilities(loadSession: true)
         };
-        inner.OnLoadSessionAsync = () =>
+        inner.OnLoadSessionAsync = _ =>
         {
             inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new AgentMessageUpdate(new TextContentBlock("hello"))));
             return Task.FromResult(SessionLoadResponse.Completed);
@@ -74,6 +74,41 @@ public sealed class AcpConnectionCoordinatorTests
         Assert.IsType<AgentMessageUpdate>(update.Update);
     }
 
+    [Fact]
+    public async Task ResyncAsync_LoadSessionIncludesEmptyMcpServersArray()
+    {
+        var inner = new FakeChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true)
+        };
+        inner.OnLoadSessionAsync = _ => Task.FromResult(SessionLoadResponse.Completed);
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            new ImmediateSynchronizationContext());
+        adapter = new AcpChatServiceAdapter(inner, eventAdapter);
+
+        var sink = new FakeSink
+        {
+            CurrentChatService = adapter,
+            CurrentSessionId = "conv-1",
+            CurrentRemoteSessionId = "remote-1",
+            IsSessionActive = true
+        };
+
+        var coordinator = new AcpConnectionCoordinator(
+            Mock.Of<IChatConnectionStore>(),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>());
+
+        await coordinator.ResyncAsync(sink);
+
+        Assert.NotNull(inner.LastLoadParams);
+        Assert.Equal("remote-1", inner.LastLoadParams!.SessionId);
+        Assert.NotNull(inner.LastLoadParams.McpServers);
+        Assert.Empty(inner.LastLoadParams.McpServers!);
+    }
+
     private sealed class FakeSink : IAcpChatCoordinatorSink
     {
         public event PropertyChangedEventHandler? PropertyChanged
@@ -93,6 +128,8 @@ public sealed class AcpConnectionCoordinatorTests
         public bool IsSessionActive { get; set; }
 
         public bool IsAuthenticationRequired { get; set; }
+
+        public bool IsHydrating { get; set; }
 
         public string? ConnectionErrorMessage { get; set; }
 
@@ -116,6 +153,13 @@ public sealed class AcpConnectionCoordinatorTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ResetHydratedConversationForResyncCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IsHydrating = isHydrating;
             return Task.CompletedTask;
         }
     }
@@ -149,7 +193,9 @@ public sealed class AcpConnectionCoordinatorTests
 
         public SessionModeState? CurrentMode => null;
 
-        public Func<Task<SessionLoadResponse>>? OnLoadSessionAsync { get; set; }
+        public Func<SessionLoadParams, Task<SessionLoadResponse>>? OnLoadSessionAsync { get; set; }
+
+        public SessionLoadParams? LastLoadParams { get; private set; }
 
         public event EventHandler<SessionUpdateEventArgs>? SessionUpdateReceived;
 
@@ -171,7 +217,13 @@ public sealed class AcpConnectionCoordinatorTests
             => throw new NotSupportedException();
 
         public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
-            => OnLoadSessionAsync?.Invoke() ?? Task.FromResult(SessionLoadResponse.Completed);
+        {
+            LastLoadParams = @params;
+            return OnLoadSessionAsync?.Invoke(@params) ?? Task.FromResult(SessionLoadResponse.Completed);
+        }
+
+        public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(new SessionListResponse());
 
         public Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();

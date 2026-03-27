@@ -42,4 +42,18 @@ public sealed class SessionLoadTypesTests
         Assert.That(parsed.RootElement.TryGetProperty("mcpServers", out var mcpServers), Is.True);
         Assert.That(mcpServers.ValueKind, Is.EqualTo(JsonValueKind.Array));
     }
+
+    [Test]
+    public void SessionLoadParams_Constructor_Should_Default_McpServers_To_Empty_Array()
+    {
+        // Given/When: Constructing params without explicitly supplying MCP servers
+        var sessionParams = new SessionLoadParams("test-session", "/home/user/project");
+
+        // Then: protocol-required mcpServers should still be emitted as an empty array
+        Assert.That(sessionParams.McpServers, Is.Not.Null);
+        Assert.That(sessionParams.McpServers, Is.Empty);
+
+        var json = JsonSerializer.Serialize(sessionParams);
+        Assert.That(json, Does.Contain("\"mcpServers\":[]"));
+    }
 }

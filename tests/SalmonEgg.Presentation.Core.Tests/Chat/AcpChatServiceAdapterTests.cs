@@ -145,6 +145,9 @@ public sealed class AcpChatServiceAdapterTests
         public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
             => throw new NotSupportedException();
 
+        public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 

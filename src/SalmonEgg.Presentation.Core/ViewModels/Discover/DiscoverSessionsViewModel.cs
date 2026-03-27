@@ -8,12 +8,8 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
-using SalmonEgg.Application.Services;
-using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Protocol;
-using SalmonEgg.Domain.Services;
-using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -26,26 +22,44 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly INavigationCoordinator _navigationCoordinator;
     private readonly AcpProfilesViewModel _profilesViewModel;
     private readonly IDiscoverSessionsConnectionFacade _connectionFacade;
-    private readonly ISessionManager _sessionManager;
+    private readonly IDiscoverSessionImportCoordinator _importCoordinator;
     private readonly SynchronizationContext _syncContext;
-    private CancellationTokenSource? _loadingCts;
+    private CancellationTokenSource? _refreshSessionsCts;
     private bool _disposed;
 
     [ObservableProperty]
-    private bool _isLoading;
-
-    [ObservableProperty]
-    private string? _loadingStatus;
+    [NotifyPropertyChangedFor(nameof(IsLoading))]
+    [NotifyPropertyChangedFor(nameof(LoadingStatus))]
+    [NotifyPropertyChangedFor(nameof(IsListVisible))]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
+    private DiscoverSessionsLoadPhase _loadPhase = DiscoverSessionsLoadPhase.Idle;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
+    [NotifyPropertyChangedFor(nameof(DisplayErrorMessage))]
+    [NotifyPropertyChangedFor(nameof(IsListVisible))]
     private string? _errorMessage;
 
-    public bool HasError => !string.IsNullOrEmpty(ErrorMessage) || !string.IsNullOrEmpty(_connectionFacade.ConnectionErrorMessage);
+    public bool HasError => !string.IsNullOrWhiteSpace(DisplayErrorMessage);
 
     public string? DisplayErrorMessage => ErrorMessage ?? _connectionFacade.ConnectionErrorMessage;
 
-    public bool IsConnecting => _connectionFacade.IsConnecting;
+    public bool IsLoading => LoadPhase is
+        DiscoverSessionsLoadPhase.Connecting or
+        DiscoverSessionsLoadPhase.Initializing or
+        DiscoverSessionsLoadPhase.ListingSessions;
+
+    public string? LoadingStatus => LoadPhase switch
+    {
+        DiscoverSessionsLoadPhase.Connecting => "正在连接到 Agent...",
+        DiscoverSessionsLoadPhase.Initializing => "正在初始化 ACP 协议...",
+        DiscoverSessionsLoadPhase.ListingSessions => "正在获取会话列表...",
+        _ => null
+    };
+
+    public bool IsListVisible => LoadPhase == DiscoverSessionsLoadPhase.Loaded;
+
+    public bool ShowEmptyState => LoadPhase == DiscoverSessionsLoadPhase.Empty;
 
     public AcpProfilesViewModel ProfilesViewModel => _profilesViewModel;
 
@@ -68,75 +82,60 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         INavigationCoordinator navigationCoordinator,
         AcpProfilesViewModel profilesViewModel,
         IDiscoverSessionsConnectionFacade connectionFacade,
-        ISessionManager sessionManager)
+        IDiscoverSessionImportCoordinator importCoordinator)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
         _profilesViewModel = profilesViewModel ?? throw new ArgumentNullException(nameof(profilesViewModel));
         _connectionFacade = connectionFacade ?? throw new ArgumentNullException(nameof(connectionFacade));
-        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
+        _importCoordinator = importCoordinator ?? throw new ArgumentNullException(nameof(importCoordinator));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
         _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
         _connectionFacade.PropertyChanged += OnConnectionFacadePropertyChanged;
     }
 
-    private void OnConnectionFacadePropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(IDiscoverSessionsConnectionFacade.IsConnecting) or
-            nameof(IDiscoverSessionsConnectionFacade.IsInitializing) or
-            nameof(IDiscoverSessionsConnectionFacade.IsConnected) or
-            nameof(IDiscoverSessionsConnectionFacade.ConnectionErrorMessage))
-        {
-            _syncContext.Post(_ =>
-            {
-                OnPropertyChanged(nameof(IsConnecting));
-                OnPropertyChanged(nameof(HasError));
-                OnPropertyChanged(nameof(DisplayErrorMessage));
-
-                UpdateLoadingStatus();
-            }, null);
-        }
-    }
-
-    private void UpdateLoadingStatus()
-    {
-        if (_connectionFacade.IsConnecting)
-        {
-            LoadingStatus = "正在连接到 Agent...";
-            IsLoading = true;
-        }
-        else if (_connectionFacade.IsInitializing)
-        {
-            LoadingStatus = "正在初始化 ACP 协议...";
-            IsLoading = true;
-        }
-        else if (IsLoading && string.IsNullOrEmpty(LoadingStatus))
-        {
-            // Keep previous status or default if we are still internally loading (e.g. listing sessions)
-            LoadingStatus = "正在获取会话列表...";
-        }
-    }
-
     private void OnProfilesViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AcpProfilesViewModel.SelectedProfile))
+        if (e.PropertyName != nameof(AcpProfilesViewModel.SelectedProfile))
         {
-            _syncContext.Post(_ =>
-            {
-                OnPropertyChanged(nameof(SelectedProfile));
-                OnPropertyChanged(nameof(HasSelectedProfile));
-                OnPropertyChanged(nameof(HasNoSelectedProfile));
-
-                _ = RefreshSessionsAsync();
-            }, null);
+            return;
         }
+
+        _syncContext.Post(_ =>
+        {
+            OnPropertyChanged(nameof(SelectedProfile));
+            OnPropertyChanged(nameof(HasSelectedProfile));
+            OnPropertyChanged(nameof(HasNoSelectedProfile));
+
+            _ = RefreshSessionsAsync();
+        }, null);
+    }
+
+    private void OnConnectionFacadePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not nameof(IDiscoverSessionsConnectionFacade.IsConnecting)
+            and not nameof(IDiscoverSessionsConnectionFacade.IsInitializing)
+            and not nameof(IDiscoverSessionsConnectionFacade.IsConnected)
+            and not nameof(IDiscoverSessionsConnectionFacade.ConnectionErrorMessage))
+        {
+            return;
+        }
+
+        _syncContext.Post(_ =>
+        {
+            OnPropertyChanged(nameof(HasError));
+            OnPropertyChanged(nameof(DisplayErrorMessage));
+            if (LoadPhase is DiscoverSessionsLoadPhase.Connecting or DiscoverSessionsLoadPhase.Initializing)
+            {
+                SyncConnectionPhase();
+            }
+        }, null);
     }
 
     [RelayCommand]
     private async Task InitializeAsync()
     {
-        // SSOT: Only refresh if list is empty to avoid redundant network calls if already loaded in Settings
         await _profilesViewModel.RefreshIfEmptyAsync().ConfigureAwait(false);
 
         _syncContext.Post(_ =>
@@ -148,7 +147,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
             if (SelectedProfile != null)
             {
-                // If we already have a selection, load it if the session list is empty
                 if (AgentSessions.Count == 0 && !IsLoading)
                 {
                     _ = RefreshSessionsAsync();
@@ -156,7 +154,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             }
             else if (AvailableProfiles.Any())
             {
-                // Default to first profile if nothing selected
                 SelectedProfile = AvailableProfiles.First();
             }
         }, null);
@@ -168,68 +165,56 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         var profile = SelectedProfile;
         if (profile == null)
         {
-            _syncContext.Post(_ => {
+            await PostToUiAsync(() =>
+            {
                 AgentSessions.Clear();
-                IsLoading = false;
-            }, null);
+                ErrorMessage = null;
+                LoadPhase = DiscoverSessionsLoadPhase.Idle;
+            }).ConfigureAwait(false);
             return;
         }
 
-        // Cancel any pending load
-        _loadingCts?.Cancel();
-        _loadingCts = new CancellationTokenSource();
-        var token = _loadingCts.Token;
+        _refreshSessionsCts?.Cancel();
+        _refreshSessionsCts?.Dispose();
+        _refreshSessionsCts = new CancellationTokenSource();
+        var cancellationToken = _refreshSessionsCts.Token;
 
-        _syncContext.Post(_ =>
+        await PostToUiAsync(() =>
         {
-            IsLoading = true;
-            ErrorMessage = null;
-            UpdateLoadingStatus();
             AgentSessions.Clear();
-        }, null);
+            ErrorMessage = null;
+            LoadPhase = DiscoverSessionsLoadPhase.Connecting;
+            SyncConnectionPhase();
+        }).ConfigureAwait(false);
 
         try
         {
-            // Step 1: Ensure connected using the shared facade (which delegates to ChatViewModel SSOT)
             await _connectionFacade.ConnectToProfileAsync(profile).ConfigureAwait(false);
-
-            if (token.IsCancellationRequested) return;
-
-            // Wait for initialization to complete if it's currently happening
-            while ((_connectionFacade.IsConnecting || _connectionFacade.IsInitializing) && !token.IsCancellationRequested)
-            {
-                await Task.Delay(100, token).ConfigureAwait(false);
-            }
-
-            if (token.IsCancellationRequested) return;
-
-            if (!_connectionFacade.IsConnected)
-            {
-                _syncContext.Post(_ => ErrorMessage = _connectionFacade.ConnectionErrorMessage ?? "连接失败，无法获取会话列表。", null);
-                return;
-            }
+            cancellationToken.ThrowIfCancellationRequested();
 
             var chatService = _connectionFacade.CurrentChatService;
-            if (chatService == null)
+            if (chatService is not { IsConnected: true, IsInitialized: true })
             {
-                _syncContext.Post(_ => ErrorMessage = "ChatService 实例不可用。", null);
-                return;
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(_connectionFacade.ConnectionErrorMessage)
+                        ? "ACP 连接尚未完成初始化。"
+                        : _connectionFacade.ConnectionErrorMessage);
             }
 
-            _syncContext.Post(_ => LoadingStatus = "正在获取会话列表...", null);
-
-            // Step 2: List sessions
-            var listResponse = await chatService.ListSessionsAsync(new SessionListParams(), token).ConfigureAwait(false);
-
-            if (token.IsCancellationRequested) return;
+            await PostToUiAsync(() => LoadPhase = DiscoverSessionsLoadPhase.ListingSessions).ConfigureAwait(false);
+            var listResponse = await chatService
+                .ListSessionsAsync(new SessionListParams(), cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var items = new List<DiscoverSessionItemViewModel>();
             if (listResponse?.Sessions != null)
             {
                 foreach (var session in listResponse.Sessions)
                 {
-                    DateTime lastModified = DateTime.Now;
-                    if (!string.IsNullOrEmpty(session.UpdatedAt) && DateTime.TryParse(session.UpdatedAt, out var parsed))
+                    var lastModified = DateTime.Now;
+                    if (!string.IsNullOrWhiteSpace(session.UpdatedAt)
+                        && DateTime.TryParse(session.UpdatedAt, out var parsed))
                     {
                         lastModified = parsed;
                     }
@@ -238,106 +223,233 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                         session.SessionId,
                         string.IsNullOrWhiteSpace(session.Title) ? "未命名会话" : session.Title,
                         string.IsNullOrWhiteSpace(session.Description) ? "暂无描述" : session.Description,
-                        lastModified));
+                        lastModified,
+                        session.Cwd));
                 }
             }
 
-            _syncContext.Post(_ =>
+            await PostToUiAsync(() =>
             {
+                AgentSessions.Clear();
                 foreach (var item in items)
                 {
                     AgentSessions.Add(item);
                 }
 
-                if (AgentSessions.Count == 0 && !HasError)
-                {
-                    ErrorMessage = "未找到任何可用会话。";
-                }
-            }, null);
+                LoadPhase = AgentSessions.Count == 0
+                    ? DiscoverSessionsLoadPhase.Empty
+                    : DiscoverSessionsLoadPhase.Loaded;
+            }).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Ignore
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load sessions for profile {ProfileId}", profile.Id);
-            _syncContext.Post(_ => ErrorMessage = $"无法获取会话列表: {ex.Message}", null);
-        }
-        finally
-        {
-            if (!token.IsCancellationRequested)
+            await PostToUiAsync(() =>
             {
-                _syncContext.Post(_ =>
-                {
-                    IsLoading = false;
-                    if (string.IsNullOrEmpty(ErrorMessage))
-                    {
-                        LoadingStatus = null;
-                    }
-                }, null);
-            }
+                ErrorMessage = ResolveLoadErrorMessage(ex);
+                LoadPhase = DiscoverSessionsLoadPhase.Error;
+            }).ConfigureAwait(false);
         }
     }
 
     [RelayCommand]
     private async Task LoadSessionAsync(DiscoverSessionItemViewModel? session)
     {
-        if (session == null || SelectedProfile == null) return;
+        if (session == null || SelectedProfile == null)
+        {
+            return;
+        }
 
         try
         {
-            _syncContext.Post(_ =>
+            await PostToUiAsync(() => ErrorMessage = null).ConfigureAwait(false);
+
+            var importResult = await _importCoordinator
+                .ImportAsync(session.Id, session.SessionCwd, SelectedProfile.Id)
+                .ConfigureAwait(false);
+            if (!importResult.Succeeded || string.IsNullOrWhiteSpace(importResult.LocalConversationId))
             {
-                IsLoading = true;
-                ErrorMessage = null;
-            }, null);
+                await PostToUiAsync(() =>
+                {
+                    ErrorMessage = string.IsNullOrWhiteSpace(importResult.ErrorMessage)
+                        ? "导入会话失败。"
+                        : importResult.ErrorMessage;
+                    LoadPhase = DiscoverSessionsLoadPhase.Error;
+                }).ConfigureAwait(false);
+                return;
+            }
 
-            _logger.LogInformation("Importing session {SessionId} from profile {ProfileId}", session.Id, SelectedProfile.Id);
-
-            var success = await _navigationCoordinator.ActivateSessionAsync(session.Id, null).ConfigureAwait(false);
-
-            if (!success)
+            var activated = await RunOnUiContextAsync(
+                    () => _navigationCoordinator.ActivateSessionAsync(importResult.LocalConversationId!, null))
+                .ConfigureAwait(false);
+            if (!activated)
             {
-                _syncContext.Post(_ => ErrorMessage = "加载会话并导入失败，请检查连接状态。", null);
+                await PostToUiAsync(() =>
+                {
+                    ErrorMessage = "加载会话并导入失败，请检查连接状态。";
+                    LoadPhase = DiscoverSessionsLoadPhase.Error;
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            var hydrated = await RunOnUiContextAsync(
+                    () => _connectionFacade.HydrateActiveConversationAsync())
+                .ConfigureAwait(false);
+            if (!hydrated)
+            {
+                await PostToUiAsync(() =>
+                {
+                    ErrorMessage = "导入后的会话历史加载失败，请检查 ACP 连接状态。";
+                    LoadPhase = DiscoverSessionsLoadPhase.Error;
+                }).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load session {SessionId}", session.Id);
-            _syncContext.Post(_ => ErrorMessage = $"导入会话时出错: {ex.Message}", null);
-        }
-        finally
-        {
-            _syncContext.Post(_ => IsLoading = false, null);
+            _logger.LogError(ex, "Failed to import session {SessionId}", session.Id);
+            await PostToUiAsync(() =>
+            {
+                ErrorMessage = $"导入会话时出错: {ex.Message}";
+                LoadPhase = DiscoverSessionsLoadPhase.Error;
+            }).ConfigureAwait(false);
         }
     }
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (_disposed)
+        {
+            return;
+        }
 
+        _disposed = true;
         _profilesViewModel.PropertyChanged -= OnProfilesViewModelPropertyChanged;
         _connectionFacade.PropertyChanged -= OnConnectionFacadePropertyChanged;
-        _loadingCts?.Cancel();
-        _loadingCts?.Dispose();
+        _refreshSessionsCts?.Cancel();
+        _refreshSessionsCts?.Dispose();
     }
+
+    private void SyncConnectionPhase()
+    {
+        if (!string.IsNullOrWhiteSpace(_connectionFacade.ConnectionErrorMessage))
+        {
+            LoadPhase = DiscoverSessionsLoadPhase.Error;
+            return;
+        }
+
+        if (_connectionFacade.IsInitializing)
+        {
+            LoadPhase = DiscoverSessionsLoadPhase.Initializing;
+            return;
+        }
+
+        if (_connectionFacade.IsConnecting)
+        {
+            LoadPhase = DiscoverSessionsLoadPhase.Connecting;
+        }
+    }
+
+    private string ResolveLoadErrorMessage(Exception ex)
+    {
+        if (!string.IsNullOrWhiteSpace(_connectionFacade.ConnectionErrorMessage))
+        {
+            return _connectionFacade.ConnectionErrorMessage!;
+        }
+
+        return $"无法获取会话列表: {ex.Message}";
+    }
+
+    private async Task PostToUiAsync(Action action)
+    {
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            action();
+            return;
+        }
+
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _syncContext.Post(_ =>
+        {
+            try
+            {
+                action();
+                tcs.TrySetResult(true);
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }, null);
+
+        await tcs.Task.ConfigureAwait(false);
+    }
+
+    private Task<T> RunOnUiContextAsync<T>(Func<Task<T>> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            return action();
+        }
+
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _syncContext.Post(async _ =>
+        {
+            try
+            {
+                var result = await action().ConfigureAwait(false);
+                tcs.TrySetResult(result);
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        }, null);
+
+        return tcs.Task;
+    }
+}
+
+public enum DiscoverSessionsLoadPhase
+{
+    Idle = 0,
+    Connecting = 1,
+    Initializing = 2,
+    ListingSessions = 3,
+    Loaded = 4,
+    Empty = 5,
+    Error = 6
 }
 
 public sealed class DiscoverSessionItemViewModel
 {
     public string Id { get; }
+
     public string Title { get; }
+
     public string Description { get; }
+
     public DateTime LastModified { get; }
+
+    public string? SessionCwd { get; }
+
     public string FormattedDate => LastModified.ToString("yyyy-MM-dd HH:mm");
 
-    public DiscoverSessionItemViewModel(string id, string title, string description, DateTime lastModified)
+    public DiscoverSessionItemViewModel(
+        string id,
+        string title,
+        string description,
+        DateTime lastModified,
+        string? sessionCwd = null)
     {
         Id = id;
         Title = title;
         Description = description;
         LastModified = lastModified;
+        SessionCwd = string.IsNullOrWhiteSpace(sessionCwd) ? null : sessionCwd.Trim();
     }
 }

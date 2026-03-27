@@ -81,6 +81,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private Task? _restoreTask;
     private long _connectionGeneration;
     private readonly Dictionary<string, BottomPanelState> _bottomPanelStateByConversation = new(StringComparer.Ordinal);
+    private ObservableCollection<PlanEntryViewModel>? _observedPlanEntries;
 
     /// <summary>
     /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
@@ -123,6 +124,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private bool _isPromptInFlight;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOverlayVisible))]
+    private bool _isHydrating;
+
+    public bool IsOverlayVisible => IsConnecting || IsInitializing || IsHydrating;
+
+    public string OverlayStatusText =>
+        IsConnecting ? "正在连接到 Agent..." :
+        IsInitializing ? "正在初始化 ACP 协议..." :
+        IsHydrating ? "正在加载会话历史..." : string.Empty;
+
+    [ObservableProperty]
     private bool _isTurnStatusVisible;
 
     [ObservableProperty]
@@ -158,9 +170,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsInitialized))]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
+    [NotifyPropertyChangedFor(nameof(IsOverlayVisible))]
     private bool _isInitializing;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOverlayVisible))]
     private bool _isConnecting;
 
     [ObservableProperty]
@@ -197,6 +211,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
     [NotifyPropertyChangedFor(nameof(IsInitialized))]
+    [NotifyPropertyChangedFor(nameof(IsOverlayVisible))]
     private bool _isConnected;
 
     [ObservableProperty]
@@ -343,6 +358,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _acpProfiles.Profiles.CollectionChanged += OnAcpProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _conversationWorkspace.PropertyChanged += OnConversationWorkspacePropertyChanged;
+        AttachPlanEntriesCollectionChanged(PlanEntries);
 
         IsConversationListLoading = _conversationWorkspace.IsConversationListLoading;
         ConversationListVersion = _conversationWorkspace.ConversationListVersion;
@@ -566,12 +582,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             IsSessionActive = projection.IsSessionActive;
             IsPromptInFlight = projection.IsPromptInFlight;
             IsTurnStatusVisible = projection.IsTurnStatusVisible;
+            IsHydrating = projection.IsHydrating;
+            OnPropertyChanged(nameof(IsOverlayVisible));
             TurnStatusText = projection.TurnStatusText;
             IsTurnStatusRunning = projection.IsTurnStatusRunning;
             TurnPhase = projection.TurnPhase;
             IsConnecting = projection.IsConnecting;
             IsConnected = projection.IsConnected;
             IsInitializing = projection.IsInitializing;
+            OnPropertyChanged(nameof(IsOverlayVisible));
             Interlocked.Exchange(ref _connectionGeneration, projection.ConnectionGeneration);
             CurrentConnectionStatus = projection.ConnectionStatus;
             ConnectionErrorMessage = projection.ConnectionError;
@@ -587,6 +606,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ShowPlanPanel = projection.ShowPlanPanel;
             CurrentPlanTitle = projection.PlanTitle;
             SyncPlanEntries(projection.PlanEntries);
+            SyncMessageHistory(projection.Transcript);
         }
         finally
         {
@@ -857,6 +877,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         OnPropertyChanged(nameof(ShouldShowPlanEmpty));
     }
 
+    partial void OnPlanEntriesChanged(ObservableCollection<PlanEntryViewModel> value)
+    {
+        AttachPlanEntriesCollectionChanged(value);
+        RaisePlanEntryDerivedPropertyNotifications();
+    }
+
     private void OnCurrentSessionIdChanged(string? value)
     {
         // Keep the header name stable and decouple it from ACP sessionId.
@@ -1102,9 +1128,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    private void SyncMessageHistory(IReadOnlyList<ConversationMessageSnapshot> transcript)
+    private void SyncMessageHistory(IImmutableList<ConversationMessageSnapshot> transcript)
     {
-        var messages = transcript ?? Array.Empty<ConversationMessageSnapshot>();
+        var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         for (int i = 0; i < messages.Count; i++)
         {
             var message = messages[i];
@@ -3265,6 +3291,70 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public string? SelectedProfileId => _selectedProfileIdFromStore;
 
+    public Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return _chatStore.Dispatch(new SetIsHydratingAction(isHydrating)).AsTask();
+    }
+
+    public async Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_chatService is not { IsConnected: true, IsInitialized: true } chatService)
+        {
+            SetError("Failed to load session: ACP chat service is not connected and initialized.");
+            return false;
+        }
+
+        if (chatService.AgentCapabilities?.LoadSession != true)
+        {
+            SetError("Failed to load session: the current agent does not support loading existing sessions.");
+            return false;
+        }
+
+        var binding = await ResolveActiveConversationBindingAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(binding?.RemoteSessionId))
+        {
+            SetError("Failed to load session: no remote session binding is available for the active conversation.");
+            return false;
+        }
+
+        try
+        {
+            await SetIsHydratingAsync(true, cancellationToken).ConfigureAwait(false);
+            await ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
+            await chatService
+                .LoadSessionAsync(new SessionLoadParams(binding.RemoteSessionId!, GetActiveSessionCwdOrDefault()))
+                .ConfigureAwait(false);
+            if (chatService is AcpChatServiceAdapter adapter)
+            {
+                adapter.MarkHydrated();
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (chatService is AcpChatServiceAdapter adapter)
+            {
+                adapter.MarkHydrated(lowTrust: true, reason: "DiscoverImportLoadSessionFailed");
+            }
+
+            Logger.LogError(ex, "Failed to hydrate active conversation from remote session");
+            SetError($"Failed to load session: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            await SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     public void SelectProfile(ServerConfiguration profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -3414,6 +3504,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
            _acpProfiles.Profiles.CollectionChanged -= OnAcpProfilesCollectionChanged;
            _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
            _conversationWorkspace.PropertyChanged -= OnConversationWorkspacePropertyChanged;
+           AttachPlanEntriesCollectionChanged(null);
 
            _sendPromptCts?.Cancel();
            _transientNotificationCts?.Cancel();
@@ -3427,6 +3518,31 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _sendPromptCts = null;
        _transientNotificationCts = null;
        }
+
+    private void AttachPlanEntriesCollectionChanged(ObservableCollection<PlanEntryViewModel>? planEntries)
+    {
+        if (_observedPlanEntries != null)
+        {
+            _observedPlanEntries.CollectionChanged -= OnPlanEntriesCollectionChanged;
+        }
+
+        _observedPlanEntries = planEntries;
+
+        if (_observedPlanEntries != null)
+        {
+            _observedPlanEntries.CollectionChanged += OnPlanEntriesCollectionChanged;
+        }
+    }
+
+    private void OnPlanEntriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => RaisePlanEntryDerivedPropertyNotifications();
+
+    private void RaisePlanEntryDerivedPropertyNotifications()
+    {
+        OnPropertyChanged(nameof(HasPlanEntries));
+        OnPropertyChanged(nameof(ShouldShowPlanList));
+        OnPropertyChanged(nameof(ShouldShowPlanEmpty));
+    }
 }
 
 /// <summary>

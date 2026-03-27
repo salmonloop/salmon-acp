@@ -502,9 +502,12 @@ public class ChatViewModelTests
 
         // If store selection ever toggles away and back, previous selection must not revive.
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-2" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "session-2", StringComparison.Ordinal)));
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "session-1", StringComparison.Ordinal)
+                && string.Equals(fixture.ViewModel.SelectedBottomPanelTab?.Id, "terminal", StringComparison.Ordinal)));
 
         Assert.Equal("terminal", fixture.ViewModel.SelectedBottomPanelTab?.Id);
     }
@@ -540,9 +543,12 @@ public class ChatViewModelTests
         Assert.False(stateMap.Contains("session-1"));
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-2" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "session-2", StringComparison.Ordinal)));
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "session-1", StringComparison.Ordinal)
+                && string.Equals(fixture.ViewModel.SelectedBottomPanelTab?.Id, "terminal", StringComparison.Ordinal)));
 
         Assert.Equal("terminal", fixture.ViewModel.SelectedBottomPanelTab?.Id);
     }
@@ -2444,6 +2450,71 @@ public class ChatViewModelTests
                 invocation.Arguments[2]?.ToString(),
                 "Unhandled session update type: UsageUpdate",
                 StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task HydrateActiveConversationAsync_LoadSessionIncludesEmptyMcpServersArray()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\demo");
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
+        SessionLoadParams? capturedParams = null;
+        chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            .Callback<SessionLoadParams>(value => capturedParams = value)
+            .ReturnsAsync(SessionLoadResponse.Completed);
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)));
+
+        var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
+
+        Assert.True(hydrated);
+        Assert.NotNull(capturedParams);
+        Assert.Equal("remote-1", capturedParams!.SessionId);
+        Assert.Equal(@"C:\repo\demo", capturedParams.Cwd);
+        Assert.NotNull(capturedParams.McpServers);
+        Assert.Empty(capturedParams.McpServers!);
     }
 
     [Fact]

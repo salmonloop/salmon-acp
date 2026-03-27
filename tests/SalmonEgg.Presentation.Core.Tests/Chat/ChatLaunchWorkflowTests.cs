@@ -410,6 +410,8 @@ public sealed class ChatLaunchWorkflowTests
 
         public Task ActivateStartAsync() => Task.CompletedTask;
 
+        public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
+
         public Task ActivateSettingsAsync(string settingsKey)
         {
             ActivateSettingsCount++;
