@@ -10,12 +10,11 @@ public sealed class SessionListTypesTests
     [Test]
     public void ListSessionsResponse_Should_Serialize_Correctly()
     {
-        // Given: A ListSessionsResponse with sessions
-        var response = new ListSessionsResponse
+        var response = new SessionListResponse
         {
-            Sessions = new List<SessionInfo>
+            Sessions = new List<AgentSessionInfo>
             {
-                new SessionInfo
+                new AgentSessionInfo
                 {
                     SessionId = "test-session",
                     Cwd = "/home/user/project",
@@ -36,8 +35,7 @@ public sealed class SessionListTypesTests
     [Test]
     public void SessionInfo_Should_Serialize_Correctly()
     {
-        // Given: A SessionInfo with data
-        var sessionInfo = new SessionInfo
+        var sessionInfo = new AgentSessionInfo
         {
             SessionId = "test-session",
             Cwd = "/home/user/project",

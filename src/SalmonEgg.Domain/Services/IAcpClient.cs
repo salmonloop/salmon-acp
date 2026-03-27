@@ -154,15 +154,6 @@ namespace SalmonEgg.Domain.Services
         Task<AuthenticateResponse> AuthenticateAsync(AuthenticateParams @params, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 列出已存在的会话。
-        /// 发送 session/list 请求并等待 Agent 响应。
-        /// </summary>
-        /// <param name="params">列表会话参数</param>
-        /// <param name="cancellationToken">取消令牌</param>
-        /// <returns>会话列表响应</returns>
-        Task<ListSessionsResponse> ListSessionsAsync(ListSessionsParams @params, CancellationToken cancellationToken = default);
-
-        /// <summary>
         /// 响应权限请求。
         /// 发送对之前权限请求的响应。
         /// </summary>

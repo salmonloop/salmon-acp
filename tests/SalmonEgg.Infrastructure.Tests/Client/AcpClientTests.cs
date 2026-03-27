@@ -503,6 +503,79 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.Equal(JsonRpcErrorCode.InvalidParams, response.Error!.Code);
         }
 
+        [Fact]
+        public async Task ListSessionsAsync_WhenAgentDoesNotSupportSessionList_DoesNotSendProtocolRequest()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var responseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(
+                    2,
+                    JsonSerializer.SerializeToElement(new SessionListResponse(), parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var result = await client.ListSessionsAsync(new SessionListParams());
+            await responseTrigger;
+
+            Assert.Empty(result.Sessions);
+            _transportMock.Verify(
+                t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task ListSessionsAsync_ParsesNextCursorFromRuntimeResponse()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+            typeof(AcpClient)
+                .GetField("_agentCapabilities", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(client, new AgentCapabilities(sessionCapabilities: new SessionCapabilities
+                {
+                    List = new SessionListCapabilities()
+                }));
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var responseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(
+                    2,
+                    JsonSerializer.SerializeToElement(
+                        new
+                        {
+                            sessions = new[]
+                            {
+                                new
+                                {
+                                    sessionId = "session-1",
+                                    cwd = "/repo",
+                                    title = "Imported"
+                                }
+                            },
+                            nextCursor = "cursor-2"
+                        },
+                        parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var result = await client.ListSessionsAsync(new SessionListParams());
+            await responseTrigger;
+
+            var nextCursorProperty = typeof(SessionListResponse).GetProperty("NextCursor");
+            Assert.NotNull(nextCursorProperty);
+            Assert.Equal("cursor-2", nextCursorProperty!.GetValue(result) as string);
+        }
+
         private static async Task<JsonRpcResponse> WaitForResponseAsync(
             MessageParser parser,
             ConcurrentQueue<string> sentMessages,

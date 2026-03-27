@@ -120,9 +120,9 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
         try
         {
             await sink.SetIsHydratingAsync(true, cancellationToken).ConfigureAwait(false);
+            await sink.ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
             await sink.CurrentChatService.LoadSessionAsync(
                 new SessionLoadParams(sessionId, sink.GetActiveSessionCwdOrDefault())).ConfigureAwait(false);
-            await sink.ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
             adapter?.MarkHydrated();
             await sink.MarkActiveConversationRemoteHydratedAsync(cancellationToken).ConfigureAwait(false);
             await sink.SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);

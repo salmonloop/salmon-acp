@@ -92,6 +92,29 @@ public sealed class DiscoverSessionImportCoordinatorTests
         Assert.Equal("Agent Provided Title", session.DisplayName);
     }
 
+    [Fact]
+    public async Task ImportAsync_WhenBindingFails_RollsBackCreatedConversation()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences();
+        var sessionManager = new FakeSessionManager();
+        using var workspace = CreateWorkspace(
+            sessionManager,
+            preferences,
+            syncContext);
+        var coordinator = new DiscoverSessionImportCoordinator(
+            sessionManager,
+            workspace,
+            new FailingBindingCommands(),
+            Mock.Of<ILogger<DiscoverSessionImportCoordinator>>());
+
+        var result = await coordinator.ImportAsync("remote-session-42", @"C:\repo\remote", "profile-1");
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(workspace.GetKnownConversationIds());
+        Assert.Empty(sessionManager.GetAllSessions());
+    }
+
     private static ChatConversationWorkspace CreateWorkspace(
         ISessionManager sessionManager,
         AppPreferencesViewModel preferences,
@@ -187,5 +210,11 @@ public sealed class DiscoverSessionImportCoordinatorTests
 
         public Task<bool> CancelSessionAsync(string sessionId, string? reason = null)
             => Task.FromResult(_sessions.ContainsKey(sessionId));
+    }
+
+    private sealed class FailingBindingCommands : IConversationBindingCommands
+    {
+        public ValueTask<BindingUpdateResult> UpdateBindingAsync(string conversationId, string? remoteSessionId, string? boundProfileId)
+            => ValueTask.FromResult(BindingUpdateResult.Error("BindingFailed"));
     }
 }

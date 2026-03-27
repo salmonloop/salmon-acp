@@ -109,6 +109,54 @@ public sealed class AcpConnectionCoordinatorTests
         Assert.Empty(inner.LastLoadParams.McpServers!);
     }
 
+    [Fact]
+    public async Task ResyncAsync_WhenAdapterWasAlreadyHydrated_ReplaysOnlyAfterSinkReset()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var inner = new FakeChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true)
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(inner, eventAdapter);
+        adapter.MarkHydrated();
+
+        var sink = new FakeSink
+        {
+            CurrentChatService = adapter,
+            CurrentSessionId = "conv-1",
+            CurrentRemoteSessionId = "remote-1",
+            IsSessionActive = true
+        };
+
+        var publishedBeforeReset = false;
+        adapter.SessionUpdateReceived += (_, _) =>
+        {
+            if (sink.ResetHydratedConversationForResyncCalls == 0)
+            {
+                publishedBeforeReset = true;
+            }
+        };
+
+        inner.OnLoadSessionAsync = _ =>
+        {
+            inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new AgentMessageUpdate(new TextContentBlock("hello"))));
+            return Task.FromResult(SessionLoadResponse.Completed);
+        };
+
+        var coordinator = new AcpConnectionCoordinator(
+            Mock.Of<IChatConnectionStore>(),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>());
+
+        await coordinator.ResyncAsync(sink);
+
+        Assert.False(publishedBeforeReset);
+    }
+
     private sealed class FakeSink : IAcpChatCoordinatorSink
     {
         public event PropertyChangedEventHandler? PropertyChanged

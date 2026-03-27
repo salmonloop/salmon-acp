@@ -1751,6 +1751,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             var storeState = await _chatStore.State ?? ChatState.Empty;
             var activeConversationId = storeState.HydratedConversationId;
             var activeBinding = storeState.ResolveBinding(activeConversationId);
+            var boundConversationId = ResolveConversationIdForRemoteSession(storeState, e.SessionId);
+
+            if (e.Update is SessionInfoUpdate sessionInfoUpdate)
+            {
+                if (!string.IsNullOrWhiteSpace(boundConversationId))
+                {
+                    await ApplySessionInfoUpdateAsync(boundConversationId!, sessionInfoUpdate).ConfigureAwait(true);
+                }
+
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(activeBinding?.RemoteSessionId)
                 || !string.Equals(e.SessionId, activeBinding.RemoteSessionId, StringComparison.Ordinal))
             {
@@ -1819,10 +1831,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 await ApplySessionUpdateDeltaAsync(
                     activeConversationId!,
                     _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, optionUpdate))).ConfigureAwait(true);
-            }
-            else if (e.Update is SessionInfoUpdate)
-            {
-                await ApplySessionInfoUpdateAsync(activeConversationId!, (SessionInfoUpdate)e.Update).ConfigureAwait(true);
             }
             else if (e.Update is UsageUpdate)
             {
@@ -2215,6 +2223,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         var state = await _chatStore.State ?? ChatState.Empty;
+        return ResolveConversationIdForRemoteSession(state, remoteSessionId);
+    }
+
+    private string? ResolveConversationIdForRemoteSession(ChatState state, string remoteSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(remoteSessionId))
+        {
+            return null;
+        }
+
         if (state.Bindings != null)
         {
             foreach (var binding in state.Bindings)

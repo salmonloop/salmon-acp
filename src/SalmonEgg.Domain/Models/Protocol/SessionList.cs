@@ -5,8 +5,14 @@ namespace SalmonEgg.Domain.Models.Protocol;
 
 public class SessionListParams
 {
+    [JsonPropertyName("cwd")]
+    public string? Cwd { get; set; }
+
+    [JsonPropertyName("cursor")]
+    public string? Cursor { get; set; }
+
     [JsonExtensionData]
-    public Dictionary<string, object>? ExtraParams { get; set; }
+    public Dictionary<string, object?>? ExtraParams { get; set; }
 }
 
 public class SessionListResponse
@@ -14,8 +20,11 @@ public class SessionListResponse
     [JsonPropertyName("sessions")]
     public List<AgentSessionInfo> Sessions { get; set; } = new();
 
+    [JsonPropertyName("nextCursor")]
+    public string? NextCursor { get; set; }
+
     [JsonExtensionData]
-    public Dictionary<string, object>? ExtraData { get; set; }
+    public Dictionary<string, object?>? ExtraData { get; set; }
 }
 
 public class AgentSessionInfo

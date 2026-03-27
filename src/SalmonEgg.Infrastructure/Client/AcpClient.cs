@@ -292,6 +292,17 @@ namespace SalmonEgg.Infrastructure.Client
         {
             EnsureInitialized();
 
+            if (!SupportsSessionList)
+            {
+                _errorLogger.LogError(new ErrorLogEntry(
+                    "SESSION_LIST_UNSUPPORTED",
+                    "Agent does not support session/list capability",
+                    ErrorSeverity.Info,
+                    nameof(ListSessionsAsync)));
+
+                return new SessionListResponse();
+            }
+
             var request = new JsonRpcRequest(
                 Interlocked.Increment(ref _nextMessageId),
                 "session/list",
@@ -1211,50 +1222,6 @@ namespace SalmonEgg.Infrastructure.Client
         /// <summary>
         /// 确保客户端已初始化。
         /// </summary>
-        /// <summary>
-        /// Lists all available sessions.
-        /// </summary>
-        public async Task<ListSessionsResponse> ListSessionsAsync(ListSessionsParams @params, CancellationToken cancellationToken = default)
-        {
-            EnsureInitialized();
-
-            if (!SupportsSessionList)
-            {
-                _errorLogger.LogError(new ErrorLogEntry(
-                    "SESSION_LIST_UNSUPPORTED",
-                    "Agent does not support session/list capability",
-                    ErrorSeverity.Info,
-                    nameof(ListSessionsAsync)));
-
-                return new ListSessionsResponse();
-            }
-
-            var request = new JsonRpcRequest(
-                Interlocked.Increment(ref _nextMessageId),
-                "session/list",
-                JsonSerializer.SerializeToElement(@params, _parser.Options));
-            var response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
-
-            var validationResult = _validator.ValidateResponse(response);
-            if (!validationResult.IsValid)
-            {
-                throw new AcpException(JsonRpcErrorCode.InvalidRequest, $"Response validation failed: {string.Join("; ", validationResult.Errors)}");
-            }
-
-            if (response.IsError)
-            {
-                throw new AcpException(response.Error!.Code, response.Error.Message, response.Error.Data);
-            }
-
-            var result = JsonSerializer.Deserialize<ListSessionsResponse>(response.Result!.Value.GetRawText(), _parser.Options);
-            if (result == null)
-            {
-                throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to deserialize ListSessionsResponse");
-            }
-
-            return result;
-        }
-
         private void EnsureInitialized()
         {
             if (!_isInitialized)

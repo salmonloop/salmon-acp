@@ -2455,6 +2455,93 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_ForBackgroundConversation_RefreshesCatalogMetadata()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((sessionId, cwd) =>
+            {
+                var session = new Session(sessionId, cwd);
+                sessions[sessionId] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(sessionId => sessions.TryGetValue(sessionId, out var session) ? session : null);
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((sessionId, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(sessionId, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(sessionId => sessions.Remove(sessionId));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\one");
+        await sessionManager.Object.CreateSessionAsync("conv-2", @"C:\repo\two");
+
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-2",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 4, 0, 0, 0, DateTimeKind.Utc)));
+
+        var chatService = CreateConnectedChatService();
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-a"))
+                .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-a"))
+        });
+        await WaitForConditionAsync(() => Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)));
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs(
+                "remote-2",
+                new SessionInfoUpdate
+                {
+                    Title = "Background renamed",
+                    UpdatedAt = "2026-03-24T03:00:00Z"
+                }));
+
+        await WaitForConditionAsync(() =>
+        {
+            var item = fixture.Workspace.GetCatalog().Single(entry => string.Equals(entry.ConversationId, "conv-2", StringComparison.Ordinal));
+            return Task.FromResult(string.Equals(item.DisplayName, "Background renamed", StringComparison.Ordinal));
+        });
+
+        Assert.Equal("conv-1", fixture.ViewModel.CurrentSessionId);
+        Assert.Equal("conv-1", fixture.ViewModel.CurrentSessionId);
+    }
+
+    [Fact]
     public async Task ProcessSessionUpdateAsync_AgentMessageUpdate_AppendsTranscriptUsingStoreConversationEvenIfUiSessionIdMutatesMidUpdate()
     {
         var syncContext = new QueueingSynchronizationContext();

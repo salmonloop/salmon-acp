@@ -82,6 +82,7 @@ public sealed class DiscoverSessionImportCoordinator : IDiscoverSessionImportCoo
                 .ConfigureAwait(false);
             if (bindingResult.Status is not BindingUpdateStatus.Success)
             {
+                RollBackImportedConversation(localConversationId);
                 return new DiscoverSessionImportResult(
                     false,
                     null,
@@ -101,6 +102,27 @@ public sealed class DiscoverSessionImportCoordinator : IDiscoverSessionImportCoo
                 "Failed to import discovered remote session {RemoteSessionId}",
                 remoteSessionId);
             return new DiscoverSessionImportResult(false, null, ex.Message);
+        }
+    }
+
+    private void RollBackImportedConversation(string localConversationId)
+    {
+        if (string.IsNullOrWhiteSpace(localConversationId))
+        {
+            return;
+        }
+
+        try
+        {
+            _conversationWorkspace.DeleteConversation(localConversationId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to roll back imported conversation workspace state {ConversationId}",
+                localConversationId);
+            _sessionManager.RemoveSession(localConversationId);
         }
     }
 }
