@@ -36,6 +36,7 @@ namespace SalmonEgg.Application.Services.Chat
         public event EventHandler<PermissionRequestEventArgs>? PermissionRequestReceived;
         public event EventHandler<FileSystemRequestEventArgs>? FileSystemRequestReceived;
         public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
+        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
         public event EventHandler<string>? ErrorOccurred;
 
         public ChatService(IAcpClient acpClient, IErrorLogger errorLogger, ISessionManager sessionManager)
@@ -48,6 +49,7 @@ namespace SalmonEgg.Application.Services.Chat
             _acpClient.PermissionRequestReceived += OnPermissionRequestReceived;
             _acpClient.FileSystemRequestReceived += OnFileSystemRequestReceived;
             _acpClient.TerminalRequestReceived += OnTerminalRequestReceived;
+            _acpClient.AskUserRequestReceived += OnAskUserRequestReceived;
             _acpClient.ErrorOccurred += OnErrorOccurred;
         }
 
@@ -141,6 +143,11 @@ namespace SalmonEgg.Application.Services.Chat
                 nameof(OnErrorOccurred),
                 _currentSessionId);
             _errorLogger.LogError(entry);
+        }
+
+        private void OnAskUserRequestReceived(object? sender, AskUserRequestEventArgs e)
+        {
+            AskUserRequestReceived?.Invoke(this, e);
         }
 
         private SessionUpdateEntry? CreateSessionUpdateEntry(SessionUpdate update, string sessionId)
@@ -505,6 +512,26 @@ namespace SalmonEgg.Application.Services.Chat
             }
         }
 
+        public async Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers)
+        {
+            try
+            {
+                return await _acpClient.RespondToAskUserRequestAsync(messageId, answers).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                var entry = new ErrorLogEntry(
+                    "RespondToAskUserRequestAsync failed",
+                    ex.Message,
+                    ErrorSeverity.Error,
+                    nameof(RespondToAskUserRequestAsync),
+                    null,
+                    ex);
+                _errorLogger.LogError(entry);
+                throw;
+            }
+        }
+
         public async Task<bool> DisconnectAsync()
         {
             try
@@ -569,6 +596,7 @@ namespace SalmonEgg.Application.Services.Chat
             _acpClient.PermissionRequestReceived -= OnPermissionRequestReceived;
             _acpClient.FileSystemRequestReceived -= OnFileSystemRequestReceived;
             _acpClient.TerminalRequestReceived -= OnTerminalRequestReceived;
+            _acpClient.AskUserRequestReceived -= OnAskUserRequestReceived;
             _acpClient.ErrorOccurred -= OnErrorOccurred;
         }
 

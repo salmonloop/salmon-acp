@@ -44,6 +44,7 @@ namespace SalmonEgg.Infrastructure.Client
         private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonRpcResponse>> _pendingRequests = new();
         // Inbound tool requests (agent -> client) are correlated by request id so we can format responses correctly.
         private readonly ConcurrentDictionary<string, string> _pendingInboundRequestMethods = new();
+        private readonly ConcurrentDictionary<string, AskUserRequest> _pendingAskUserRequests = new();
 
         private readonly object _lock = new();
         private bool _disposed;
@@ -80,6 +81,11 @@ namespace SalmonEgg.Infrastructure.Client
         /// 终端请求事件。
         /// </summary>
         public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
+
+        /// <summary>
+        /// Ask-user 请求事件。
+        /// </summary>
+        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
 
         /// <summary>
         /// 连接错误事件。
@@ -478,6 +484,19 @@ namespace SalmonEgg.Infrastructure.Client
             return await TrySendFileSystemResponseAsync(messageId, success, content, message).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// 响应 ask-user 请求。
+        /// </summary>
+        public async Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers)
+        {
+            if (answers == null)
+            {
+                throw new ArgumentNullException(nameof(answers));
+            }
+
+            return await TrySendAskUserResponseAsync(messageId, answers).ConfigureAwait(false);
+        }
+
         private async Task<bool> TrySendPermissionOutcomeResponseAsync(object? messageId, string outcome, string? optionId)
         {
             if (messageId == null)
@@ -532,6 +551,32 @@ namespace SalmonEgg.Infrastructure.Client
             }
 
             return await SendResponseAsync(new JsonRpcResponse(messageId, result)).ConfigureAwait(false);
+        }
+
+        private async Task<bool> TrySendAskUserResponseAsync(object messageId, IReadOnlyDictionary<string, string> answers)
+        {
+            var idStr = messageId?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(idStr))
+            {
+                return false;
+            }
+
+            if (!_pendingInboundRequestMethods.TryRemove(idStr, out _))
+            {
+                return false;
+            }
+
+            if (!_pendingAskUserRequests.TryRemove(idStr, out var request))
+            {
+                return false;
+            }
+
+            AskUserContract.ValidateAnswers(request, answers);
+            var response = new AskUserResponse(request.Questions, answers);
+            return await SendResponseAsync(
+                new JsonRpcResponse(
+                    messageId,
+                    JsonSerializer.SerializeToElement(response, _parser.Options))).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -729,6 +774,14 @@ namespace SalmonEgg.Infrastructure.Client
                     }
                     _ = HandleTerminalRequestAsync(request);
                     break;
+                case "interaction.ask_user":
+                    if (!string.IsNullOrWhiteSpace(requestIdStr))
+                    {
+                        _pendingInboundRequestMethods[requestIdStr] = request.Method;
+                        ScheduleInboundRequestTimeout(request.Id, TimeSpan.FromSeconds(30), defaultKind: "ask_user");
+                    }
+                    HandleAskUserRequest(request);
+                    break;
                 default:
                     // Best-effort: respond with "method not found" so the agent doesn't hang waiting.
                     _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
@@ -761,6 +814,11 @@ namespace SalmonEgg.Infrastructure.Client
                 if (string.IsNullOrWhiteSpace(idStr))
                 {
                     return;
+                }
+
+                if (string.Equals(defaultKind, "ask_user", StringComparison.Ordinal))
+                {
+                    _pendingAskUserRequests.TryRemove(idStr, out _);
                 }
 
                 if (defaultKind == "permission")
@@ -935,6 +993,72 @@ namespace SalmonEgg.Infrastructure.Client
             catch (Exception ex)
             {
                 OnErrorOccurred($"Failed to process file system request: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理 ask-user 请求。
+        /// </summary>
+        private void HandleAskUserRequest(JsonRpcRequest request)
+        {
+            try
+            {
+                if (!request.Params.HasValue)
+                {
+                    _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                    _pendingAskUserRequests.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidParams("Missing params")));
+                    return;
+                }
+
+                var askUserRequest = JsonSerializer.Deserialize<AskUserRequest>(request.Params.Value.GetRawText(), _parser.Options);
+                if (askUserRequest == null)
+                {
+                    _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                    _pendingAskUserRequests.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidParams("Failed to deserialize ask_user request.")));
+                    return;
+                }
+
+                AskUserContract.ValidateRequest(askUserRequest);
+
+                var requestId = request.Id?.ToString() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(requestId))
+                {
+                    _pendingAskUserRequests[requestId] = askUserRequest;
+                }
+
+                if (AskUserRequestReceived == null)
+                {
+                    _pendingInboundRequestMethods.TryRemove(requestId, out _);
+                    _pendingAskUserRequests.TryRemove(requestId, out _);
+                    _ = SendResponseAsync(new JsonRpcResponse(
+                        request.Id,
+                        new JsonRpcError(
+                            JsonRpcErrorCode.CapabilityNotSupported,
+                            "Ask-user requests are not supported.")));
+                    return;
+                }
+
+                var eventArgs = new AskUserRequestEventArgs(
+                    request.Id ?? string.Empty,
+                    askUserRequest,
+                    answers => RespondToAskUserRequestAsync(request.Id ?? string.Empty, answers));
+
+                AskUserRequestReceived.Invoke(this, eventArgs);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                _pendingAskUserRequests.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidParams(ex.Message)));
+            }
+            catch (Exception ex)
+            {
+                _pendingInboundRequestMethods.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                _pendingAskUserRequests.TryRemove(request.Id?.ToString() ?? string.Empty, out _);
+                OnErrorOccurred($"Failed to process ask_user request: {ex.Message}");
+                _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInternalError(ex.Message)));
             }
         }
 

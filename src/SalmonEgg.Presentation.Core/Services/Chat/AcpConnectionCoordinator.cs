@@ -124,6 +124,7 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
                 new SessionLoadParams(sessionId, sink.GetActiveSessionCwdOrDefault())).ConfigureAwait(false);
             await sink.ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
             adapter?.MarkHydrated();
+            await sink.MarkActiveConversationRemoteHydratedAsync(cancellationToken).ConfigureAwait(false);
             await sink.SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation("ACP resync completed. sessionId={SessionId}", sessionId);

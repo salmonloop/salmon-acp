@@ -81,7 +81,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private Task? _restoreTask;
     private long _connectionGeneration;
     private readonly Dictionary<string, BottomPanelState> _bottomPanelStateByConversation = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AskUserRequestViewModel> _pendingAskUserRequestsByConversation = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RemoteConversationHydrationStamp> _remoteHydrationStampsByConversation = new(StringComparer.Ordinal);
+    private readonly ObservableCollection<AskUserQuestionViewModel> _emptyAskUserQuestions = new();
     private ObservableCollection<PlanEntryViewModel>? _observedPlanEntries;
+    private AskUserRequestViewModel? _observedPendingAskUserRequest;
 
     /// <summary>
     /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
@@ -196,7 +200,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public bool HasConnectionError => !string.IsNullOrWhiteSpace(ConnectionErrorMessage);
 
-    public bool IsInputEnabled => !IsBusy && !IsPromptInFlight;
+    public bool IsInputEnabled => !IsBusy && !IsPromptInFlight && PendingAskUserRequest is null;
+
+    public bool HasPendingAskUserRequest => PendingAskUserRequest is not null;
+
+    public string AskUserPrompt => PendingAskUserRequest?.Prompt ?? string.Empty;
+
+    public ObservableCollection<AskUserQuestionViewModel> AskUserQuestions => PendingAskUserRequest?.Questions ?? _emptyAskUserQuestions;
+
+    public bool AskUserHasError => PendingAskUserRequest?.HasError ?? false;
+
+    public string AskUserErrorMessage => PendingAskUserRequest?.ErrorMessage ?? string.Empty;
+
+    public IAsyncRelayCommand? AskUserSubmitCommand => PendingAskUserRequest?.SubmitCommand;
 
     // UI-BOUND PROPERTIES: Handlers for WinUI/Uno property change notifications.
     // These ensure the View reflects internal state changes that might not trigger automatically.
@@ -277,6 +293,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     [ObservableProperty]
     private FileSystemRequestViewModel? _pendingFileSystemRequest;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingAskUserRequest))]
+    [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
+    [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
+    private AskUserRequestViewModel? _pendingAskUserRequest;
 
     [ObservableProperty]
     private bool _isAuthenticationRequired;
@@ -901,6 +923,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         SyncMiniWindowSelectedSession();
         SyncBottomPanelState(value);
+        SyncPendingAskUserRequestState(value);
     }
 
     partial void OnSelectedBottomPanelTabChanged(BottomPanelTabViewModel? value)
@@ -1020,6 +1043,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             var restoredConversationId = _conversationWorkspace.LastActiveConversationId;
             await BootstrapSelectedProfileFromWorkspaceAsync(restoredConversationId).ConfigureAwait(false);
             await SelectAndHydrateConversationAsync(restoredConversationId).ConfigureAwait(false);
+            await TryAutoConnectAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1679,6 +1703,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
            chatService.PermissionRequestReceived += OnPermissionRequestReceived;
             chatService.FileSystemRequestReceived += OnFileSystemRequestReceived;
             chatService.TerminalRequestReceived += OnTerminalRequestReceived;
+            chatService.AskUserRequestReceived += OnAskUserRequestReceived;
             chatService.ErrorOccurred += OnErrorOccurred;
 
            UpdateAgentInfo();
@@ -1690,6 +1715,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
            chatService.PermissionRequestReceived -= OnPermissionRequestReceived;
             chatService.FileSystemRequestReceived -= OnFileSystemRequestReceived;
             chatService.TerminalRequestReceived -= OnTerminalRequestReceived;
+            chatService.AskUserRequestReceived -= OnAskUserRequestReceived;
             chatService.ErrorOccurred -= OnErrorOccurred;
         }
 
@@ -1949,6 +1975,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
 
             await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
+            await EnsureActiveConversationRemoteHydratedAsync(sessionId, cancellationToken).ConfigureAwait(false);
             NotifyConversationListChanged();
 
             return true;
@@ -2126,11 +2153,108 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         _bottomPanelStateByConversation.Remove(conversationId);
+        RemovePendingAskUserRequestState(conversationId);
+        _remoteHydrationStampsByConversation.Remove(conversationId);
 
         if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
         {
             BottomPanelTabs = new ObservableCollection<BottomPanelTabViewModel>();
             SelectedBottomPanelTab = null;
+        }
+    }
+
+    private void OnAskUserRequestReceived(object? sender, AskUserRequestEventArgs e)
+    {
+        _ = ProcessAskUserRequestAsync(e);
+    }
+
+    private async Task ProcessAskUserRequestAsync(AskUserRequestEventArgs e)
+    {
+        try
+        {
+            var conversationId = await ResolveConversationIdForRemoteSessionAsync(e.SessionId).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(conversationId))
+            {
+                Logger.LogWarning("Ask-user request ignored because no bound conversation matched remote session {RemoteSessionId}", e.SessionId);
+                return;
+            }
+
+            AskUserRequestViewModel? requestViewModel = null;
+            requestViewModel = AskUserInteractionViewModelFactory.Create(
+                e.Request,
+                e.MessageId,
+                async answers =>
+                {
+                    var succeeded = await e.Respond(answers).ConfigureAwait(true);
+                    if (!succeeded)
+                    {
+                        return false;
+                    }
+
+                    await PostToUiAsync(() => RemovePendingAskUserRequestState(conversationId!)).ConfigureAwait(true);
+                    return true;
+                });
+
+            await PostToUiAsync(() =>
+            {
+                _pendingAskUserRequestsByConversation[conversationId!] = requestViewModel;
+                SyncPendingAskUserRequestState(CurrentSessionId);
+            }).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing ask-user request");
+        }
+    }
+
+    private async Task<string?> ResolveConversationIdForRemoteSessionAsync(string remoteSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(remoteSessionId))
+        {
+            return null;
+        }
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        if (state.Bindings != null)
+        {
+            foreach (var binding in state.Bindings)
+            {
+                if (string.Equals(binding.Value.RemoteSessionId, remoteSessionId, StringComparison.Ordinal))
+                {
+                    return binding.Key;
+                }
+            }
+        }
+
+        return string.Equals(_currentRemoteSessionId, remoteSessionId, StringComparison.Ordinal)
+            ? CurrentSessionId
+            : null;
+    }
+
+    private void SyncPendingAskUserRequestState(string? conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            PendingAskUserRequest = null;
+            return;
+        }
+
+        PendingAskUserRequest = _pendingAskUserRequestsByConversation.TryGetValue(conversationId, out var request)
+            ? request
+            : null;
+    }
+
+    private void RemovePendingAskUserRequestState(string conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        _pendingAskUserRequestsByConversation.Remove(conversationId);
+        if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
+        {
+            PendingAskUserRequest = null;
         }
     }
 
@@ -2998,7 +3122,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         && !string.IsNullOrWhiteSpace(CurrentSessionId)
         && !string.IsNullOrWhiteSpace(CurrentPrompt)
         && !IsBusy
-        && !IsPromptInFlight;
+        && !IsPromptInFlight
+        && PendingAskUserRequest is null;
 
     [RelayCommand]
     private async Task CancelPromptAsync()
@@ -3219,6 +3344,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             IsBusy = true;
             ClearError();
             await _acpConnectionCommands.DisconnectAsync(this);
+            _remoteHydrationStampsByConversation.Clear();
+            _pendingAskUserRequestsByConversation.Clear();
+            PendingAskUserRequest = null;
         }
         catch (Exception ex)
         {
@@ -3250,6 +3378,37 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         OnPropertyChanged(nameof(CanSendPromptUi));
 
 
+    }
+
+    partial void OnPendingAskUserRequestChanged(AskUserRequestViewModel? value)
+    {
+        if (_observedPendingAskUserRequest != null)
+        {
+            _observedPendingAskUserRequest.PropertyChanged -= OnPendingAskUserRequestPropertyChanged;
+        }
+
+        _observedPendingAskUserRequest = value;
+        if (_observedPendingAskUserRequest != null)
+        {
+            _observedPendingAskUserRequest.PropertyChanged += OnPendingAskUserRequestPropertyChanged;
+        }
+
+        SendPromptCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(IsInputEnabled));
+        OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(HasPendingAskUserRequest));
+        OnPropertyChanged(nameof(AskUserPrompt));
+        OnPropertyChanged(nameof(AskUserQuestions));
+        OnPropertyChanged(nameof(AskUserHasError));
+        OnPropertyChanged(nameof(AskUserErrorMessage));
+        OnPropertyChanged(nameof(AskUserSubmitCommand));
+    }
+
+    private void OnPendingAskUserRequestPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(AskUserHasError));
+        OnPropertyChanged(nameof(AskUserErrorMessage));
+        OnPropertyChanged(nameof(AskUserSubmitCommand));
     }
 
     partial void OnIsConnectedChanged(bool value)
@@ -3290,6 +3449,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         return _chatStore.Dispatch(new SetIsHydratingAction(isHydrating)).AsTask();
     }
 
+    public async Task MarkActiveConversationRemoteHydratedAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var conversationId = CurrentSessionId;
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var binding = state.ResolveBinding(conversationId);
+        if (TryCreateRemoteHydrationStamp(binding, out var stamp))
+        {
+            _remoteHydrationStampsByConversation[conversationId!] = stamp;
+        }
+    }
+
     public async Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -3324,6 +3500,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 adapter.MarkHydrated();
             }
+
+            await MarkActiveConversationRemoteHydratedAsync(cancellationToken).ConfigureAwait(false);
 
             return true;
         }
@@ -3371,6 +3549,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             UnsubscribeFromChatService(_chatService);
         }
 
+        _remoteHydrationStampsByConversation.Clear();
+        _pendingAskUserRequestsByConversation.Clear();
+        PendingAskUserRequest = null;
         _chatService = chatService;
         if (chatService != null)
         {
@@ -3442,6 +3623,74 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ShowConfigOptionsPanel: false)).ConfigureAwait(false);
     }
 
+    private async Task EnsureActiveConversationRemoteHydratedAsync(string conversationId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_disposed || string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        if (_chatService is not { IsConnected: true, IsInitialized: true } chatService)
+        {
+            return;
+        }
+
+        if (chatService.AgentCapabilities?.LoadSession != true)
+        {
+            return;
+        }
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        if (!string.Equals(state.HydratedConversationId, conversationId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var binding = state.ResolveBinding(conversationId);
+        if (!TryCreateRemoteHydrationStamp(binding, out var requiredStamp))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requiredStamp.ProfileId)
+            && !string.Equals(requiredStamp.ProfileId, SelectedProfileId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var isRequiredRemoteSessionLoaded = string.Equals(
+            chatService.CurrentSessionId,
+            requiredStamp.RemoteSessionId,
+            StringComparison.Ordinal);
+
+        if (_remoteHydrationStampsByConversation.TryGetValue(conversationId, out var hydratedStamp)
+            && hydratedStamp == requiredStamp
+            && isRequiredRemoteSessionLoaded)
+        {
+            return;
+        }
+
+        await HydrateActiveConversationAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private bool TryCreateRemoteHydrationStamp(
+        ConversationBindingSlice? binding,
+        out RemoteConversationHydrationStamp stamp)
+    {
+        if (string.IsNullOrWhiteSpace(binding?.RemoteSessionId))
+        {
+            stamp = default;
+            return false;
+        }
+
+        stamp = new RemoteConversationHydrationStamp(
+            binding.RemoteSessionId!,
+            binding.ProfileId,
+            ConnectionGeneration);
+        return true;
+    }
+
     private sealed class NoopAcpConnectionCoordinator : IAcpConnectionCoordinator
     {
         public static NoopAcpConnectionCoordinator Instance { get; } = new();
@@ -3467,6 +3716,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             Selected = tabs.FirstOrDefault();
         }
     }
+
+    private readonly record struct RemoteConversationHydrationStamp(
+        string RemoteSessionId,
+        string? ProfileId,
+        long ConnectionGeneration);
 
        public void Dispose()
     {
@@ -3498,6 +3752,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
            _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
            _conversationWorkspace.PropertyChanged -= OnConversationWorkspacePropertyChanged;
            AttachPlanEntriesCollectionChanged(null);
+           if (_observedPendingAskUserRequest != null)
+           {
+               _observedPendingAskUserRequest.PropertyChanged -= OnPendingAskUserRequestPropertyChanged;
+               _observedPendingAskUserRequest = null;
+           }
 
            _sendPromptCts?.Cancel();
            _transientNotificationCts?.Cancel();

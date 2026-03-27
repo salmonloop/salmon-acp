@@ -129,6 +129,8 @@ public sealed class AcpChatServiceAdapterTests
 
         public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
 
+        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
+
         public event EventHandler<string>? ErrorOccurred;
 
         public void RaiseSessionUpdate(SessionUpdateEventArgs args)
@@ -167,6 +169,9 @@ public sealed class AcpChatServiceAdapterTests
             => throw new NotSupportedException();
 
         public Task<bool> RespondToFileSystemRequestAsync(object messageId, bool success, string? content = null, string? message = null)
+            => throw new NotSupportedException();
+
+        public Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers)
             => throw new NotSupportedException();
 
         public Task<bool> DisconnectAsync()

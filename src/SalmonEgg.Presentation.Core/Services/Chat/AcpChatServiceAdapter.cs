@@ -66,6 +66,12 @@ public sealed class AcpChatServiceAdapter : IChatService, IDisposable
         remove => _inner.TerminalRequestReceived -= value;
     }
 
+    public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived
+    {
+        add => _inner.AskUserRequestReceived += value;
+        remove => _inner.AskUserRequestReceived -= value;
+    }
+
     public event EventHandler<string>? ErrorOccurred
     {
         add => _inner.ErrorOccurred += value;
@@ -104,6 +110,9 @@ public sealed class AcpChatServiceAdapter : IChatService, IDisposable
 
     public Task<bool> RespondToFileSystemRequestAsync(object messageId, bool success, string? content = null, string? message = null)
         => _inner.RespondToFileSystemRequestAsync(messageId, success, content, message);
+
+    public Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers)
+        => _inner.RespondToAskUserRequestAsync(messageId, answers);
 
     public Task<bool> DisconnectAsync()
         => _inner.DisconnectAsync();

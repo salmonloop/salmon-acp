@@ -43,6 +43,11 @@ namespace SalmonEgg.Domain.Services
         event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
 
         /// <summary>
+        /// Ask-user 请求事件。当 Agent 需要用户结构化回答时触发。
+        /// </summary>
+        event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
+
+        /// <summary>
         /// 连接错误事件。当发生连接错误时触发。
         /// </summary>
         event EventHandler<string>? ErrorOccurred;
@@ -177,6 +182,15 @@ namespace SalmonEgg.Domain.Services
         /// <param name="message">错误消息（如果失败）</param>
         /// <returns>是否成功发送响应</returns>
         Task<bool> RespondToFileSystemRequestAsync(object messageId, bool success, string? content = null, string? message = null);
+
+        /// <summary>
+        /// 响应 ask-user 请求。
+        /// 发送对之前交互式提问请求的结构化答案。
+        /// </summary>
+        /// <param name="messageId">原始请求的消息 ID</param>
+        /// <param name="answers">问题到答案的映射。</param>
+        /// <returns>是否成功发送响应</returns>
+        Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers);
 
         /// <summary>
         /// 断开与 Agent 的连接。

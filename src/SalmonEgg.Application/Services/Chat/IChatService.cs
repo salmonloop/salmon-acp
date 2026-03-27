@@ -78,6 +78,11 @@ namespace SalmonEgg.Application.Services.Chat
         event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
 
         /// <summary>
+        /// Ask-user 请求事件
+        /// </summary>
+        event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
+
+        /// <summary>
         /// 错误事件
         /// </summary>
         event EventHandler<string>? ErrorOccurred;
@@ -136,6 +141,11 @@ namespace SalmonEgg.Application.Services.Chat
         /// 响应文件系统请求
         /// </summary>
         Task<bool> RespondToFileSystemRequestAsync(object messageId, bool success, string? content = null, string? message = null);
+
+        /// <summary>
+        /// 响应 ask-user 请求
+        /// </summary>
+        Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers);
 
         /// <summary>
         /// 断开连接

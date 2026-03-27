@@ -523,6 +523,8 @@ public sealed class DiscoverSessionsViewModelTests
 
         public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
 
+        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
+
         public event EventHandler<string>? ErrorOccurred;
 
         public Task<InitializeResponse> InitializeAsync(InitializeParams @params)
@@ -556,6 +558,9 @@ public sealed class DiscoverSessionsViewModelTests
             => throw new NotSupportedException();
 
         public Task<bool> RespondToFileSystemRequestAsync(object messageId, bool success, string? content = null, string? message = null)
+            => throw new NotSupportedException();
+
+        public Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers)
             => throw new NotSupportedException();
 
         public Task<bool> DisconnectAsync()

@@ -403,6 +403,106 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.False(releaseResponse.IsError);
         }
 
+        [Fact]
+        public async Task AskUserRequest_WhenAnswered_PublishesEventAndReturnsStructuredResponse()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+            var sentMessages = new ConcurrentQueue<string>();
+            AskUserRequestEventArgs? published = null;
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
+                .ReturnsAsync(true);
+
+            client.AskUserRequestReceived += async (_, args) =>
+            {
+                published = args;
+                await client.RespondToAskUserRequestAsync(
+                    args.MessageId,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["Choose a mode"] = "Plan"
+                    });
+            };
+
+            var request = new JsonRpcRequest(
+                201,
+                "interaction.ask_user",
+                JsonSerializer.SerializeToElement(
+                    new AskUserRequest
+                    {
+                        SessionId = "session-1",
+                        Questions =
+                        {
+                            new AskUserQuestion
+                            {
+                                Header = "Execution",
+                                Question = "Choose a mode",
+                                MultiSelect = false,
+                                Options =
+                                {
+                                    new AskUserOption { Label = "Agent", Description = "Interactive mode" },
+                                    new AskUserOption { Label = "Plan", Description = "Planning mode" }
+                                }
+                            }
+                        }
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(request)));
+
+            var response = await WaitForResponseAsync(parser, sentMessages, responseId: 201);
+
+            Assert.NotNull(published);
+            Assert.Equal("session-1", published!.SessionId);
+            Assert.False(response.IsError);
+
+            var result = JsonSerializer.Deserialize<AskUserResponse>(
+                response.Result!.Value.GetRawText(),
+                parser.Options);
+
+            Assert.NotNull(result);
+            Assert.Single(result!.Questions);
+            Assert.Equal("Plan", result.Answers["Choose a mode"]);
+        }
+
+        [Fact]
+        public async Task AskUserRequest_WhenPayloadInvalid_ReturnsInvalidParams()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+            var sentMessages = new ConcurrentQueue<string>();
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
+                .ReturnsAsync(true);
+
+            var request = new JsonRpcRequest(
+                202,
+                "interaction.ask_user",
+                JsonSerializer.SerializeToElement(
+                    new AskUserRequest
+                    {
+                        SessionId = "session-1",
+                        Questions = new List<AskUserQuestion>()
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(request)));
+
+            var response = await WaitForResponseAsync(parser, sentMessages, responseId: 202);
+
+            Assert.True(response.IsError);
+            Assert.Equal(JsonRpcErrorCode.InvalidParams, response.Error!.Code);
+        }
+
         private static async Task<JsonRpcResponse> WaitForResponseAsync(
             MessageParser parser,
             ConcurrentQueue<string> sentMessages,
