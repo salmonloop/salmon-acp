@@ -125,7 +125,7 @@ public sealed class DiscoverSessionsViewModelTests
 
             await viewModel.LoadSessionCommand.ExecuteAsync(CreateSessionItem());
 
-            Assert.Equal(("remote-session-1", @"C:\repo\remote", "profile-1"), importCoordinator.LastRequest);
+            Assert.Equal(("remote-session-1", @"C:\repo\remote", "profile-1", "Remote Session"), importCoordinator.LastRequest);
             Assert.Equal(("local-conversation-1", null), navigationCoordinator.LastActivation);
             Assert.Equal(1, connectionFacade.HydrateCalls);
             Assert.Null(viewModel.ErrorMessage);
@@ -392,16 +392,17 @@ public sealed class DiscoverSessionsViewModelTests
             _result = result;
         }
 
-        public (string RemoteSessionId, string? RemoteSessionCwd, string? ProfileId)? LastRequest { get; private set; }
+        public (string RemoteSessionId, string? RemoteSessionCwd, string? ProfileId, string? RemoteSessionTitle)? LastRequest { get; private set; }
 
         public Task<DiscoverSessionImportResult> ImportAsync(
             string remoteSessionId,
             string? remoteSessionCwd,
             string? profileId,
+            string? remoteSessionTitle = null,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            LastRequest = (remoteSessionId, remoteSessionCwd, profileId);
+            LastRequest = (remoteSessionId, remoteSessionCwd, profileId, remoteSessionTitle);
             return Task.FromResult(_result);
         }
     }
@@ -419,6 +420,7 @@ public sealed class DiscoverSessionsViewModelTests
             string remoteSessionId,
             string? remoteSessionCwd,
             string? profileId,
+            string? remoteSessionTitle = null,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -432,6 +434,7 @@ public sealed class DiscoverSessionsViewModelTests
             string remoteSessionId,
             string? remoteSessionCwd,
             string? profileId,
+            string? remoteSessionTitle = null,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();

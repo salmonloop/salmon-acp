@@ -61,6 +61,37 @@ public sealed class DiscoverSessionImportCoordinatorTests
         Assert.Equal("profile-1", bindingSlice.ProfileId);
     }
 
+    [Fact]
+    public async Task ImportAsync_SeedsLocalConversationDisplayName_FromRemoteSessionTitle()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences();
+        var sessionManager = new FakeSessionManager();
+        using var workspace = CreateWorkspace(
+            sessionManager,
+            preferences,
+            syncContext);
+        await using var state = State.Value(new object(), () => ChatState.Empty);
+        var chatStore = new ChatStore(state);
+        var bindingCommands = new BindingCoordinator(workspace, chatStore);
+        var coordinator = new DiscoverSessionImportCoordinator(
+            sessionManager,
+            workspace,
+            bindingCommands,
+            Mock.Of<ILogger<DiscoverSessionImportCoordinator>>());
+
+        var result = await coordinator.ImportAsync(
+            "remote-session-42",
+            @"C:\repo\remote",
+            "profile-1",
+            "Agent Provided Title");
+
+        Assert.True(result.Succeeded);
+        var localConversationId = Assert.IsType<string>(result.LocalConversationId);
+        var session = Assert.IsType<Session>(sessionManager.GetSession(localConversationId));
+        Assert.Equal("Agent Provided Title", session.DisplayName);
+    }
+
     private static ChatConversationWorkspace CreateWorkspace(
         ISessionManager sessionManager,
         AppPreferencesViewModel preferences,

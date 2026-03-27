@@ -268,7 +268,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             await PostToUiAsync(() => ErrorMessage = null).ConfigureAwait(false);
 
             var importResult = await _importCoordinator
-                .ImportAsync(session.Id, session.SessionCwd, SelectedProfile.Id)
+                .ImportAsync(session.Id, session.SessionCwd, SelectedProfile.Id, session.Title)
                 .ConfigureAwait(false);
             if (!importResult.Succeeded || string.IsNullOrWhiteSpace(importResult.LocalConversationId))
             {

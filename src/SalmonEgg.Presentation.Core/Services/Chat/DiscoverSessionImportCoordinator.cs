@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 
 namespace SalmonEgg.Presentation.Core.Services.Chat;
@@ -12,6 +13,7 @@ public interface IDiscoverSessionImportCoordinator
         string remoteSessionId,
         string? remoteSessionCwd,
         string? profileId,
+        string? remoteSessionTitle = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -43,6 +45,7 @@ public sealed class DiscoverSessionImportCoordinator : IDiscoverSessionImportCoo
         string remoteSessionId,
         string? remoteSessionCwd,
         string? profileId,
+        string? remoteSessionTitle = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -59,6 +62,15 @@ public sealed class DiscoverSessionImportCoordinator : IDiscoverSessionImportCoo
                 ? null
                 : remoteSessionCwd.Trim();
             await _sessionManager.CreateSessionAsync(localConversationId, cwd).ConfigureAwait(false);
+            var sanitizedTitle = SessionNamePolicy.Sanitize(remoteSessionTitle);
+            if (!string.IsNullOrWhiteSpace(sanitizedTitle))
+            {
+                _sessionManager.UpdateSession(
+                    localConversationId,
+                    session => session.DisplayName = sanitizedTitle,
+                    updateActivity: false);
+            }
+
             await _conversationWorkspace.RegisterConversationAsync(
                 localConversationId,
                 createdAt: DateTime.UtcNow,
