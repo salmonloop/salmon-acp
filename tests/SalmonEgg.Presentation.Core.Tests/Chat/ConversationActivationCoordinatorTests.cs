@@ -59,7 +59,7 @@ public sealed class ConversationActivationCoordinatorTests
         var result = await coordinator.ActivateSessionAsync("session-1");
 
         Assert.True(result.Succeeded);
-        var currentState = await state;
+        var currentState = Assert.IsType<ChatState>(await state);
         Assert.Equal("session-1", currentState.HydratedConversationId);
         Assert.NotNull(currentState.Transcript);
         Assert.Single(currentState.Transcript!);
@@ -99,7 +99,7 @@ public sealed class ConversationActivationCoordinatorTests
         var result = await coordinator.ActivateSessionAsync("session-1");
 
         Assert.True(result.Succeeded);
-        var currentState = await state;
+        var currentState = Assert.IsType<ChatState>(await state);
         Assert.Equal("session-1", currentState.HydratedConversationId);
         Assert.Null(currentState.Binding);
     }
@@ -144,7 +144,7 @@ public sealed class ConversationActivationCoordinatorTests
         var result = await coordinator.ActivateSessionAsync("session-1");
 
         Assert.True(result.Succeeded);
-        var currentState = await state;
+        var currentState = Assert.IsType<ChatState>(await state);
         Assert.Equal("session-1", currentState.HydratedConversationId);
         Assert.NotNull(currentState.Transcript);
         Assert.Single(currentState.Transcript!);
@@ -195,7 +195,7 @@ public sealed class ConversationActivationCoordinatorTests
         var result = await coordinator.ActivateSessionAsync("session-1");
 
         Assert.True(result.Succeeded);
-        var currentState = await state;
+        var currentState = Assert.IsType<ChatState>(await state);
         Assert.Equal("session-1", currentState.HydratedConversationId);
         Assert.NotNull(currentState.Transcript);
         Assert.Single(currentState.Transcript!);
@@ -282,7 +282,7 @@ public sealed class ConversationActivationCoordinatorTests
 
         Assert.True(result.Succeeded);
         Assert.Equal("session-1", result.ConversationId);
-        var currentState = await state;
+        var currentState = Assert.IsType<ChatState>(await state);
         Assert.Equal("session-1", currentState.HydratedConversationId);
         Assert.Equal(new ConversationBindingSlice("session-1", "remote-1", "profile-a"), currentState.Binding);
 

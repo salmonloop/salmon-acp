@@ -45,7 +45,9 @@ public class ChatStoreTests
         // Assert
         var currentState = await WaitForStateAsync(
             state,
-            current => string.Equals(current?.HydratedConversationId, "conv-1", System.StringComparison.Ordinal) && current.IsPromptInFlight == false);
+            current => current is not null
+                && string.Equals(current.HydratedConversationId, "conv-1", System.StringComparison.Ordinal)
+                && current.IsPromptInFlight == false);
         Assert.NotNull(currentState);
         Assert.False(currentState.IsPromptInFlight);
         Assert.Equal("conv-1", currentState.HydratedConversationId);

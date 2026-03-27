@@ -515,17 +515,41 @@ public sealed class DiscoverSessionsViewModelTests
 
         public SessionListResponse SessionListResponse { get; set; } = new();
 
-        public event EventHandler<SessionUpdateEventArgs>? SessionUpdateReceived;
+        public event EventHandler<SessionUpdateEventArgs>? SessionUpdateReceived
+        {
+            add { }
+            remove { }
+        }
 
-        public event EventHandler<PermissionRequestEventArgs>? PermissionRequestReceived;
+        public event EventHandler<PermissionRequestEventArgs>? PermissionRequestReceived
+        {
+            add { }
+            remove { }
+        }
 
-        public event EventHandler<FileSystemRequestEventArgs>? FileSystemRequestReceived;
+        public event EventHandler<FileSystemRequestEventArgs>? FileSystemRequestReceived
+        {
+            add { }
+            remove { }
+        }
 
-        public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived;
+        public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived
+        {
+            add { }
+            remove { }
+        }
 
-        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived;
+        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived
+        {
+            add { }
+            remove { }
+        }
 
-        public event EventHandler<string>? ErrorOccurred;
+        public event EventHandler<string>? ErrorOccurred
+        {
+            add { }
+            remove { }
+        }
 
         public Task<InitializeResponse> InitializeAsync(InitializeParams @params)
             => throw new NotSupportedException();

@@ -118,7 +118,11 @@ public sealed class NavigationSelectionProjectorTests
 
         public int ConversationListVersion => 0;
 
-        public event PropertyChangedEventHandler? PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged
+        {
+            add { }
+            remove { }
+        }
 
         public string[] GetKnownConversationIds() => [];
 
