@@ -142,13 +142,34 @@ public sealed class NavigationCoreTests
     {
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
 
-        Assert.Contains("AutomationProperties.AutomationId=\"ChatView.InactiveRoot\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.ActiveRoot\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.CurrentSessionNameButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.CurrentSessionNameEditor\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.CurrentAgentDisplay\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.LoadingOverlay\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.MessagesList\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatViewXaml_UsesAutomationCapableLoadingOverlayRoot()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+
+        Assert.Contains("AutomationProperties.AutomationId=\"ChatView.LoadingOverlay\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<ContentControl x:Name=\"LoadingOverlayPresenter\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Grid AutomationProperties.AutomationId=\"ChatView.LoadingOverlay\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ChatView.LoadingOverlayStatus\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatViewXaml_DoesNotContainLegacyInactiveAgentSetupPlaceholder()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+
+        Assert.DoesNotContain("AutomationProperties.AutomationId=\"ChatView.InactiveRoot\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AutomationProperties.AutomationId=\"ChatView.GoToSettingsButton\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("准备好开始了吗？", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("去配置 Agent", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

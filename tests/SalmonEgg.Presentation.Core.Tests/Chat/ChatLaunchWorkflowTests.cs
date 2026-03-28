@@ -184,6 +184,7 @@ public sealed class ChatLaunchWorkflowTests
             workspace,
             Mock.Of<IConversationActivationCoordinator>(),
             Mock.Of<IShellSelectionReadModel>(),
+            Mock.Of<INavigationCoordinator>(),
             Mock.Of<ILogger<ConversationCatalogFacade>>());
 
         var chat = new FakeChatLaunchWorkflowChatFacade
@@ -230,6 +231,7 @@ public sealed class ChatLaunchWorkflowTests
             workspace,
             Mock.Of<IConversationActivationCoordinator>(),
             Mock.Of<IShellSelectionReadModel>(),
+            Mock.Of<INavigationCoordinator>(),
             Mock.Of<ILogger<ConversationCatalogFacade>>());
 
         var chat = new FakeChatLaunchWorkflowChatFacade

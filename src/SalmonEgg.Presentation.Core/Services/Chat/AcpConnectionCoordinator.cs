@@ -96,8 +96,9 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
         cancellationToken.ThrowIfCancellationRequested();
 
         var binding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        var conversationId = binding?.ConversationId;
         var sessionId = binding?.RemoteSessionId;
-        if (string.IsNullOrWhiteSpace(sessionId))
+        if (string.IsNullOrWhiteSpace(conversationId) || string.IsNullOrWhiteSpace(sessionId))
         {
             _logger.LogDebug("Skipping ACP resync because no remote session binding is available.");
             return;
@@ -119,19 +120,19 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
 
         try
         {
-            await sink.SetIsHydratingAsync(true, cancellationToken).ConfigureAwait(false);
-            await sink.ResetHydratedConversationForResyncAsync(cancellationToken).ConfigureAwait(false);
+            await sink.SetConversationHydratingAsync(conversationId!, true, cancellationToken).ConfigureAwait(false);
+            await sink.ResetConversationForResyncAsync(conversationId!, cancellationToken).ConfigureAwait(false);
             await sink.CurrentChatService.LoadSessionAsync(
-                new SessionLoadParams(sessionId, sink.GetActiveSessionCwdOrDefault())).ConfigureAwait(false);
+                new SessionLoadParams(sessionId, sink.GetSessionCwdOrDefault(conversationId!))).ConfigureAwait(false);
             adapter?.MarkHydrated();
-            await sink.MarkActiveConversationRemoteHydratedAsync(cancellationToken).ConfigureAwait(false);
-            await sink.SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);
+            await sink.MarkConversationRemoteHydratedAsync(conversationId!, cancellationToken).ConfigureAwait(false);
+            await sink.SetConversationHydratingAsync(conversationId!, false, cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation("ACP resync completed. sessionId={SessionId}", sessionId);
         }
         catch (Exception ex)
         {
-            await sink.SetIsHydratingAsync(false, cancellationToken).ConfigureAwait(false);
+            await sink.SetConversationHydratingAsync(conversationId!, false, cancellationToken).ConfigureAwait(false);
             adapter?.MarkHydrated(lowTrust: true, reason: "LoadSessionFailed");
             _logger.LogWarning(ex, "ACP resync failed. sessionId={SessionId}", sessionId);
         }

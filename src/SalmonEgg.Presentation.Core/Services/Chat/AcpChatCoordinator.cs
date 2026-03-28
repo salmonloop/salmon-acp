@@ -367,16 +367,38 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             update => wrappedService!.PublishBufferedUpdate(update),
             sink.SessionUpdateSynchronizationContext,
             _sessionUpdateBufferLimit,
-            resyncRequired: () => _ = HandleResyncRequiredAsync(sink, cancellationToken));
+            resyncRequired: sourceSessionId => _ = HandleResyncRequiredAsync(
+                sink,
+                wrappedService!,
+                sourceSessionId,
+                cancellationToken));
         wrappedService = new AcpChatServiceAdapter(chatService, eventAdapter);
         return wrappedService;
     }
 
     private async Task HandleResyncRequiredAsync(
         IAcpChatCoordinatorSink sink,
+        AcpChatServiceAdapter sourceService,
+        string? sourceSessionId,
         CancellationToken cancellationToken)
     {
+        if (!ReferenceEquals(sink.CurrentChatService, sourceService))
+        {
+            _logger.LogDebug("Ignoring ACP resync request from stale chat service instance.");
+            return;
+        }
+
         var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(sourceSessionId)
+            || !string.Equals(currentBinding?.RemoteSessionId, sourceSessionId, StringComparison.Ordinal))
+        {
+            _logger.LogDebug(
+                "Ignoring ACP resync request because the active binding no longer targets the source session. sourceSessionId={SourceSessionId} activeRemoteSessionId={ActiveRemoteSessionId}",
+                sourceSessionId,
+                currentBinding?.RemoteSessionId);
+            return;
+        }
+
         _logger.LogWarning(
             "ACP update stream requested resync. remoteSessionId={RemoteSessionId}",
             currentBinding?.RemoteSessionId);

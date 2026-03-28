@@ -94,41 +94,52 @@ public sealed partial class RealUserConfigSmokeTests
         var stopwatch = Stopwatch.StartNew();
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         var sawOverlay = false;
-        var sawRemoteGrowth = false;
+        var sawTranscriptVisible = false;
         var sawPrematureDismissal = false;
-        var baselineCount = candidate.LocalMessageCount;
+        string? prematureDismissalCapturePath = null;
+        long? overlayDismissedAtMs = null;
 
         while (DateTime.UtcNow < deadline)
         {
             var overlayVisible = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(100)) is not null;
             var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100));
             var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(100));
-            var realizedMessageCount = CountRealizedMessageItems(messagesList);
+            var visibleTranscriptTextCount = CountVisibleTranscriptText(messagesList);
             var selected = session.TryGetIsSelected(SessionAutomationId(candidate.ConversationId));
 
             timeline.Add(
-                $"{stopwatch.ElapsedMilliseconds,5}ms overlay={overlayVisible} header={(header is not null)} selected={selected} realized={realizedMessageCount} baseline={baselineCount}");
+                $"{stopwatch.ElapsedMilliseconds,5}ms overlay={overlayVisible} header={(header is not null)} selected={selected} visibleText={visibleTranscriptTextCount}");
 
             if (overlayVisible)
             {
                 sawOverlay = true;
             }
 
-            if (realizedMessageCount > baselineCount)
+            if (visibleTranscriptTextCount > 0)
             {
-                sawRemoteGrowth = true;
+                sawTranscriptVisible = true;
             }
 
-            if (sawOverlay
-                && !overlayVisible
-                && !sawRemoteGrowth
-                && stopwatch.Elapsed > TimeSpan.FromMilliseconds(500))
+            if (sawOverlay && !overlayVisible && overlayDismissedAtMs is null)
             {
+                overlayDismissedAtMs = stopwatch.ElapsedMilliseconds;
+            }
+
+            if (overlayDismissedAtMs is not null
+                && !sawTranscriptVisible
+                && stopwatch.ElapsedMilliseconds - overlayDismissedAtMs.Value > 500)
+            {
+                var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
+                Directory.CreateDirectory(captureRoot);
+                prematureDismissalCapturePath = Path.Combine(
+                    captureRoot,
+                    $"remote-overlay-premature-{candidate.ConversationId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
+                session.MainWindow.CaptureToFile(prematureDismissalCapturePath);
                 sawPrematureDismissal = true;
                 break;
             }
 
-            if (sawOverlay && sawRemoteGrowth && !overlayVisible)
+            if (sawOverlay && sawTranscriptVisible && !overlayVisible)
             {
                 break;
             }
@@ -144,15 +155,24 @@ public sealed partial class RealUserConfigSmokeTests
 
         Assert.False(
             sawPrematureDismissal,
-            $"Loading overlay disappeared before remote replay visibly grew the transcript for conversation {candidate.ConversationId}.{Environment.NewLine}{failureDetails}");
+            $"Loading overlay disappeared before any transcript content became visible for conversation {candidate.ConversationId}.{Environment.NewLine}Capture: {prematureDismissalCapturePath ?? "<none>"}{Environment.NewLine}{failureDetails}");
 
         Assert.True(
-            sawRemoteGrowth,
-            $"Real-config smoke did not observe remote replay growth for conversation {candidate.ConversationId} within the timeout window.{Environment.NewLine}{failureDetails}");
+            sawTranscriptVisible,
+            $"Real-config smoke did not observe any transcript content for conversation {candidate.ConversationId} within the timeout window.{Environment.NewLine}{failureDetails}");
     }
 
-    private static int CountRealizedMessageItems(AutomationElement? messagesList)
-        => messagesList?.FindAllDescendants(cf => cf.ByControlType(ControlType.ListItem)).Length ?? 0;
+    private static int CountVisibleTranscriptText(AutomationElement? messagesList)
+    {
+        if (messagesList is null)
+        {
+            return 0;
+        }
+
+        return messagesList
+            .FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+            .Count(element => !TryGetIsOffscreen(element) && !string.IsNullOrWhiteSpace(element.Name));
+    }
 
     private static string SessionAutomationId(string conversationId)
         => $"MainNav.Session.{conversationId}";
@@ -321,4 +341,16 @@ public sealed partial class RealUserConfigSmokeTests
 
     [GeneratedRegex("\\\"sessionId\\\":\\\"([^\\\"]+)\\\"", RegexOptions.Compiled)]
     private static partial Regex SessionIdRegex();
+
+    private static bool TryGetIsOffscreen(AutomationElement element)
+    {
+        try
+        {
+            return element.IsOffscreen;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

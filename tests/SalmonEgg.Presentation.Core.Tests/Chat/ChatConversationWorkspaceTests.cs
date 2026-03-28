@@ -610,6 +610,7 @@ public sealed class ChatConversationWorkspaceTests
             workspace,
             activationCoordinator.Object,
             selection.Object,
+            Mock.Of<INavigationCoordinator>(),
             Mock.Of<ILogger<ConversationCatalogFacade>>());
 
         var deleteTask = Task.Run(() => facade.DeleteConversation("session-1"));
@@ -618,6 +619,48 @@ public sealed class ChatConversationWorkspaceTests
 
         tcs.SetResult(new ConversationMutationResult(true, false, null));
         await deleteTask;
+    }
+
+    [Fact]
+    public async Task ConversationCatalogFacade_ArchiveCurrentConversation_NavigatesToStartAfterMutationCompletes()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        var mutationCompleted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activationCoordinator = new Mock<IConversationActivationCoordinator>();
+        activationCoordinator
+            .Setup(a => a.ArchiveConversationAsync("session-1", "session-1", It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                mutationCompleted.TrySetResult(null);
+                await Task.Delay(50);
+                return new ConversationMutationResult(true, true, null);
+            });
+
+        var selection = new Mock<IShellSelectionReadModel>();
+        selection.SetupGet(s => s.CurrentSelection)
+            .Returns(new NavigationSelectionState.Session("session-1"));
+
+        var navigation = new Mock<INavigationCoordinator>();
+        navigation.Setup(n => n.ActivateStartAsync()).Returns(Task.CompletedTask);
+
+        var facade = new ConversationCatalogFacade(
+            workspace,
+            activationCoordinator.Object,
+            selection.Object,
+            navigation.Object,
+            Mock.Of<ILogger<ConversationCatalogFacade>>());
+
+        facade.ArchiveConversation("session-1");
+
+        await mutationCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.Delay(100);
+
+        navigation.Verify(n => n.ActivateStartAsync(), Times.Once);
     }
 
     [Fact]

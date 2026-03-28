@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -197,6 +198,41 @@ public sealed class AcpChatCoordinatorTests
 
         service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>()), Times.Never);
         Assert.Equal(0, sink.ResetHydratedConversationForResyncCalls);
+    }
+
+    [Fact]
+    public async Task HandleResyncRequiredAsync_WhenCurrentBindingTargetsDifferentRemoteSession_IgnoresRequest()
+    {
+        var sink = new FakeSink
+        {
+            CurrentSessionId = "conv-2",
+            CurrentRemoteSessionId = "remote-2",
+            ResolvedBinding = new ConversationRemoteBindingState("conv-2", "remote-2", "profile-2")
+        };
+        var service = CreateChatService(new AgentCapabilities(loadSession: true));
+        var wrappedService = new AcpChatServiceAdapter(
+            service.Object,
+            new AcpEventAdapter(_ => { }, new ImmediateSynchronizationContext()));
+        sink.CurrentChatService = wrappedService;
+
+        var sut = new AcpChatCoordinator(
+            Mock.Of<IAcpChatServiceFactory>(),
+            Mock.Of<ILogger<AcpChatCoordinator>>(),
+            connectionCoordinator: new AcpConnectionCoordinator(
+                Mock.Of<IChatConnectionStore>(),
+                Mock.Of<ILogger<AcpConnectionCoordinator>>()));
+
+        var method = typeof(AcpChatCoordinator).GetMethod(
+            "HandleResyncRequiredAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+
+        var task = Assert.IsAssignableFrom<Task>(method!.Invoke(sut, [sink, wrappedService, "remote-1", CancellationToken.None]));
+        await task;
+
+        Assert.Equal(0, sink.ResetHydratedConversationForResyncCalls);
+        service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>()), Times.Never);
     }
 
     [Fact]
@@ -485,10 +521,13 @@ public sealed class AcpChatCoordinatorTests
             RemoteUrl = "wss://agent.test"
         };
         var service = CreateChatService();
+        var syncContext = new QueueingSynchronizationContext();
         var sink = new FakeSink
         {
             IsSessionActive = true,
-            CurrentSessionId = "local-session-1"
+            CurrentSessionId = "local-session-1",
+            CurrentRemoteSessionId = "remote-session-1",
+            SessionUpdateSynchronizationContext = syncContext
         };
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
@@ -512,6 +551,7 @@ public sealed class AcpChatCoordinatorTests
         service.Raise(
             x => x.SessionUpdateReceived += null,
             new SessionUpdateEventArgs("remote-session-1", new PlanUpdate(title: "two")));
+        syncContext.RunAll();
 
         connectionCoordinator.Verify(
             x => x.ResyncAsync(sink, It.IsAny<CancellationToken>()),
@@ -726,6 +766,25 @@ public sealed class AcpChatCoordinatorTests
         public override void Post(SendOrPostCallback d, object? state)
         {
             d(state);
+        }
+    }
+
+    private sealed class QueueingSynchronizationContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            _callbacks.Enqueue((d, state));
+        }
+
+        public void RunAll()
+        {
+            while (_callbacks.Count > 0)
+            {
+                var (callback, state) = _callbacks.Dequeue();
+                callback(state);
+            }
         }
     }
 }

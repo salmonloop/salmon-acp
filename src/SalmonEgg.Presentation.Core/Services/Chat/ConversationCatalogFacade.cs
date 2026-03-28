@@ -13,6 +13,7 @@ public sealed class ConversationCatalogFacade : IConversationCatalog, IDisposabl
     private readonly ChatConversationWorkspace _workspace;
     private readonly IConversationActivationCoordinator _activationCoordinator;
     private readonly IShellSelectionReadModel _shellSelection;
+    private readonly INavigationCoordinator _navigationCoordinator;
     private readonly ILogger<ConversationCatalogFacade> _logger;
     private bool _disposed;
 
@@ -20,11 +21,13 @@ public sealed class ConversationCatalogFacade : IConversationCatalog, IDisposabl
         ChatConversationWorkspace workspace,
         IConversationActivationCoordinator activationCoordinator,
         IShellSelectionReadModel shellSelection,
+        INavigationCoordinator navigationCoordinator,
         ILogger<ConversationCatalogFacade> logger)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _activationCoordinator = activationCoordinator ?? throw new ArgumentNullException(nameof(activationCoordinator));
         _shellSelection = shellSelection ?? throw new ArgumentNullException(nameof(shellSelection));
+        _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _workspace.PropertyChanged += OnWorkspacePropertyChanged;
@@ -112,7 +115,11 @@ public sealed class ConversationCatalogFacade : IConversationCatalog, IDisposabl
     {
         try
         {
-            await mutation().ConfigureAwait(false);
+            var result = await mutation().ConfigureAwait(true);
+            if (result.Succeeded && result.ClearedActiveConversation)
+            {
+                await _navigationCoordinator.ActivateStartAsync().ConfigureAwait(true);
+            }
         }
         catch (Exception ex)
         {

@@ -61,35 +61,6 @@
     </Page.Resources>
 
     <Grid>
-        <!-- 未激活会话状态：空状态设计 -->
-        <Grid Visibility="{x:Bind ViewModel.IsSessionActive, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-              AutomationProperties.AutomationId="ChatView.InactiveRoot"
-              Transitions="{x:Bind Motion.PageTransitions, Mode=OneWay}">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="24">
-                <Viewbox Width="80" Height="80" Opacity="0.2">
-                    <SymbolIcon Symbol="Message" Foreground="{ThemeResource AccentBrush}"/>
-                </Viewbox>
-                <StackPanel Spacing="8">
-                    <TextBlock Text="准备好开始了吗？"
-                               FontSize="24"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock Text="请前往“设置 > Agent (ACP)”配置并连接到您的 Agent"
-                               FontSize="14"
-                               Opacity="0.7"
-                               HorizontalAlignment="Center"
-                               TextAlignment="Center"/>
-                </StackPanel>
-                <Button Content="去配置 Agent"
-                        AutomationProperties.AutomationId="ChatView.GoToSettingsButton"
-                        HorizontalAlignment="Center"
-                        Style="{StaticResource AccentButtonStyle}"
-                        Padding="24,8"
-                        Click="OnGoToSettingsClick"/>
-            </StackPanel>
-        </Grid>
-
         <!-- 已激活会话状态：对话界面 -->
         <Grid
               AutomationProperties.AutomationId="ChatView.ActiveRoot"
@@ -292,16 +263,43 @@
         </Grid>
 
         <!-- 加载遮罩：覆盖空态与会话态的整个聊天页生命周期 -->
-        <Grid AutomationProperties.AutomationId="ChatView.LoadingOverlay"
-              Background="{ThemeResource AppOverlayScrimBrush}"
-              Visibility="{x:Bind ViewModel.IsOverlayVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16">
-                <ProgressRing IsActive="True" Width="48" Height="48"/>
-                <TextBlock Text="{x:Bind ViewModel.OverlayStatusText, Mode=OneWay}"
-                           FontSize="14"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           HorizontalAlignment="Center"/>
-            </StackPanel>
-        </Grid>
+        <ContentControl x:Name="LoadingOverlayPresenter"
+                        AutomationProperties.AutomationId="ChatView.LoadingOverlay"
+                        AutomationProperties.Name="会话加载中"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch"
+                        IsTabStop="False"
+                        Visibility="Collapsed">
+            <Grid Background="{ThemeResource AppOverlayScrimBrush}">
+                <Border HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MinWidth="240"
+                        MaxWidth="320"
+                        Padding="24,20"
+                        CornerRadius="16"
+                        Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel HorizontalAlignment="Center"
+                                Spacing="14">
+                        <ProgressRing IsActive="True"
+                                      Width="48"
+                                      Height="48"
+                                      HorizontalAlignment="Center"/>
+                        <TextBlock AutomationProperties.AutomationId="ChatView.LoadingOverlayStatus"
+                                   AutomationProperties.LiveSetting="Assertive"
+                                   Text="{x:Bind ViewModel.OverlayStatusText, Mode=OneWay}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   TextWrapping="WrapWholeWords"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ContentControl>
     </Grid>
 </Page>

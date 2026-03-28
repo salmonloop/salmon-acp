@@ -104,7 +104,22 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
         return Task.CompletedTask;
     }
 
+    Task ResetConversationForResyncAsync(string conversationId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return string.IsNullOrWhiteSpace(conversationId)
+            || !string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal)
+            ? Task.CompletedTask
+            : ResetHydratedConversationForResyncAsync(cancellationToken);
+    }
+
     string GetActiveSessionCwdOrDefault() => Environment.CurrentDirectory;
+
+    string GetSessionCwdOrDefault(string conversationId)
+        => string.IsNullOrWhiteSpace(conversationId)
+            || !string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal)
+            ? Environment.CurrentDirectory
+            : GetActiveSessionCwdOrDefault();
 
     Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
     {
@@ -112,9 +127,32 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
         return Task.CompletedTask;
     }
 
+    Task SetConversationHydratingAsync(
+        string conversationId,
+        bool isHydrating,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return string.IsNullOrWhiteSpace(conversationId)
+            || !string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal)
+            ? Task.CompletedTask
+            : SetIsHydratingAsync(isHydrating, cancellationToken);
+    }
+
     Task MarkActiveConversationRemoteHydratedAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.CompletedTask;
+    }
+
+    Task MarkConversationRemoteHydratedAsync(
+        string conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return string.IsNullOrWhiteSpace(conversationId)
+            || !string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal)
+            ? Task.CompletedTask
+            : MarkActiveConversationRemoteHydratedAsync(cancellationToken);
     }
 }

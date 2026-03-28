@@ -8,7 +8,6 @@ using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
-using SalmonEgg.Presentation.Services;
 
 namespace SalmonEgg.Presentation.Views.Chat
 {
@@ -18,22 +17,27 @@ namespace SalmonEgg.Presentation.Views.Chat
         public ChatViewModel ViewModel => ShellViewModel.Chat;
         public ShellLayoutViewModel LayoutVM => ShellViewModel.ShellLayout;
         public UiMotion Motion => UiMotion.Current;
-        private readonly IShellNavigationService _shellNavigation;
         private bool _isViewLoaded;
         private bool _isTrackingMessages;
         private readonly InitialScrollGate _initialScrollGate = new();
         private bool _userScrolledUp;
         private const double BottomThreshold = 10;
         private const int MaxInitialScrollAttempts = 8;
+        private static readonly TimeSpan LoadingOverlayRenderHoldTimeout = TimeSpan.FromSeconds(2);
         private ScrollViewer? _scrollViewer;
         private bool _suspendAutoScrollTracking;
+        private bool _isOverlayLayoutTracking;
+        private bool _isHoldingLoadingOverlay;
+        private string? _overlayRenderHoldConversationId;
+        private DateTimeOffset _overlayRenderHoldDeadlineUtc;
 
         public ChatView()
         {
             ShellViewModel = App.ServiceProvider.GetRequiredService<ChatShellViewModel>();
-            _shellNavigation = App.ServiceProvider.GetRequiredService<IShellNavigationService>();
 
             this.InitializeComponent();
+            _overlayRenderHoldConversationId = ViewModel.CurrentSessionId;
+            SetLoadingOverlayVisibility(ViewModel.IsOverlayVisible);
 
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
@@ -45,6 +49,7 @@ namespace SalmonEgg.Presentation.Views.Chat
             _userScrolledUp = false;
             _initialScrollGate.MarkPending();
             EnsureMessageTracking();
+            UpdateLoadingOverlayPresentation();
             RequestInitialScroll();
             try
             {
@@ -61,6 +66,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         {
             _isViewLoaded = false;
             DetachScrollViewer();
+            DetachOverlayLayoutTracking();
             _initialScrollGate.CancelInFlight();
             if (_isTrackingMessages)
             {
@@ -68,6 +74,10 @@ namespace SalmonEgg.Presentation.Views.Chat
                 ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
                 _isTrackingMessages = false;
             }
+
+            _isHoldingLoadingOverlay = false;
+            _overlayRenderHoldDeadlineUtc = default;
+            SetLoadingOverlayVisibility(false);
         }
 
         private void EnsureMessageTracking()
@@ -104,11 +114,14 @@ namespace SalmonEgg.Presentation.Views.Chat
             {
                 RequestScrollToBottom();
             }
+
+            UpdateLoadingOverlayPresentation();
         }
 
         private void OnMessagesListLoaded(object sender, RoutedEventArgs e)
         {
             DetachScrollViewer();
+            AttachOverlayLayoutTracking();
             _scrollViewer = FindScrollViewer(MessagesList);
             if (_scrollViewer != null)
             {
@@ -118,6 +131,7 @@ namespace SalmonEgg.Presentation.Views.Chat
             }
 
             RequestInitialScroll();
+            UpdateLoadingOverlayPresentation();
         }
 
         private void ScrollViewer_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
@@ -193,6 +207,13 @@ namespace SalmonEgg.Presentation.Views.Chat
 
         private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(ChatViewModel.IsOverlayVisible)
+                || e.PropertyName == nameof(ChatViewModel.CurrentSessionId)
+                || e.PropertyName == nameof(ChatViewModel.IsSessionActive))
+            {
+                UpdateLoadingOverlayPresentation();
+            }
+
             if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId) ||
                 e.PropertyName == nameof(ChatViewModel.IsSessionActive))
             {
@@ -331,6 +352,136 @@ namespace SalmonEgg.Presentation.Views.Chat
             _scrollViewer = null;
         }
 
+        private void AttachOverlayLayoutTracking()
+        {
+            if (_isOverlayLayoutTracking)
+            {
+                return;
+            }
+
+            MessagesList.LayoutUpdated += OnMessagesListLayoutUpdated;
+            _isOverlayLayoutTracking = true;
+        }
+
+        private void DetachOverlayLayoutTracking()
+        {
+            if (!_isOverlayLayoutTracking)
+            {
+                return;
+            }
+
+            MessagesList.LayoutUpdated -= OnMessagesListLayoutUpdated;
+            _isOverlayLayoutTracking = false;
+        }
+
+        private void OnMessagesListLayoutUpdated(object sender, object e)
+        {
+            if (!_isHoldingLoadingOverlay)
+            {
+                return;
+            }
+
+            EvaluateLoadingOverlayRenderHold();
+        }
+
+        private void UpdateLoadingOverlayPresentation()
+        {
+            if (ViewModel.IsOverlayVisible)
+            {
+                _isHoldingLoadingOverlay = false;
+                _overlayRenderHoldConversationId = ViewModel.CurrentSessionId;
+                _overlayRenderHoldDeadlineUtc = default;
+                SetLoadingOverlayVisibility(true);
+                return;
+            }
+
+            if (CanBeginLoadingOverlayRenderHold())
+            {
+                _isHoldingLoadingOverlay = true;
+                _overlayRenderHoldDeadlineUtc = DateTimeOffset.UtcNow + LoadingOverlayRenderHoldTimeout;
+                SetLoadingOverlayVisibility(true);
+                return;
+            }
+
+            EvaluateLoadingOverlayRenderHold();
+        }
+
+        private bool CanBeginLoadingOverlayRenderHold()
+        {
+            return _isViewLoaded
+                && !_isHoldingLoadingOverlay
+                && !string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId)
+                && string.Equals(_overlayRenderHoldConversationId, ViewModel.CurrentSessionId, StringComparison.Ordinal)
+                && ViewModel.MessageHistory.Count > 0
+                && !HasRealizedMessageContainer();
+        }
+
+        private void EvaluateLoadingOverlayRenderHold()
+        {
+            if (!_isHoldingLoadingOverlay)
+            {
+                SetLoadingOverlayVisibility(false);
+                return;
+            }
+
+            if (ViewModel.IsOverlayVisible)
+            {
+                _isHoldingLoadingOverlay = false;
+                _overlayRenderHoldDeadlineUtc = default;
+                SetLoadingOverlayVisibility(true);
+                return;
+            }
+
+            var shouldRelease = !_isViewLoaded
+                || string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId)
+                || !string.Equals(_overlayRenderHoldConversationId, ViewModel.CurrentSessionId, StringComparison.Ordinal)
+                || ViewModel.MessageHistory.Count <= 0
+                || HasRealizedMessageContainer()
+                || DateTimeOffset.UtcNow >= _overlayRenderHoldDeadlineUtc;
+
+            if (shouldRelease)
+            {
+                _isHoldingLoadingOverlay = false;
+                _overlayRenderHoldDeadlineUtc = default;
+                _overlayRenderHoldConversationId = ViewModel.CurrentSessionId;
+                SetLoadingOverlayVisibility(false);
+                return;
+            }
+
+            SetLoadingOverlayVisibility(true);
+        }
+
+        private bool HasRealizedMessageContainer()
+        {
+            if (MessagesList is null || ViewModel.MessageHistory.Count <= 0)
+            {
+                return false;
+            }
+
+            var probeCount = Math.Min(ViewModel.MessageHistory.Count, 3);
+            for (var index = 0; index < probeCount; index++)
+            {
+                if (MessagesList.ContainerFromIndex(index) is not null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void SetLoadingOverlayVisibility(bool isVisible)
+        {
+            if (LoadingOverlayPresenter is null)
+            {
+                return;
+            }
+
+            LoadingOverlayPresenter.Visibility = isVisible
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
         private void StopInitialScrollForManualInteraction()
         {
             if (!_initialScrollGate.HasPending)
@@ -394,11 +545,6 @@ namespace SalmonEgg.Presentation.Views.Chat
                     }
                     break;
             }
-        }
-
-        private void OnGoToSettingsClick(object sender, RoutedEventArgs e)
-        {
-            _ = _shellNavigation.NavigateToSettings("General");
         }
     }
 }

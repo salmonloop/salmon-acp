@@ -256,7 +256,7 @@ public static class DependencyInjection
         services.AddSingleton<IConversationBindingCommands>(sp => sp.GetRequiredService<BindingCoordinator>());
         services.AddSingleton<IWorkspaceWriter>(sp =>
             new WorkspaceWriter(sp.GetRequiredService<ChatConversationWorkspace>()));
-        services.AddSingleton<Func<Action<SessionUpdateEventArgs>, SynchronizationContext, Action?, AcpEventAdapter>>(sp =>
+        services.AddSingleton<Func<Action<SessionUpdateEventArgs>, SynchronizationContext, Action<string?>?, AcpEventAdapter>>(sp =>
             (handler, syncContext, resyncRequired) => new AcpEventAdapter(
                 handler,
                 syncContext,
