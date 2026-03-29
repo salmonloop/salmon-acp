@@ -5,6 +5,7 @@ namespace SalmonEgg.GuiTests.Windows;
 
 internal sealed class GuiAppDataScope : IDisposable
 {
+    private const string AppDataRootEnvVar = "SALMONEGG_APPDATA_ROOT";
     private readonly string _appDataRoot;
     private readonly string _configDirectory;
     private readonly string _conversationsDirectory;
@@ -15,6 +16,7 @@ internal sealed class GuiAppDataScope : IDisposable
     private readonly bool _appYamlExisted;
     private readonly bool _conversationsExisted;
     private readonly string _projectRootPath;
+    private readonly string? _previousGuiAppDataRootOverride;
     private bool _disposed;
 
     private GuiAppDataScope(
@@ -25,7 +27,8 @@ internal sealed class GuiAppDataScope : IDisposable
         bool appYamlExisted,
         byte[]? originalConversations,
         bool conversationsExisted,
-        string projectRootPath)
+        string projectRootPath,
+        string? previousGuiAppDataRootOverride)
     {
         _appDataRoot = appDataRoot;
         _configDirectory = Path.GetDirectoryName(appYamlPath)!;
@@ -37,9 +40,10 @@ internal sealed class GuiAppDataScope : IDisposable
         _originalConversations = originalConversations;
         _conversationsExisted = conversationsExisted;
         _projectRootPath = projectRootPath;
+        _previousGuiAppDataRootOverride = previousGuiAppDataRootOverride;
     }
 
-    public static GuiAppDataScope CreateDeterministicLeftNavData(int sessionCount = 1)
+    public static GuiAppDataScope CreateDeterministicLeftNavData(int sessionCount = 1, bool withContent = false)
     {
         if (sessionCount <= 0)
         {
@@ -50,6 +54,8 @@ internal sealed class GuiAppDataScope : IDisposable
         WindowsGuiAppSession.StopAllRunningInstances();
 
         var appDataRoot = ResolveAppDataRoot();
+        var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
         var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
         var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
         var projectRootPath = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", "project-1");
@@ -62,9 +68,10 @@ internal sealed class GuiAppDataScope : IDisposable
             File.Exists(appYamlPath),
             File.Exists(conversationsPath) ? File.ReadAllBytes(conversationsPath) : null,
             File.Exists(conversationsPath),
-            projectRootPath);
+            projectRootPath,
+            previousGuiAppDataRootOverride);
 
-        scope.Seed(sessionCount);
+        scope.Seed(sessionCount, withContent);
         return scope;
     }
 
@@ -82,6 +89,7 @@ internal sealed class GuiAppDataScope : IDisposable
         DeleteDirectoryIfEmpty(_configDirectory);
         DeleteDirectoryIfEmpty(_conversationsDirectory);
         DeleteDirectoryIfEmpty(_appDataRoot);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, _previousGuiAppDataRootOverride);
 
         try
         {
@@ -116,27 +124,29 @@ internal sealed class GuiAppDataScope : IDisposable
         }
     }
 
-    private void Seed(int sessionCount)
+    private void Seed(int sessionCount, bool withContent = false)
     {
         Directory.CreateDirectory(_configDirectory);
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
 
         File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(_conversationsPath, BuildConversationsJson(_projectRootPath, sessionCount), Encoding.UTF8);
+        File.WriteAllText(_conversationsPath, BuildConversationsJson(_projectRootPath, sessionCount, withContent), Encoding.UTF8);
     }
 
     private static string ResolveAppDataRoot()
     {
-        var overrideRoot = Environment.GetEnvironmentVariable("SALMONEGG_GUI_APPDATA_ROOT");
+        var overrideRoot = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
         if (!string.IsNullOrWhiteSpace(overrideRoot))
         {
             return overrideRoot.Trim();
         }
 
         return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SalmonEgg");
+            Path.GetTempPath(),
+            "SalmonEgg.GuiTests",
+            "appdata",
+            Guid.NewGuid().ToString("N"));
     }
 
     private static string BuildAppYaml(string projectRootPath)
@@ -157,13 +167,36 @@ internal sealed class GuiAppDataScope : IDisposable
             string.Empty);
     }
 
-    private static string BuildConversationsJson(string projectRootPath, int sessionCount)
+    private static string BuildConversationsJson(string projectRootPath, int sessionCount, bool withContent = false)
     {
         var baseTime = new DateTimeOffset(2026, 03, 19, 09, 00, 00, TimeSpan.Zero);
         var conversations = Enumerable.Range(1, sessionCount)
             .Select(index =>
             {
                 var timestamp = baseTime.AddMinutes(-(index - 1));
+                object[] messages = Array.Empty<object>();
+                
+                if (withContent)
+                {
+                    messages = new object[]
+                    {
+                        new {
+                            id = $"m-{index}-1",
+                            timestamp = timestamp,
+                            contentType = "text",
+                            textContent = $"Hello from session {index}",
+                            isOutgoing = false
+                        },
+                        new {
+                            id = $"m-{index}-2",
+                            timestamp = timestamp.AddSeconds(1),
+                            contentType = "text",
+                            textContent = $"Hi there!",
+                            isOutgoing = true
+                        }
+                    };
+                }
+
                 return new
                 {
                     conversationId = $"gui-session-{index:00}",
@@ -171,7 +204,7 @@ internal sealed class GuiAppDataScope : IDisposable
                     createdAt = timestamp,
                     lastUpdatedAt = timestamp,
                     cwd = projectRootPath,
-                    messages = Array.Empty<object>()
+                    messages = messages
                 };
             })
             .ToArray();

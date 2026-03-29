@@ -167,18 +167,22 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [NotifyPropertyChangedFor(nameof(OverlayStatusText))]
     private bool _isSessionSwitching;
 
+    private bool IsOverlayOwnedByCurrentSession(string? ownerConversationId)
+        => !string.IsNullOrWhiteSpace(ownerConversationId)
+            && string.Equals(ownerConversationId, CurrentSessionId, StringComparison.Ordinal);
+
     private bool IsSessionSwitchOverlayVisible
         => IsSessionSwitching && !string.IsNullOrWhiteSpace(_sessionSwitchOverlayConversationId);
 
     private bool ShouldShowConnectionLifecycleOverlay
-        => !string.IsNullOrWhiteSpace(_connectionLifecycleOverlayConversationId)
+        => IsOverlayOwnedByCurrentSession(_connectionLifecycleOverlayConversationId)
             && (IsConnecting || IsInitializing);
 
     private bool ShouldShowHistoryOverlay
-        => !string.IsNullOrWhiteSpace(_historyOverlayConversationId);
+        => IsOverlayOwnedByCurrentSession(_historyOverlayConversationId);
 
     private bool ShouldShowProjectedHydrationOverlay
-        => string.IsNullOrWhiteSpace(_historyOverlayConversationId)
+        => !ShouldShowHistoryOverlay
             && IsHydrating
             && !string.IsNullOrWhiteSpace(CurrentSessionId);
 
@@ -186,13 +190,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         => ShouldShowConnectionLifecycleOverlay
             || ShouldShowHistoryOverlay
             || ShouldShowProjectedHydrationOverlay
-            || IsSessionSwitchOverlayVisible;
+            || IsSessionSwitchOverlayVisible
+            || IsLayoutLoading;
+
+    public bool HasVisibleTranscriptContent => MessageHistory.Count > 0;
+
+    public bool ShouldShowBlockingLoadingMask
+        => IsOverlayVisible && !HasVisibleTranscriptContent;
+
+    public bool ShouldShowLoadingOverlayStatusPill
+        => IsOverlayVisible
+            && !string.IsNullOrWhiteSpace(OverlayStatusText);
+
+    public bool ShouldShowLoadingOverlayPresenter
+        => ShouldShowBlockingLoadingMask || ShouldShowLoadingOverlayStatusPill;
 
     public string OverlayStatusText =>
         IsConnecting && ShouldShowConnectionLifecycleOverlay ? "正在连接到 Agent..." :
         IsInitializing && ShouldShowConnectionLifecycleOverlay ? "正在初始化 ACP 协议..." :
         (ShouldShowHistoryOverlay || ShouldShowProjectedHydrationOverlay) ? "正在加载会话历史..." :
         IsSessionSwitchOverlayVisible ? "正在准备会话..." : string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOverlayVisible))]
+    private bool _isLayoutLoading;
 
     [ObservableProperty]
     private bool _isTurnStatusVisible;
@@ -852,6 +873,22 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
+    private ServerConfiguration? ResolveLoadedProfileSelection(ServerConfiguration? profile)
+    {
+        if (profile is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.Id))
+        {
+            return _acpProfiles.Profiles.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, profile.Id, StringComparison.Ordinal));
+        }
+
+        return _acpProfiles.Profiles.FirstOrDefault(candidate => ReferenceEquals(candidate, profile));
+    }
+
     private void ApplySessionStateProjection(
         IReadOnlyList<ConversationModeOptionSnapshot> availableModes,
         string? selectedModeId,
@@ -1077,10 +1114,22 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         if (string.IsNullOrWhiteSpace(value))
         {
             _currentRemoteSessionId = null;
+            var sessionSwitchConversationId = IsSessionSwitching ? _sessionSwitchOverlayConversationId : null;
+            var overlayOwnersAlreadyMatch =
+                string.Equals(_sessionSwitchOverlayConversationId, sessionSwitchConversationId, StringComparison.Ordinal)
+                && string.IsNullOrWhiteSpace(_connectionLifecycleOverlayConversationId)
+                && string.IsNullOrWhiteSpace(_historyOverlayConversationId);
             SetConversationOverlayOwners(
-                sessionSwitchConversationId: IsSessionSwitching ? _sessionSwitchOverlayConversationId : null,
+                sessionSwitchConversationId: sessionSwitchConversationId,
                 connectionLifecycleConversationId: null,
                 historyConversationId: null);
+            if (overlayOwnersAlreadyMatch)
+            {
+                RaiseOverlayStateChanged();
+            }
+        }
+        else
+        {
             RaiseOverlayStateChanged();
         }
 
@@ -1134,15 +1183,38 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
-        var activationResult = await _conversationActivationCoordinator
-            .ActivateSessionAsync(conversationId)
-            .ConfigureAwait(false);
-        if (!activationResult.Succeeded)
+        var keepLayoutLoading = false;
+        IsLayoutLoading = true;
+        try
         {
-            return;
-        }
+            var startAt = DateTimeOffset.UtcNow;
 
-        await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
+            var activationResult = await _conversationActivationCoordinator
+                .ActivateSessionAsync(conversationId)
+                .ConfigureAwait(false);
+            if (!activationResult.Succeeded)
+            {
+                return;
+            }
+
+            // 强制 Skeleton 遮罩停留至少 600ms，以提供 premium 的加载感并确保 UI 布局就绪
+            var elapsed = DateTimeOffset.UtcNow - startAt;
+            var minDur = TimeSpan.FromMilliseconds(600);
+            if (elapsed < minDur)
+            {
+                await Task.Delay(minDur - elapsed).ConfigureAwait(false);
+            }
+
+            await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
+            keepLayoutLoading = IsSessionActive && MessageHistory.Count > 0;
+        }
+        finally
+        {
+            if (!keepLayoutLoading)
+            {
+                IsLayoutLoading = false;
+            }
+        }
     }
 
     private async Task ApplyCurrentStoreProjectionAsync()
@@ -1326,6 +1398,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private void SyncMessageHistory(IImmutableList<ConversationMessageSnapshot> transcript)
     {
+        var previousCount = MessageHistory.Count;
         var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         for (int i = 0; i < messages.Count; i++)
         {
@@ -1351,6 +1424,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         while (MessageHistory.Count > messages.Count)
         {
             MessageHistory.RemoveAt(MessageHistory.Count - 1);
+        }
+
+        if (previousCount != MessageHistory.Count)
+        {
+            OnPropertyChanged(nameof(HasVisibleTranscriptContent));
+            OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
+            OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
         }
     }
 
@@ -1905,7 +1985,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _suppressStoreProfileProjection = true;
             try
             {
-                SelectedAcpProfile = config;
+                var selectedProfile = ResolveLoadedProfileSelection(config);
+                SelectedAcpProfile = selectedProfile;
+                _acpProfiles.SelectedProfile = selectedProfile;
             }
             finally
             {
@@ -1942,7 +2024,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             await PrepareSelectedProfileConnectionAsync(profile, cancellationToken).ConfigureAwait(false);
             _suppressAutoConnectFromPreferenceChange = true;
             _acpProfiles.MarkLastConnected(profile);
-            _acpProfiles.SelectedProfile = profile;
+            _acpProfiles.SelectedProfile = ResolveLoadedProfileSelection(profile);
             var result = await _acpConnectionCommands
                 .ConnectToProfileAsync(profile, TransportConfig, this, cancellationToken)
                 .ConfigureAwait(false);
@@ -2194,6 +2276,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         OnPropertyChanged(nameof(IsOverlayVisible));
         OnPropertyChanged(nameof(OverlayStatusText));
+        OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
+        OnPropertyChanged(nameof(ShouldShowLoadingOverlayStatusPill));
+        OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
     }
 
     private void TrackPendingSessionUpdate(Task task)
@@ -2712,7 +2797,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
         return new ConversationActivationLease(version, currentCts);
     }
-
     private bool EndConversationActivation(ConversationActivationLease lease)
     {
         ArgumentNullException.ThrowIfNull(lease);
@@ -4468,15 +4552,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         ArgumentNullException.ThrowIfNull(profile);
 
+        var selectedProfile = ResolveLoadedProfileSelection(profile);
         _suppressAcpProfileConnect = true;
+        _suppressStoreProfileProjection = selectedProfile is null;
         try
         {
-            SelectedAcpProfile = profile;
-            _acpProfiles.SelectedProfile = profile;
+            SelectedAcpProfile = selectedProfile;
+            _acpProfiles.SelectedProfile = selectedProfile;
         }
         finally
         {
+            _suppressStoreProfileProjection = false;
             _suppressAcpProfileConnect = false;
+        }
+
+        if (selectedProfile is null)
+        {
+            _ = _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profile.Id));
         }
     }
 

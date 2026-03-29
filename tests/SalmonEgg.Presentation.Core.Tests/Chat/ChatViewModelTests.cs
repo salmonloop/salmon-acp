@@ -957,6 +957,21 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task SelectProfile_WhenProfileIsNotLoaded_PreservesStoreSelectionWithoutProjectingDetachedInstance()
+    {
+        await using var fixture = CreateViewModel();
+        var detachedProfile = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+
+        fixture.ViewModel.SelectProfile(detachedProfile);
+        await Task.Delay(50);
+
+        var connectionState = await fixture.GetConnectionStateAsync();
+        Assert.Equal("profile-a", connectionState.SelectedProfileId);
+        Assert.Null(fixture.ViewModel.SelectedAcpProfile);
+        Assert.Null(fixture.Profiles.SelectedProfile);
+    }
+
+    [Fact]
     public async Task CurrentAgentDisplayText_PrefersProtocolAgentName_ThenProfileName_ThenDash()
     {
         await using var fixture = CreateViewModel();
@@ -1312,6 +1327,49 @@ public class ChatViewModelTests
         await fixture.ViewModel.TryAutoConnectAsync(CancellationToken.None);
 
         Assert.Equal(2, connectCalls);
+    }
+
+    [Fact]
+    public async Task TryAutoConnectAsync_FallbackProfileOutsideLoadedList_DoesNotProjectDetachedUiSelection()
+    {
+        var commands = new Mock<IAcpConnectionCommands>();
+        commands
+            .Setup(x => x.ConnectToProfileAsync(
+                It.IsAny<ServerConfiguration>(),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AcpTransportApplyResult(Mock.Of<IChatService>(), new InitializeResponse()));
+
+        var configurationService = new Mock<IConfigurationService>();
+        configurationService.Setup(x => x.ListConfigurationsAsync()).ReturnsAsync(Array.Empty<ServerConfiguration>());
+        configurationService.Setup(x => x.LoadConfigurationAsync("profile-1")).ReturnsAsync(
+            new ServerConfiguration
+            {
+                Id = "profile-1",
+                Name = "Detached Profile",
+                Transport = TransportType.Stdio
+            });
+
+        await using var fixture = CreateViewModel(
+            acpConnectionCommands: commands.Object,
+            configurationService: configurationService);
+        var lastSelectedServerIdField = typeof(AppPreferencesViewModel)
+            .GetField("_lastSelectedServerId", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(lastSelectedServerIdField);
+        lastSelectedServerIdField!.SetValue(fixture.Preferences, "profile-1");
+
+        await fixture.ViewModel.TryAutoConnectAsync(CancellationToken.None);
+
+        Assert.Null(fixture.ViewModel.SelectedAcpProfile);
+        Assert.Null(fixture.Profiles.SelectedProfile);
+        commands.Verify(
+            x => x.ConnectToProfileAsync(
+                It.Is<ServerConfiguration>(profile => string.Equals(profile.Id, "profile-1", StringComparison.Ordinal)),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -3827,6 +3885,45 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task SelectAndHydrateConversationAsync_WhenActivationFails_ClearsLayoutLoadingState()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var activationCoordinator = new Mock<IConversationActivationCoordinator>();
+        activationCoordinator
+            .Setup(coordinator => coordinator.ActivateSessionAsync("conv-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ConversationActivationResult(false, "conv-1", "ActivationFailed"));
+
+        await using var fixture = CreateViewModel(syncContext, conversationActivationCoordinator: activationCoordinator.Object);
+
+        await InvokePrivateTaskAsync(fixture.ViewModel, "SelectAndHydrateConversationAsync", "conv-1");
+
+        Assert.False(fixture.ViewModel.IsLayoutLoading);
+        Assert.False(fixture.ViewModel.IsOverlayVisible);
+        Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+    }
+
+    [Fact]
+    public async Task SelectAndHydrateConversationAsync_WhenActivatedConversationHasNoMessages_ClearsLayoutLoadingState()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var activationCoordinator = new Mock<IConversationActivationCoordinator>();
+        activationCoordinator
+            .Setup(coordinator => coordinator.ActivateSessionAsync("conv-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ConversationActivationResult(true, "conv-1", null));
+
+        await using var fixture = CreateViewModel(syncContext, conversationActivationCoordinator: activationCoordinator.Object);
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1" });
+
+        await InvokePrivateTaskAsync(fixture.ViewModel, "SelectAndHydrateConversationAsync", "conv-1");
+
+        Assert.Equal("conv-1", fixture.ViewModel.CurrentSessionId);
+        Assert.Empty(fixture.ViewModel.MessageHistory);
+        Assert.False(fixture.ViewModel.IsLayoutLoading);
+        Assert.False(fixture.ViewModel.IsOverlayVisible);
+        Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+    }
+
+    [Fact]
     public async Task SwitchConversationAsync_RemoteBoundConversation_WhenProfileConnectIsPending_KeepsOverlayVisible()
     {
         var syncContext = new QueueingSynchronizationContext();
@@ -4044,6 +4141,74 @@ public class ChatViewModelTests
         Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
         Assert.False(fixture.ViewModel.IsOverlayVisible);
         Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+    }
+
+    [Fact]
+    public async Task Overlay_HistoryOwnerFromDifferentConversation_DoesNotLeakStatusToCurrentSession()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-2" });
+        SetPrivateField(fixture.ViewModel, "_historyOverlayConversationId", "conv-1");
+
+        Assert.Equal("conv-2", fixture.ViewModel.CurrentSessionId);
+        Assert.False(fixture.ViewModel.IsOverlayVisible);
+        Assert.False(fixture.ViewModel.ShouldShowBlockingLoadingMask);
+        Assert.False(fixture.ViewModel.ShouldShowLoadingOverlayStatusPill);
+        Assert.False(fixture.ViewModel.ShouldShowLoadingOverlayPresenter);
+        Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+    }
+
+    [Fact]
+    public async Task Overlay_ConnectionLifecycleOwnerFromDifferentConversation_DoesNotLeakStatusToCurrentSession()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-2" });
+        SetPrivateField(fixture.ViewModel, "_connectionLifecycleOverlayConversationId", "conv-1");
+        fixture.ViewModel.IsConnecting = true;
+
+        Assert.Equal("conv-2", fixture.ViewModel.CurrentSessionId);
+        Assert.False(fixture.ViewModel.IsOverlayVisible);
+        Assert.False(fixture.ViewModel.ShouldShowBlockingLoadingMask);
+        Assert.False(fixture.ViewModel.ShouldShowLoadingOverlayStatusPill);
+        Assert.False(fixture.ViewModel.ShouldShowLoadingOverlayPresenter);
+        Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+    }
+
+    [Fact]
+    public async Task Overlay_WhenCurrentSessionChanges_RaisesDerivedPropertyNotifications()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1" });
+        SetPrivateField(fixture.ViewModel, "_historyOverlayConversationId", "conv-1");
+
+        var raised = new List<string>();
+        fixture.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.PropertyName))
+            {
+                raised.Add(e.PropertyName!);
+            }
+        };
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-2" });
+
+        Assert.Equal("conv-2", fixture.ViewModel.CurrentSessionId);
+        Assert.False(fixture.ViewModel.IsOverlayVisible);
+        Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+        Assert.Contains(nameof(ChatViewModel.IsOverlayVisible), raised);
+        Assert.Contains(nameof(ChatViewModel.OverlayStatusText), raised);
+        Assert.Contains(nameof(ChatViewModel.ShouldShowBlockingLoadingMask), raised);
+        Assert.Contains(nameof(ChatViewModel.ShouldShowLoadingOverlayStatusPill), raised);
+        Assert.Contains(nameof(ChatViewModel.ShouldShowLoadingOverlayPresenter), raised);
     }
 
     [Fact]
@@ -4407,6 +4572,136 @@ public class ChatViewModelTests
             var finalState = await fixture.GetStateAsync();
             Assert.Equal("conv-local", finalState.HydratedConversationId);
             Assert.Equal("local", Assert.Single(finalState.Transcript!).TextContent);
+        }
+    }
+
+    [Fact]
+    public async Task SwitchConversationAsync_WhenSupersededByPureLocalConversation_HidesLoadingStatusPillImmediately()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-local", @"C:\repo\local");
+        await sessionManager.Object.CreateSessionAsync("conv-remote", @"C:\repo\remote");
+
+        var allowConnectCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
+        chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            .ReturnsAsync(SessionLoadResponse.Completed);
+
+        ViewModelFixture? fixture = null;
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        commands.Setup(x => x.ConnectToProfileAsync(
+                It.Is<ServerConfiguration>(profile => string.Equals(profile.Id, "profile-1", StringComparison.Ordinal)),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ServerConfiguration, IAcpTransportConfiguration, IAcpChatCoordinatorSink, CancellationToken>(async (profile, _, sink, cancellationToken) =>
+            {
+                await allowConnectCompletion.Task.WaitAsync(cancellationToken);
+                sink.SelectProfile(profile);
+                sink.ReplaceChatService(chatService.Object);
+                await fixture!.DispatchConnectionAsync(new SetSelectedProfileAction(profile.Id));
+                await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
+            });
+
+        fixture = CreateViewModel(syncContext, sessionManager: sessionManager, acpConnectionCommands: commands.Object);
+        await using (fixture)
+        {
+            fixture.Profiles.Profiles.Add(new ServerConfiguration { Id = "profile-1", Name = "Profile 1", Transport = TransportType.Stdio });
+            var restoreTask = fixture.ViewModel.RestoreAsync();
+            await syncContext.RunUntilCompletedAsync(restoreTask);
+
+            fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+                ConversationId: "conv-local",
+                Transcript:
+                [
+                    new ConversationMessageSnapshot
+                    {
+                        Id = "local-1",
+                        Timestamp = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                        IsOutgoing = true,
+                        ContentType = "text",
+                        TextContent = "local"
+                    }
+                ],
+                Plan: [],
+                ShowPlanPanel: false,
+                PlanTitle: null,
+                CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+            fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+                ConversationId: "conv-remote",
+                Transcript: [],
+                Plan: [],
+                ShowPlanPanel: false,
+                PlanTitle: null,
+                CreatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+            await fixture.UpdateStateAsync(state => state with
+            {
+                HydratedConversationId = "conv-local",
+                Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                    .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
+            });
+            syncContext.RunAll();
+
+            var remoteSwitchTask = fixture.ViewModel.SwitchConversationAsync("conv-remote");
+
+            await WaitForConditionAsync(() =>
+            {
+                syncContext.RunAll();
+                return Task.FromResult(fixture.ViewModel.ShouldShowLoadingOverlayStatusPill || remoteSwitchTask.IsCompleted);
+            });
+
+            Assert.False(remoteSwitchTask.IsCompleted);
+
+            var localSwitchTask = fixture.ViewModel.SwitchConversationAsync("conv-local");
+            await syncContext.RunUntilCompletedAsync(localSwitchTask);
+
+            Assert.True(await localSwitchTask);
+            await WaitForConditionAsync(() =>
+            {
+                syncContext.RunAll();
+                return Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-local", StringComparison.Ordinal));
+            });
+
+            Assert.False(fixture.ViewModel.ShouldShowLoadingOverlayStatusPill);
+            Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+
+            allowConnectCompletion.TrySetResult(null);
+            await syncContext.RunUntilCompletedAsync(remoteSwitchTask);
         }
     }
 

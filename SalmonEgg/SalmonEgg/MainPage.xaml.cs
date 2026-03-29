@@ -113,6 +113,7 @@ public sealed partial class MainPage : Page
         Loaded += OnMainPageLoaded;
         Unloaded += OnMainPageUnloaded;
         ContentFrame.Navigated += OnContentFrameNavigated;
+        ContentFrame.NavigationFailed += OnContentFrameNavigationFailed;
 
         // 2. Listen for global preference changes (animations, theme, backdrop)
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
@@ -144,6 +145,7 @@ public sealed partial class MainPage : Page
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         NavVM.PropertyChanged -= OnNavigationViewModelPropertyChanged;
         _metricsProvider.Detach();
+        ContentFrame.NavigationFailed -= OnContentFrameNavigationFailed;
 #if WINDOWS
         _trayIcon?.Dispose();
         _trayIcon = null;
@@ -319,7 +321,20 @@ public sealed partial class MainPage : Page
         var transition = UiMotion.Current.IsAnimationEnabled
             ? (NavigationTransitionInfo)new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
-        ContentFrame.Navigate(pageType, parameter, transition);
+
+        try
+        {
+            var navigated = ContentFrame.Navigate(pageType, parameter, transition);
+            if (!navigated)
+            {
+                BootLogDebug($"ContentFrame Navigate returned false: target={pageType?.Name ?? "<null>"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            BootLogDebug($"ContentFrame Navigate exception: target={pageType?.Name ?? "<null>"} exception={ex}");
+            throw;
+        }
     }
 
     private async void OnMainNavItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
@@ -657,6 +672,11 @@ public sealed partial class MainPage : Page
         // when the coordinator updates the shell selection state. Calling
         // ApplySelectionDeferred here would interrupt the indicator animation.
         UpdateRightPanelAvailability(IsChatPageType(e.SourcePageType));
+    }
+
+    private void OnContentFrameNavigationFailed(object sender, NavigationFailedEventArgs e)
+    {
+        BootLogDebug($"ContentFrame NavigationFailed: target={e.SourcePageType?.Name ?? "<null>"} exception={e.Exception}");
     }
 
     private void OnTitleBarBackClick(object sender, RoutedEventArgs e)
@@ -1083,5 +1103,6 @@ public sealed partial class MainPage
         Loaded -= OnMainPageLoaded;
         Unloaded -= OnMainPageUnloaded;
         ContentFrame.Navigated -= OnContentFrameNavigated;
+        ContentFrame.NavigationFailed -= OnContentFrameNavigationFailed;
     }
 }

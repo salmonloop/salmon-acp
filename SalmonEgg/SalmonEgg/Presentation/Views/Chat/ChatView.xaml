@@ -138,7 +138,8 @@
                                   SelectionMode="None"
                                   HorizontalAlignment="Stretch"
                                   MinWidth="0"
-                                  Loaded="OnMessagesListLoaded">
+                                  Loaded="OnMessagesListLoaded"
+                                  LayoutUpdated="OnMessagesListLayoutUpdated">
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -268,38 +269,42 @@
         <ContentControl x:Name="LoadingOverlayPresenter"
                         x:Uid="ChatViewLoadingOverlay"
                         AutomationProperties.AutomationId="ChatView.LoadingOverlay"
+                        Grid.RowSpan="3"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch"
                         HorizontalContentAlignment="Stretch"
                         VerticalContentAlignment="Stretch"
                         IsTabStop="False"
-                        Visibility="Collapsed">
-            <Grid Background="{ThemeResource AppOverlayScrimBrush}">
-                <Border HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MinWidth="240"
-                        MaxWidth="320"
-                        Padding="24,20"
-                        CornerRadius="16"
-                        Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                        BorderThickness="1">
-                    <StackPanel HorizontalAlignment="Center"
-                                Spacing="14">
-                        <ProgressRing IsActive="True"
-                                      Width="48"
-                                      Height="48"
-                                      HorizontalAlignment="Center"/>
-                        <TextBlock AutomationProperties.AutomationId="ChatView.LoadingOverlayStatus"
-                                   Text="{x:Bind ViewModel.OverlayStatusText, Mode=OneWay}"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                   HorizontalAlignment="Center"
-                                   TextAlignment="Center"
-                                   TextWrapping="WrapWholeWords"/>
-                    </StackPanel>
+                        IsHitTestVisible="{x:Bind ViewModel.ShouldShowBlockingLoadingMask, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShouldShowLoadingOverlayPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Grid>
+                <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                        AutomationProperties.AutomationId="ChatView.LoadingOverlayMask"
+                        Visibility="{x:Bind ViewModel.ShouldShowBlockingLoadingMask, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <controls:ChatSkeleton VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
                 </Border>
+
+                <Grid>
+                    <!-- Status Pill overlay -->
+                    <Border VerticalAlignment="Bottom" 
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,48"
+                            Padding="16,8"
+                            Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="20"
+                            Visibility="{x:Bind ViewModel.ShouldShowLoadingOverlayStatusPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <ProgressRing IsActive="True" Width="16" Height="16" />
+                            <TextBlock AutomationProperties.AutomationId="ChatView.LoadingOverlayStatus"
+                                       Text="{x:Bind ViewModel.OverlayStatusText, Mode=OneWay}"
+                                       FontSize="12"
+                                       FontWeight="Medium"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
         </ContentControl>
     </Grid>

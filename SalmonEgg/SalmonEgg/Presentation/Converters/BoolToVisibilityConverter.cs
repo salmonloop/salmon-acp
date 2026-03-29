@@ -18,6 +18,12 @@ namespace SalmonEgg.Presentation.Converters
                 if (invert) boolValue = !boolValue;
                 return boolValue ? Visibility.Visible : Visibility.Collapsed;
             }
+
+            if (value is string stringValue)
+            {
+                return string.IsNullOrWhiteSpace(stringValue) ? Visibility.Collapsed : Visibility.Visible;
+            }
+
             return Visibility.Collapsed;
         }
 

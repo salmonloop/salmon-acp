@@ -81,6 +81,7 @@ public sealed class NavigationSmokeTests
         var dialog = session.FindByAutomationId("SessionsDialog", TimeSpan.FromSeconds(10));
         var dialogSession = session.FindFirstDescendantByControlType(dialog, ControlType.ListItem, TimeSpan.FromSeconds(10));
 
+        Assert.NotNull(dialogSession);
         session.ActivateElement(dialogSession);
 
         var chatHeader = session.FindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(10));

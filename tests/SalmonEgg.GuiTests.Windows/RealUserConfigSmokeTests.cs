@@ -93,41 +93,57 @@ public sealed partial class RealUserConfigSmokeTests
         var timeline = new List<string>();
         var stopwatch = Stopwatch.StartNew();
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        var sawOverlay = false;
+        var sawBlockingMask = false;
+        var sawOverlayStatus = false;
         var sawTranscriptVisible = false;
         var sawPrematureDismissal = false;
         string? prematureDismissalCapturePath = null;
-        long? overlayDismissedAtMs = null;
+        string? persistentMaskCapturePath = null;
+        long? maskDismissedAtMs = null;
+        long? transcriptVisibleAtMs = null;
+        var maskDismissedAfterTranscript = false;
 
         while (DateTime.UtcNow < deadline)
         {
-            var overlayVisible = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(100)) is not null;
+            var blockingMaskVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayMask", TimeSpan.FromMilliseconds(100)) is not null;
+            var overlayStatusVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null;
             var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100));
             var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(100));
             var visibleTranscriptTextCount = CountVisibleTranscriptText(messagesList);
             var selected = session.TryGetIsSelected(SessionAutomationId(candidate.ConversationId));
 
             timeline.Add(
-                $"{stopwatch.ElapsedMilliseconds,5}ms overlay={overlayVisible} header={(header is not null)} selected={selected} visibleText={visibleTranscriptTextCount}");
+                $"{stopwatch.ElapsedMilliseconds,5}ms mask={blockingMaskVisible} status={overlayStatusVisible} header={(header is not null)} selected={selected} visibleText={visibleTranscriptTextCount}");
 
-            if (overlayVisible)
+            if (blockingMaskVisible)
             {
-                sawOverlay = true;
+                sawBlockingMask = true;
+            }
+
+            if (overlayStatusVisible)
+            {
+                sawOverlayStatus = true;
             }
 
             if (visibleTranscriptTextCount > 0)
             {
                 sawTranscriptVisible = true;
+                transcriptVisibleAtMs ??= stopwatch.ElapsedMilliseconds;
             }
 
-            if (sawOverlay && !overlayVisible && overlayDismissedAtMs is null)
+            if (sawBlockingMask && !blockingMaskVisible && maskDismissedAtMs is null)
             {
-                overlayDismissedAtMs = stopwatch.ElapsedMilliseconds;
+                maskDismissedAtMs = stopwatch.ElapsedMilliseconds;
             }
 
-            if (overlayDismissedAtMs is not null
+            if (transcriptVisibleAtMs is not null && !blockingMaskVisible)
+            {
+                maskDismissedAfterTranscript = true;
+            }
+
+            if (maskDismissedAtMs is not null
                 && !sawTranscriptVisible
-                && stopwatch.ElapsedMilliseconds - overlayDismissedAtMs.Value > 500)
+                && stopwatch.ElapsedMilliseconds - maskDismissedAtMs.Value > 500)
             {
                 var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
                 Directory.CreateDirectory(captureRoot);
@@ -139,7 +155,20 @@ public sealed partial class RealUserConfigSmokeTests
                 break;
             }
 
-            if (sawOverlay && sawTranscriptVisible && !overlayVisible)
+            if (transcriptVisibleAtMs is not null
+                && blockingMaskVisible
+                && stopwatch.ElapsedMilliseconds - transcriptVisibleAtMs.Value > 4000)
+            {
+                var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
+                Directory.CreateDirectory(captureRoot);
+                persistentMaskCapturePath = Path.Combine(
+                    captureRoot,
+                    $"remote-mask-persistent-{candidate.ConversationId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
+                session.MainWindow.CaptureToFile(persistentMaskCapturePath);
+                break;
+            }
+
+            if (sawTranscriptVisible && !blockingMaskVisible)
             {
                 break;
             }
@@ -150,16 +179,117 @@ public sealed partial class RealUserConfigSmokeTests
         var failureDetails = string.Join(Environment.NewLine, timeline);
 
         Assert.True(
-            sawOverlay,
-            $"The real-config navigation path never surfaced ChatView.LoadingOverlay for remote-bound conversation {candidate.ConversationId}.{Environment.NewLine}{failureDetails}");
+            sawOverlayStatus,
+            $"The real-config navigation path surfaced the loading overlay but never exposed ChatView.LoadingOverlayStatus for conversation {candidate.ConversationId}.{Environment.NewLine}{failureDetails}");
 
         Assert.False(
             sawPrematureDismissal,
-            $"Loading overlay disappeared before any transcript content became visible for conversation {candidate.ConversationId}.{Environment.NewLine}Capture: {prematureDismissalCapturePath ?? "<none>"}{Environment.NewLine}{failureDetails}");
+            $"Blocking loading mask disappeared before any transcript content became visible for conversation {candidate.ConversationId}.{Environment.NewLine}Capture: {prematureDismissalCapturePath ?? "<none>"}{Environment.NewLine}{failureDetails}");
 
         Assert.True(
             sawTranscriptVisible,
             $"Real-config smoke did not observe any transcript content for conversation {candidate.ConversationId} within the timeout window.{Environment.NewLine}{failureDetails}");
+
+        Assert.True(
+            maskDismissedAfterTranscript,
+            $"Blocking loading mask remained visible after transcript content was already visible for conversation {candidate.ConversationId}.{Environment.NewLine}Capture: {persistentMaskCapturePath ?? "<none>"}{Environment.NewLine}{failureDetails}");
+    }
+
+    [SkippableFact]
+    public void SelectPureLocalSession_WhileRemoteLoading_DoesNotLeakRemoteStatusPill()
+    {
+        GuiTestGate.RequireEnabled();
+
+        var remoteCandidates = RealUserConfigProbe.LoadReplayBackedCandidates();
+        var localCandidates = RealUserConfigProbe.LoadPureLocalCandidates();
+        Skip.If(remoteCandidates.Count == 0, "No replay-backed remote conversation candidates were found in the current SalmonEgg app data.");
+        Skip.If(localCandidates.Count == 0, "No pure local conversation candidates were found in the current SalmonEgg app data.");
+
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var startItem = session.FindByAutomationId("MainNav.Start", TimeSpan.FromSeconds(10));
+        session.ActivateElement(startItem);
+        Thread.Sleep(500);
+
+        var remoteCandidate = remoteCandidates
+            .FirstOrDefault(item => session.TryFindByAutomationId(SessionAutomationId(item.ConversationId), TimeSpan.FromSeconds(1)) is not null);
+        Skip.If(remoteCandidate is null, $"No replay-backed remote candidate is currently visible in the left navigation. Candidates: {string.Join(", ", remoteCandidates.Select(c => c.ConversationId))}");
+
+        var localCandidate = localCandidates
+            .Where(item => !string.Equals(item.ConversationId, remoteCandidate.ConversationId, StringComparison.Ordinal))
+            .FirstOrDefault(item => session.TryFindByAutomationId(SessionAutomationId(item.ConversationId), TimeSpan.FromSeconds(1)) is not null);
+        Skip.If(localCandidate is null, $"No pure local conversation candidate is currently visible in the left navigation. Candidates: {string.Join(", ", localCandidates.Select(c => c.ConversationId))}");
+
+        var remoteItem = session.FindByAutomationId(SessionAutomationId(remoteCandidate.ConversationId), TimeSpan.FromSeconds(10));
+        session.ActivateElement(remoteItem);
+
+        var sawRemoteStatus = false;
+        var remoteStatusDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < remoteStatusDeadline)
+        {
+            if (session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null)
+            {
+                sawRemoteStatus = true;
+                break;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        Skip.IfNot(sawRemoteStatus, $"Remote loading pill did not become visible for conversation {remoteCandidate.ConversationId}; cannot validate cross-session leakage.");
+
+        var localItem = session.FindByAutomationId(SessionAutomationId(localCandidate.ConversationId), TimeSpan.FromSeconds(10));
+        session.ActivateElement(localItem);
+
+        var timeline = new List<string>();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);
+        var localSelectedAtUtc = DateTime.MinValue;
+        var leakedStatusAfterLocalSelection = false;
+        string? capturePath = null;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var remoteSelected = session.TryGetIsSelected(SessionAutomationId(remoteCandidate.ConversationId)) == true;
+            var localSelected = session.TryGetIsSelected(SessionAutomationId(localCandidate.ConversationId)) == true;
+            var overlayStatusVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null;
+            var blockingMaskVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayMask", TimeSpan.FromMilliseconds(100)) is not null;
+            var headerVisible = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100)) is not null;
+
+            timeline.Add(
+                $"{DateTime.UtcNow:HH:mm:ss.fff} remoteSelected={remoteSelected} localSelected={localSelected} status={overlayStatusVisible} mask={blockingMaskVisible} header={headerVisible}");
+
+            if (localSelected && localSelectedAtUtc == DateTime.MinValue)
+            {
+                localSelectedAtUtc = DateTime.UtcNow;
+            }
+
+            if (localSelectedAtUtc != DateTime.MinValue
+                && DateTime.UtcNow - localSelectedAtUtc > TimeSpan.FromMilliseconds(500)
+                && overlayStatusVisible)
+            {
+                var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
+                Directory.CreateDirectory(captureRoot);
+                capturePath = Path.Combine(
+                    captureRoot,
+                    $"remote-status-leak-to-local-{localCandidate.ConversationId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
+                session.MainWindow.CaptureToFile(capturePath);
+                leakedStatusAfterLocalSelection = true;
+                break;
+            }
+
+            if (localSelectedAtUtc != DateTime.MinValue
+                && DateTime.UtcNow - localSelectedAtUtc > TimeSpan.FromMilliseconds(1200)
+                && !overlayStatusVisible)
+            {
+                break;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        Assert.False(
+            leakedStatusAfterLocalSelection,
+            $"Remote loading status pill leaked after selecting pure local conversation {localCandidate.ConversationId} while remote conversation {remoteCandidate.ConversationId} was still loading.{Environment.NewLine}Capture: {capturePath ?? "<none>"}{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
     }
 
     private static int CountVisibleTranscriptText(AutomationElement? messagesList)
@@ -180,6 +310,11 @@ public sealed partial class RealUserConfigSmokeTests
     private sealed record RealReplayCandidate(
         string ConversationId,
         string RemoteSessionId,
+        int LocalMessageCount,
+        DateTimeOffset LastUpdatedAtUtc);
+
+    private sealed record RealLocalCandidate(
+        string ConversationId,
         int LocalMessageCount,
         DateTimeOffset LastUpdatedAtUtc);
 
@@ -256,6 +391,64 @@ public sealed partial class RealUserConfigSmokeTests
 
             return candidates
                 .OrderBy(candidate => candidate.LocalMessageCount)
+                .ThenByDescending(candidate => candidate.LastUpdatedAtUtc)
+                .ToArray();
+        }
+
+        public static IReadOnlyList<RealLocalCandidate> LoadPureLocalCandidates()
+        {
+            var appDataRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SalmonEgg");
+            var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
+
+            if (!File.Exists(conversationsPath))
+            {
+                return [];
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(conversationsPath));
+            if (!document.RootElement.TryGetProperty("conversations", out var conversationsElement)
+                || conversationsElement.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var candidates = new List<RealLocalCandidate>();
+            foreach (var conversationElement in conversationsElement.EnumerateArray())
+            {
+                var conversationId = ReadString(conversationElement, "conversationId");
+                if (string.IsNullOrWhiteSpace(conversationId))
+                {
+                    continue;
+                }
+
+                var boundProfileId = ReadString(conversationElement, "boundProfileId");
+                var remoteSessionId = ReadString(conversationElement, "remoteSessionId");
+                if (!string.IsNullOrWhiteSpace(boundProfileId) || !string.IsNullOrWhiteSpace(remoteSessionId))
+                {
+                    continue;
+                }
+
+                var messageCount = conversationElement.TryGetProperty("messages", out var messagesElement)
+                    && messagesElement.ValueKind == JsonValueKind.Array
+                    ? messagesElement.GetArrayLength()
+                    : 0;
+
+                var lastUpdatedAt = conversationElement.TryGetProperty("lastUpdatedAt", out var lastUpdatedElement)
+                    && lastUpdatedElement.ValueKind == JsonValueKind.String
+                    && DateTimeOffset.TryParse(lastUpdatedElement.GetString(), out var parsedLastUpdatedAt)
+                        ? parsedLastUpdatedAt
+                        : DateTimeOffset.MinValue;
+
+                candidates.Add(new RealLocalCandidate(
+                    conversationId,
+                    messageCount,
+                    lastUpdatedAt));
+            }
+
+            return candidates
+                .OrderByDescending(candidate => candidate.LocalMessageCount)
                 .ThenByDescending(candidate => candidate.LastUpdatedAtUtc)
                 .ToArray();
         }

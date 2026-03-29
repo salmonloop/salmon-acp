@@ -1,7 +1,9 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using FlaUI.Core.Definitions;
 using FlaUI.Core;
@@ -134,7 +136,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"AutomationId prefix '{prefix}' was not found.");
     }
 
-    public AutomationElement FindFirstDescendantByControlType(
+    public AutomationElement? FindFirstDescendantByControlType(
         AutomationElement scope,
         ControlType controlType,
         TimeSpan? timeout = null)
@@ -144,6 +146,26 @@ internal sealed class WindowsGuiAppSession : IDisposable
             element => element != null,
             timeout ?? TimeSpan.FromSeconds(10),
             $"ControlType '{controlType}' was not found.")!;
+    }
+
+    public bool WaitUntilHidden(string automationId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var element = TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
+            if (element == null)
+            {
+                return true;
+            }
+            Thread.Sleep(250);
+        }
+        return false;
+    }
+
+    public bool WaitUntilVisible(string automationId, TimeSpan timeout)
+    {
+        return TryFindByAutomationId(automationId, timeout) != null;
     }
 
     public void InvokeButton(string automationId)
@@ -207,23 +229,28 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     private static void LaunchInstalledMsix(MsixManifestInfo manifest)
     {
-        var packageFamilyName = ResolveInstalledPackageFamilyName(manifest.IdentityName);
-        var aumid = $"{packageFamilyName}!{manifest.ApplicationId}";
-        Process.Start(new ProcessStartInfo
+        var executablePath = ResolveInstalledExecutablePath(manifest.IdentityName);
+        var process = Process.Start(new ProcessStartInfo
         {
-            FileName = "explorer.exe",
-            Arguments = $"shell:AppsFolder\\{aumid}",
-            UseShellExecute = true
+            FileName = executablePath,
+            WorkingDirectory = Path.GetDirectoryName(executablePath),
+            UseShellExecute = false
         });
+
+        if (process == null)
+        {
+            throw new InvalidOperationException(
+                $"Failed to launch installed SalmonEgg executable '{executablePath}'.");
+        }
     }
 
-    private static string ResolveInstalledPackageFamilyName(string identityName)
+    private static string ResolveInstalledExecutablePath(string identityName)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"(Get-AppxPackage -Name '{identityName}' | Select-Object -First 1 -ExpandProperty PackageFamilyName)\"",
+            Arguments = $"-NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"(Get-AppxPackage -Name '{identityName}' | Select-Object -First 1 -ExpandProperty InstallLocation)\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -238,10 +265,17 @@ internal sealed class WindowsGuiAppSession : IDisposable
         if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
         {
             throw new InvalidOperationException(
-                $"SalmonEgg MSIX is not installed or PackageFamilyName could not be resolved. {error}".Trim());
+                $"SalmonEgg MSIX is not installed or InstallLocation could not be resolved. {error}".Trim());
         }
 
-        return output;
+        var executablePath = Path.Combine(output, $"{ProcessName}.exe");
+        if (!File.Exists(executablePath))
+        {
+            throw new InvalidOperationException(
+                $"Installed SalmonEgg executable '{executablePath}' was not found.");
+        }
+
+        return executablePath;
     }
 
     private static Process WaitForProcess(string processName, TimeSpan timeout)
@@ -284,19 +318,31 @@ internal sealed class WindowsGuiAppSession : IDisposable
     {
         var deadline = DateTime.UtcNow + timeout;
         T? last = null;
+        Exception? lastException = null;
 
         while (DateTime.UtcNow < deadline)
         {
-            last = probe();
-            if (success(last))
+            try
             {
-                return last;
+                last = probe();
+                if (success(last))
+                {
+                    return last;
+                }
+
+                lastException = null;
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException or Win32Exception or COMException)
+            {
+                lastException = ex;
             }
 
             Thread.Sleep(250);
         }
 
-        throw new TimeoutException(failureMessage);
+        throw lastException is null
+            ? new TimeoutException(failureMessage)
+            : new TimeoutException($"{failureMessage} Last error: {lastException.Message}", lastException);
     }
 
     private static bool HasAutomationIdPrefix(AutomationElement element, string prefix)
