@@ -149,14 +149,22 @@
                             Spacing="12">
                     <TextBlock x:Uid="Start_Title"
                                Text="Salmon Egg"
-                               FontSize="60"
-                               FontWeight="SemiBold"
+                               FontSize="64"
+                               FontWeight="Bold"
                                HorizontalAlignment="Center"
                                TextAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               AutomationProperties.AutomationId="StartView.Title" />
-                    <TextBlock Text="准备好在机库里点火，启动你的下一段会话。"
-                               FontSize="16"
+                               AutomationProperties.AutomationId="StartView.Title">
+                        <TextBlock.Foreground>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="{ThemeResource SystemAccentColor}" Offset="0" />
+                                <GradientStop Color="{ThemeResource SystemAccentColorLight2}" Offset="1" />
+                            </LinearGradientBrush>
+                        </TextBlock.Foreground>
+                    </TextBlock>
+                    <TextBlock Text="你的 AI 好鲑鲑"
+                               FontSize="18"
+                               Opacity="0.6"
+                               FontWeight="Medium"
                                HorizontalAlignment="Center"
                                TextAlignment="Center"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
