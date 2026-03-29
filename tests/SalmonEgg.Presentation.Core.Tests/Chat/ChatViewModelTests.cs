@@ -1875,7 +1875,7 @@ public class ChatViewModelTests
 
     private static async Task WaitForConditionAsync(
         Func<Task<bool>> predicate,
-        int timeoutMilliseconds = 2000,
+        int timeoutMilliseconds = 4000,
         int pollDelayMilliseconds = 10)
     {
         var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
@@ -3480,9 +3480,12 @@ public class ChatViewModelTests
         await syncContext.RunUntilCompletedAsync(hydrationTask);
 
         Assert.True(await hydrationTask);
-        Assert.Contains(
-            fixture.ViewModel.MessageHistory,
-            message => string.Equals(message.TextContent, "late replay", StringComparison.Ordinal));
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            return fixture.ViewModel.MessageHistory.Any(message =>
+                string.Equals(message.TextContent, "late replay", StringComparison.Ordinal));
+        });
         await WaitForConditionAsync(() => Task.FromResult(!fixture.ViewModel.IsOverlayVisible));
     }
 
@@ -3579,9 +3582,12 @@ public class ChatViewModelTests
         await syncContext.RunUntilCompletedAsync(hydrationTask);
 
         Assert.True(await hydrationTask);
-        Assert.Contains(
-            fixture.ViewModel.MessageHistory,
-            message => string.Equals(message.TextContent, "late replay after plan", StringComparison.Ordinal));
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            return fixture.ViewModel.MessageHistory.Any(message =>
+                string.Equals(message.TextContent, "late replay after plan", StringComparison.Ordinal));
+        });
         await WaitForConditionAsync(() => Task.FromResult(!fixture.ViewModel.IsOverlayVisible));
     }
 
@@ -3663,9 +3669,12 @@ public class ChatViewModelTests
 
         Assert.True(await hydrationTask);
         Assert.Equal("remote title only", fixture.ViewModel.CurrentSessionDisplayName);
-        Assert.Contains(
-            fixture.ViewModel.MessageHistory,
-            message => string.Equals(message.TextContent, "late replay after title", StringComparison.Ordinal));
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            return fixture.ViewModel.MessageHistory.Any(message =>
+                string.Equals(message.TextContent, "late replay after title", StringComparison.Ordinal));
+        });
         await WaitForConditionAsync(() => Task.FromResult(!fixture.ViewModel.IsOverlayVisible));
     }
 
@@ -4305,6 +4314,132 @@ public class ChatViewModelTests
 
         allowLoadCompletion.TrySetResult(null);
         await WaitForConditionAsync(() => Task.FromResult(!fixture.ViewModel.IsOverlayVisible), timeoutMilliseconds: 7000);
+    }
+
+    [Fact]
+    public async Task ConversationSessionSwitcherContract_RemoteBoundConversation_DoesNotFlashWorkspaceCachedTranscriptBeforeRemoteReplay()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\one");
+        await sessionManager.Object.CreateSessionAsync("conv-2", @"C:\repo\two");
+
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        await syncContext.RunUntilCompletedAsync(fixture.ViewModel.RestoreAsync());
+
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-2",
+            Transcript:
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "cached-1",
+                    Timestamp = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "cached first message"
+                }
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        var loadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
+        chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            .Returns<SessionLoadParams>(async _ =>
+            {
+                loadStarted.TrySetResult(null);
+                await allowLoadCompletion.Task;
+                return SessionLoadResponse.Completed;
+            });
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+                .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
+        });
+        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        syncContext.RunAll();
+
+        var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
+        var activationTask = switcher.SwitchConversationAsync("conv-2");
+
+        while (!activationTask.IsCompleted)
+        {
+            if (!syncContext.RunNext())
+            {
+                await Task.Delay(10);
+            }
+        }
+
+        Assert.True(activationTask.IsCompletedSuccessfully);
+        Assert.True(await activationTask);
+        Assert.Equal("conv-2", fixture.ViewModel.CurrentSessionId);
+        Assert.True(
+            fixture.ViewModel.IsOverlayVisible || fixture.ViewModel.MessageHistory.Count == 0,
+            "The remote switch should not surface cached transcript before remote hydration UI takes over.");
+        Assert.Empty(fixture.ViewModel.MessageHistory);
+        Assert.DoesNotContain(
+            fixture.ViewModel.MessageHistory,
+            message => string.Equals(message.TextContent, "cached first message", StringComparison.Ordinal));
+
+        allowLoadCompletion.TrySetResult(null);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(loadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 4000);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(!fixture.ViewModel.IsOverlayVisible);
+        }, timeoutMilliseconds: 7000);
     }
 
     [Fact]

@@ -205,6 +205,59 @@ public sealed class ConversationActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task ActivateSessionAsync_SelectionOnly_SkipsWorkspaceSnapshotHydration()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences(syncContext);
+        var workspaceStore = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        using var workspace = CreateWorkspace(workspaceStore, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1", "hello")
+            ],
+            Plan:
+            [
+                new ConversationPlanEntrySnapshot
+                {
+                    Content = "step-1",
+                    Status = PlanEntryStatus.InProgress,
+                    Priority = PlanEntryPriority.High
+                }
+            ],
+            ShowPlanPanel: true,
+            PlanTitle: "plan",
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        var state = State.Value(new object(), () => ChatState.Empty);
+        var chatStore = CreateChatStore(state);
+        var connectionStore = CreateConnectionStore();
+        var bindingCommands = new BindingCoordinator(workspace, chatStore);
+        var coordinator = new ConversationActivationCoordinator(
+            workspace,
+            bindingCommands,
+            chatStore,
+            connectionStore,
+            Mock.Of<ILogger<ConversationActivationCoordinator>>());
+
+        var result = await coordinator.ActivateSessionAsync(
+            "session-1",
+            ConversationActivationHydrationMode.SelectionOnly);
+
+        Assert.True(result.Succeeded);
+        var currentState = Assert.IsType<ChatState>(await state);
+        Assert.Equal("session-1", currentState.HydratedConversationId);
+        Assert.Null(currentState.Transcript);
+        Assert.Null(currentState.PlanEntries);
+        Assert.False(currentState.ShowPlanPanel);
+        Assert.Null(currentState.PlanTitle);
+    }
+
+    [Fact]
     public async Task ActivateSessionAsync_CommitsVisibleShellSelection_OnlyAfterActivationSucceeds()
     {
         var activationGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

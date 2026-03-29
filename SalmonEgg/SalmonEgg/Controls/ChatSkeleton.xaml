@@ -19,9 +19,25 @@
         </Style>
 
         <Storyboard x:Name="ShimmerStoryboard" RepeatBehavior="Forever">
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ShimmerTransform" Storyboard.TargetProperty="X">
-                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="-800" />
-                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="800">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ShimmerLeadingStop" Storyboard.TargetProperty="Offset">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="-0.8" />
+                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="1.2">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseInOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ShimmerHighlightStop" Storyboard.TargetProperty="Offset">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="-0.6" />
+                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="1.4">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseInOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ShimmerTrailingStop" Storyboard.TargetProperty="Offset">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="-0.4" />
+                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="1.6">
                     <EasingDoubleKeyFrame.EasingFunction>
                         <CubicEase EasingMode="EaseInOut" />
                     </EasingDoubleKeyFrame.EasingFunction>
@@ -40,13 +56,10 @@
     <Grid x:Name="RootGrid" Padding="20">
         <Grid.Resources>
             <LinearGradientBrush x:Key="ShimmerBrush" StartPoint="0,0" EndPoint="1,0">
-                <LinearGradientBrush.Transform>
-                    <TranslateTransform x:Name="ShimmerTransform" X="-400" />
-                </LinearGradientBrush.Transform>
-                <GradientStop Color="Transparent" Offset="0.3" />
+                <GradientStop x:Name="ShimmerLeadingStop" Color="Transparent" Offset="-0.8" />
                 <!-- GradientStop.Color must resolve to a Color resource, not a Brush resource. -->
-                <GradientStop Color="{ThemeResource SystemAltHighColor}" Offset="0.5" />
-                <GradientStop Color="Transparent" Offset="0.7" />
+                <GradientStop x:Name="ShimmerHighlightStop" Color="{ThemeResource SystemAltHighColor}" Offset="-0.6" />
+                <GradientStop x:Name="ShimmerTrailingStop" Color="Transparent" Offset="-0.4" />
             </LinearGradientBrush>
         </Grid.Resources>
 

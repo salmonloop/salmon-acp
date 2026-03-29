@@ -3,9 +3,20 @@ using System.Threading.Tasks;
 
 namespace SalmonEgg.Presentation.Core.Services.Chat;
 
+public enum ConversationActivationHydrationMode
+{
+    WorkspaceSnapshot = 0,
+    SelectionOnly = 1
+}
+
 public interface IConversationActivationCoordinator
 {
     Task<ConversationActivationResult> ActivateSessionAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    Task<ConversationActivationResult> ActivateSessionAsync(
+        string sessionId,
+        ConversationActivationHydrationMode hydrationMode,
+        CancellationToken cancellationToken = default);
 
     Task<ConversationMutationResult> ArchiveConversationAsync(
         string conversationId,

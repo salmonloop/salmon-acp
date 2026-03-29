@@ -30,7 +30,13 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ConversationActivationResult> ActivateSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    public Task<ConversationActivationResult> ActivateSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+        => ActivateSessionAsync(sessionId, ConversationActivationHydrationMode.WorkspaceSnapshot, cancellationToken);
+
+    public async Task<ConversationActivationResult> ActivateSessionAsync(
+        string sessionId,
+        ConversationActivationHydrationMode hydrationMode,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
@@ -48,7 +54,8 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             }
 
             var currentState = await _chatStore.State ?? ChatState.Empty;
-            var shouldHydrate = ShouldHydrate(currentState, sessionId);
+            var shouldHydrate = hydrationMode == ConversationActivationHydrationMode.WorkspaceSnapshot
+                && ShouldHydrate(currentState, sessionId);
             if (!string.Equals(currentState.HydratedConversationId, sessionId, StringComparison.Ordinal))
             {
                 await _chatStore.Dispatch(new SelectConversationAction(sessionId));
@@ -56,27 +63,20 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
 
             if (shouldHydrate)
             {
-                await _chatStore.Dispatch(new SetIsHydratingAction(true)).ConfigureAwait(false);
-                try
-                {
-                    var snapshot = _conversationWorkspace.GetConversationSnapshot(sessionId);
-                    await _chatStore.Dispatch(new HydrateConversationAction(
-                        sessionId,
-                        snapshot?.Transcript.ToImmutableList() ?? ImmutableList<ConversationMessageSnapshot>.Empty,
-                        snapshot?.Plan.ToImmutableList() ?? ImmutableList<ConversationPlanEntrySnapshot>.Empty,
-                        snapshot?.ShowPlanPanel ?? false,
-                        snapshot?.PlanTitle)).ConfigureAwait(false);
-                    await _chatStore.Dispatch(new SetConversationSessionStateAction(
-                        sessionId,
-                        snapshot?.AvailableModes?.ToImmutableList() ?? ImmutableList<ConversationModeOptionSnapshot>.Empty,
-                        snapshot?.SelectedModeId,
-                        snapshot?.ConfigOptions?.ToImmutableList() ?? ImmutableList<ConversationConfigOptionSnapshot>.Empty,
-                        snapshot?.ShowConfigOptionsPanel ?? false)).ConfigureAwait(false);
-                }
-                finally
-                {
-                    await _chatStore.Dispatch(new SetIsHydratingAction(false)).ConfigureAwait(false);
-                }
+                var snapshot = _conversationWorkspace.GetConversationSnapshot(sessionId);
+                await _chatStore.Dispatch(new HydrateConversationAction(
+                    sessionId,
+                    snapshot?.Transcript.ToImmutableList() ?? ImmutableList<ConversationMessageSnapshot>.Empty,
+                    snapshot?.Plan.ToImmutableList() ?? ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+                    snapshot?.ShowPlanPanel ?? false,
+                    snapshot?.PlanTitle)).ConfigureAwait(false);
+                await _chatStore.Dispatch(new SetConversationSessionStateAction(
+                    sessionId,
+                    snapshot?.AvailableModes?.ToImmutableList() ?? ImmutableList<ConversationModeOptionSnapshot>.Empty,
+                    snapshot?.SelectedModeId,
+                    snapshot?.ConfigOptions?.ToImmutableList() ?? ImmutableList<ConversationConfigOptionSnapshot>.Empty,
+                    snapshot?.ShowConfigOptionsPanel ?? false)).ConfigureAwait(false);
+                await _chatStore.Dispatch(new SetIsHydratingAction(false)).ConfigureAwait(false);
             }
 
             await SyncSelectedProfileFromConversationBindingAsync(sessionId, cancellationToken).ConfigureAwait(false);

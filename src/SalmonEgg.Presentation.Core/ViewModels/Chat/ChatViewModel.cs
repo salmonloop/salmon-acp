@@ -2644,9 +2644,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             await EnsureConversationWorkspaceRestoredAsync(activationLease.CancellationToken).ConfigureAwait(false);
             activationLease.CancellationToken.ThrowIfCancellationRequested();
 
-            var activationResult = await _conversationActivationCoordinator
-                .ActivateSessionAsync(sessionId, activationLease.CancellationToken)
+            var activationHydrationMode = await ResolveConversationActivationHydrationModeAsync(
+                    sessionId,
+                    activationLease.CancellationToken)
                 .ConfigureAwait(false);
+            var activationResult = activationHydrationMode == ConversationActivationHydrationMode.SelectionOnly
+                ? await _conversationActivationCoordinator
+                    .ActivateSessionAsync(sessionId, activationHydrationMode, activationLease.CancellationToken)
+                    .ConfigureAwait(false)
+                : await _conversationActivationCoordinator
+                    .ActivateSessionAsync(sessionId, activationLease.CancellationToken)
+                    .ConfigureAwait(false);
             if (!activationResult.Succeeded)
             {
                 return false;
@@ -2656,6 +2664,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             await ResetRemoteHydrationUiStateAsync(activationLease.Version).ConfigureAwait(false);
             activationLease.CancellationToken.ThrowIfCancellationRequested();
             await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
+            if (activationHydrationMode == ConversationActivationHydrationMode.WorkspaceSnapshot)
+            {
+                await DismissSessionSwitchOverlayAsync(activationLease.Version, sessionId).ConfigureAwait(false);
+            }
             _conversationActivationGate.Release();
             activationGateEntered = false;
             if (!awaitRemoteHydration)
@@ -4826,6 +4838,25 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         return await HydrateConversationAsync(conversationId, binding!, activationVersion, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<ConversationActivationHydrationMode> ResolveConversationActivationHydrationModeAsync(
+        string conversationId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var binding = await ResolveConversationBindingAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(binding?.RemoteSessionId))
+        {
+            return ConversationActivationHydrationMode.WorkspaceSnapshot;
+        }
+
+        if (_chatService?.AgentCapabilities?.LoadSession == false)
+        {
+            return ConversationActivationHydrationMode.WorkspaceSnapshot;
+        }
+
+        return ConversationActivationHydrationMode.SelectionOnly;
+    }
+
     private async Task<ConversationBindingSlice?> ResolveConversationBindingAsync(
         string conversationId,
         CancellationToken cancellationToken)
@@ -5122,18 +5153,26 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         _syncContext.Post(_ =>
         {
-            if (Volatile.Read(ref _conversationActivationVersion) != activationVersion
-                || !string.Equals(_sessionSwitchOverlayConversationId, conversationId, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            IsSessionSwitching = false;
-            SetConversationOverlayOwners(
-                sessionSwitchConversationId: null,
-                connectionLifecycleConversationId: _connectionLifecycleOverlayConversationId,
-                historyConversationId: _historyOverlayConversationId);
+            DismissSessionSwitchOverlay(activationVersion, conversationId);
         }, null);
+    }
+
+    private Task DismissSessionSwitchOverlayAsync(long activationVersion, string conversationId)
+        => PostToUiAsync(() => DismissSessionSwitchOverlay(activationVersion, conversationId));
+
+    private void DismissSessionSwitchOverlay(long activationVersion, string conversationId)
+    {
+        if (Volatile.Read(ref _conversationActivationVersion) != activationVersion
+            || !string.Equals(_sessionSwitchOverlayConversationId, conversationId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        IsSessionSwitching = false;
+        SetConversationOverlayOwners(
+            sessionSwitchConversationId: null,
+            connectionLifecycleConversationId: _connectionLifecycleOverlayConversationId,
+            historyConversationId: _historyOverlayConversationId);
     }
 
     private void TryCompletePendingHistoryOverlayDismissal(ChatUiProjection projection)
