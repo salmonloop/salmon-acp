@@ -174,6 +174,30 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         }
 
         [Fact]
+        public async Task LoadSessionAsync_WhenCallerCancels_ThrowsOperationCanceledException()
+        {
+            var timeouts = new AcpClient.AcpRequestTimeouts(
+                DefaultTimeout: TimeSpan.FromSeconds(5),
+                SessionNewTimeout: TimeSpan.FromSeconds(5),
+                SessionPromptTimeout: TimeSpan.FromSeconds(5));
+
+            var client = await CreateInitializedClientAsync(timeouts);
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            using var cts = new CancellationTokenSource();
+            var loadTask = client.LoadSessionAsync(
+                new SessionLoadParams("session-123", "cwd", null),
+                cts.Token);
+
+            await Task.Delay(50);
+            cts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loadTask);
+        }
+
+        [Fact]
         public async Task CreateSessionAsync_TimeoutMessage_ContainsMethodAndLastRx()
         {
             var timeouts = new AcpClient.AcpRequestTimeouts(

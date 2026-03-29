@@ -111,6 +111,83 @@ public sealed class ChatSkeletonSmokeTests
         }
     }
 
+    [SkippableFact]
+    public void SelectRemoteSession_RepeatedClicksWithLocalDetour_DoesNotHangAndHydratesLatestSelection()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "2000");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicSlowRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24,
+                includeLocalConversation: true,
+                localMessageCount: 4);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            var remoteItem = session.FindByAutomationId("MainNav.Session.gui-remote-conversation-01", TimeSpan.FromSeconds(15));
+            var localItem = session.FindByAutomationId("MainNav.Session.gui-local-conversation-01", TimeSpan.FromSeconds(15));
+
+            session.ActivateElement(remoteItem);
+
+            var sawInitialRemoteStatus = session.WaitUntilVisible("ChatView.LoadingOverlayStatus", TimeSpan.FromSeconds(10));
+            Assert.True(sawInitialRemoteStatus, "Initial remote selection did not expose ChatView.LoadingOverlayStatus.");
+
+            session.ActivateElement(remoteItem);
+            session.ActivateElement(localItem);
+
+            var localHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Local Session 01",
+                scenario: "repeated-remote-clicks-local-detour-local",
+                appData);
+            Assert.Contains("GUI Local Session 01", localHeader.Name, StringComparison.Ordinal);
+
+            session.ActivateElement(remoteItem);
+            session.ActivateElement(remoteItem);
+
+            var sawFinalRemoteStatus = session.WaitUntilVisible("ChatView.LoadingOverlayStatus", TimeSpan.FromSeconds(10));
+            Assert.True(sawFinalRemoteStatus, "Final remote reselection did not expose ChatView.LoadingOverlayStatus.");
+
+            var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(40));
+            if (!overlayHidden)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "repeated-remote-clicks-local-detour-overlay-stuck",
+                    $"Repeated remote reselection stayed stuck behind the loading overlay. Visible texts: [{string.Join(", ", session.GetVisibleTexts())}]");
+            }
+
+            var remoteHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Remote Session 01",
+                scenario: "repeated-remote-clicks-local-detour-remote",
+                appData);
+            Assert.Contains("GUI Remote Session 01", remoteHeader.Name, StringComparison.Ordinal);
+
+            var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+            var lastMessageVisible = session.TryFindVisibleText(
+                "GUI Remote Session 01 replay 024",
+                messagesList,
+                TimeSpan.FromSeconds(8));
+
+            if (lastMessageVisible is null)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "repeated-remote-clicks-local-detour-scroll",
+                    $"Latest remote replay message was not visible after repeated remote clicks with a local detour. Visible texts: [{string.Join(", ", session.GetVisibleTexts(messagesList))}]");
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
     private static AutomationElement WaitForLoadingOverlay(WindowsGuiAppSession session, string scenario)
     {
         var timeline = new List<string>();
@@ -163,5 +240,58 @@ public sealed class ChatSkeletonSmokeTests
         {
             return null;
         }
+    }
+
+    private static AutomationElement WaitForSessionHeader(
+        WindowsGuiAppSession session,
+        string expectedTitle,
+        string scenario,
+        GuiAppDataScope appData)
+    {
+        var timeline = new List<string>();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100));
+            var headerName = header?.Name ?? "<missing>";
+            var overlayVisible = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(100)) is not null;
+            var statusVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null;
+
+            timeline.Add(
+                $"{DateTime.UtcNow:HH:mm:ss.fff} header={headerName} overlay={overlayVisible} status={statusVisible}");
+
+            if (header is not null
+                && headerName.Contains(expectedTitle, StringComparison.Ordinal))
+            {
+                return header;
+            }
+
+            Thread.Sleep(150);
+        }
+
+        ThrowWithScreenshot(
+            session,
+            appData,
+            scenario,
+            $"Expected header containing '{expectedTitle}' was not observed.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+        throw new Xunit.Sdk.XunitException("Unreachable");
+    }
+
+    private static void ThrowWithScreenshot(
+        WindowsGuiAppSession session,
+        GuiAppDataScope appData,
+        string scenario,
+        string message)
+    {
+        var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
+        Directory.CreateDirectory(captureRoot);
+        var screenshotPath = Path.Combine(
+            captureRoot,
+            $"{scenario}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
+        session.MainWindow.CaptureToFile(screenshotPath);
+
+        throw new Xunit.Sdk.XunitException(
+            $"{message}{Environment.NewLine}Screenshot: {screenshotPath}{Environment.NewLine}boot.log:{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
 }

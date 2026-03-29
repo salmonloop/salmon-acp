@@ -86,10 +86,13 @@ public sealed class DelayedLoadChatService : IChatService
     public Task<SessionNewResponse> CreateSessionAsync(SessionNewParams @params)
         => _inner.CreateSessionAsync(@params);
 
-    public async Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+    public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+        => LoadSessionAsync(@params, CancellationToken.None);
+
+    public async Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
     {
-        await Task.Delay(_loadSessionDelay).ConfigureAwait(false);
-        return await _inner.LoadSessionAsync(@params).ConfigureAwait(false);
+        await Task.Delay(_loadSessionDelay, cancellationToken).ConfigureAwait(false);
+        return await _inner.LoadSessionAsync(@params, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)

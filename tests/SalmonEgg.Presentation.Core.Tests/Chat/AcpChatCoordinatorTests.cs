@@ -141,7 +141,7 @@ public sealed class AcpChatCoordinatorTests
             .Returns(service.Object);
 
         service
-            .Setup(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            .Setup(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(SessionLoadResponse.Completed);
 
         var sut = new AcpChatCoordinator(
@@ -154,9 +154,11 @@ public sealed class AcpChatCoordinatorTests
         await sut.ApplyTransportConfigurationAsync(transport, sink, preserveConversation: true);
 
         service.Verify(
-            x => x.LoadSessionAsync(It.Is<SessionLoadParams>(p =>
-                p.SessionId == "remote-session-1" &&
-                p.Cwd == sink.ActiveSessionCwd)),
+            x => x.LoadSessionAsync(
+                It.Is<SessionLoadParams>(p =>
+                    p.SessionId == "remote-session-1" &&
+                    p.Cwd == sink.ActiveSessionCwd),
+                It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.Equal(1, sink.ResetHydratedConversationForResyncCalls);
     }
@@ -184,7 +186,7 @@ public sealed class AcpChatCoordinatorTests
             .Returns(service.Object);
 
         service
-            .Setup(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            .Setup(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(SessionLoadResponse.Completed);
 
         var sut = new AcpChatCoordinator(
@@ -196,7 +198,7 @@ public sealed class AcpChatCoordinatorTests
 
         await sut.ApplyTransportConfigurationAsync(transport, sink, preserveConversation: true);
 
-        service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>()), Times.Never);
+        service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.Equal(0, sink.ResetHydratedConversationForResyncCalls);
     }
 
@@ -232,7 +234,7 @@ public sealed class AcpChatCoordinatorTests
         await task;
 
         Assert.Equal(0, sink.ResetHydratedConversationForResyncCalls);
-        service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>()), Times.Never);
+        service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

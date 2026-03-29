@@ -55,7 +55,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         ArgumentNullException.ThrowIfNull(transportConfiguration);
         ArgumentNullException.ThrowIfNull(sink);
 
-        sink.SelectProfile(profile);
+        await sink.SelectProfileAsync(profile, cancellationToken).ConfigureAwait(false);
         ApplyProfileToTransportConfiguration(profile, transportConfiguration);
 
         var preserveConversation = sink.IsSessionActive && !string.IsNullOrWhiteSpace(sink.CurrentSessionId);
@@ -111,7 +111,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             }
 
             var wrappedService = WrapChatService(createdService, sink, cancellationToken);
-            sink.ReplaceChatService(wrappedService);
+            await sink.ReplaceChatServiceAsync(wrappedService, cancellationToken).ConfigureAwait(false);
             _activeChatServiceAdapter = wrappedService;
 
             await _connectionCoordinator.SetInitializingAsync(sink.SelectedProfileId, cancellationToken).ConfigureAwait(false);
@@ -160,7 +160,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
                 _logger.LogDebug(disconnectEx, "Failed to tear down ACP service after initialization error");
             }
 
-            sink.ReplaceChatService(null);
+            await sink.ReplaceChatServiceAsync(null, cancellationToken).ConfigureAwait(false);
             _activeChatServiceAdapter = null;
             sink.UpdateAgentIdentity(null, null);
             await _connectionCoordinator.SetDisconnectedAsync(ex.Message, cancellationToken).ConfigureAwait(false);
@@ -347,7 +347,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             }
         }
 
-        sink.ReplaceChatService(null);
+        await sink.ReplaceChatServiceAsync(null, cancellationToken).ConfigureAwait(false);
         _activeChatServiceAdapter = null;
         await ClearBindingForCurrentConversationAsync(sink).ConfigureAwait(false);
         sink.UpdateAgentIdentity(null, null);

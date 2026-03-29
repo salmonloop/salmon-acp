@@ -103,6 +103,11 @@ namespace SalmonEgg.Application.Services.Chat
         Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params);
 
         /// <summary>
+        /// 加载现有会话，并允许调用方取消过时的加载请求。
+        /// </summary>
+        Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken);
+
+        /// <summary>
         /// 列出远端 Agent 支持的会话列表
         /// </summary>
         Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default);

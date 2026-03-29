@@ -783,6 +783,9 @@ public sealed class DiscoverSessionsViewModelTests
             => throw new NotSupportedException();
 
         public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+            => LoadSessionAsync(@params, CancellationToken.None);
+
+        public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
         public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)

@@ -8,18 +8,17 @@ public enum SelectionProjectionApplyDecision
 
 public sealed class SelectionProjectionApplyGate
 {
-    private bool _isInteractionInFlight;
+    private int _interactionDepth;
     private bool _hasDeferredApply;
 
     public void BeginInteraction()
     {
-        _isInteractionInFlight = true;
-        _hasDeferredApply = false;
+        _interactionDepth++;
     }
 
     public SelectionProjectionApplyDecision RequestApply()
     {
-        if (!_isInteractionInFlight)
+        if (_interactionDepth <= 0)
         {
             return SelectionProjectionApplyDecision.ApplyNow;
         }
@@ -30,8 +29,18 @@ public sealed class SelectionProjectionApplyGate
 
     public bool EndInteraction()
     {
+        if (_interactionDepth <= 0)
+        {
+            return false;
+        }
+
+        _interactionDepth--;
+        if (_interactionDepth > 0)
+        {
+            return false;
+        }
+
         var shouldApply = _hasDeferredApply;
-        _isInteractionInFlight = false;
         _hasDeferredApply = false;
         return shouldApply;
     }

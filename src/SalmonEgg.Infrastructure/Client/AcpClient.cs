@@ -627,28 +627,31 @@ namespace SalmonEgg.Infrastructure.Client
                _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] transport.SendMessageAsync 返回: {sendResult}", ErrorSeverity.Info, nameof(SendRequestAsync)));
 
                // 等待响应或超时
-               using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+               using (var timeoutCts = new CancellationTokenSource(effectiveTimeout))
+               using (var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
                {
-                   cts.CancelAfter(effectiveTimeout);
                    _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] Waiting for response (timeout={effectiveTimeout.TotalSeconds:0}s)...", ErrorSeverity.Info, nameof(SendRequestAsync)));
-                   var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, cts.Token)).ConfigureAwait(false);
-                   _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 等待完成，完成的任务: {(completedTask == tcs.Task ? "tcs.Task" : "timeout")}", ErrorSeverity.Info, nameof(SendRequestAsync)));
+                   var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, waitCts.Token)).ConfigureAwait(false);
+                   _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 等待完成，完成的任务: {(completedTask == tcs.Task ? "tcs.Task" : "wait-cancelled")}", ErrorSeverity.Info, nameof(SendRequestAsync)));
                     if (completedTask == tcs.Task)
                     {
                         return await tcs.Task.ConfigureAwait(false);
                     }
-                    else
-                    {
-                        var lastRxMs = Interlocked.Read(ref _lastReceivedUnixMs);
-                        var lastRxAge =
-                            lastRxMs <= 0
-                                ? "never"
-                                : $"{TimeSpan.FromMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastRxMs).TotalSeconds:0.0}s ago";
 
-                        var msg = $"Request timed out (method={request.Method}, id={requestIdStr}, timeout={effectiveTimeout.TotalSeconds:0}s, lastRx={lastRxAge}).";
-                        _errorLogger.LogError(new ErrorLogEntry("REQ_TIMEOUT", msg, ErrorSeverity.Warning, nameof(SendRequestAsync)));
-                        throw new TimeoutException(msg);
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException(cancellationToken);
                     }
+
+                    var lastRxMs = Interlocked.Read(ref _lastReceivedUnixMs);
+                    var lastRxAge =
+                        lastRxMs <= 0
+                            ? "never"
+                            : $"{TimeSpan.FromMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastRxMs).TotalSeconds:0.0}s ago";
+
+                    var msg = $"Request timed out (method={request.Method}, id={requestIdStr}, timeout={effectiveTimeout.TotalSeconds:0}s, lastRx={lastRxAge}).";
+                    _errorLogger.LogError(new ErrorLogEntry("REQ_TIMEOUT", msg, ErrorSeverity.Warning, nameof(SendRequestAsync)));
+                    throw new TimeoutException(msg);
                 }
             }
             

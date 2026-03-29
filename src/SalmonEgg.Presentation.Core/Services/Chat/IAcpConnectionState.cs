@@ -78,8 +78,22 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
     {
     }
 
+    Task SelectProfileAsync(ServerConfiguration profile, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        SelectProfile(profile);
+        return Task.CompletedTask;
+    }
+
     void ReplaceChatService(IChatService? chatService)
     {
+    }
+
+    Task ReplaceChatServiceAsync(IChatService? chatService, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ReplaceChatService(chatService);
+        return Task.CompletedTask;
     }
 
     void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)

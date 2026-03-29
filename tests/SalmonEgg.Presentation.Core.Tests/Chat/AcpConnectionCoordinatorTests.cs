@@ -29,7 +29,7 @@ public sealed class AcpConnectionCoordinatorTests
         {
             AgentCapabilities = new AgentCapabilities(loadSession: true)
         };
-        inner.OnLoadSessionAsync = _ =>
+        inner.OnLoadSessionAsync = (_, _) =>
         {
             inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new AgentMessageUpdate(new TextContentBlock("hello"))));
             return Task.FromResult(SessionLoadResponse.Completed);
@@ -81,7 +81,7 @@ public sealed class AcpConnectionCoordinatorTests
         {
             AgentCapabilities = new AgentCapabilities(loadSession: true)
         };
-        inner.OnLoadSessionAsync = _ => Task.FromResult(SessionLoadResponse.Completed);
+        inner.OnLoadSessionAsync = (_, _) => Task.FromResult(SessionLoadResponse.Completed);
 
         AcpChatServiceAdapter? adapter = null;
         var eventAdapter = new AcpEventAdapter(
@@ -142,7 +142,7 @@ public sealed class AcpConnectionCoordinatorTests
             }
         };
 
-        inner.OnLoadSessionAsync = _ =>
+        inner.OnLoadSessionAsync = (_, _) =>
         {
             inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new AgentMessageUpdate(new TextContentBlock("hello"))));
             return Task.FromResult(SessionLoadResponse.Completed);
@@ -241,7 +241,7 @@ public sealed class AcpConnectionCoordinatorTests
 
         public SessionModeState? CurrentMode => null;
 
-        public Func<SessionLoadParams, Task<SessionLoadResponse>>? OnLoadSessionAsync { get; set; }
+        public Func<SessionLoadParams, CancellationToken, Task<SessionLoadResponse>>? OnLoadSessionAsync { get; set; }
 
         public SessionLoadParams? LastLoadParams { get; private set; }
 
@@ -287,9 +287,12 @@ public sealed class AcpConnectionCoordinatorTests
             => throw new NotSupportedException();
 
         public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+            => LoadSessionAsync(@params, CancellationToken.None);
+
+        public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
         {
             LastLoadParams = @params;
-            return OnLoadSessionAsync?.Invoke(@params) ?? Task.FromResult(SessionLoadResponse.Completed);
+            return OnLoadSessionAsync?.Invoke(@params, cancellationToken) ?? Task.FromResult(SessionLoadResponse.Completed);
         }
 
         public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)

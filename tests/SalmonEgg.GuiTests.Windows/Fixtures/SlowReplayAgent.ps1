@@ -60,13 +60,13 @@ function Send-Error($id, [int]$code, [string]$message)
     }
 }
 
-function Send-SessionUpdate([hashtable]$update)
+function Send-SessionUpdate([string]$targetSessionId, [hashtable]$update)
 {
     Write-JsonLine @{
         jsonrpc = '2.0'
         method = 'session/update'
         params = @{
-            sessionId = $sessionId
+            sessionId = $targetSessionId
             update = $update
         }
     }
@@ -102,10 +102,15 @@ while (($line = [Console]::In.ReadLine()) -ne $null)
 
         'session/load'
         {
-            Send-Response $message.id @{}
+            $requestedSessionId = [string]$message.params.sessionId
+            if ([string]::IsNullOrWhiteSpace($requestedSessionId))
+            {
+                $requestedSessionId = $sessionId
+            }
+
             Start-Sleep -Milliseconds $replayStartDelayMs
 
-            Send-SessionUpdate @{
+            Send-SessionUpdate $requestedSessionId @{
                 sessionUpdate = 'session_info_update'
                 title = 'GUI Remote Session 01'
                 updatedAt = '2026-03-29T12:00:00Z'
@@ -116,7 +121,7 @@ while (($line = [Console]::In.ReadLine()) -ne $null)
                 $text = 'GUI Remote Session 01 replay {0:d3}' -f $index
                 $updateType = if (($index % 2) -eq 0) { 'agent_message_chunk' } else { 'user_message_chunk' }
 
-                Send-SessionUpdate @{
+                Send-SessionUpdate $requestedSessionId @{
                     sessionUpdate = $updateType
                     content = (New-TextContent $text)
                 }
@@ -126,6 +131,8 @@ while (($line = [Console]::In.ReadLine()) -ne $null)
                     Start-Sleep -Milliseconds $chunkDelayMs
                 }
             }
+
+            Send-Response $message.id @{}
 
             continue
         }

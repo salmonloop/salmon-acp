@@ -87,6 +87,9 @@ public sealed class AcpChatServiceAdapter : IChatService, IDisposable
     public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
         => _inner.LoadSessionAsync(@params);
 
+    public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
+        => _inner.LoadSessionAsync(@params, cancellationToken);
+
     public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
         => _inner.ListSessionsAsync(@params, cancellationToken);
 

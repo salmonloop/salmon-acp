@@ -23,6 +23,7 @@ public sealed partial class MiniChatView : Page
     private const double BottomThreshold = 10;
     private const int MaxInitialScrollAttempts = 8;
     private bool _suspendAutoScrollTracking;
+    private bool _manualScrollIntentPending;
 
     public MiniChatView()
     {
@@ -52,6 +53,7 @@ public sealed partial class MiniChatView : Page
     {
         _isLoaded = true;
         _userScrolledUp = false;
+        _manualScrollIntentPending = false;
         _initialScrollGate.MarkPending();
         EnsureViewModelTracking();
         RequestInitialScroll();
@@ -141,8 +143,13 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (_initialScrollGate.HasPending && !_userScrolledUp && TryCompletePendingInitialScroll())
+        if (_initialScrollGate.HasPending)
         {
+            if (!_userScrolledUp)
+            {
+                TryCompletePendingInitialScroll();
+            }
+
             return;
         }
 
@@ -151,23 +158,25 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
+        if (!_manualScrollIntentPending)
+        {
+            return;
+        }
+
         _userScrolledUp = !IsScrollViewerAtBottom();
+        _manualScrollIntentPending = false;
     }
 
     private void OnScrollViewerPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        _manualScrollIntentPending = true;
         StopInitialScrollForManualInteraction();
     }
 
     private void OnScrollViewerPointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
+        _manualScrollIntentPending = true;
         StopInitialScrollForManualInteraction();
-
-        var point = e.GetCurrentPoint(_scrollViewer);
-        if (point.Properties.MouseWheelDelta > 0)
-        {
-            _userScrolledUp = true;
-        }
     }
 
     private void OnMessageHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -199,6 +208,7 @@ public sealed partial class MiniChatView : Page
         if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId)
             || e.PropertyName == nameof(ChatViewModel.IsSessionActive))
         {
+            ResetAutoScrollStateForConversationChange();
             _initialScrollGate.MarkPending();
             RequestInitialScroll();
         }
@@ -452,12 +462,18 @@ public sealed partial class MiniChatView : Page
         }
 
         _suspendAutoScrollTracking = false;
-        _userScrolledUp = true;
         _initialScrollGate.ClearPending();
     }
 
     private void ReleaseAutoScrollTracking()
     {
         _ = DispatcherQueue.TryEnqueue(() => _suspendAutoScrollTracking = false);
+    }
+
+    private void ResetAutoScrollStateForConversationChange()
+    {
+        _userScrolledUp = false;
+        _suspendAutoScrollTracking = false;
+        _manualScrollIntentPending = false;
     }
 }

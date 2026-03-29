@@ -105,7 +105,9 @@ internal sealed class GuiAppDataScope : IDisposable
 
     public static GuiAppDataScope CreateDeterministicSlowRemoteReplayData(
         int cachedMessageCount = 1,
-        int replayMessageCount = 60)
+        int replayMessageCount = 60,
+        bool includeLocalConversation = false,
+        int localMessageCount = 3)
     {
         if (cachedMessageCount < 0)
         {
@@ -115,6 +117,11 @@ internal sealed class GuiAppDataScope : IDisposable
         if (replayMessageCount <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(replayMessageCount));
+        }
+
+        if (includeLocalConversation && localMessageCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(localMessageCount));
         }
 
         GuiTestGate.RequireEnabled();
@@ -150,7 +157,12 @@ internal sealed class GuiAppDataScope : IDisposable
             previousFakeReplaySessionId,
             previousFakeReplayMessageCount);
 
-        scope.SeedSlowRemoteReplay(profileId, cachedMessageCount, replayMessageCount);
+        scope.SeedSlowRemoteReplay(
+            profileId,
+            cachedMessageCount,
+            replayMessageCount,
+            includeLocalConversation,
+            localMessageCount);
         return scope;
     }
 
@@ -226,7 +238,9 @@ internal sealed class GuiAppDataScope : IDisposable
     private void SeedSlowRemoteReplay(
         string profileId,
         int cachedMessageCount,
-        int replayMessageCount)
+        int replayMessageCount,
+        bool includeLocalConversation,
+        int localMessageCount)
     {
         if (string.IsNullOrWhiteSpace(_serverYamlPath))
         {
@@ -246,7 +260,12 @@ internal sealed class GuiAppDataScope : IDisposable
             Encoding.UTF8);
         File.WriteAllText(
             _conversationsPath,
-            BuildSlowRemoteReplayConversationsJson(_projectRootPath, profileId, cachedMessageCount),
+            BuildSlowRemoteReplayConversationsJson(
+                _projectRootPath,
+                profileId,
+                cachedMessageCount,
+                includeLocalConversation,
+                localMessageCount),
             Encoding.UTF8);
         File.WriteAllText(
             _serverYamlPath,
@@ -352,16 +371,18 @@ internal sealed class GuiAppDataScope : IDisposable
     private static string BuildSlowRemoteReplayConversationsJson(
         string projectRootPath,
         string profileId,
-        int cachedMessageCount)
+        int cachedMessageCount,
+        bool includeLocalConversation,
+        int localMessageCount)
     {
-        var timestamp = new DateTimeOffset(2026, 03, 29, 12, 00, 00, TimeSpan.Zero);
+        var remoteTimestamp = new DateTimeOffset(2026, 03, 29, 12, 00, 00, TimeSpan.Zero);
         var cachedMessages = cachedMessageCount <= 0
             ? Array.Empty<object>()
             : Enumerable.Range(1, cachedMessageCount)
                 .Select(messageIndex => new
                 {
                     id = $"cached-{messageIndex}",
-                    timestamp = timestamp.AddSeconds(messageIndex),
+                    timestamp = remoteTimestamp.AddSeconds(messageIndex),
                     contentType = "text",
                     textContent = $"GUI Remote Session 01 cached {messageIndex:000}",
                     isOutgoing = messageIndex % 2 != 0
@@ -369,24 +390,49 @@ internal sealed class GuiAppDataScope : IDisposable
                 .Cast<object>()
                 .ToArray();
 
+        var conversations = new List<object>();
+
+        if (includeLocalConversation)
+        {
+            var localTimestamp = remoteTimestamp.AddMinutes(-1);
+            conversations.Add(new
+            {
+                conversationId = "gui-local-conversation-01",
+                displayName = "GUI Local Session 01",
+                createdAt = localTimestamp,
+                lastUpdatedAt = localTimestamp,
+                cwd = projectRootPath,
+                messages = Enumerable.Range(1, localMessageCount)
+                    .Select(messageIndex => new
+                    {
+                        id = $"local-{messageIndex}",
+                        timestamp = localTimestamp.AddSeconds(messageIndex),
+                        contentType = "text",
+                        textContent = $"GUI Local Session 01 message {messageIndex:000}",
+                        isOutgoing = messageIndex % 2 == 0
+                    })
+                    .Cast<object>()
+                    .ToArray()
+            });
+        }
+
+        conversations.Add(new
+        {
+            conversationId = "gui-remote-conversation-01",
+            displayName = "GUI Remote Session 01",
+            createdAt = remoteTimestamp,
+            lastUpdatedAt = remoteTimestamp,
+            cwd = projectRootPath,
+            remoteSessionId = "gui-remote-session-01",
+            boundProfileId = profileId,
+            messages = cachedMessages
+        });
+
         var document = new
         {
             version = 1,
             lastActiveConversationId = (string?)null,
-            conversations = new[]
-            {
-                new
-                {
-                    conversationId = "gui-remote-conversation-01",
-                    displayName = "GUI Remote Session 01",
-                    createdAt = timestamp,
-                    lastUpdatedAt = timestamp,
-                    cwd = projectRootPath,
-                    remoteSessionId = "gui-remote-session-01",
-                    boundProfileId = profileId,
-                    messages = cachedMessages
-                }
-            }
+            conversations = conversations.ToArray()
         };
 
         return JsonSerializer.Serialize(document);

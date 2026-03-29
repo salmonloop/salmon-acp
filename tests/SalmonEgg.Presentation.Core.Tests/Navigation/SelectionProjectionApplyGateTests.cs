@@ -39,4 +39,20 @@ public sealed class SelectionProjectionApplyGateTests
 
         Assert.False(shouldApplyAfterInteraction);
     }
+
+    [Fact]
+    public void EndInteraction_WhenNestedInteractionsRemain_DoesNotReleaseDeferredApplyUntilLastInteractionEnds()
+    {
+        var gate = new SelectionProjectionApplyGate();
+        gate.BeginInteraction();
+        gate.RequestApply();
+        gate.BeginInteraction();
+        gate.RequestApply();
+
+        var shouldApplyAfterInnerInteraction = gate.EndInteraction();
+        var shouldApplyAfterOuterInteraction = gate.EndInteraction();
+
+        Assert.False(shouldApplyAfterInnerInteraction);
+        Assert.True(shouldApplyAfterOuterInteraction);
+    }
 }

@@ -1985,9 +1985,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _suppressStoreProfileProjection = true;
             try
             {
-                var selectedProfile = ResolveLoadedProfileSelection(config);
-                SelectedAcpProfile = selectedProfile;
-                _acpProfiles.SelectedProfile = selectedProfile;
+                await PostToUiAsync(() =>
+                {
+                    var selectedProfile = ResolveLoadedProfileSelection(config);
+                    SelectedAcpProfile = selectedProfile;
+                    _acpProfiles.SelectedProfile = selectedProfile;
+                }).ConfigureAwait(false);
             }
             finally
             {
@@ -2022,17 +2025,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         try
         {
             await PrepareSelectedProfileConnectionAsync(profile, cancellationToken).ConfigureAwait(false);
-            _suppressAutoConnectFromPreferenceChange = true;
-            _acpProfiles.MarkLastConnected(profile);
-            _acpProfiles.SelectedProfile = ResolveLoadedProfileSelection(profile);
+            await PostToUiAsync(() =>
+            {
+                _suppressAutoConnectFromPreferenceChange = true;
+                _acpProfiles.MarkLastConnected(profile);
+                _acpProfiles.SelectedProfile = ResolveLoadedProfileSelection(profile);
+            }).ConfigureAwait(false);
             var result = await _acpConnectionCommands
                 .ConnectToProfileAsync(profile, TransportConfig, this, cancellationToken)
                 .ConfigureAwait(false);
 
-            CacheAuthMethods(result.InitializeResponse);
-            ClearAuthenticationRequirement();
-            UpdateAgentInfo();
-            ShowTransportConfigPanel = false;
+            await PostToUiAsync(() =>
+            {
+                CacheAuthMethods(result.InitializeResponse);
+                ClearAuthenticationRequirement();
+                UpdateAgentInfo();
+                ShowTransportConfigPanel = false;
+            }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -2049,7 +2058,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
         finally
         {
-            _suppressAutoConnectFromPreferenceChange = false;
+            await PostToUiAsync(() =>
+            {
+                _suppressAutoConnectFromPreferenceChange = false;
+            }).ConfigureAwait(false);
         }
     }
 
@@ -4494,7 +4506,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             await RefreshRemoteSessionMetadataFromSsotAsync(conversationId, binding, chatService, cancellationToken).ConfigureAwait(false);
             await ResetConversationProjectionForResyncAsync(conversationId, cancellationToken).ConfigureAwait(false);
             await chatService
-                .LoadSessionAsync(new SessionLoadParams(binding.RemoteSessionId!, GetSessionCwdOrDefault(conversationId)))
+                .LoadSessionAsync(
+                    new SessionLoadParams(binding.RemoteSessionId!, GetSessionCwdOrDefault(conversationId)),
+                    cancellationToken)
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (requiresTranscriptGrowthObservation && chatService is AcpChatServiceAdapter adapter)
@@ -4560,7 +4574,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    public void SelectProfile(ServerConfiguration profile)
+    private void ApplySelectedProfile(ServerConfiguration profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
@@ -4584,7 +4598,27 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    public void ReplaceChatService(IChatService? chatService)
+    public void SelectProfile(ServerConfiguration profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            ApplySelectedProfile(profile);
+            return;
+        }
+
+        _ = SelectProfileAsync(profile);
+    }
+
+    public Task SelectProfileAsync(ServerConfiguration profile, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        cancellationToken.ThrowIfCancellationRequested();
+        return PostToUiAsync(() => ApplySelectedProfile(profile));
+    }
+
+    private void ApplyChatServiceReplacement(IChatService? chatService)
     {
         if (_chatService != null)
         {
@@ -4599,8 +4633,26 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         {
             SubscribeToChatService(chatService);
         }
+
         OnPropertyChanged(nameof(CurrentChatService));
         OnPropertyChanged(nameof(IsInitialized));
+    }
+
+    public void ReplaceChatService(IChatService? chatService)
+    {
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            ApplyChatServiceReplacement(chatService);
+            return;
+        }
+
+        _ = ReplaceChatServiceAsync(chatService);
+    }
+
+    public Task ReplaceChatServiceAsync(IChatService? chatService, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return PostToUiAsync(() => ApplyChatServiceReplacement(chatService));
     }
 
     public void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)
@@ -5269,13 +5321,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         {
             Version = version;
             CancellationTokenSource = cancellationTokenSource ?? throw new ArgumentNullException(nameof(cancellationTokenSource));
+            CancellationToken = cancellationTokenSource.Token;
         }
 
         public long Version { get; }
 
         public CancellationTokenSource CancellationTokenSource { get; }
 
-        public CancellationToken CancellationToken => CancellationTokenSource.Token;
+        public CancellationToken CancellationToken { get; }
     }
 
        public void Dispose()

@@ -415,7 +415,7 @@ public sealed class NavigationCoordinatorTests
             chatService.SetupGet(service => service.IsConnected).Returns(true);
             chatService.SetupGet(service => service.IsInitialized).Returns(true);
             chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
-            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(SessionLoadResponse.Completed);
             chat.ViewModel.ReplaceChatService(chatService.Object);
 
@@ -430,9 +430,11 @@ public sealed class NavigationCoordinatorTests
 
             Assert.True(activated);
             chatService.Verify(
-                service => service.LoadSessionAsync(It.Is<SessionLoadParams>(parameters =>
-                    string.Equals(parameters.SessionId, "remote-2", StringComparison.Ordinal)
-                    && string.Equals(parameters.Cwd, @"C:\repo\two", StringComparison.Ordinal))),
+                service => service.LoadSessionAsync(
+                    It.Is<SessionLoadParams>(parameters =>
+                        string.Equals(parameters.SessionId, "remote-2", StringComparison.Ordinal)
+                        && string.Equals(parameters.Cwd, @"C:\repo\two", StringComparison.Ordinal)),
+                    It.IsAny<CancellationToken>()),
                 Times.Once);
         }
         finally
@@ -469,8 +471,8 @@ public sealed class NavigationCoordinatorTests
             chatService.SetupGet(service => service.IsConnected).Returns(true);
             chatService.SetupGet(service => service.IsInitialized).Returns(true);
             chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
-            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
-                .Returns<SessionLoadParams>(async _ =>
+            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+                .Returns<SessionLoadParams, CancellationToken>(async (_, _) =>
                 {
                     loadStarted.TrySetResult(null);
                     await allowLoadCompletion.Task;
@@ -533,8 +535,8 @@ public sealed class NavigationCoordinatorTests
             chatService.SetupGet(service => service.IsConnected).Returns(true);
             chatService.SetupGet(service => service.IsInitialized).Returns(true);
             chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
-            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
-                .Returns<SessionLoadParams>(async _ =>
+            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+                .Returns<SessionLoadParams, CancellationToken>(async (_, _) =>
                 {
                     loadStarted.TrySetResult(null);
                     await allowLoadCompletion.Task;
@@ -596,7 +598,7 @@ public sealed class NavigationCoordinatorTests
             chatService.SetupGet(service => service.IsConnected).Returns(true);
             chatService.SetupGet(service => service.IsInitialized).Returns(true);
             chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
-            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
+            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("remote load failed"));
             chat.ViewModel.ReplaceChatService(chatService.Object);
 
@@ -656,8 +658,8 @@ public sealed class NavigationCoordinatorTests
             chatService.SetupGet(service => service.IsConnected).Returns(true);
             chatService.SetupGet(service => service.IsInitialized).Returns(true);
             chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
-            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>()))
-                .Returns<SessionLoadParams>(async parameters =>
+            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+                .Returns<SessionLoadParams, CancellationToken>(async (parameters, _) =>
                 {
                     if (string.Equals(parameters.SessionId, "remote-1", StringComparison.Ordinal))
                     {

@@ -270,7 +270,10 @@ namespace SalmonEgg.Application.Services.Chat
             }
         }
 
-        public async Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+        public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+            => LoadSessionAsync(@params, CancellationToken.None);
+
+        public async Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
         {
             var previousSessionId = _currentSessionId;
             List<SessionUpdateEntry>? previousHistory = null;
@@ -296,7 +299,7 @@ namespace SalmonEgg.Application.Services.Chat
                 // if the server replays the history during the load process.
                 _sessionManager.UpdateSession(@params.SessionId, s => s.History.Clear());
 
-                var response = await _acpClient.LoadSessionAsync(@params);
+                var response = await _acpClient.LoadSessionAsync(@params, cancellationToken).ConfigureAwait(false);
                 try
                 {
                     var session = GetOrCreateSession(@params.SessionId, @params.Cwd);
@@ -308,6 +311,23 @@ namespace SalmonEgg.Application.Services.Chat
                     // Ignore session tracking failures
                 }
                 return response;
+            }
+            catch (OperationCanceledException)
+            {
+                if (hadPreviousHistory && previousHistory != null)
+                {
+                    _sessionManager.UpdateSession(@params.SessionId, s =>
+                    {
+                        s.History.Clear();
+                        foreach (var entry in previousHistory)
+                        {
+                            s.History.Add(entry);
+                        }
+                    });
+                }
+
+                _currentSessionId = previousSessionId;
+                throw;
             }
             catch (Exception ex)
             {

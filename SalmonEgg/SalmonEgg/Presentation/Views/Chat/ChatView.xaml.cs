@@ -25,6 +25,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         private const int MaxInitialScrollAttempts = 8;
         private ScrollViewer? _scrollViewer;
         private bool _suspendAutoScrollTracking;
+        private bool _manualScrollIntentPending;
 
         public ChatView()
         {
@@ -40,6 +41,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         {
             _isViewLoaded = true;
             _userScrolledUp = false;
+            _manualScrollIntentPending = false;
             _initialScrollGate.MarkPending();
             EnsureMessageTracking();
             BeginLayoutLoadingIfPendingMessages();
@@ -160,8 +162,13 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            if (_initialScrollGate.HasPending && !_userScrolledUp && TryCompletePendingInitialScroll())
+            if (_initialScrollGate.HasPending)
             {
+                if (!_userScrolledUp)
+                {
+                    TryCompletePendingInitialScroll();
+                }
+
                 return;
             }
 
@@ -170,23 +177,25 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
+            if (!_manualScrollIntentPending)
+            {
+                return;
+            }
+
             _userScrolledUp = !IsScrollViewerAtBottom();
+            _manualScrollIntentPending = false;
         }
 
         private void ScrollViewer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            _manualScrollIntentPending = true;
             StopInitialScrollForManualInteraction();
         }
 
         private void ScrollViewer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
+            _manualScrollIntentPending = true;
             StopInitialScrollForManualInteraction();
-
-            var point = e.GetCurrentPoint(_scrollViewer);
-            if (point.Properties.MouseWheelDelta > 0)
-            {
-                _userScrolledUp = true;
-            }
         }
 
         private static ScrollViewer? FindScrollViewer(DependencyObject element)
@@ -228,6 +237,7 @@ namespace SalmonEgg.Presentation.Views.Chat
             if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId)
                 || e.PropertyName == nameof(ChatViewModel.IsSessionActive))
             {
+                ResetAutoScrollStateForConversationChange();
                 _initialScrollGate.MarkPending();
                 BeginLayoutLoadingIfPendingMessages();
                 RequestInitialScroll();
@@ -432,7 +442,6 @@ namespace SalmonEgg.Presentation.Views.Chat
             }
 
             _suspendAutoScrollTracking = false;
-            _userScrolledUp = true;
             _initialScrollGate.ClearPending();
             RefreshLayoutLoadingState();
         }
@@ -440,6 +449,13 @@ namespace SalmonEgg.Presentation.Views.Chat
         private void ReleaseAutoScrollTracking()
         {
             _ = DispatcherQueue.TryEnqueue(() => _suspendAutoScrollTracking = false);
+        }
+
+        private void ResetAutoScrollStateForConversationChange()
+        {
+            _userScrolledUp = false;
+            _suspendAutoScrollTracking = false;
+            _manualScrollIntentPending = false;
         }
 
         private void OnSessionNameClick(object sender, RoutedEventArgs e)
