@@ -96,6 +96,46 @@ public class UiConventionsTests
     }
 
     [Fact]
+    public void MiniWindowCoordinator_ShouldCreateDedicatedMiniChatWindow()
+    {
+        var repoRoot = FindRepoRoot();
+        var coordinatorFile = Path.Combine(
+            repoRoot,
+            "SalmonEgg",
+            "SalmonEgg",
+            "Presentation",
+            "Services",
+            "MiniWindowCoordinator.cs");
+        var text = File.ReadAllText(coordinatorFile);
+
+        Assert.Contains("new MiniChatWindow()", text);
+        Assert.DoesNotContain("new Microsoft.UI.Xaml.Window()", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MiniChatWindow_ShouldUseNativeTitleBarTakeoverOnWindows()
+    {
+        var repoRoot = FindRepoRoot();
+        var windowFile = Path.Combine(
+            repoRoot,
+            "SalmonEgg",
+            "SalmonEgg",
+            "Presentation",
+            "Views",
+            "MiniWindow",
+            "MiniChatWindow.cs");
+
+        Assert.True(File.Exists(windowFile), $"Expected mini window implementation at '{windowFile}'.");
+
+        var text = File.ReadAllText(windowFile);
+
+        Assert.Contains("ExtendsContentIntoTitleBar = true", text);
+        Assert.Contains("SetTitleBar(", text);
+        Assert.Contains("InputNonClientPointerSource", text);
+        Assert.Contains("NonClientRegionKind.Passthrough", text);
+    }
+
+    [Fact]
     public void ChatServiceFactory_ShouldNotDependOnAppLevelCapabilityManager()
     {
         var constructor = typeof(ChatServiceFactory).GetConstructors().Single();

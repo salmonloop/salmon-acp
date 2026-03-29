@@ -22,7 +22,7 @@
                         <AdaptiveTrigger MinWindowWidth="0" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="MiniTitleBar.Padding" Value="12,0" />
+                        <Setter Target="MiniTitleBarContent.Padding" Value="12,0" />
                         <Setter Target="MessagesList.Padding" Value="12" />
                         <Setter Target="InputBorder.Padding" Value="12,10,12,16" />
                     </VisualState.Setters>
@@ -33,7 +33,7 @@
                         <AdaptiveTrigger MinWindowWidth="520" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Target="MiniTitleBar.Padding" Value="16,0" />
+                        <Setter Target="MiniTitleBarContent.Padding" Value="16,0" />
                         <Setter Target="MessagesList.Padding" Value="16" />
                         <Setter Target="InputBorder.Padding" Value="16,10,16,16" />
                     </VisualState.Setters>
@@ -41,40 +41,55 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <!-- "Title bar" content (in-content; avoids platform-specific titlebar APIs) -->
         <Border x:Name="MiniTitleBar"
                 Grid.Row="0"
                 Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0"
                 Height="48"
-                Padding="12,0">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                <ComboBox Grid.Column="0"
-                          x:Uid="MiniChatSessionSelector"
-                          MinWidth="0"
-                          ItemsSource="{x:Bind ViewModel.MiniWindowSessions, Mode=OneWay}"
-                          SelectedItem="{x:Bind ViewModel.SelectedMiniWindowSession, Mode=TwoWay}"
-                          BorderThickness="0"
-                          Background="Transparent"
-                          VerticalAlignment="Center">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
-                            <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxLines="1" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
+                Padding="0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="MiniTitleBarLeftInsetColumn" Width="0" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition x:Name="MiniTitleBarRightInsetColumn" Width="0" />
+                </Grid.ColumnDefinitions>
 
-                <Button Grid.Column="1"
-                        x:Uid="MiniChatReturnButton"
-                        Style="{StaticResource TitleBarCommandButtonStyle}"
-                        VerticalAlignment="Center"
-                        Command="{x:Bind ViewModel.ReturnToMainWindowCommand}">
-                    <!-- "BackToWindow" glyph (Segoe Fluent Icons / MDL2-compatible on WinUI) -->
-                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE73F;" />
-                </Button>
+                <Grid Grid.Column="1">
+                    <Grid x:Name="MiniTitleBarDragRegion" Background="Transparent" />
+                    <Grid x:Name="MiniTitleBarContent"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12"
+                          Padding="12,0">
+                        <ComboBox x:Name="MiniTitleBarSessionSelector"
+                                  Grid.Column="0"
+                                  x:Uid="MiniChatSessionSelector"
+                                  MinWidth="0"
+                                  ItemsSource="{x:Bind ViewModel.MiniWindowSessions, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedMiniWindowSession, Mode=TwoWay}"
+                                  BorderThickness="0"
+                                  Background="Transparent"
+                                  VerticalAlignment="Center">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
+                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxLines="1" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <Button x:Name="MiniTitleBarReturnButton"
+                                Grid.Column="1"
+                                x:Uid="MiniChatReturnButton"
+                                Style="{StaticResource TitleBarCommandButtonStyle}"
+                                VerticalAlignment="Center"
+                                Command="{x:Bind ViewModel.ReturnToMainWindowCommand}">
+                            <!-- "BackToWindow" glyph (Segoe Fluent Icons / MDL2-compatible on WinUI) -->
+                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE73F;" />
+                        </Button>
+                    </Grid>
+                </Grid>
             </Grid>
         </Border>
 

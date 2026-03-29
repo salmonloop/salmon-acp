@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
@@ -30,6 +31,21 @@ public sealed partial class MiniChatView : Page
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    public FrameworkElement TitleBarElement => MiniTitleBar;
+
+    public IReadOnlyList<FrameworkElement> TitleBarInteractiveElements
+        => new FrameworkElement[]
+        {
+            MiniTitleBarSessionSelector,
+            MiniTitleBarReturnButton
+        };
+
+    public void SetTitleBarInsets(double leftInset, double rightInset)
+    {
+        MiniTitleBarLeftInsetColumn.Width = new GridLength(Math.Max(0, leftInset));
+        MiniTitleBarRightInsetColumn.Width = new GridLength(Math.Max(0, rightInset));
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

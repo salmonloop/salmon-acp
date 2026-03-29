@@ -1,7 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml;
 #if WINDOWS
 using Microsoft.UI.Windowing;
 using Windows.Graphics;
@@ -12,7 +10,7 @@ namespace SalmonEgg.Presentation.Services;
 
 public sealed class MiniWindowCoordinator : IMiniWindowCoordinator
 {
-    private Microsoft.UI.Xaml.Window? _miniWindow;
+    private MiniChatWindow? _miniWindow;
 
     public Task OpenMiniWindowAsync()
     {
@@ -48,10 +46,7 @@ public sealed class MiniWindowCoordinator : IMiniWindowCoordinator
         {
             try
             {
-                var window = new Microsoft.UI.Xaml.Window();
-                var frame = new Frame();
-                window.Content = frame;
-                frame.Navigate(typeof(MiniChatView));
+                var window = new MiniChatWindow();
                 window.Closed += (_, _) =>
                 {
                     // Ensure the app can reopen the mini window after a manual close.
