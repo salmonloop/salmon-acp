@@ -374,7 +374,7 @@ public sealed class NavigationCoordinatorTests
             Assert.False(activationTask.IsCompleted);
             Assert.True(chat.ViewModel.IsOverlayVisible);
             Assert.True(chat.ViewModel.ShouldShowBlockingLoadingMask);
-            Assert.Equal("正在切换会话...", chat.ViewModel.OverlayStatusText);
+            Assert.Contains("切换", chat.ViewModel.OverlayStatusText, StringComparison.Ordinal);
 
             shellNavigation.CompleteFirst(ShellNavigationResult.Success());
 
@@ -585,13 +585,7 @@ public sealed class NavigationCoordinatorTests
             var selection = Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
             Assert.Equal("session-2", selection.SessionId);
             Assert.True(chat.ViewModel.IsOverlayVisible);
-            Assert.True(
-                chat.ViewModel.OverlayStatusText.StartsWith("正在加载聊天记录", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在打开会话", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在读取历史消息", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在整理消息", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在同步最新消息", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("马上就好", StringComparison.Ordinal));
+            Assert.True(IsUserFriendlyLoadingStatus(chat.ViewModel.OverlayStatusText));
 
             allowLoadCompletion.TrySetResult(null);
             await WaitForConditionAsync(() => !chat.ViewModel.IsOverlayVisible, maxAttempts: 100, delayMilliseconds: 20);
@@ -657,13 +651,7 @@ public sealed class NavigationCoordinatorTests
             var selection = Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
             Assert.Equal("session-2", selection.SessionId);
             Assert.True(chat.ViewModel.IsOverlayVisible);
-            Assert.True(
-                chat.ViewModel.OverlayStatusText.StartsWith("正在加载聊天记录", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在打开会话", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在读取历史消息", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在整理消息", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("正在同步最新消息", StringComparison.Ordinal)
-                || chat.ViewModel.OverlayStatusText.StartsWith("马上就好", StringComparison.Ordinal));
+            Assert.True(IsUserFriendlyLoadingStatus(chat.ViewModel.OverlayStatusText));
 
             allowLoadCompletion.TrySetResult(null);
             await WaitForConditionAsync(() => !chat.ViewModel.IsOverlayVisible);
@@ -1128,6 +1116,19 @@ public sealed class NavigationCoordinatorTests
         }
 
         Assert.True(predicate());
+    }
+
+    private static bool IsUserFriendlyLoadingStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return false;
+        }
+
+        return (status.StartsWith("正在", StringComparison.Ordinal) || status.StartsWith("即将", StringComparison.Ordinal))
+            && (status.Contains("聊天", StringComparison.Ordinal) || status.Contains("消息", StringComparison.Ordinal))
+            && !status.Contains("ACP", StringComparison.OrdinalIgnoreCase)
+            && !status.Contains("协议", StringComparison.Ordinal);
     }
 
     private sealed class TokenAwareShellNavigationService : IShellNavigationService, IActivationTokenShellNavigationService

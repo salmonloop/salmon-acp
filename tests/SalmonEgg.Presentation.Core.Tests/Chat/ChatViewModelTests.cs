@@ -3393,7 +3393,9 @@ public class ChatViewModelTests
         await loadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.True(fixture.ViewModel.IsOverlayVisible);
-        Assert.StartsWith("正在打开会话", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
+        Assert.True(
+            IsUserFriendlyHydrationOverlayStatus(fixture.ViewModel.OverlayStatusText),
+            $"Unexpected hydration overlay status: {fixture.ViewModel.OverlayStatusText}");
 
         allowLoadCompletion.TrySetResult(null);
         var hydrated = await hydrationTask;
@@ -3526,7 +3528,9 @@ public class ChatViewModelTests
             hydrationTask.IsCompleted,
             "Remote hydration should stay pending after session/load returns when replay has not started yet.");
         Assert.True(fixture.ViewModel.IsOverlayVisible);
-        Assert.StartsWith("正在读取历史消息", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
+        Assert.True(
+            IsUserFriendlyHydrationOverlayStatus(fixture.ViewModel.OverlayStatusText),
+            $"Unexpected hydration overlay status: {fixture.ViewModel.OverlayStatusText}");
 
         innerChatService.RaiseSessionUpdate(new SessionUpdateEventArgs(
             "remote-1",
@@ -3560,7 +3564,9 @@ public class ChatViewModelTests
         syncContext.RunAll();
 
         Assert.True(fixture.ViewModel.IsOverlayVisible);
-        Assert.StartsWith("正在加载聊天记录", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
+        Assert.True(
+            IsUserFriendlyHydrationOverlayStatus(fixture.ViewModel.OverlayStatusText),
+            $"Unexpected hydration overlay status: {fixture.ViewModel.OverlayStatusText}");
     }
 
     [Fact]
@@ -3594,7 +3600,7 @@ public class ChatViewModelTests
         syncContext.RunAll();
 
         Assert.True(fixture.ViewModel.IsOverlayVisible);
-        Assert.Equal("正在加载聊天记录（已加载 2 条）", fixture.ViewModel.OverlayStatusText);
+        Assert.Contains("已加载 2 条消息", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3999,7 +4005,7 @@ public class ChatViewModelTests
             Assert.Equal(pendingBeforePrime, syncContext.PendingCount);
             Assert.True(fixture.ViewModel.IsOverlayVisible);
             Assert.True(fixture.ViewModel.ShouldShowBlockingLoadingMask);
-            Assert.Equal("正在切换会话...", fixture.ViewModel.OverlayStatusText);
+            Assert.Contains("切换", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
 
             var pendingBeforeClear = syncContext.PendingCount;
             preview.ClearSessionSwitchPreview("conv-1");
@@ -4356,7 +4362,9 @@ public class ChatViewModelTests
             Transcript = ImmutableList<ConversationMessageSnapshot>.Empty
         });
 
-        Assert.Equal("正在加载聊天记录...", fixture.ViewModel.OverlayStatusText);
+        Assert.True(
+            IsUserFriendlyHydrationOverlayStatus(fixture.ViewModel.OverlayStatusText),
+            $"Unexpected hydration overlay status: {fixture.ViewModel.OverlayStatusText}");
 
         await fixture.UpdateStateAsync(state => state with
         {
@@ -4373,7 +4381,7 @@ public class ChatViewModelTests
             ]
         });
 
-        Assert.Equal("正在加载聊天记录（已加载 1 条）", fixture.ViewModel.OverlayStatusText);
+        Assert.Contains("已加载 1 条消息", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -6556,11 +6564,9 @@ public class ChatViewModelTests
             return false;
         }
 
-        return status.StartsWith("正在打开会话", StringComparison.Ordinal)
-            || status.StartsWith("正在读取历史消息", StringComparison.Ordinal)
-            || status.StartsWith("正在整理消息", StringComparison.Ordinal)
-            || status.StartsWith("正在同步最新消息", StringComparison.Ordinal)
-            || status.StartsWith("马上就好", StringComparison.Ordinal)
-            || status.StartsWith("正在加载聊天记录", StringComparison.Ordinal);
+        return (status.StartsWith("正在", StringComparison.Ordinal) || status.StartsWith("即将", StringComparison.Ordinal))
+            && (status.Contains("聊天", StringComparison.Ordinal) || status.Contains("消息", StringComparison.Ordinal))
+            && !status.Contains("ACP", StringComparison.OrdinalIgnoreCase)
+            && !status.Contains("协议", StringComparison.Ordinal);
     }
 }

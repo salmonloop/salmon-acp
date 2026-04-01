@@ -246,9 +246,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         OverlayLoadingStage switch
         {
             LoadingOverlayStage.Connecting => "正在连接助手...",
-            LoadingOverlayStage.InitializingProtocol => "正在准备会话环境...",
+            LoadingOverlayStage.InitializingProtocol => "正在准备聊天环境...",
             LoadingOverlayStage.HydratingHistory => BuildHydrationStatusText(),
-            LoadingOverlayStage.PreparingSession => "正在切换会话...",
+            LoadingOverlayStage.PreparingSession => "正在切换聊天...",
             _ => string.Empty
         };
 
@@ -280,50 +280,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private string BuildHydrationStatusText()
     {
-        var updateCount = ResolveHydrationObservedUpdateCount();
         var loadedCount = ResolveHydrationLoadedMessageCount();
         return _hydrationOverlayPhase switch
         {
-            HydrationOverlayPhase.RequestingSessionLoad => "正在打开会话...",
-            HydrationOverlayPhase.AwaitingReplayStart => "正在读取历史消息...",
-            HydrationOverlayPhase.ReplayingSessionUpdates => updateCount > 0
-                ? $"正在读取历史消息（已读取 {updateCount} 条）"
-                : "正在读取历史消息...",
-            HydrationOverlayPhase.ProjectingTranscript => loadedCount > 0
-                ? $"正在整理消息（已加载 {loadedCount} 条）"
-                : "正在整理消息...",
-            HydrationOverlayPhase.SettlingReplay => loadedCount > 0
-                ? $"正在同步最新消息（已加载 {loadedCount} 条）"
-                : "正在同步最新消息...",
-            HydrationOverlayPhase.FinalizingProjection => loadedCount > 0
-                ? $"马上就好（已加载 {loadedCount} 条）"
-                : "马上就好...",
-            _ => loadedCount > 0
-                ? $"正在加载聊天记录（已加载 {loadedCount} 条）"
-                : "正在加载聊天记录..."
+            HydrationOverlayPhase.RequestingSessionLoad => FormatHydrationStatus("正在打开聊天记录", loadedCount),
+            HydrationOverlayPhase.AwaitingReplayStart => FormatHydrationStatus("正在获取聊天记录", loadedCount),
+            HydrationOverlayPhase.ReplayingSessionUpdates => FormatHydrationStatus("正在同步聊天记录", loadedCount),
+            HydrationOverlayPhase.ProjectingTranscript => FormatHydrationStatus("正在整理聊天内容", loadedCount),
+            HydrationOverlayPhase.SettlingReplay => FormatHydrationStatus("正在完成聊天加载", loadedCount),
+            HydrationOverlayPhase.FinalizingProjection => FormatHydrationStatus("即将完成聊天加载", loadedCount),
+            _ => FormatHydrationStatus("正在加载聊天记录", loadedCount)
         };
     }
 
-    private long ResolveHydrationObservedUpdateCount()
-    {
-        var conversationId = !string.IsNullOrWhiteSpace(_historyOverlayConversationId)
-            ? _historyOverlayConversationId
-            : CurrentSessionId;
-        if (string.IsNullOrWhiteSpace(conversationId)
-            || !_remoteHydrationSessionUpdateBaselineCounts.TryGetValue(conversationId, out var replayBaseline))
-        {
-            return 0;
-        }
-
-        var remoteSessionId = _conversationWorkspace.GetRemoteBinding(conversationId)?.RemoteSessionId;
-        if (string.IsNullOrWhiteSpace(remoteSessionId))
-        {
-            return 0;
-        }
-
-        var observedCount = GetSessionUpdateObservationCount(remoteSessionId);
-        return Math.Max(0L, observedCount - replayBaseline);
-    }
+    private static string FormatHydrationStatus(string baseText, long loadedCount)
+        => loadedCount > 0
+            ? $"{baseText}（已加载 {loadedCount} 条消息）"
+            : $"{baseText}...";
 
     private long ResolveHydrationLoadedMessageCount()
     {

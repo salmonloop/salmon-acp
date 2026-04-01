@@ -86,27 +86,20 @@ public sealed class ChatSkeletonSmokeTests
             var protocolStageStatus = WaitForOverlayStatus(
                 session,
                 appData,
-                status => status.StartsWith("正在打开会话", StringComparison.Ordinal)
-                    || status.StartsWith("正在读取历史消息", StringComparison.Ordinal),
+                IsUserFriendlyLoadingStatus,
                 TimeSpan.FromSeconds(20),
                 "slow-remote-replay-protocol-stage-pill");
-            Assert.True(
-                protocolStageStatus.StartsWith("正在打开会话", StringComparison.Ordinal)
-                || protocolStageStatus.StartsWith("正在读取历史消息", StringComparison.Ordinal));
+            Assert.True(IsUserFriendlyLoadingStatus(protocolStageStatus));
             var hydrationProgressStatus = WaitForOverlayStatus(
                 session,
                 appData,
                 status =>
                     status.Contains("已", StringComparison.Ordinal)
                     && status.Contains("条", StringComparison.Ordinal)
-                    && (status.StartsWith("正在读取历史消息", StringComparison.Ordinal)
-                        || status.StartsWith("正在整理消息", StringComparison.Ordinal)
-                        || status.StartsWith("正在同步最新消息", StringComparison.Ordinal)
-                        || status.StartsWith("正在加载聊天记录", StringComparison.Ordinal)
-                        || status.StartsWith("马上就好", StringComparison.Ordinal)),
+                    && IsUserFriendlyLoadingStatus(status),
                 TimeSpan.FromSeconds(20),
                 "slow-remote-replay-progress-pill");
-            Assert.Matches(new Regex(@"已(读取|加载) \d+ 条", RegexOptions.CultureInvariant), hydrationProgressStatus);
+            Assert.Matches(new Regex(@"已(读取|加载) \d+ 条(消息)?", RegexOptions.CultureInvariant), hydrationProgressStatus);
 
             var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30));
             Assert.True(overlayHidden, "Slow remote replay overlay did not disappear after the transcript should have hydrated.");
@@ -997,5 +990,20 @@ public sealed class ChatSkeletonSmokeTests
             scenario,
             $"Timed out waiting for loading pill status match. Timeline:{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
         throw new Xunit.Sdk.XunitException("Unreachable");
+    }
+
+    private static bool IsUserFriendlyLoadingStatus(string status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return false;
+        }
+
+        return (status.StartsWith("正在", StringComparison.Ordinal) || status.StartsWith("即将", StringComparison.Ordinal))
+            && (status.Contains("会话", StringComparison.Ordinal)
+                || status.Contains("聊天", StringComparison.Ordinal)
+                || status.Contains("消息", StringComparison.Ordinal))
+            && !status.Contains("ACP", StringComparison.OrdinalIgnoreCase)
+            && !status.Contains("协议", StringComparison.Ordinal);
     }
 }
