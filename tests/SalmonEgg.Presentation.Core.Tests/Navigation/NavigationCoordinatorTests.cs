@@ -394,6 +394,48 @@ public sealed class NavigationCoordinatorTests
     }
 
     [Fact]
+    public async Task ActivateStartAsync_SupersedesInFlightSessionActivation_AndPreventsLateSessionCommit()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferencesWithProject();
+            var selectionStore = new ShellSelectionStateStore();
+            var switchStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowSwitchCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var activationCoordinator = new RecordingConversationSessionSwitcher(async (_, cancellationToken) =>
+            {
+                switchStarted.TrySetResult(null);
+                await allowSwitchCompletion.Task.WaitAsync(cancellationToken);
+                return true;
+            });
+            var shellNavigation = CreateShellNavigationService();
+            var coordinator = CreateCoordinator(selectionStore, activationCoordinator, preferences, shellNavigation.Object);
+
+            var sessionActivation = coordinator.ActivateSessionAsync("session-1", "project-1");
+            await switchStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            await coordinator.ActivateStartAsync();
+            allowSwitchCompletion.TrySetResult(null);
+            var activated = await sessionActivation;
+
+            Assert.False(activated);
+            Assert.Equal(NavigationSelectionState.StartSelection, selectionStore.CurrentSelection);
+            Assert.Null(preferences.LastSelectedProjectId);
+            shellNavigation.As<IActivationTokenShellNavigationService>()
+                .Verify(s => s.NavigateToStart(It.IsAny<long>()), Times.Once);
+            shellNavigation.As<IActivationTokenShellNavigationService>()
+                .Verify(s => s.NavigateToChat(It.IsAny<long>()), Times.Once);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task ActivateSessionAsync_FromStart_RemoteConversation_PrimesLoadingOverlayBeforeChatNavigationCompletes()
     {
         var originalContext = SynchronizationContext.Current;

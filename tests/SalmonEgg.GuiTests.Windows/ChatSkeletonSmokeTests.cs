@@ -118,12 +118,21 @@ public sealed class ChatSkeletonSmokeTests
                 var screenshotPath = Path.Combine(
                     captureRoot,
                     $"slow-remote-replay-scroll-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-                session.MainWindow.CaptureToFile(screenshotPath);
+                string screenshotDescriptor;
+                try
+                {
+                    session.MainWindow.CaptureToFile(screenshotPath);
+                    screenshotDescriptor = screenshotPath;
+                }
+                catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException)
+                {
+                    screenshotDescriptor = $"<capture failed: {ex.Message}>";
+                }
 
                 var visibleTexts = session.GetVisibleTexts(messagesList);
                 var bootLogTail = appData.ReadBootLogTail();
                 throw new Xunit.Sdk.XunitException(
-                    $"Latest replay message was not visible after slow remote hydration. Screenshot: {screenshotPath}{Environment.NewLine}Visible texts: [{string.Join(", ", visibleTexts)}]{Environment.NewLine}boot.log:{Environment.NewLine}{bootLogTail}");
+                    $"Latest replay message was not visible after slow remote hydration. Screenshot: {screenshotDescriptor}{Environment.NewLine}Visible texts: [{string.Join(", ", visibleTexts)}]{Environment.NewLine}boot.log:{Environment.NewLine}{bootLogTail}");
             }
         }
         finally
@@ -1011,6 +1020,112 @@ public sealed class ChatSkeletonSmokeTests
                 session,
                 expectedTitle: "GUI Local Session 01",
                 scenario: "cross-profile-long-random-final-local-header",
+                appData);
+            Assert.Contains("GUI Local Session 01", localHeader.Name, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
+    [SkippableFact]
+    public void SelectAcrossProfilesAndLocal_OneSecondCadence_FinalIntentAlwaysWins()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "2400");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicCrossProfileRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 30,
+                localMessageCount: 6);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            const string remoteOneId = "MainNav.Session.gui-remote-conversation-01";
+            const string remoteTwoId = "MainNav.Session.gui-remote-conversation-02";
+            const string localId = "MainNav.Session.gui-local-conversation-01";
+            const string startId = "MainNav.Start";
+
+            session.FindByAutomationId(remoteOneId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(remoteTwoId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(localId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(startId, TimeSpan.FromSeconds(15));
+
+            ActivateNavItem(session, appData, remoteOneId, "cross-profile-one-second-prime");
+            Assert.True(
+                session.WaitUntilVisible("ChatView.LoadingOverlayStatus", TimeSpan.FromSeconds(10)),
+                "Initial cross-profile remote selection did not expose ChatView.LoadingOverlayStatus before 1s cadence switching.");
+
+            var random = new Random(20260402);
+            var targets = new[] { remoteOneId, remoteTwoId, localId, startId };
+            for (var index = 0; index < 14; index++)
+            {
+                var target = targets[random.Next(targets.Length)];
+                ActivateNavItem(session, appData, target, $"cross-profile-one-second-step-{index:00}");
+                Thread.Sleep(1000);
+            }
+
+            ActivateNavItem(session, appData, remoteTwoId, "cross-profile-one-second-final-remote-two-1");
+            ActivateNavItem(session, appData, remoteTwoId, "cross-profile-one-second-final-remote-two-2");
+
+            var remoteTwoHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Remote Session 02",
+                scenario: "cross-profile-one-second-final-remote-two-header",
+                appData);
+            Assert.Contains("GUI Remote Session 02", remoteTwoHeader.Name, StringComparison.Ordinal);
+
+            var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(45));
+            if (!overlayHidden)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "cross-profile-one-second-final-remote-two-overlay-stuck",
+                    "Loading overlay stayed visible after final remote #2 selection in cross-profile 1s cadence switching.");
+            }
+
+            var remoteMessages = FindElementOrThrowWithScreenshot(
+                session,
+                appData,
+                "ChatView.MessagesList",
+                TimeSpan.FromSeconds(10),
+                "cross-profile-one-second-final-remote-two-messages");
+            var remoteLatestVisible = session.TryFindVisibleText(
+                "GUI Remote Session 02 replay 030",
+                remoteMessages,
+                TimeSpan.FromSeconds(10));
+            if (remoteLatestVisible is null)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "cross-profile-one-second-final-remote-two-scroll",
+                    $"Expected latest replay text for remote #2 was not visible after final intent. Visible texts: [{string.Join(", ", session.GetVisibleTexts(remoteMessages))}]");
+            }
+
+            ActivateNavItem(session, appData, startId, "cross-profile-one-second-final-start");
+            Thread.Sleep(700);
+            var startSelected = session.TryGetIsSelected(startId) == true;
+            var startVisible = session.TryFindByAutomationId("StartView.Title", TimeSpan.FromSeconds(4)) is not null;
+            if (!startSelected || !startVisible)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "cross-profile-one-second-final-start-not-visible",
+                    $"Start view did not become visible after remote #2 finalization. startSelected={startSelected} startVisible={startVisible}");
+            }
+
+            ActivateNavItem(session, appData, localId, "cross-profile-one-second-final-local-1");
+            ActivateNavItem(session, appData, localId, "cross-profile-one-second-final-local-2");
+
+            var localHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Local Session 01",
+                scenario: "cross-profile-one-second-final-local-header",
                 appData);
             Assert.Contains("GUI Local Session 01", localHeader.Name, StringComparison.Ordinal);
         }
