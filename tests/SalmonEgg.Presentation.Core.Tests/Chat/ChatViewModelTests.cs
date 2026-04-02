@@ -2702,6 +2702,7 @@ public class ChatViewModelTests
         var viewModel = fixture.ViewModel;
         var chatService = CreateConnectedChatService();
         viewModel.ReplaceChatService(chatService.Object);
+        syncContext.RunAll();
 
         var initialState = (await fixture.GetStateAsync()) with
         {
@@ -3113,7 +3114,7 @@ public class ChatViewModelTests
 
         var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
-        Assert.True(hydrated);
+        Assert.True(hydrated, fixture.ViewModel.ErrorMessage);
         Assert.NotNull(capturedParams);
         Assert.Equal("remote-1", capturedParams!.SessionId);
         Assert.Equal(@"C:\repo\demo", capturedParams.Cwd);
@@ -3206,7 +3207,7 @@ public class ChatViewModelTests
     [Fact]
     public async Task HydrateActiveConversationAsync_WhenSessionLoadReturnsModeAndConfig_ProjectsVisibleSessionState()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
 
         var chatService = CreateConnectedChatService();
@@ -3233,10 +3234,24 @@ public class ChatViewModelTests
         });
         await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        syncContext.RunAll();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal));
+        });
 
         var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
-        Assert.True(hydrated);
+        Assert.True(hydrated, fixture.ViewModel.ErrorMessage);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                fixture.ViewModel.AvailableModes.Count == 2
+                && fixture.ViewModel.ConfigOptions.Count == 1
+                && string.Equals(fixture.ViewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal));
+        });
         Assert.False(fixture.ViewModel.IsOverlayVisible);
         Assert.Equal(2, fixture.ViewModel.AvailableModes.Count);
         Assert.Equal("agent", fixture.ViewModel.SelectedMode?.ModeId);
@@ -6515,6 +6530,7 @@ public class ChatViewModelTests
             .ReturnsAsync(new SessionSetConfigOptionResponse(CreateModeConfigOptions("plan")));
 
         viewModel.ReplaceChatService(chatService.Object);
+        syncContext.RunAll();
 
         var initialState = (await fixture.GetStateAsync()) with
         {
