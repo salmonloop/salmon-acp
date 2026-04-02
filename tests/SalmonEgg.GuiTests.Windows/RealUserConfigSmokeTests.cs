@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FlaUI.Core.Definitions;
@@ -188,7 +190,7 @@ public sealed partial class RealUserConfigSmokeTests
                 prematureDismissalCapturePath = Path.Combine(
                     captureRoot,
                     $"remote-overlay-premature-{candidate.ConversationId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-                session.MainWindow.CaptureToFile(prematureDismissalCapturePath);
+                prematureDismissalCapturePath = TryCaptureMainWindow(session, prematureDismissalCapturePath);
                 sawPrematureDismissal = true;
                 break;
             }
@@ -202,7 +204,7 @@ public sealed partial class RealUserConfigSmokeTests
                 persistentMaskCapturePath = Path.Combine(
                     captureRoot,
                     $"remote-mask-persistent-{candidate.ConversationId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-                session.MainWindow.CaptureToFile(persistentMaskCapturePath);
+                persistentMaskCapturePath = TryCaptureMainWindow(session, persistentMaskCapturePath);
                 break;
             }
 
@@ -310,7 +312,7 @@ public sealed partial class RealUserConfigSmokeTests
                 capturePath = Path.Combine(
                     captureRoot,
                     $"remote-status-leak-to-local-{localCandidate.ConversationId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-                session.MainWindow.CaptureToFile(capturePath);
+                capturePath = TryCaptureMainWindow(session, capturePath);
                 leakedStatusAfterLocalSelection = true;
                 break;
             }
@@ -399,7 +401,7 @@ public sealed partial class RealUserConfigSmokeTests
             var capturePath = Path.Combine(
                 captureRoot,
                 $"random-switch-interactivity-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-            session.MainWindow.CaptureToFile(capturePath);
+            capturePath = TryCaptureMainWindow(session, capturePath);
 
             var appDataRoot = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -508,7 +510,7 @@ public sealed partial class RealUserConfigSmokeTests
             var capturePath = Path.Combine(
                 captureRoot,
                 $"cross-profile-soak-interactivity-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-            session.MainWindow.CaptureToFile(capturePath);
+            capturePath = TryCaptureMainWindow(session, capturePath);
 
             var appDataRoot = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -548,6 +550,19 @@ public sealed partial class RealUserConfigSmokeTests
         var local = session.TryGetIsSelected(localId) == true;
         var remote = session.TryGetIsSelected(remoteId) == true;
         return $"start={start},local={local},remote={remote}";
+    }
+
+    private static string TryCaptureMainWindow(WindowsGuiAppSession session, string path)
+    {
+        try
+        {
+            session.MainWindow.CaptureToFile(path);
+            return path;
+        }
+        catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException)
+        {
+            return $"<capture failed: {ex.Message}>";
+        }
     }
 
     private sealed record RealReplayCandidate(

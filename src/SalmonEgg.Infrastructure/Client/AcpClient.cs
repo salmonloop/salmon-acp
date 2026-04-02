@@ -951,8 +951,8 @@ namespace SalmonEgg.Infrastructure.Client
                     return;
                 }
 
-                var messageId = request.Id;
-                var requestId = request.Id?.ToString() ?? string.Empty;
+                var messageId = request.Id!;
+                var requestId = messageId.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
                     SetPendingInboundSessionId(requestId, sessionId);
@@ -991,7 +991,7 @@ namespace SalmonEgg.Infrastructure.Client
                 if (PermissionRequestReceived == null)
                 {
                     // No UI hooked up; cancel to avoid deadlock.
-                    _ = RespondToPermissionRequestAsync(request.Id, "cancelled", null);
+                    _ = RespondToPermissionRequestAsync(messageId, "cancelled", null);
                     return;
                 }
 
@@ -1034,8 +1034,8 @@ namespace SalmonEgg.Infrastructure.Client
                     return;
                 }
 
-                var messageId = request.Id;
-                var requestId = request.Id?.ToString() ?? string.Empty;
+                var messageId = request.Id!;
+                var requestId = messageId.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
                     SetPendingInboundSessionId(requestId, sessionId);
@@ -1110,8 +1110,8 @@ namespace SalmonEgg.Infrastructure.Client
                     return;
                 }
 
-                var messageId = request.Id;
-                var requestId = request.Id?.ToString() ?? string.Empty;
+                var messageId = request.Id!;
+                var requestId = messageId.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
                     SetPendingInboundAskUserRequest(requestId, askUserRequest);
@@ -1214,7 +1214,7 @@ namespace SalmonEgg.Infrastructure.Client
                         var createRequest = JsonSerializer.Deserialize<TerminalCreateRequest>(rawParams.GetRawText(), _parser.Options)
                             ?? throw new InvalidOperationException("Failed to deserialize terminal/create request.");
                         await SendTerminalSuccessResponseAsync(
-                            request.Id,
+                            messageId,
                             await _terminalSessionManager.CreateAsync(createRequest).ConfigureAwait(false)).ConfigureAwait(false);
                         break;
 
@@ -1222,7 +1222,7 @@ namespace SalmonEgg.Infrastructure.Client
                         var outputRequest = JsonSerializer.Deserialize<TerminalOutputRequest>(rawParams.GetRawText(), _parser.Options)
                             ?? throw new InvalidOperationException("Failed to deserialize terminal/output request.");
                         await SendTerminalSuccessResponseAsync(
-                            request.Id,
+                            messageId,
                             await _terminalSessionManager.GetOutputAsync(outputRequest).ConfigureAwait(false)).ConfigureAwait(false);
                         break;
 
@@ -1230,7 +1230,7 @@ namespace SalmonEgg.Infrastructure.Client
                         var waitRequest = JsonSerializer.Deserialize<TerminalWaitForExitRequest>(rawParams.GetRawText(), _parser.Options)
                             ?? throw new InvalidOperationException("Failed to deserialize terminal/wait_for_exit request.");
                         await SendTerminalSuccessResponseAsync(
-                            request.Id,
+                            messageId,
                             await _terminalSessionManager.WaitForExitAsync(waitRequest).ConfigureAwait(false)).ConfigureAwait(false);
                         break;
 
@@ -1238,7 +1238,7 @@ namespace SalmonEgg.Infrastructure.Client
                         var killRequest = JsonSerializer.Deserialize<TerminalKillRequest>(rawParams.GetRawText(), _parser.Options)
                             ?? throw new InvalidOperationException("Failed to deserialize terminal/kill request.");
                         await SendTerminalSuccessResponseAsync(
-                            request.Id,
+                            messageId,
                             await _terminalSessionManager.KillAsync(killRequest).ConfigureAwait(false)).ConfigureAwait(false);
                         break;
 
@@ -1246,7 +1246,7 @@ namespace SalmonEgg.Infrastructure.Client
                         var releaseRequest = JsonSerializer.Deserialize<TerminalReleaseRequest>(rawParams.GetRawText(), _parser.Options)
                             ?? throw new InvalidOperationException("Failed to deserialize terminal/release request.");
                         await SendTerminalSuccessResponseAsync(
-                            request.Id,
+                            messageId,
                             await _terminalSessionManager.ReleaseAsync(releaseRequest).ConfigureAwait(false)).ConfigureAwait(false);
                         break;
 

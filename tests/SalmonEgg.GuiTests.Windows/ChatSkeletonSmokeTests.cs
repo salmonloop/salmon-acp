@@ -256,6 +256,101 @@ public sealed class ChatSkeletonSmokeTests
     }
 
     [SkippableFact]
+    public void RandomSwitchWithOneSecondCadence_FinalSelectionAlwaysDrivesRightPane()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "2200");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicSlowRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24,
+                includeLocalConversation: true,
+                localMessageCount: 4);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            const string remoteId = "MainNav.Session.gui-remote-conversation-01";
+            const string localId = "MainNav.Session.gui-local-conversation-01";
+            const string startId = "MainNav.Start";
+
+            session.FindByAutomationId(remoteId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(localId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(startId, TimeSpan.FromSeconds(15));
+
+            var random = new Random(20260402);
+            var targets = new[] { remoteId, localId, startId };
+            for (var index = 0; index < 12; index++)
+            {
+                var target = targets[random.Next(targets.Length)];
+                ActivateNavItem(session, appData, target, $"one-second-random-switch-step-{index:00}");
+                Thread.Sleep(1000);
+            }
+
+            ActivateNavItem(session, appData, startId, "one-second-random-switch-final-start");
+            Thread.Sleep(600);
+            var startSelected = session.TryGetIsSelected(startId) == true;
+            var startVisible = session.TryFindByAutomationId("StartView.Title", TimeSpan.FromSeconds(4)) is not null;
+            if (!startSelected || !startVisible)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "one-second-random-switch-start-not-visible",
+                    $"Start view did not become interactive after 1s cadence random switching. startSelected={startSelected} startVisible={startVisible}");
+            }
+
+            ActivateNavItem(session, appData, remoteId, "one-second-random-switch-final-remote-1");
+            ActivateNavItem(session, appData, remoteId, "one-second-random-switch-final-remote-2");
+
+            var remoteHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Remote Session 01",
+                scenario: "one-second-random-switch-remote-header",
+                appData);
+            Assert.Contains("GUI Remote Session 01", remoteHeader.Name, StringComparison.Ordinal);
+
+            var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(40));
+            if (!overlayHidden)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "one-second-random-switch-overlay-stuck",
+                    "Loading overlay stayed visible after final remote selection in 1s cadence random switching.");
+            }
+
+            var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+            var latestRemoteVisible = session.TryFindVisibleText(
+                "GUI Remote Session 01 replay 024",
+                messagesList,
+                TimeSpan.FromSeconds(8));
+            if (latestRemoteVisible is null)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "one-second-random-switch-remote-scroll",
+                    $"Remote latest replay message was not visible after final remote selection. Visible texts: [{string.Join(", ", session.GetVisibleTexts(messagesList))}]");
+            }
+
+            ActivateNavItem(session, appData, localId, "one-second-random-switch-final-local-1");
+            ActivateNavItem(session, appData, localId, "one-second-random-switch-final-local-2");
+
+            var localHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Local Session 01",
+                scenario: "one-second-random-switch-local-header",
+                appData);
+            Assert.Contains("GUI Local Session 01", localHeader.Name, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
+    [SkippableFact]
     public void SelectRemoteSession_ClickStormWithLocalInterruption_DoesNotFreezeAndHydratesFinalSelection()
     {
         var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");

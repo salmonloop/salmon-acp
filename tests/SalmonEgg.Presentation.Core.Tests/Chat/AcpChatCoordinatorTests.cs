@@ -332,6 +332,55 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
+    public async Task ConnectToProfileAsync_WhenReusingCachedSession_RefreshesLastUsedTimestamp()
+    {
+        var transport = new FakeTransportConfiguration();
+        var sink = new FakeSink();
+        var service = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        var registry = new InMemoryAcpConnectionSessionRegistry();
+        var cleaner = new AcpConnectionSessionCleaner(
+            registry,
+            new ConservativeAcpConnectionEvictionPolicy(new AcpConnectionEvictionOptions()),
+            new Mock<ILogger<AcpConnectionSessionCleaner>>().Object);
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
+            .Returns(service.Object);
+
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            sessionRegistry: registry,
+            sessionCleaner: cleaner);
+        var profile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent 1",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent.exe",
+            StdioArgs = "--serve"
+        };
+
+        await sut.ConnectToProfileAsync(profile, transport, sink);
+        Assert.True(registry.TryGetByProfile("profile-1", out var cached));
+
+        var oldTimestamp = DateTime.UtcNow.AddMinutes(-10);
+        registry.Upsert(cached with { LastUsedUtc = oldTimestamp });
+
+        await Task.Delay(20);
+        await sut.ConnectToProfileAsync(profile, transport, sink);
+
+        Assert.True(registry.TryGetByProfile("profile-1", out var refreshed));
+        Assert.True(
+            refreshed.LastUsedUtc > oldTimestamp,
+            $"Expected cached session LastUsedUtc to be refreshed. old={oldTimestamp:O}, current={refreshed.LastUsedUtc:O}");
+        service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        factory.Verify(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null), Times.Once);
+    }
+
+    [Fact]
     public async Task ConnectToProfileAsync_WhenPruningStaleBackgroundSessionFails_DoesNotBlockActiveProfileReuse()
     {
         var transport = new FakeTransportConfiguration();
