@@ -22,6 +22,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
     private readonly IAcpChatServiceFactory _chatServiceFactory;
     private readonly IAcpConnectionCoordinator _connectionCoordinator;
+    private readonly IAcpConnectionSessionRegistry _sessionRegistry;
     private readonly ILogger<AcpChatCoordinator> _logger;
     private readonly int _sessionUpdateBufferLimit;
     private AcpChatServiceAdapter? _activeChatServiceAdapter;
@@ -32,6 +33,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         IAcpChatServiceFactory chatServiceFactory,
         ILogger<AcpChatCoordinator> logger,
         IAcpConnectionCoordinator? connectionCoordinator = null,
+        IAcpConnectionSessionRegistry? sessionRegistry = null,
         int sessionUpdateBufferLimit = DefaultSessionUpdateBufferLimit)
     {
         _chatServiceFactory = chatServiceFactory ?? throw new ArgumentNullException(nameof(chatServiceFactory));
@@ -44,6 +46,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         }
 
         _connectionCoordinator = connectionCoordinator ?? NoopAcpConnectionCoordinator.Instance;
+        _sessionRegistry = sessionRegistry ?? new InMemoryAcpConnectionSessionRegistry();
         _sessionUpdateBufferLimit = sessionUpdateBufferLimit;
     }
 
@@ -117,9 +120,61 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
         using var applyScope = EnterApplyScope(cancellationToken);
         var applyToken = applyScope.Token;
+        var currentConnectionSignature = BuildConnectionSignature(transportConfiguration);
 
         var previousConnectionState = CaptureConnectionState(sink);
         await _connectionCoordinator.SetConnectingAsync(sink.SelectedProfileId, applyToken).ConfigureAwait(false);
+
+        var selectedProfileId = sink.SelectedProfileId;
+        if (!string.IsNullOrWhiteSpace(selectedProfileId)
+            && _sessionRegistry.TryGetByProfile(selectedProfileId!, out var cachedSession)
+            && string.Equals(cachedSession.ConnectionSignature, currentConnectionSignature, StringComparison.Ordinal)
+            && cachedSession.Service.IsConnected
+            && cachedSession.Service.IsInitialized)
+        {
+            applyToken.ThrowIfCancellationRequested();
+
+            var currentService = sink.CurrentChatService;
+            await sink.ReplaceChatServiceAsync(cachedSession.Service, applyToken).ConfigureAwait(false);
+            _activeChatServiceAdapter = cachedSession.Service;
+            sink.UpdateAgentIdentity(
+                cachedSession.InitializeResponse.AgentInfo?.Name,
+                cachedSession.InitializeResponse.AgentInfo?.Version);
+            await _connectionCoordinator.SetConnectedAsync(selectedProfileId, applyToken).ConfigureAwait(false);
+            await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
+
+            if (currentService != null
+                && !ReferenceEquals(currentService, cachedSession.Service)
+                && !ShouldKeepServiceAlive(currentService, selectedProfileId))
+            {
+                await DisconnectServiceQuietlyAsync(currentService).ConfigureAwait(false);
+                if (currentService != null)
+                {
+                    _sessionRegistry.RemoveByService(currentService, out _);
+                }
+            }
+
+            var hasExistingRemoteBinding = await HasExistingRemoteBindingAsync(
+                sink,
+                connectionContext,
+                applyToken).ConfigureAwait(false);
+            if (connectionContext.PreserveConversation
+                && hasExistingRemoteBinding
+                && cachedSession.Service.AgentCapabilities?.LoadSession == true)
+            {
+                await _connectionCoordinator.ResyncAsync(sink, applyToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await TryMarkHydratedForConnectionContextAsync(
+                    sink,
+                    cachedSession.Service,
+                    connectionContext,
+                    applyToken).ConfigureAwait(false);
+            }
+
+            return new AcpTransportApplyResult(cachedSession.Service, cachedSession.InitializeResponse);
+        }
 
         var previousService = sink.CurrentChatService;
         IChatService? candidateService = null;
@@ -154,9 +209,24 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             await sink.ReplaceChatServiceAsync(wrappedService, applyToken).ConfigureAwait(false);
             _activeChatServiceAdapter = wrappedService;
             committed = true;
-            await DisconnectServiceQuietlyAsync(previousService).ConfigureAwait(false);
+            if (!ShouldKeepServiceAlive(previousService, selectedProfileId))
+            {
+                await DisconnectServiceQuietlyAsync(previousService).ConfigureAwait(false);
+                if (previousService != null)
+                {
+                    _sessionRegistry.RemoveByService(previousService, out _);
+                }
+            }
 
             sink.UpdateAgentIdentity(initializeResponse.AgentInfo?.Name, initializeResponse.AgentInfo?.Version);
+            if (!string.IsNullOrWhiteSpace(selectedProfileId))
+            {
+                _sessionRegistry.Upsert(new AcpConnectionSession(
+                    selectedProfileId!,
+                    wrappedService,
+                    initializeResponse,
+                    currentConnectionSignature));
+            }
             await _connectionCoordinator.SetConnectedAsync(sink.SelectedProfileId, applyToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
 
@@ -240,6 +310,10 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             try
             {
                 await DisposeServiceAsync(sink.CurrentChatService).ConfigureAwait(false);
+                if (sink.CurrentChatService != null)
+                {
+                    _sessionRegistry.RemoveByService(sink.CurrentChatService, out _);
+                }
             }
             catch (Exception disconnectEx)
             {
@@ -431,6 +505,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             {
                 disposable.Dispose();
             }
+
+            _sessionRegistry.RemoveByService(chatService, out _);
         }
 
         await sink.ReplaceChatServiceAsync(null, cancellationToken).ConfigureAwait(false);
@@ -676,6 +752,29 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         previousScope?.Dispose();
 
         return new ApplyScope(this, scopeCts, callerToken);
+    }
+
+    private bool ShouldKeepServiceAlive(IChatService? service, string? targetProfileId)
+    {
+        if (service == null
+            || string.IsNullOrWhiteSpace(targetProfileId))
+        {
+            return false;
+        }
+
+        return _sessionRegistry.TryGetProfileId(service, out var currentProfileId)
+            && !string.Equals(currentProfileId, targetProfileId, StringComparison.Ordinal);
+    }
+
+    private static string BuildConnectionSignature(IAcpTransportConfiguration transportConfiguration)
+    {
+        ArgumentNullException.ThrowIfNull(transportConfiguration);
+        return string.Join(
+            "|",
+            transportConfiguration.SelectedTransportType.ToString(),
+            transportConfiguration.StdioCommand ?? string.Empty,
+            transportConfiguration.StdioArgs ?? string.Empty,
+            transportConfiguration.RemoteUrl ?? string.Empty);
     }
 
     private sealed class ApplyScope : IDisposable

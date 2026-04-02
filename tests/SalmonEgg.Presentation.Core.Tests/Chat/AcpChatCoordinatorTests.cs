@@ -89,6 +89,156 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
+    public async Task ConnectToProfileAsync_WhenSwitchingBackToExistingProfile_ReusesExistingSessionWithoutReinitialize()
+    {
+        var transport = new FakeTransportConfiguration();
+        var sink = new FakeSink();
+        var profile1Service = CreateChatService();
+        var profile2Service = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        profile1Service
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-p1", "1.0.0"), new AgentCapabilities()));
+        profile2Service
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-p2", "1.0.0"), new AgentCapabilities()));
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-1.exe", "--serve-1", null))
+            .Returns(profile1Service.Object);
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-2.exe", "--serve-2", null))
+            .Returns(profile2Service.Object);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        var profile1 = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent 1",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent-1.exe",
+            StdioArgs = "--serve-1"
+        };
+        var profile2 = new ServerConfiguration
+        {
+            Id = "profile-2",
+            Name = "Agent 2",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent-2.exe",
+            StdioArgs = "--serve-2"
+        };
+
+        var first = await sut.ConnectToProfileAsync(profile1, transport, sink);
+        var second = await sut.ConnectToProfileAsync(profile2, transport, sink);
+        var third = await sut.ConnectToProfileAsync(profile1, transport, sink);
+
+        Assert.IsType<AcpChatServiceAdapter>(first.ChatService);
+        Assert.IsType<AcpChatServiceAdapter>(second.ChatService);
+        Assert.IsType<AcpChatServiceAdapter>(third.ChatService);
+        Assert.Same(first.ChatService, third.ChatService);
+        Assert.Equal("agent-p1", sink.AgentName);
+
+        profile1Service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        profile2Service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        profile1Service.Verify(x => x.DisconnectAsync(), Times.Never);
+        profile2Service.Verify(x => x.DisconnectAsync(), Times.Never);
+        factory.Verify(x => x.CreateChatService(TransportType.Stdio, "agent-1.exe", "--serve-1", null), Times.Once);
+        factory.Verify(x => x.CreateChatService(TransportType.Stdio, "agent-2.exe", "--serve-2", null), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConnectToProfileAsync_WhenReusingSameActiveProfile_DoesNotDisconnectCurrentService()
+    {
+        var transport = new FakeTransportConfiguration();
+        var sink = new FakeSink();
+        var profileService = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        profileService
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-p1", "1.0.0"), new AgentCapabilities()));
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-1.exe", "--serve-1", null))
+            .Returns(profileService.Object);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+        var profile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent 1",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent-1.exe",
+            StdioArgs = "--serve-1"
+        };
+
+        var first = await sut.ConnectToProfileAsync(profile, transport, sink);
+        var second = await sut.ConnectToProfileAsync(profile, transport, sink);
+
+        Assert.Same(first.ChatService, second.ChatService);
+        profileService.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        profileService.Verify(x => x.DisconnectAsync(), Times.Never);
+        factory.Verify(x => x.CreateChatService(TransportType.Stdio, "agent-1.exe", "--serve-1", null), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConnectToProfileAsync_WhenProfileConfigChangesWithSameId_RecreatesSession()
+    {
+        var transport = new FakeTransportConfiguration();
+        var sink = new FakeSink();
+        var firstService = CreateChatService();
+        var secondService = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        firstService
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-old", "1.0.0"), new AgentCapabilities()));
+        secondService
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-new", "1.0.0"), new AgentCapabilities()));
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-old.exe", "--serve-old", null))
+            .Returns(firstService.Object);
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-new.exe", "--serve-new", null))
+            .Returns(secondService.Object);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        var oldProfile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent Old",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent-old.exe",
+            StdioArgs = "--serve-old"
+        };
+        var newProfile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent New",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent-new.exe",
+            StdioArgs = "--serve-new"
+        };
+
+        var first = await sut.ConnectToProfileAsync(oldProfile, transport, sink);
+        var second = await sut.ConnectToProfileAsync(newProfile, transport, sink);
+
+        Assert.NotSame(first.ChatService, second.ChatService);
+        Assert.Equal("agent-new", sink.AgentName);
+        firstService.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        secondService.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        firstService.Verify(x => x.DisconnectAsync(), Times.Once);
+    }
+
+    [Fact]
     public async Task ApplyTransportConfigurationAsync_DisconnectsExistingServiceBeforeReplacingIt()
     {
         var transport = new FakeTransportConfiguration
