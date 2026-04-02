@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Application.Services.Chat;
+using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using Xunit;
@@ -27,9 +28,9 @@ public sealed class AcpConnectionSessionCleanerTests
         var staleDisconnected = WrapAdapter(staleDisconnectedInner.Object);
         var staleUninitialized = WrapAdapter(staleUninitializedInner.Object);
 
-        registry.Upsert(new AcpConnectionSession("active", active, CreateInitializeResponse("active"), "sig-active"));
-        registry.Upsert(new AcpConnectionSession("stale-disconnected", staleDisconnected, CreateInitializeResponse("stale-a"), "sig-a"));
-        registry.Upsert(new AcpConnectionSession("stale-uninitialized", staleUninitialized, CreateInitializeResponse("stale-b"), "sig-b"));
+        registry.Upsert(new AcpConnectionSession("active", active, CreateInitializeResponse("active"), CreateReuseKey("sig-active")));
+        registry.Upsert(new AcpConnectionSession("stale-disconnected", staleDisconnected, CreateInitializeResponse("stale-a"), CreateReuseKey("sig-a")));
+        registry.Upsert(new AcpConnectionSession("stale-uninitialized", staleUninitialized, CreateInitializeResponse("stale-b"), CreateReuseKey("sig-b")));
 
         var result = await cleaner.CleanupStaleAsync(active, CancellationToken.None);
 
@@ -55,7 +56,7 @@ public sealed class AcpConnectionSessionCleanerTests
             .ThrowsAsync(new InvalidOperationException("disconnect failure"));
 
         var stale = WrapAdapter(staleInner.Object);
-        registry.Upsert(new AcpConnectionSession("stale", stale, CreateInitializeResponse("stale"), "sig-stale"));
+        registry.Upsert(new AcpConnectionSession("stale", stale, CreateInitializeResponse("stale"), CreateReuseKey("sig-stale")));
 
         var result = await cleaner.CleanupStaleAsync(activeService: null, CancellationToken.None);
 
@@ -67,6 +68,9 @@ public sealed class AcpConnectionSessionCleanerTests
 
     private static InitializeResponse CreateInitializeResponse(string name)
         => new(1, new AgentInfo(name, "1.0.0"), new AgentCapabilities());
+
+    private static AcpConnectionReuseKey CreateReuseKey(string token)
+        => new(TransportType.Stdio, token, token, token);
 
     private static AcpChatServiceAdapter WrapAdapter(IChatService inner)
         => new(

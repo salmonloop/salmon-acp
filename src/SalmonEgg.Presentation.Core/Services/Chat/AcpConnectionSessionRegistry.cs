@@ -9,7 +9,7 @@ public sealed record AcpConnectionSession(
     string ProfileId,
     AcpChatServiceAdapter Service,
     InitializeResponse InitializeResponse,
-    string ConnectionSignature);
+    AcpConnectionReuseKey ConnectionReuseKey);
 
 public interface IAcpConnectionSessionRegistry
 {

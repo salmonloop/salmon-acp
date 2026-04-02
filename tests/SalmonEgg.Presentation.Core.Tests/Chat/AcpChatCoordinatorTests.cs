@@ -186,6 +186,52 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
+    public async Task ConnectToProfileAsync_WhenProfileConfigChangesOnlyByWhitespaceAndArgSpacing_ReusesSession()
+    {
+        var transport = new FakeTransportConfiguration();
+        var sink = new FakeSink();
+        var service = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        service
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent", "1.0.0"), new AgentCapabilities()));
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "  agent.exe  ", " --serve   --mode   plan ", null))
+            .Returns(service.Object);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        var profileWithSpacing = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent",
+            Transport = TransportType.Stdio,
+            StdioCommand = "  agent.exe  ",
+            StdioArgs = " --serve   --mode   plan "
+        };
+        var normalizedProfile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent.exe",
+            StdioArgs = "--serve --mode plan"
+        };
+
+        var first = await sut.ConnectToProfileAsync(profileWithSpacing, transport, sink);
+        var second = await sut.ConnectToProfileAsync(normalizedProfile, transport, sink);
+
+        Assert.Same(first.ChatService, second.ChatService);
+        service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        service.Verify(x => x.DisconnectAsync(), Times.Never);
+        factory.Verify(x => x.CreateChatService(TransportType.Stdio, "  agent.exe  ", " --serve   --mode   plan ", null), Times.Once);
+        factory.Verify(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve --mode plan", null), Times.Never);
+    }
+
+    [Fact]
     public async Task ConnectToProfileAsync_WhenProfileConfigChangesWithSameId_RecreatesSession()
     {
         var transport = new FakeTransportConfiguration();

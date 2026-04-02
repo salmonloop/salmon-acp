@@ -137,7 +137,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
         using var applyScope = EnterApplyScope(cancellationToken);
         var applyToken = applyScope.Token;
-        var currentConnectionSignature = BuildConnectionSignature(transportConfiguration);
+        var currentConnectionReuseKey = BuildConnectionReuseKey(transportConfiguration);
 
         var previousConnectionState = CaptureConnectionState(sink);
         await _connectionCoordinator.SetConnectingAsync(sink.SelectedProfileId, applyToken).ConfigureAwait(false);
@@ -145,7 +145,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         var selectedProfileId = sink.SelectedProfileId;
         if (!string.IsNullOrWhiteSpace(selectedProfileId)
             && _sessionRegistry.TryGetByProfile(selectedProfileId!, out var cachedSession)
-            && string.Equals(cachedSession.ConnectionSignature, currentConnectionSignature, StringComparison.Ordinal)
+            && cachedSession.ConnectionReuseKey == currentConnectionReuseKey
             && cachedSession.Service.IsConnected
             && cachedSession.Service.IsInitialized)
         {
@@ -242,7 +242,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
                     selectedProfileId!,
                     wrappedService,
                     initializeResponse,
-                    currentConnectionSignature));
+                    currentConnectionReuseKey));
             }
             await _connectionCoordinator.SetConnectedAsync(sink.SelectedProfileId, applyToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
@@ -783,16 +783,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             && !string.Equals(currentProfileId, targetProfileId, StringComparison.Ordinal);
     }
 
-    private static string BuildConnectionSignature(IAcpTransportConfiguration transportConfiguration)
-    {
-        ArgumentNullException.ThrowIfNull(transportConfiguration);
-        return string.Join(
-            "|",
-            transportConfiguration.SelectedTransportType.ToString(),
-            transportConfiguration.StdioCommand ?? string.Empty,
-            transportConfiguration.StdioArgs ?? string.Empty,
-            transportConfiguration.RemoteUrl ?? string.Empty);
-    }
+    private static AcpConnectionReuseKey BuildConnectionReuseKey(IAcpTransportConfiguration transportConfiguration)
+        => AcpConnectionReuseKey.FromTransportConfiguration(transportConfiguration);
 
     private sealed class ApplyScope : IDisposable
     {
