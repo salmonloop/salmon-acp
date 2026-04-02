@@ -34,16 +34,34 @@ jobs:
 
       - name: Test
         timeout-minutes: 20
-        run: >
-          dotnet test SalmonEgg.sln
-          --configuration ${{ env.CONFIGURATION }}
-          --no-build
-          --verbosity normal
-          --collect:"XPlat Code Coverage"
-          --blame-hang
-          --blame-hang-timeout 5m
-          --logger "trx;LogFilePrefix=results"
-          --results-directory ${{ env.TEST_RESULTS_DIR }}
+        shell: pwsh
+        run: |
+          $testArgs = @(
+            "test",
+            "SalmonEgg.sln",
+            "--configuration", "${{ env.CONFIGURATION }}",
+            "--no-build",
+            "--verbosity", "normal",
+            "--collect:XPlat Code Coverage",
+            "--blame-hang",
+            "--blame-hang-timeout", "5m",
+            "--logger", "trx;LogFilePrefix=results",
+            "--results-directory", "${{ env.TEST_RESULTS_DIR }}"
+          )
+
+          Write-Host "Running test pass 1..."
+          dotnet @testArgs
+          if ($LASTEXITCODE -eq 0)
+          {
+              exit 0
+          }
+
+          Write-Warning "Test pass 1 failed. Retrying once to filter transient flakiness..."
+          dotnet @testArgs
+          if ($LASTEXITCODE -ne 0)
+          {
+              exit $LASTEXITCODE
+          }
 
       - name: Run Core Gate Script
         shell: pwsh

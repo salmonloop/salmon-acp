@@ -702,7 +702,8 @@ public class ChatViewModelTests
         await using var fixture = CreateViewModel();
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(fixture.ViewModel.BottomPanelTabs.Count == 2));
 
         Assert.Collection(
             fixture.ViewModel.BottomPanelTabs,
@@ -720,14 +721,19 @@ public class ChatViewModelTests
         Assert.Null(fixture.ViewModel.SelectedBottomPanelTab);
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(fixture.ViewModel.BottomPanelTabs.Count == 2));
 
         Assert.Equal(2, fixture.ViewModel.BottomPanelTabs.Count);
         var outputTab = fixture.ViewModel.BottomPanelTabs[1];
         Assert.Equal("output", outputTab.Id);
 
         fixture.ViewModel.SelectedBottomPanelTab = outputTab;
-        await Task.Delay(50);
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(
+                fixture.ViewModel.SelectedBottomPanelTab?.Id,
+                "output",
+                StringComparison.Ordinal)));
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-2" });
         await Task.Delay(50);
@@ -3109,9 +3115,6 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
 
-        await WaitForConditionAsync(() =>
-            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)));
-
         var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
         Assert.True(hydrated, fixture.ViewModel.ErrorMessage);
@@ -3207,7 +3210,7 @@ public class ChatViewModelTests
     [Fact]
     public async Task HydrateActiveConversationAsync_WhenSessionLoadReturnsModeAndConfig_ProjectsVisibleSessionState()
     {
-        var syncContext = new QueueingSynchronizationContext();
+        var syncContext = new ImmediateSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
 
         var chatService = CreateConnectedChatService();
@@ -3234,24 +3237,16 @@ public class ChatViewModelTests
         });
         await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
-        syncContext.RunAll();
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal));
-        });
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)));
 
         var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
         Assert.True(hydrated, fixture.ViewModel.ErrorMessage);
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(
-                fixture.ViewModel.AvailableModes.Count == 2
-                && fixture.ViewModel.ConfigOptions.Count == 1
-                && string.Equals(fixture.ViewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal));
-        });
+        await WaitForConditionAsync(() => Task.FromResult(
+            fixture.ViewModel.AvailableModes.Count == 2
+            && fixture.ViewModel.ConfigOptions.Count == 1
+            && string.Equals(fixture.ViewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal)));
         Assert.False(fixture.ViewModel.IsOverlayVisible);
         Assert.Equal(2, fixture.ViewModel.AvailableModes.Count);
         Assert.Equal("agent", fixture.ViewModel.SelectedMode?.ModeId);
