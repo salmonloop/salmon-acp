@@ -192,15 +192,39 @@ namespace SalmonEgg.Domain.Models.Protocol
 
     /// <summary>
     /// Session/Load 方法的响应。
-    /// 当历史加载完成时返回 null 或空对象。
+    /// 可能返回 null / 空对象，或返回模式与配置选项快照。
     /// </summary>
     public class SessionLoadResponse
     {
+        /// <summary>
+        /// 会话模式状态（可选，兼容旧 Agent 可能直接返回数组）。
+        /// </summary>
+        [JsonPropertyName("modes")]
+        [JsonConverter(typeof(SessionModesStateJsonConverter))]
+        public SessionModesState? Modes { get; set; }
+
+        /// <summary>
+        /// 可用的配置选项列表（可选）。
+        /// </summary>
+        [JsonPropertyName("configOptions")]
+        public List<ConfigOption>? ConfigOptions { get; set; }
+
         /// <summary>
         /// 创建新的 SessionLoadResponse 实例。
         /// </summary>
         public SessionLoadResponse()
         {
+        }
+
+        /// <summary>
+        /// 创建新的 SessionLoadResponse 实例。
+        /// </summary>
+        /// <param name="modes">模式状态</param>
+        /// <param name="configOptions">配置选项列表</param>
+        public SessionLoadResponse(SessionModesState? modes, List<ConfigOption>? configOptions = null)
+        {
+            Modes = modes;
+            ConfigOptions = configOptions;
         }
 
         /// <summary>

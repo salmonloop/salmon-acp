@@ -61,6 +61,7 @@ namespace SalmonEgg.Infrastructure.Client
         private long _nextMessageId;
         private long _lastReceivedUnixMs;
         private bool SupportsSessionList => _agentCapabilities?.SessionCapabilities?.List != null;
+        private bool SupportsSessionLoad => _agentCapabilities?.SupportsSessionLoading == true;
 
         /// <summary>
         /// 初始化事件。
@@ -282,6 +283,17 @@ namespace SalmonEgg.Infrastructure.Client
         {
             EnsureInitialized();
 
+            if (!SupportsSessionLoad)
+            {
+                _errorLogger.LogError(new ErrorLogEntry(
+                    "SESSION_LOAD_UNSUPPORTED",
+                    "Agent does not support session/load capability",
+                    ErrorSeverity.Info,
+                    nameof(LoadSessionAsync)));
+
+                return SessionLoadResponse.Completed;
+            }
+
             var request = new JsonRpcRequest(
                 Interlocked.Increment(ref _nextMessageId),
                 "session/load",
@@ -294,8 +306,17 @@ namespace SalmonEgg.Infrastructure.Client
                 throw new AcpException(response.Error!.Code, response.Error.Message, response.Error.Data);
             }
 
-            // 响应可能是 null（表示加载完成）
-            return SessionLoadResponse.Completed;
+            if (!response.Result.HasValue ||
+                response.Result.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                return SessionLoadResponse.Completed;
+            }
+
+            var sessionLoadResponse = JsonSerializer.Deserialize<SessionLoadResponse>(
+                response.Result.Value.GetRawText(),
+                _parser.Options);
+
+            return sessionLoadResponse ?? SessionLoadResponse.Completed;
         }
 
         /// <summary>
@@ -804,7 +825,8 @@ namespace SalmonEgg.Infrastructure.Client
                     }
                     _ = HandleTerminalRequestAsync(request);
                     break;
-                case "interaction.ask_user":
+                case ClientCapabilityMetadata.AskUserExtensionMethod:
+                case ClientCapabilityMetadata.LegacyAskUserExtensionMethod:
                     if (!string.IsNullOrWhiteSpace(requestIdStr))
                     {
                         TrackPendingInboundRequest(requestIdStr, request.Method, request.Id);
@@ -922,7 +944,14 @@ namespace SalmonEgg.Infrastructure.Client
                 }
 
                 var sessionId = sessionIdProp.GetString() ?? string.Empty;
-                var messageId = request.Id ?? string.Empty;
+                if (request.Id == null)
+                {
+                    RemovePendingInboundTracking(request.Id?.ToString() ?? string.Empty);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidRequest("Missing request id")));
+                    return;
+                }
+
+                var messageId = request.Id;
                 var requestId = request.Id?.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
@@ -998,7 +1027,14 @@ namespace SalmonEgg.Infrastructure.Client
                 }
 
                 var sessionId = sessionIdProp.GetString() ?? string.Empty;
-                var messageId = request.Id ?? string.Empty;
+                if (request.Id == null)
+                {
+                    RemovePendingInboundTracking(request.Id?.ToString() ?? string.Empty);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidRequest("Missing request id")));
+                    return;
+                }
+
+                var messageId = request.Id;
                 var requestId = request.Id?.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
@@ -1067,6 +1103,13 @@ namespace SalmonEgg.Infrastructure.Client
 
                 AskUserContract.ValidateRequest(askUserRequest);
 
+                if (request.Id == null)
+                {
+                    RemovePendingInboundTracking(request.Id?.ToString() ?? string.Empty);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidRequest("Missing request id")));
+                    return;
+                }
+
                 var requestId = request.Id?.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
@@ -1085,9 +1128,9 @@ namespace SalmonEgg.Infrastructure.Client
                 }
 
                 var eventArgs = new AskUserRequestEventArgs(
-                    request.Id ?? string.Empty,
+                    request.Id,
                     askUserRequest,
-                    answers => RespondToAskUserRequestAsync(request.Id ?? string.Empty, answers));
+                    answers => RespondToAskUserRequestAsync(request.Id, answers));
 
                 AskUserRequestReceived.Invoke(this, eventArgs);
             }
@@ -1134,7 +1177,14 @@ namespace SalmonEgg.Infrastructure.Client
                     return;
                 }
 
-                var messageId = request.Id ?? string.Empty;
+                if (request.Id == null)
+                {
+                    RemovePendingInboundTracking(request.Id?.ToString() ?? string.Empty);
+                    _ = SendResponseAsync(new JsonRpcResponse(request.Id, JsonRpcError.CreateInvalidRequest("Missing request id")));
+                    return;
+                }
+
+                var messageId = request.Id;
                 var requestId = request.Id?.ToString() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(requestId))
                 {
@@ -1339,13 +1389,13 @@ namespace SalmonEgg.Infrastructure.Client
             _pendingInboundRequests.AddOrUpdate(
                 idStr,
                 _ => new PendingInboundRequest(
-                    Method: "interaction.ask_user",
+                    Method: ClientCapabilityMetadata.AskUserExtensionMethod,
                     MessageId: null,
                     SessionId: request.SessionId,
                     AskUserRequest: request),
                 (_, existing) => existing with
                 {
-                    Method = string.IsNullOrWhiteSpace(existing.Method) ? "interaction.ask_user" : existing.Method,
+                    Method = string.IsNullOrWhiteSpace(existing.Method) ? ClientCapabilityMetadata.AskUserExtensionMethod : existing.Method,
                     SessionId = request.SessionId,
                     AskUserRequest = request
                 });

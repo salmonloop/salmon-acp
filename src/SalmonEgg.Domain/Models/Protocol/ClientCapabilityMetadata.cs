@@ -9,7 +9,8 @@ namespace SalmonEgg.Domain.Models.Protocol
     public static class ClientCapabilityMetadata
     {
         public const string ExtensionsMetaKey = "salmonegg/extensions";
-        public const string AskUserExtensionMethod = "interaction.ask_user";
+        public const string AskUserExtensionMethod = "_interaction.ask_user";
+        public const string LegacyAskUserExtensionMethod = "interaction.ask_user";
 
         /// <summary>
         /// Creates the default extension metadata advertised by SalmonEgg.
@@ -19,7 +20,8 @@ namespace SalmonEgg.Domain.Models.Protocol
             {
                 [ExtensionsMetaKey] = new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
-                    [AskUserExtensionMethod] = true
+                    [AskUserExtensionMethod] = true,
+                    [LegacyAskUserExtensionMethod] = true
                 }
             };
     }

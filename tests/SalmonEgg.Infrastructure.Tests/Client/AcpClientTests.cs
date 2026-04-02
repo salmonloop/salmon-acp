@@ -51,7 +51,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var initResponse = new InitializeResponse(
                 1, // protocolVersion
                 new AgentInfo("TestAgent", "1.0.0"),
-                new AgentCapabilities()
+                new AgentCapabilities(loadSession: true)
             );
 
             _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("initialize"), It.IsAny<CancellationToken>()))
@@ -143,6 +143,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var extensions = meta.GetProperty(ClientCapabilityMetadata.ExtensionsMetaKey);
 
             Assert.True(extensions.GetProperty(ClientCapabilityMetadata.AskUserExtensionMethod).GetBoolean());
+            Assert.True(extensions.GetProperty(ClientCapabilityMetadata.LegacyAskUserExtensionMethod).GetBoolean());
             Assert.False(clientCapabilities.TryGetProperty("fs", out _));
             Assert.False(clientCapabilities.TryGetProperty("terminal", out _));
         }
@@ -228,6 +229,91 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             cts.Cancel();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loadTask);
+        }
+
+        [Fact]
+        public async Task LoadSessionAsync_WhenAgentDoesNotSupportLoadSession_DoesNotSendProtocolRequest()
+        {
+            var client = await CreateInitializedClientAsync();
+            typeof(AcpClient)
+                .GetField("_agentCapabilities", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(client, new AgentCapabilities(loadSession: false));
+
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+
+            Assert.Same(SessionLoadResponse.Completed, result);
+            _transportMock.Verify(
+                t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task LoadSessionAsync_ParsesModesAndConfigOptionsFromResponse()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var responseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(
+                    2,
+                    JsonSerializer.SerializeToElement(
+                        new
+                        {
+                            modes = new
+                            {
+                                currentModeId = "plan",
+                                availableModes = new[]
+                                {
+                                    new
+                                    {
+                                        id = "plan",
+                                        name = "Plan",
+                                        description = "Planning mode"
+                                    }
+                                }
+                            },
+                            configOptions = new[]
+                            {
+                                new
+                                {
+                                    id = "mode",
+                                    name = "Mode",
+                                    category = "mode",
+                                    type = "string",
+                                    currentValue = "plan",
+                                    options = new[]
+                                    {
+                                        new
+                                        {
+                                            value = "plan",
+                                            name = "Plan",
+                                            description = "Planning mode"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            await responseTrigger;
+
+            Assert.NotNull(result.Modes);
+            Assert.Equal("plan", result.Modes!.CurrentModeId);
+            Assert.Single(result.Modes.AvailableModes);
+            Assert.Equal("plan", result.Modes.AvailableModes[0].Id);
+
+            Assert.NotNull(result.ConfigOptions);
+            Assert.Single(result.ConfigOptions!);
+            Assert.Equal("mode", result.ConfigOptions![0].Id);
+            Assert.Equal("plan", result.ConfigOptions[0].CurrentValue);
         }
 
         [Fact]
@@ -554,8 +640,10 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.False(releaseResponse.IsError);
         }
 
-        [Fact]
-        public async Task AskUserRequest_WhenAnswered_PublishesEventAndReturnsStructuredResponse()
+        [Theory]
+        [InlineData(ClientCapabilityMetadata.AskUserExtensionMethod)]
+        [InlineData(ClientCapabilityMetadata.LegacyAskUserExtensionMethod)]
+        public async Task AskUserRequest_WhenAnswered_PublishesEventAndReturnsStructuredResponse(string methodName)
         {
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
@@ -580,7 +668,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var request = new JsonRpcRequest(
                 201,
-                "interaction.ask_user",
+                methodName,
                 JsonSerializer.SerializeToElement(
                     new AskUserRequest
                     {
@@ -621,8 +709,10 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.Equal("Plan", result.Answers["Choose a mode"]);
         }
 
-        [Fact]
-        public async Task AskUserRequest_WhenPayloadInvalid_ReturnsInvalidParams()
+        [Theory]
+        [InlineData(ClientCapabilityMetadata.AskUserExtensionMethod)]
+        [InlineData(ClientCapabilityMetadata.LegacyAskUserExtensionMethod)]
+        public async Task AskUserRequest_WhenPayloadInvalid_ReturnsInvalidParams(string methodName)
         {
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
@@ -635,7 +725,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var request = new JsonRpcRequest(
                 202,
-                "interaction.ask_user",
+                methodName,
                 JsonSerializer.SerializeToElement(
                     new AskUserRequest
                     {
