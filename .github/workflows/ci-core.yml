@@ -9,6 +9,7 @@ on:
 env:
   DOTNET_VERSION: "10.0.x"
   CONFIGURATION: "Release"
+  TEST_RESULTS_DIR: "TestResults"
 
 jobs:
   build-and-test:
@@ -32,7 +33,14 @@ jobs:
         run: dotnet build SalmonEgg.sln --configuration ${{ env.CONFIGURATION }} --no-restore
 
       - name: Test
-        run: dotnet test SalmonEgg.sln --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal --collect:"XPlat Code Coverage"
+        run: >
+          dotnet test SalmonEgg.sln
+          --configuration ${{ env.CONFIGURATION }}
+          --no-build
+          --verbosity normal
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFilePrefix=results"
+          --results-directory ${{ env.TEST_RESULTS_DIR }}
 
       - name: Run Core Gate Script
         shell: pwsh
@@ -43,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: "**/TestResults/*.trx"
+          path: "${{ env.TEST_RESULTS_DIR }}/**/*.trx"
 
       - name: Upload coverage reports
         if: always()
@@ -51,4 +59,3 @@ jobs:
         with:
           name: coverage-report
           path: "**/coverage*.xml"
-
