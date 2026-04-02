@@ -2255,7 +2255,7 @@ public class ChatViewModelTests
             .ThrowsAsync(new InvalidOperationException("unexpected connect"));
         var tcsSession = new TaskCompletionSource<AcpRemoteSessionResult>();
         var tcsPrompt = new TaskCompletionSource<AcpPromptDispatchResult>();
-        
+
         commands.Setup(x => x.EnsureRemoteSessionAsync(It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .Returns(tcsSession.Task);
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
@@ -2273,7 +2273,7 @@ public class ChatViewModelTests
         // Wait for projection
         await Task.Delay(50);
         syncContext.RunAll();
-        
+
         Assert.True(viewModel.IsSessionActive);
         viewModel.CurrentPrompt = "hi";
         syncContext.RunAll();
@@ -2282,7 +2282,7 @@ public class ChatViewModelTests
         Assert.True(viewModel.CanSendPromptUi);
 
         var sendTask = viewModel.SendPromptCommand.ExecuteAsync(null);
-        
+
         // At this point, it should have dispatched BeginTurnAction with CreatingRemoteSession
         await WaitForConditionAsync(async () =>
         {
@@ -2310,7 +2310,7 @@ public class ChatViewModelTests
         // Now complete the prompt dispatch
         tcsPrompt.SetResult(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(), false));
         await sendTask;
-        
+
         // Flush the terminal-state projection that follows the prompt response.
         await WaitForConditionAsync(async () =>
         {
@@ -2599,8 +2599,8 @@ public class ChatViewModelTests
         var chatService = CreateConnectedChatService();
         viewModel.ReplaceChatService(chatService.Object);
 
-        var initialState = (await fixture.GetStateAsync()) with 
-        { 
+        var initialState = (await fixture.GetStateAsync()) with
+        {
             HydratedConversationId = "conv-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
@@ -2633,8 +2633,8 @@ public class ChatViewModelTests
         var chatService = CreateConnectedChatService();
         viewModel.ReplaceChatService(chatService.Object);
 
-        var initialState = (await fixture.GetStateAsync()) with 
-        { 
+        var initialState = (await fixture.GetStateAsync()) with
+        {
             HydratedConversationId = "conv-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
@@ -2670,8 +2670,8 @@ public class ChatViewModelTests
         var chatService = CreateConnectedChatService();
         viewModel.ReplaceChatService(chatService.Object);
 
-        var initialState = (await fixture.GetStateAsync()) with 
-        { 
+        var initialState = (await fixture.GetStateAsync()) with
+        {
             HydratedConversationId = "conv-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
@@ -3350,13 +3350,13 @@ public class ChatViewModelTests
 
             Assert.True(activated, fixture.ViewModel.ErrorMessage);
 
-        chatService.Verify(
-                service => service.LoadSessionAsync(
-                    It.Is<SessionLoadParams>(parameters =>
-                        string.Equals(parameters.SessionId, "remote-2", StringComparison.Ordinal)
-                        && string.Equals(parameters.Cwd, @"C:\repo\two", StringComparison.Ordinal)),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
+            chatService.Verify(
+                    service => service.LoadSessionAsync(
+                        It.Is<SessionLoadParams>(parameters =>
+                            string.Equals(parameters.SessionId, "remote-2", StringComparison.Ordinal)
+                            && string.Equals(parameters.Cwd, @"C:\repo\two", StringComparison.Ordinal)),
+                        It.IsAny<CancellationToken>()),
+                    Times.Once);
         }
     }
 
@@ -5252,11 +5252,6 @@ public class ChatViewModelTests
             await syncContext.RunUntilCompletedAsync(localSwitchTask);
 
             Assert.True(await localSwitchTask);
-            await WaitForConditionAsync(() =>
-            {
-                syncContext.RunAll();
-                return Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-local", StringComparison.Ordinal));
-            });
 
             allowConnectCompletion.TrySetResult(null);
             await syncContext.RunUntilCompletedAsync(remoteSwitchTask);

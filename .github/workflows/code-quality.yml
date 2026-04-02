@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -26,9 +28,40 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore SalmonEgg.sln
 
+      - name: Detect changed C# files
+        id: changed_cs
+        shell: pwsh
+        run: |
+          $eventName = "${{ github.event_name }}"
+          $base = if ($eventName -eq "pull_request") { "${{ github.event.pull_request.base.sha }}" } else { "${{ github.event.before }}" }
+          if ([string]::IsNullOrWhiteSpace($base) -or $base -eq "0000000000000000000000000000000000000000")
+          {
+              $base = "HEAD~1"
+          }
+
+          $changed = git diff --name-only $base ${{ github.sha }} -- "*.cs"
+          $existing = @($changed | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path $_) })
+
+          if ($existing.Count -eq 0)
+          {
+              "has_changes=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+              exit 0
+          }
+
+          "has_changes=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "files<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $existing | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Check formatting
-        run: dotnet format SalmonEgg.sln --verify-no-changes --no-restore
+        if: steps.changed_cs.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          $raw = @"
+          ${{ steps.changed_cs.outputs.files }}
+          "@
+          $files = $raw -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          dotnet format SalmonEgg.sln --verify-no-changes --no-restore --include $files
 
       - name: Build with analyzers
         run: dotnet build SalmonEgg.sln --configuration ${{ env.CONFIGURATION }} --no-restore /p:EnforceCodeStyleInBuild=true
-

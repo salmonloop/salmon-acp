@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -34,13 +35,13 @@ public sealed class LiveLogStreamServiceTests
             var logFile = Path.Combine(tempRoot, "app.log");
             await File.WriteAllTextAsync(logFile, "line-1\n");
 
-            var updates = new List<LiveLogStreamUpdate>();
+            var updates = new ConcurrentQueue<LiveLogStreamUpdate>();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
             var service = new LiveLogStreamService(pollInterval: TimeSpan.FromMilliseconds(30));
 
             var runTask = service.StartAsync(tempRoot, update =>
             {
-                updates.Add(update);
+                updates.Enqueue(update);
                 return Task.CompletedTask;
             }, cts.Token);
 
@@ -75,13 +76,13 @@ public sealed class LiveLogStreamServiceTests
             var logFile = Path.Combine(tempRoot, "app.log");
             await File.WriteAllTextAsync(logFile, "line-1\nline-2\nline-3\n");
 
-            var updates = new List<LiveLogStreamUpdate>();
+            var updates = new ConcurrentQueue<LiveLogStreamUpdate>();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
             var service = new LiveLogStreamService(pollInterval: TimeSpan.FromMilliseconds(30));
 
             var runTask = service.StartAsync(tempRoot, update =>
             {
-                updates.Add(update);
+                updates.Enqueue(update);
                 return Task.CompletedTask;
             }, cts.Token);
 
@@ -112,13 +113,13 @@ public sealed class LiveLogStreamServiceTests
             await File.WriteAllTextAsync(fileA, "initial-a\n");
             File.SetLastWriteTimeUtc(fileA, DateTime.UtcNow.AddSeconds(-2));
 
-            var updates = new List<LiveLogStreamUpdate>();
+            var updates = new ConcurrentQueue<LiveLogStreamUpdate>();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
             var service = new LiveLogStreamService(pollInterval: TimeSpan.FromMilliseconds(25));
 
             var runTask = service.StartAsync(tempRoot, update =>
             {
-                updates.Add(update);
+                updates.Enqueue(update);
                 return Task.CompletedTask;
             }, cts.Token);
 
@@ -164,13 +165,13 @@ public sealed class LiveLogStreamServiceTests
         var tempRoot = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
-            var updates = new List<LiveLogStreamUpdate>();
+            var updates = new ConcurrentQueue<LiveLogStreamUpdate>();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             var service = new LiveLogStreamService(pollInterval: TimeSpan.FromMilliseconds(30));
 
             var runTask = service.StartAsync(tempRoot, update =>
             {
-                updates.Add(update);
+                updates.Enqueue(update);
                 return Task.CompletedTask;
             }, cts.Token);
 
