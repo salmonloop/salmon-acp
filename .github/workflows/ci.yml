@@ -38,21 +38,9 @@ jobs:
     - name: Test
       run: dotnet test SalmonEgg.sln --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal --collect:"XPlat Code Coverage"
 
-    - name: Gate Session Lifecycle Race Contracts
-      run: >
-        dotnet test tests/SalmonEgg.Presentation.Core.Tests/SalmonEgg.Presentation.Core.Tests.csproj
-        --configuration ${{ env.CONFIGURATION }}
-        --no-build
-        --filter "FullyQualifiedName~NavigationCoordinatorTests|FullyQualifiedName~AcpChatCoordinatorTests|FullyQualifiedName~AcpConnectionSessionCleanerTests"
-        --verbosity normal
-
-    - name: Gate ACP Protocol Contracts
-      run: >
-        dotnet test tests/SalmonEgg.Infrastructure.Tests/SalmonEgg.Infrastructure.Tests.csproj
-        --configuration ${{ env.CONFIGURATION }}
-        --no-build
-        --filter "FullyQualifiedName~AcpClientTests"
-        --verbosity normal
+    - name: Run Core Gate Script
+      shell: pwsh
+      run: ./scripts/gates/run-core-gates.ps1 -Configuration ${{ env.CONFIGURATION }}
 
     - name: Upload test results
       if: always()

@@ -22,17 +22,5 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Build GUI tests
-        run: dotnet build tests/SalmonEgg.GuiTests.Windows/SalmonEgg.GuiTests.Windows.csproj -v minimal
-
-      - name: Gate Random 1s Cadence (Single Profile)
-        run: >
-          dotnet test tests/SalmonEgg.GuiTests.Windows/SalmonEgg.GuiTests.Windows.csproj
-          --filter "FullyQualifiedName~RandomSwitchWithOneSecondCadence_FinalSelectionAlwaysDrivesRightPane"
-          -v minimal
-
-      - name: Gate Random 1s Cadence (Cross Profile)
-        run: >
-          dotnet test tests/SalmonEgg.GuiTests.Windows/SalmonEgg.GuiTests.Windows.csproj
-          --filter "FullyQualifiedName~SelectAcrossProfilesAndLocal_OneSecondCadence_FinalIntentAlwaysWins"
-          -v minimal
-
+        shell: pwsh
+        run: ./scripts/gates/run-gui-smoke-gates.ps1

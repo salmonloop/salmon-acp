@@ -25,6 +25,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
     private readonly IAcpConnectionCoordinator _connectionCoordinator;
     private readonly IAcpConnectionSessionRegistry _sessionRegistry;
     private readonly IAcpConnectionPoolManager _connectionPoolManager;
+    private readonly IAcpSessionCommandOrchestrator _sessionCommandOrchestrator;
     private readonly ILogger<AcpChatCoordinator> _logger;
     private readonly int _sessionUpdateBufferLimit;
     private AcpChatServiceAdapter? _activeChatServiceAdapter;
@@ -38,6 +39,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         IAcpConnectionSessionRegistry? sessionRegistry = null,
         IAcpConnectionSessionCleaner? sessionCleaner = null,
         IAcpConnectionPoolManager? connectionPoolManager = null,
+        IAcpSessionCommandOrchestrator? sessionCommandOrchestrator = null,
         int sessionUpdateBufferLimit = DefaultSessionUpdateBufferLimit)
     {
         _chatServiceFactory = chatServiceFactory ?? throw new ArgumentNullException(nameof(chatServiceFactory));
@@ -60,6 +62,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             _sessionRegistry,
             cleaner,
             NullLogger<AcpConnectionPoolManager>.Instance);
+        _sessionCommandOrchestrator = sessionCommandOrchestrator ?? new AcpSessionCommandOrchestrator(
+            NullLogger<AcpSessionCommandOrchestrator>.Instance);
         _sessionUpdateBufferLimit = sessionUpdateBufferLimit;
     }
 
@@ -360,49 +364,12 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         Func<CancellationToken, Task<bool>> authenticateAsync,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(sink);
-        ArgumentNullException.ThrowIfNull(authenticateAsync);
-
-        var chatService = RequireReadyChatService(sink);
-        if (!sink.IsSessionActive || string.IsNullOrWhiteSpace(sink.CurrentSessionId))
-        {
-            throw new InvalidOperationException("No active local conversation is available for ACP session creation.");
-        }
-
-        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId))
-        {
-            return new AcpRemoteSessionResult(
-                currentBinding.RemoteSessionId!,
-                new SessionNewResponse(currentBinding.RemoteSessionId!),
-                UsedExistingBinding: true);
-        }
-
-        var sessionParams = new SessionNewParams(
-            sink.GetActiveSessionCwdOrDefault(),
-            new List<McpServer>());
-
-        SessionNewResponse response;
-        try
-        {
-            response = await chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (IsAuthenticationRequiredError(ex))
-        {
-            var authenticated = await authenticateAsync(cancellationToken).ConfigureAwait(false);
-            if (!authenticated)
-            {
-                throw new InvalidOperationException(
-                    sink.AuthenticationHintMessage ?? "The agent requires authentication before it can respond.",
-                    ex);
-            }
-
-            response = await chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
-        }
-
-        await UpdateBindingForCurrentConversationAsync(sink, response.SessionId, sink.SelectedProfileId).ConfigureAwait(false);
-        _activeChatServiceAdapter?.MarkHydrated();
-        return new AcpRemoteSessionResult(response.SessionId, response, UsedExistingBinding: false);
+        return await _sessionCommandOrchestrator.EnsureRemoteSessionAsync(
+                sink,
+                authenticateAsync,
+                () => _activeChatServiceAdapter?.MarkHydrated(),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<AcpPromptDispatchResult> SendPromptAsync(
@@ -411,35 +378,17 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         Func<CancellationToken, Task<bool>> authenticateAsync,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(promptText))
-        {
-            throw new ArgumentException("Prompt text must not be empty.", nameof(promptText));
-        }
-
-        ArgumentNullException.ThrowIfNull(sink);
-        ArgumentNullException.ThrowIfNull(authenticateAsync);
-
-        if (sink.IsAuthenticationRequired)
-        {
-            var authenticated = await authenticateAsync(cancellationToken).ConfigureAwait(false);
-            if (!authenticated)
-            {
-                throw new InvalidOperationException(
-                    sink.AuthenticationHintMessage ?? "The agent requires authentication before it can respond.");
-            }
-        }
-
-        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
-        var remoteSessionId = !string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId)
-            ? currentBinding.RemoteSessionId!
-            : (await EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken).ConfigureAwait(false)).RemoteSessionId;
-
-        return await DispatchPromptToRemoteSessionAsync(
-            remoteSessionId,
-            promptText,
-            sink,
-            authenticateAsync,
-            cancellationToken).ConfigureAwait(false);
+        return await _sessionCommandOrchestrator.SendPromptAsync(
+                promptText,
+                sink,
+                authenticateAsync,
+                (targetSink, auth, markHydrated, token) => _sessionCommandOrchestrator.EnsureRemoteSessionAsync(
+                    targetSink,
+                    auth,
+                    markHydrated,
+                    token),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<AcpPromptDispatchResult> DispatchPromptToRemoteSessionAsync(
@@ -449,52 +398,18 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         Func<CancellationToken, Task<bool>> authenticateAsync,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(promptText))
-        {
-            throw new ArgumentException("Prompt text must not be empty.", nameof(promptText));
-        }
-
-        ArgumentNullException.ThrowIfNull(sink);
-        ArgumentNullException.ThrowIfNull(authenticateAsync);
-
-        var chatService = RequireReadyChatService(sink);
-
-        var promptParams = new SessionPromptParams(
-            remoteSessionId,
-            new List<ContentBlock> { new TextContentBlock { Text = promptText } });
-
-        try
-        {
-            var response = await chatService.SendPromptAsync(promptParams, cancellationToken).ConfigureAwait(false);
-            return new AcpPromptDispatchResult(promptParams.SessionId, response, RetriedAfterSessionRecovery: false);
-        }
-        catch (Exception ex) when (IsAuthenticationRequiredError(ex))
-        {
-            var authenticated = await authenticateAsync(cancellationToken).ConfigureAwait(false);
-            if (!authenticated)
-            {
-                throw new InvalidOperationException(
-                    sink.AuthenticationHintMessage ?? "The agent requires authentication before it can respond.",
-                    ex);
-            }
-
-            var response = await chatService.SendPromptAsync(promptParams, cancellationToken).ConfigureAwait(false);
-            return new AcpPromptDispatchResult(promptParams.SessionId, response, RetriedAfterSessionRecovery: false);
-        }
-        catch (Exception ex) when (IsRemoteSessionNotFound(ex))
-        {
-            _logger.LogWarning(ex, "Remote session {RemoteSessionId} not found. Attempting recovery...", remoteSessionId);
-            await ClearBindingForCurrentConversationAsync(sink).ConfigureAwait(false);
-            var recreated = await EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken).ConfigureAwait(false);
-            var retryParams = new SessionPromptParams(
-                recreated.RemoteSessionId,
-                promptParams.Prompt,
-                promptParams.MaxTokens,
-                promptParams.StopSequences);
-
-            var response = await chatService.SendPromptAsync(retryParams, cancellationToken).ConfigureAwait(false);
-            return new AcpPromptDispatchResult(retryParams.SessionId, response, RetriedAfterSessionRecovery: true);
-        }
+        return await _sessionCommandOrchestrator.DispatchPromptToRemoteSessionAsync(
+                remoteSessionId,
+                promptText,
+                sink,
+                authenticateAsync,
+                (targetSink, auth, markHydrated, token) => _sessionCommandOrchestrator.EnsureRemoteSessionAsync(
+                    targetSink,
+                    auth,
+                    markHydrated,
+                    token),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task CancelPromptAsync(
@@ -502,18 +417,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         string? reason = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(sink);
-
-        var chatService = sink.CurrentChatService;
-        var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
-        if (chatService == null || string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId))
-        {
-            return;
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        await chatService.CancelSessionAsync(
-            new SessionCancelParams(currentBinding.RemoteSessionId!, reason)).ConfigureAwait(false);
+        await _sessionCommandOrchestrator.CancelPromptAsync(sink, reason, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DisconnectAsync(

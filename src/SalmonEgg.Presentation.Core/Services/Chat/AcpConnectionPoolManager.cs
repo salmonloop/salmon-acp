@@ -26,7 +26,15 @@ public interface IAcpConnectionPoolManager
         AcpConnectionReuseKey reuseKey);
 
     bool RemoveByService(IChatService service, out string profileId);
+
+    AcpConnectionPoolMetricsSnapshot GetMetricsSnapshot();
 }
+
+public readonly record struct AcpConnectionPoolMetricsSnapshot(
+    long CleanupCount,
+    long CacheHits,
+    long CacheMisses,
+    long SessionUpserts);
 
 public sealed class AcpConnectionPoolManager : IAcpConnectionPoolManager
 {
@@ -135,6 +143,13 @@ public sealed class AcpConnectionPoolManager : IAcpConnectionPoolManager
     public bool RemoveByService(IChatService service, out string profileId)
         => _sessionRegistry.RemoveByService(service, out profileId);
 
+    public AcpConnectionPoolMetricsSnapshot GetMetricsSnapshot()
+        => new(
+            Volatile.Read(ref _cleanupCount),
+            Volatile.Read(ref _cacheHits),
+            Volatile.Read(ref _cacheMisses),
+            Volatile.Read(ref _sessionUpserts));
+
     private static bool IsSoftPinnedSession(AcpConnectionSession session)
         => session.InitializeResponse.AgentCapabilities?.LoadSession != true;
 
@@ -142,4 +157,3 @@ public sealed class AcpConnectionPoolManager : IAcpConnectionPoolManager
         => !string.IsNullOrWhiteSpace(selectedProfileId)
            && string.Equals(session.ProfileId, selectedProfileId, StringComparison.Ordinal);
 }
-
