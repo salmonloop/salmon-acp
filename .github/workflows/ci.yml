@@ -194,24 +194,6 @@ jobs:
           asset_path: ./macos-dmg/SalmonEgg-macos.dmg
           asset_name: SalmonEgg-macos.dmg
           asset_content_type: application/x-apple-diskimage
-    - name: Checkout
-      uses: actions/checkout@v3
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-
-    - name: Publish WebAssembly
-      run: |
-        cd SalmonEgg/SalmonEgg
-        dotnet publish -f net9.0-browserwasm -c ${{ env.CONFIGURATION }} -o ../../publish/wasm
-
-    - name: Upload WebAssembly artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: wasm-build
-        path: publish/wasm
 
   code-quality:
     name: Code Quality Checks
