@@ -16,6 +16,7 @@ public interface IAcpConnectionSessionCleaner
     Task<AcpConnectionSessionCleanupResult> CleanupStaleAsync(
         IChatService? activeService,
         Func<AcpConnectionSession, bool>? isPinned = null,
+        Func<AcpConnectionSession, bool>? isHardPinned = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -23,21 +24,25 @@ public sealed class AcpConnectionSessionCleaner : IAcpConnectionSessionCleaner
 {
     private readonly IAcpConnectionSessionRegistry _sessionRegistry;
     private readonly IAcpConnectionEvictionPolicy _evictionPolicy;
+    private readonly AcpConnectionEvictionOptions _evictionOptions;
     private readonly ILogger<AcpConnectionSessionCleaner> _logger;
 
     public AcpConnectionSessionCleaner(
         IAcpConnectionSessionRegistry sessionRegistry,
         IAcpConnectionEvictionPolicy evictionPolicy,
+        AcpConnectionEvictionOptions evictionOptions,
         ILogger<AcpConnectionSessionCleaner> logger)
     {
         _sessionRegistry = sessionRegistry ?? throw new ArgumentNullException(nameof(sessionRegistry));
         _evictionPolicy = evictionPolicy ?? throw new ArgumentNullException(nameof(evictionPolicy));
+        _evictionOptions = evictionOptions ?? throw new ArgumentNullException(nameof(evictionOptions));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<AcpConnectionSessionCleanupResult> CleanupStaleAsync(
         IChatService? activeService,
         Func<AcpConnectionSession, bool>? isPinned = null,
+        Func<AcpConnectionSession, bool>? isHardPinned = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -88,14 +93,43 @@ public sealed class AcpConnectionSessionCleaner : IAcpConnectionSessionCleaner
             .Where(session =>
                 session.Service.IsConnected
                 && session.Service.IsInitialized
-                && !ReferenceEquals(activeService, session.Service)
-                && !(isPinned?.Invoke(session) ?? false))
+                && !ReferenceEquals(activeService, session.Service))
+            .ToArray();
+        var hardPinnedCandidates = warmCandidates
+            .Where(session => isHardPinned?.Invoke(session) ?? false)
+            .ToArray();
+        var softPinnedCandidates = warmCandidates
+            .Where(session => !(isHardPinned?.Invoke(session) ?? false) && (isPinned?.Invoke(session) ?? false))
+            .ToArray();
+        var unpinnedCandidates = warmCandidates
+            .Where(session => !(isHardPinned?.Invoke(session) ?? false) && !(isPinned?.Invoke(session) ?? false))
             .ToArray();
 
         var evictProfiles = _evictionPolicy.GetProfilesToEvict(
-            warmCandidates,
-            new AcpConnectionEvictionContext(DateTime.UtcNow, warmCandidates.Length));
+            unpinnedCandidates,
+            new AcpConnectionEvictionContext(DateTime.UtcNow, unpinnedCandidates.Length));
         var evictProfileSet = evictProfiles.ToHashSet(StringComparer.Ordinal);
+        if (_evictionOptions.MaxPinnedProfiles is { } maxPinnedProfiles && maxPinnedProfiles >= 0)
+        {
+            var pinnedOverflow = softPinnedCandidates.Length - maxPinnedProfiles;
+            if (pinnedOverflow > 0)
+            {
+                foreach (var pinned in softPinnedCandidates
+                             .OrderBy(session => session.LastUsedUtc)
+                             .Take(pinnedOverflow))
+                {
+                    evictProfileSet.Add(pinned.ProfileId);
+                }
+
+                _logger.LogInformation(
+                    "ACP pinned session budget enforced. softPinned={SoftPinned} maxPinned={MaxPinned} hardPinned={HardPinned} evictedPinned={EvictedPinned}",
+                    softPinnedCandidates.Length,
+                    maxPinnedProfiles,
+                    hardPinnedCandidates.Length,
+                    pinnedOverflow);
+            }
+        }
+
         var sessionsToEvict = warmCandidates
             .Where(session => evictProfileSet.Contains(session.ProfileId))
             .ToArray();

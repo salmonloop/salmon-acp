@@ -11,6 +11,9 @@ public sealed class AcpConnectionEvictionOptions
     public TimeSpan? IdleTtl { get; set; }
 
     public int? MaxWarmProfiles { get; set; }
+
+    // Soft pinned profile budget (e.g., loadSession=false agents). Null disables budget enforcement.
+    public int? MaxPinnedProfiles { get; set; }
 }
 
 public readonly record struct AcpConnectionEvictionContext(
@@ -79,4 +82,3 @@ public sealed class ConservativeAcpConnectionEvictionPolicy : IAcpConnectionEvic
         return evictProfiles.ToArray();
     }
 }
-

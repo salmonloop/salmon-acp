@@ -343,6 +343,7 @@ public sealed class AcpChatCoordinatorTests
         var cleaner = new AcpConnectionSessionCleaner(
             registry,
             new ConservativeAcpConnectionEvictionPolicy(new AcpConnectionEvictionOptions()),
+            new AcpConnectionEvictionOptions(),
             new Mock<ILogger<AcpConnectionSessionCleaner>>().Object);
 
         factory

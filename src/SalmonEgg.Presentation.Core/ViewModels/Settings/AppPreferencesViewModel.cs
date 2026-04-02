@@ -69,6 +69,19 @@ public partial class AppPreferencesViewModel : ObservableObject
     [ObservableProperty]
     private string? _lastSelectedProjectId;
 
+    // ACP connection governance (advanced, currently no direct UI editor).
+    [ObservableProperty]
+    private bool _acpEnableConnectionEviction;
+
+    [ObservableProperty]
+    private int? _acpConnectionIdleTtlMinutes;
+
+    [ObservableProperty]
+    private int? _acpMaxWarmProfiles;
+
+    [ObservableProperty]
+    private int? _acpMaxPinnedProfiles;
+
     public ObservableCollection<KeyBindingPairViewModel> KeyBindings { get; } = new();
 
     public bool IsLaunchOnStartupSupported => _capabilities.SupportsLaunchOnStartup;
@@ -138,6 +151,10 @@ public partial class AppPreferencesViewModel : ObservableObject
                 RememberRecentProjectPaths = settings.RememberRecentProjectPaths;
                 CacheRetentionDays = settings.CacheRetentionDays;
                 LastSelectedProjectId = settings.LastSelectedProjectId;
+                AcpEnableConnectionEviction = settings.AcpEnableConnectionEviction;
+                AcpConnectionIdleTtlMinutes = settings.AcpConnectionIdleTtlMinutes;
+                AcpMaxWarmProfiles = settings.AcpMaxWarmProfiles;
+                AcpMaxPinnedProfiles = settings.AcpMaxPinnedProfiles;
 
                 Projects.Clear();
                 foreach (var project in settings.Projects)
@@ -231,6 +248,10 @@ public partial class AppPreferencesViewModel : ObservableObject
     partial void OnRememberRecentProjectPathsChanged(bool value) => ScheduleSave();
     partial void OnCacheRetentionDaysChanged(int value) => ScheduleSave();
     partial void OnLastSelectedProjectIdChanged(string? value) => ScheduleSave();
+    partial void OnAcpEnableConnectionEvictionChanged(bool value) => ScheduleSave();
+    partial void OnAcpConnectionIdleTtlMinutesChanged(int? value) => ScheduleSave();
+    partial void OnAcpMaxWarmProfilesChanged(int? value) => ScheduleSave();
+    partial void OnAcpMaxPinnedProfilesChanged(int? value) => ScheduleSave();
 
     private void OnProjectsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -319,6 +340,10 @@ public partial class AppPreferencesViewModel : ObservableObject
             HistoryRetentionDays = 30;
             RememberRecentProjectPaths = true;
             CacheRetentionDays = 7;
+            AcpEnableConnectionEviction = false;
+            AcpConnectionIdleTtlMinutes = null;
+            AcpMaxWarmProfiles = null;
+            AcpMaxPinnedProfiles = null;
             KeyBindings.Clear();
         }
         finally
@@ -359,6 +384,10 @@ public partial class AppPreferencesViewModel : ObservableObject
                     HistoryRetentionDays = HistoryRetentionDays,
                     RememberRecentProjectPaths = RememberRecentProjectPaths,
                     CacheRetentionDays = CacheRetentionDays,
+                    AcpEnableConnectionEviction = AcpEnableConnectionEviction,
+                    AcpConnectionIdleTtlMinutes = AcpConnectionIdleTtlMinutes,
+                    AcpMaxWarmProfiles = AcpMaxWarmProfiles,
+                    AcpMaxPinnedProfiles = AcpMaxPinnedProfiles,
                     ProjectPathMappings = NormalizeProjectPathMappings(ProjectPathMappings),
                     LastSelectedProjectId = LastSelectedProjectId,
                     Projects = Projects

@@ -182,6 +182,38 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         }
 
         [Fact]
+        public async Task InitializeAsync_WhenServerProtocolIsNewer_ThrowsProtocolVersionMismatch()
+        {
+            var parser = new MessageParser();
+            var client = new AcpClient(_transportMock.Object, parser, null, _errorLoggerMock.Object);
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var initResponse = new InitializeResponse(
+                2,
+                new AgentInfo("TestAgent", "1.0.0"),
+                new AgentCapabilities());
+
+            var initTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(1, JsonSerializer.SerializeToElement(initResponse, parser.Options));
+                _transportMock.Raise(
+                    t => t.MessageReceived += null,
+                    new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() => client.InitializeAsync(new InitializeParams(
+                new ClientInfo("Test", "1.0.0"),
+                ClientCapabilityDefaults.Create())));
+            await initTrigger;
+
+            Assert.Equal(JsonRpcErrorCode.ProtocolVersionMismatch, ex.ErrorCode);
+        }
+
+        [Fact]
         public async Task NonPromptRequest_StillUsesDefaultTimeoutBudget()
         {
             var timeouts = new AcpClient.AcpRequestTimeouts(
@@ -561,6 +593,31 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.Equal(
                 "cancelled",
                 resultDoc.RootElement.GetProperty("outcome").GetProperty("outcome").GetString());
+        }
+
+        [Fact]
+        public async Task CancelSessionAsync_SendsSessionCancelAsNotificationWithoutRequestId()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+            string? sentPayload = null;
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentPayload = message)
+                .ReturnsAsync(true);
+
+            await client.CancelSessionAsync(new SessionCancelParams("session-42", "User cancelled"));
+
+            Assert.NotNull(sentPayload);
+            var parsed = parser.ParseMessage(sentPayload!);
+            var notification = Assert.IsType<JsonRpcNotification>(parsed);
+            Assert.Equal("session/cancel", notification.Method);
+            Assert.True(notification.Params.HasValue);
+            Assert.False(notification.Params.Value.TryGetProperty("id", out _));
+            Assert.Equal(
+                "session-42",
+                notification.Params.Value.GetProperty("sessionId").GetString());
         }
 
         [Fact]

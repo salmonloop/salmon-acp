@@ -54,7 +54,11 @@ public sealed class AppSettingsService : IAppSettingsService
                 KeyBindings = model.KeyBindings ?? new(),
                 Projects = model.Projects ?? new(),
                 ProjectPathMappings = CloneProjectPathMappings(model.ProjectPathMappings),
-                LastSelectedProjectId = string.IsNullOrWhiteSpace(model.LastSelectedProjectId) ? null : model.LastSelectedProjectId
+                LastSelectedProjectId = string.IsNullOrWhiteSpace(model.LastSelectedProjectId) ? null : model.LastSelectedProjectId,
+                AcpEnableConnectionEviction = model.AcpEnableConnectionEviction,
+                AcpConnectionIdleTtlMinutes = model.AcpConnectionIdleTtlMinutes,
+                AcpMaxWarmProfiles = model.AcpMaxWarmProfiles,
+                AcpMaxPinnedProfiles = model.AcpMaxPinnedProfiles
             };
         }
         catch (YamlException)
@@ -91,7 +95,11 @@ public sealed class AppSettingsService : IAppSettingsService
             KeyBindings = settings.KeyBindings ?? new(),
             Projects = settings.Projects ?? new(),
             ProjectPathMappings = CloneProjectPathMappings(settings.ProjectPathMappings),
-            LastSelectedProjectId = settings.LastSelectedProjectId ?? string.Empty
+            LastSelectedProjectId = settings.LastSelectedProjectId ?? string.Empty,
+            AcpEnableConnectionEviction = settings.AcpEnableConnectionEviction,
+            AcpConnectionIdleTtlMinutes = settings.AcpConnectionIdleTtlMinutes,
+            AcpMaxWarmProfiles = settings.AcpMaxWarmProfiles,
+            AcpMaxPinnedProfiles = settings.AcpMaxPinnedProfiles
         };
 
         var yaml = YamlSerialization.CreateSerializer().Serialize(model);

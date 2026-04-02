@@ -88,7 +88,7 @@ public class UiConventionsTests
 
         Assert.Contains("AddSingleton<ISettingsChatConnection>", text);
         Assert.Contains("AddSingleton<IChatLaunchWorkflow>", text);
-        Assert.Contains("AddSingleton<IAcpConnectionCommands, AcpChatCoordinator>", text);
+        Assert.Contains("AddSingleton<IAcpConnectionCommands>(sp =>", text);
         Assert.Contains("AddSingleton<IAcpChatServiceFactory>", text);
         Assert.Contains("AddSingleton<MainNavigationViewModel>(sp =>", text);
         Assert.Contains("AddSingleton<INavigationCoordinator>(sp =>", text);

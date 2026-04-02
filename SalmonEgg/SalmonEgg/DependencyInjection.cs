@@ -160,7 +160,10 @@ public static class DependencyInjection
                 sp.GetRequiredService<IChatConnectionStore>(),
                 sp.GetRequiredService<ILogger<AcpConnectionCoordinator>>()));
         services.AddSingleton<IAcpConnectionSessionRegistry, InMemoryAcpConnectionSessionRegistry>();
-        services.AddSingleton<AcpConnectionEvictionOptions>();
+        services.AddSingleton(sp =>
+            AcpConnectionEvictionOptionsLoader.Load(
+                sp.GetRequiredService<IAppSettingsService>(),
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger("AcpConnectionEvictionOptionsLoader")));
         services.AddSingleton<IAcpConnectionEvictionPolicy>(sp =>
             new ConservativeAcpConnectionEvictionPolicy(
                 sp.GetRequiredService<AcpConnectionEvictionOptions>()));
@@ -168,7 +171,13 @@ public static class DependencyInjection
             new AcpConnectionSessionCleaner(
                 sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
                 sp.GetRequiredService<IAcpConnectionEvictionPolicy>(),
+                sp.GetRequiredService<AcpConnectionEvictionOptions>(),
                 sp.GetRequiredService<ILogger<AcpConnectionSessionCleaner>>()));
+        services.AddSingleton<IAcpConnectionPoolManager>(sp =>
+            new AcpConnectionPoolManager(
+                sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
+                sp.GetRequiredService<IAcpConnectionSessionCleaner>(),
+                sp.GetRequiredService<ILogger<AcpConnectionPoolManager>>()));
 
         // MVUX Shell Layout Store
         services.AddSingleton<IShellLayoutStore>(sp =>
@@ -216,7 +225,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILogger<AcpChatCoordinator>>(),
                 sp.GetRequiredService<IAcpConnectionCoordinator>(),
                 sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
-                sp.GetRequiredService<IAcpConnectionSessionCleaner>()));
+                sp.GetRequiredService<IAcpConnectionSessionCleaner>(),
+                sp.GetRequiredService<IAcpConnectionPoolManager>()));
 
         // Chat Service (default instance using default transport)
         services.AddSingleton<IChatService>(sp =>

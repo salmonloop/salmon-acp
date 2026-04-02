@@ -45,4 +45,13 @@ internal sealed class AppSettingsYamlV1
     public List<ProjectPathMapping> ProjectPathMappings { get; set; } = new();
 
     public string LastSelectedProjectId { get; set; } = string.Empty;
+
+    // ACP connection governance
+    public bool AcpEnableConnectionEviction { get; set; }
+
+    public int? AcpConnectionIdleTtlMinutes { get; set; }
+
+    public int? AcpMaxWarmProfiles { get; set; }
+
+    public int? AcpMaxPinnedProfiles { get; set; }
 }

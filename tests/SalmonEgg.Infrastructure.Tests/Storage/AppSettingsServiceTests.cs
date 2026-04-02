@@ -97,5 +97,26 @@ public sealed class AppSettingsServiceTests : IDisposable
                 Assert.Equal("C:\\Project\\Two", second.LocalRootPath);
             });
     }
+
+    [Fact]
+    public async Task SaveThenLoad_RoundTripsAcpConnectionGovernanceOptions()
+    {
+        var service = new AppSettingsService();
+        var settings = new AppSettings
+        {
+            AcpEnableConnectionEviction = true,
+            AcpConnectionIdleTtlMinutes = 15,
+            AcpMaxWarmProfiles = 3,
+            AcpMaxPinnedProfiles = 1
+        };
+
+        await service.SaveAsync(settings);
+
+        var loaded = await service.LoadAsync();
+        Assert.True(loaded.AcpEnableConnectionEviction);
+        Assert.Equal(15, loaded.AcpConnectionIdleTtlMinutes);
+        Assert.Equal(3, loaded.AcpMaxWarmProfiles);
+        Assert.Equal(1, loaded.AcpMaxPinnedProfiles);
+    }
 }
 

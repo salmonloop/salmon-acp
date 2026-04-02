@@ -45,4 +45,13 @@ public sealed class AppSettings
     public List<ProjectPathMapping> ProjectPathMappings { get; set; } = new();
 
     public string? LastSelectedProjectId { get; set; }
+
+    // ACP connection governance
+    public bool AcpEnableConnectionEviction { get; set; }
+
+    public int? AcpConnectionIdleTtlMinutes { get; set; }
+
+    public int? AcpMaxWarmProfiles { get; set; }
+
+    public int? AcpMaxPinnedProfiles { get; set; }
 }

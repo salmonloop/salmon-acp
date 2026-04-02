@@ -156,6 +156,49 @@ public sealed class AcpConnectionSessionCleanerTests
         Assert.False(registry.TryGetByProfile("evictable", out _));
     }
 
+    [Fact]
+    public async Task CleanupStaleAsync_WhenPinnedBudgetExceeded_EvictsOldestSoftPinnedButKeepsHardPinned()
+    {
+        var registry = new InMemoryAcpConnectionSessionRegistry();
+        var logger = new Mock<ILogger<AcpConnectionSessionCleaner>>();
+        var cleaner = CreateCleaner(
+            registry,
+            logger.Object,
+            new AcpConnectionEvictionOptions
+            {
+                EnablePolicyEviction = true,
+                MaxPinnedProfiles = 1
+            });
+
+        var hardPinned = WrapAdapter(CreateChatService(isConnected: true, isInitialized: true).Object);
+        var oldSoftPinned = WrapAdapter(CreateChatService(isConnected: true, isInitialized: true).Object);
+        var recentSoftPinned = WrapAdapter(CreateChatService(isConnected: true, isInitialized: true).Object);
+
+        registry.Upsert(new AcpConnectionSession("selected", hardPinned, CreateInitializeResponse("selected"), CreateReuseKey("sig-selected"))
+        {
+            LastUsedUtc = DateTime.UtcNow.AddMinutes(-12)
+        });
+        registry.Upsert(new AcpConnectionSession("soft-old", oldSoftPinned, CreateInitializeResponse("soft-old", loadSession: false), CreateReuseKey("sig-soft-old"))
+        {
+            LastUsedUtc = DateTime.UtcNow.AddMinutes(-10)
+        });
+        registry.Upsert(new AcpConnectionSession("soft-recent", recentSoftPinned, CreateInitializeResponse("soft-recent", loadSession: false), CreateReuseKey("sig-soft-recent"))
+        {
+            LastUsedUtc = DateTime.UtcNow.AddMinutes(-2)
+        });
+
+        var result = await cleaner.CleanupStaleAsync(
+            activeService: null,
+            isPinned: session => session.InitializeResponse.AgentCapabilities?.LoadSession != true,
+            isHardPinned: session => string.Equals(session.ProfileId, "selected", StringComparison.Ordinal),
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(1, result.RemovedCount);
+        Assert.True(registry.TryGetByProfile("selected", out _));
+        Assert.False(registry.TryGetByProfile("soft-old", out _));
+        Assert.True(registry.TryGetByProfile("soft-recent", out _));
+    }
+
     private static InitializeResponse CreateInitializeResponse(string name, bool loadSession = true)
         => new(1, new AgentInfo(name, "1.0.0"), new AgentCapabilities(loadSession: loadSession));
 
@@ -163,10 +206,14 @@ public sealed class AcpConnectionSessionCleanerTests
         IAcpConnectionSessionRegistry registry,
         ILogger<AcpConnectionSessionCleaner> logger,
         AcpConnectionEvictionOptions? options = null)
-        => new(
+    {
+        var configured = options ?? new AcpConnectionEvictionOptions();
+        return new AcpConnectionSessionCleaner(
             registry,
-            new ConservativeAcpConnectionEvictionPolicy(options ?? new AcpConnectionEvictionOptions()),
+            new ConservativeAcpConnectionEvictionPolicy(configured),
+            configured,
             logger);
+    }
 
     private static AcpConnectionReuseKey CreateReuseKey(string token)
         => new(TransportType.Stdio, token, token, token);
