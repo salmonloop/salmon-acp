@@ -59,6 +59,16 @@ jobs:
           name: desktop-windows-build
           path: publish/desktop-windows
 
+      - name: Build Windows MSIX
+        shell: cmd
+        run: build.bat msix
+
+      - name: Upload Windows MSIX artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: desktop-windows-msix
+          path: artifacts/msix/*.msix
+
   package-macos:
     name: Package macOS
     runs-on: macos-latest
@@ -174,6 +184,12 @@ jobs:
           name: desktop-windows-build
           path: desktop
 
+      - name: Download Windows MSIX artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: desktop-windows-msix
+          path: windows-msix
+
       - name: Download macOS bundle artifact
         uses: actions/download-artifact@v5
         with:
@@ -219,6 +235,18 @@ jobs:
             exit 1
           fi
           (cd desktop && zip -r ../release-assets/SalmonEgg-desktop.zip .)
+
+          # Copy Windows MSIX package
+          if [ ! -d "windows-msix" ]; then
+            echo "Missing windows-msix artifact directory"
+            exit 1
+          fi
+          MSIX_PATH=$(find windows-msix -maxdepth 1 -name "*.msix" -print -quit)
+          if [ -z "${MSIX_PATH}" ]; then
+            echo "No .msix found in windows-msix artifact"
+            exit 1
+          fi
+          cp "${MSIX_PATH}" release-assets/
 
           # Zip macOS app bundle for release distribution
           if [ ! -d "macos-bundle" ]; then
