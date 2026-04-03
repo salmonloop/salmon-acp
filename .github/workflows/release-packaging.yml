@@ -177,7 +177,7 @@ jobs:
           path: macos-bundle
 
       - name: Download macOS .dmg artifact
-        if: github.event_name == 'release' && secrets.MACOS_APP_CODESIGN_KEY != '' && secrets.MACOS_DMG_CODESIGN_KEY != ''
+        if: github.event_name == 'release' && env.MACOS_APP_CODESIGN_KEY != '' && env.MACOS_DMG_CODESIGN_KEY != ''
         uses: actions/download-artifact@v5
         with:
           name: desktop-macos-dmg
