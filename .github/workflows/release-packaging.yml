@@ -91,7 +91,7 @@ jobs:
             -c ${{ env.CONFIGURATION }} `
             -r $env:MACOS_RID `
             -p:PackageFormat=app `
-            -p:TargetFrameworks=net10.0-desktop `
+            -p:RuntimeIdentifiers=$env:MACOS_RID `
             @codesignArgs
 
       - name: Collect macOS app bundle
@@ -122,7 +122,7 @@ jobs:
             -r $env:MACOS_RID `
             -p:SelfContained=true `
             -p:PackageFormat=dmg `
-            -p:TargetFrameworks=net10.0-desktop `
+            -p:RuntimeIdentifiers=$env:MACOS_RID `
             -p:CodesignKey=$env:MACOS_APP_CODESIGN_KEY `
             -p:DiskImageSigningKey=$env:MACOS_DMG_CODESIGN_KEY `
             @notaryArgs
