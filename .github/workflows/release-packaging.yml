@@ -59,15 +59,23 @@ jobs:
           name: desktop-windows-build
           path: publish/desktop-windows
 
-      - name: Build Windows MSIX
-        shell: cmd
-        run: build.bat msix
+      - name: Publish Windows MSIX
+        shell: pwsh
+        run: |
+          cd SalmonEgg/SalmonEgg
+          dotnet publish `
+            -f net10.0-windows10.0.26100.0 `
+            -c ${{ env.CONFIGURATION }} `
+            -p:PublishProfile=Properties/PublishProfiles/win-msix-x64.pubxml `
+            -p:EnableWinUIBuild=true `
+            -p:IsolatedMsixBuild=true `
+            -p:BuildProjectReferences=false
 
       - name: Upload Windows MSIX artifact
         uses: actions/upload-artifact@v5
         with:
           name: desktop-windows-msix
-          path: artifacts/msix/*.msix
+          path: artifacts/msix/**/*.msix
 
   package-macos:
     name: Package macOS
