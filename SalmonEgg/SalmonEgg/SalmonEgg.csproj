@@ -222,7 +222,7 @@
 
   <Target Name="AddWinSdkXamlReferences"
           BeforeTargets="MarkupCompilePass1;MarkupCompilePass2"
-          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0' AND '$(MSBuildRuntimeType)' == 'Core'">
+          Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0' AND '$(MSBuildRuntimeType)' == 'Core' AND '$(DisableCustomWinSdkXamlReferences)' != 'true'">
     <!-- Feed WinUI/Windows metadata to the XAML compiler without adding them as compile references. -->
     <PropertyGroup>
       <_WinSdkVersionForXaml Condition="'$(WindowsSdkVersion)' != ''">$(WindowsSdkVersion)</_WinSdkVersionForXaml>
@@ -257,6 +257,10 @@
                                Condition="Exists('$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0.18362\Microsoft.UI.winmd')" />
       <XamlReferencesToCompile Include="$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0.17763\Microsoft.UI.winmd"
                                Condition="Exists('$(PkgMicrosoft_WindowsAppSDK)\lib\uap10.0.17763\Microsoft.UI.winmd')" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\*\metadata\10.0.18362.0\Microsoft.UI.winmd"
+                               Condition="Exists('$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences')" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\*\metadata\10.0.17763.0\Microsoft.UI.winmd"
+                               Condition="Exists('$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences')" />
       <XamlReferencesToCompile Include="$(_WinSdkUnionMetadataDir)\Windows.winmd"
                                Condition="Exists('$(_WinSdkUnionMetadataDir)\\Windows.winmd')" />
       <XamlReferencesToCompile Include="$(_WinSdkReferencesDir)\Windows.Foundation.UniversalApiContract\**\*.winmd"
