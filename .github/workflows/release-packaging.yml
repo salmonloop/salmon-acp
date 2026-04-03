@@ -63,43 +63,12 @@ jobs:
         shell: pwsh
         run: |
           $appProject = "SalmonEgg/SalmonEgg/SalmonEgg.csproj"
-          $presentationCoreProject = "src/SalmonEgg.Presentation.Core/SalmonEgg.Presentation.Core.csproj"
-          $tfm = "net10.0-windows10.0.26100.0"
-          $isolatedObjDir = "SalmonEgg/SalmonEgg/obj/msix-app"
-
-          if (Test-Path -LiteralPath $isolatedObjDir)
-          {
-            Remove-Item -LiteralPath $isolatedObjDir -Recurse -Force
-          }
-
-          dotnet msbuild `
+          dotnet publish `
             $appProject `
-            /t:Restore `
-            /p:Configuration=${{ env.CONFIGURATION }} `
-            /p:TargetFramework=$tfm `
-            /p:EnableWinUIBuild=true `
-            /p:IsolatedMsixBuild=true `
-            /p:BuildProjectReferences=false `
-            /v:minimal
-
-          dotnet build `
-            $presentationCoreProject `
+            -f net10.0-windows10.0.26100.0 `
             -c ${{ env.CONFIGURATION }} `
-            -f net10.0 `
-            -nodeReuse:false `
-            -v:minimal
-
-          dotnet msbuild `
-            $appProject `
-            /t:Publish `
-            /p:Configuration=${{ env.CONFIGURATION }} `
-            /p:TargetFramework=$tfm `
-            /p:PublishProfile=Properties/PublishProfiles/win-msix-x64.pubxml `
-            /p:EnableWinUIBuild=true `
-            /p:IsolatedMsixBuild=true `
-            /p:BuildProjectReferences=false `
-            /p:Restore=false `
-            /v:minimal
+            -p:PublishProfile=Properties/PublishProfiles/win-msix-x64.pubxml `
+            -p:EnableWinUIBuild=true
 
       - name: Upload Windows MSIX artifact
         uses: actions/upload-artifact@v5
