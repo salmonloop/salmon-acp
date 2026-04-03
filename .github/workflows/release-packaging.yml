@@ -285,7 +285,7 @@ jobs:
 
           # Copy Windows MSIX package when available
           if [ -d "windows-msix" ]; then
-            MSIX_PATH=$(find windows-msix -maxdepth 1 -name "*.msix" -print -quit)
+            MSIX_PATH=$(find windows-msix -name "*.msix" -print -quit)
             if [ -n "${MSIX_PATH}" ]; then
               cp "${MSIX_PATH}" release-assets/
             fi
