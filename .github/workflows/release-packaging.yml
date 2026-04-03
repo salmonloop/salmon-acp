@@ -93,6 +93,21 @@ jobs:
             -f net10.0 `
             -v minimal
 
+      - name: Prepare MSIX signing certificate
+        shell: pwsh
+        env:
+          MSIX_PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MSIX_PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:MSIX_PFX_PASSWORD)) {
+            throw "MSIX signing secrets missing. Set MSIX_PFX_BASE64 and MSIX_PFX_PASSWORD in repo secrets."
+          }
+
+          $certDir = Join-Path $env:GITHUB_WORKSPACE "artifacts\signing"
+          New-Item -ItemType Directory -Force -Path $certDir | Out-Null
+          $pfxPath = Join-Path $certDir "salmonegg-msix.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:MSIX_PFX_BASE64))
+
       - name: Publish Windows MSIX
         shell: pwsh
         run: |
@@ -106,6 +121,9 @@ jobs:
             /p:IsolatedMsixBuild=true `
             /p:BuildProjectReferences=false `
             /p:DisableCustomWinSdkXamlReferences=true `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateKeyFile="${{ github.workspace }}\artifacts\signing\salmonegg-msix.pfx" `
+            /p:PackageCertificatePassword="${{ secrets.MSIX_PFX_PASSWORD }}" `
             /p:Restore=false `
             /v:minimal
 
