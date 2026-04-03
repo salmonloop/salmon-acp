@@ -79,32 +79,30 @@ jobs:
             -out $harvestPath
 
           $productPath = Join-Path $installerDir "Product.wxs"
-          @'
-<?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="SalmonEgg (Desktop)" Language="1033" Version="1.0.0" Manufacturer="SalmonLoop" UpgradeCode="A2F958DF-D4A4-4E9A-A487-E7CFF31E3271">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of SalmonEgg is already installed." />
-    <MediaTemplate EmbedCab="yes" />
-
-    <Feature Id="MainFeature" Title="SalmonEgg Desktop" Level="1">
-      <ComponentGroupRef Id="SalmonEggDesktopFiles" />
-    </Feature>
-
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <UIRef Id="WixUI_InstallDir" />
-    <UIRef Id="WixUI_ErrorProgressText" />
-  </Product>
-
-  <Fragment>
-    <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="LocalAppDataFolder">
-        <Directory Id="INSTALLFOLDER" Name="SalmonEgg" />
-      </Directory>
-    </Directory>
-  </Fragment>
-</Wix>
-'@ | Set-Content -Path $productPath -Encoding UTF8
+          $productXml = @(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">'
+            '  <Product Id="*" Name="SalmonEgg (Desktop)" Language="1033" Version="1.0.0" Manufacturer="SalmonLoop" UpgradeCode="A2F958DF-D4A4-4E9A-A487-E7CFF31E3271">'
+            '    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" />'
+            '    <MajorUpgrade DowngradeErrorMessage="A newer version of SalmonEgg is already installed." />'
+            '    <MediaTemplate EmbedCab="yes" />'
+            '    <Feature Id="MainFeature" Title="SalmonEgg Desktop" Level="1">'
+            '      <ComponentGroupRef Id="SalmonEggDesktopFiles" />'
+            '    </Feature>'
+            '    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />'
+            '    <UIRef Id="WixUI_InstallDir" />'
+            '    <UIRef Id="WixUI_ErrorProgressText" />'
+            '  </Product>'
+            '  <Fragment>'
+            '    <Directory Id="TARGETDIR" Name="SourceDir">'
+            '      <Directory Id="LocalAppDataFolder">'
+            '        <Directory Id="INSTALLFOLDER" Name="SalmonEgg" />'
+            '      </Directory>'
+            '    </Directory>'
+            '  </Fragment>'
+            '</Wix>'
+          )
+          Set-Content -Path $productPath -Encoding UTF8 -Value $productXml
 
           $wixObjDir = Join-Path $installerDir "obj"
           New-Item -ItemType Directory -Force -Path $wixObjDir | Out-Null
