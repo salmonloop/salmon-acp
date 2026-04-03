@@ -65,6 +65,12 @@ jobs:
           $appProject = "SalmonEgg/SalmonEgg/SalmonEgg.csproj"
           $presentationCoreProject = "src/SalmonEgg.Presentation.Core/SalmonEgg.Presentation.Core.csproj"
           $tfm = "net10.0-windows10.0.26100.0"
+          $isolatedObjDir = "SalmonEgg/SalmonEgg/obj/msix-app"
+
+          if (Test-Path -LiteralPath $isolatedObjDir)
+          {
+            Remove-Item -LiteralPath $isolatedObjDir -Recurse -Force
+          }
 
           dotnet msbuild `
             $appProject `
