@@ -191,13 +191,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+          if gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
             exit 0
           fi
 
-          gh release create "${RELEASE_TAG}" --verify-tag --generate-notes
+          gh release create "${RELEASE_TAG}" --repo "${GH_REPO}" --verify-tag --generate-notes
 
       - name: Prepare release bundles
         shell: bash
@@ -244,6 +245,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release upload "${RELEASE_TAG}" release-assets/* --clobber
+          gh release upload "${RELEASE_TAG}" release-assets/* --repo "${GH_REPO}" --clobber
