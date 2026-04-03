@@ -62,6 +62,11 @@ jobs:
   package-macos:
     name: Package macOS
     runs-on: macos-latest
+    env:
+      MACOS_RID: osx-arm64
+      MACOS_APP_CODESIGN_KEY: ${{ secrets.MACOS_APP_CODESIGN_KEY }}
+      MACOS_DMG_CODESIGN_KEY: ${{ secrets.MACOS_DMG_CODESIGN_KEY }}
+      MACOS_NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -71,24 +76,66 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Publish Desktop (macOS)
+      - name: Publish macOS app bundle
+        shell: pwsh
         run: |
           cd SalmonEgg/SalmonEgg
-          dotnet publish -f net10.0-desktop -c ${{ env.CONFIGURATION }} -o ../../publish/desktop-macos
+          $codesignArgs = @()
+          if (-not [string]::IsNullOrWhiteSpace($env:MACOS_APP_CODESIGN_KEY))
+          {
+            $codesignArgs += "-p:CodesignKey=$env:MACOS_APP_CODESIGN_KEY"
+          }
 
-      - name: Prepare macOS assets
+          dotnet publish `
+            -f net10.0-desktop `
+            -c ${{ env.CONFIGURATION }} `
+            -r $env:MACOS_RID `
+            -p:PackageFormat=app `
+            @codesignArgs
+
+      - name: Collect macOS app bundle
         run: |
           set -euo pipefail
-          mkdir -p publish/macos-bundle publish/dmg
-          APP_PATH=$(find publish/desktop-macos -maxdepth 1 -name "*.app" -print -quit)
+          mkdir -p publish/macos-bundle
+          APP_PATH=$(find SalmonEgg/SalmonEgg/bin/${{ env.CONFIGURATION }}/net10.0-desktop/${MACOS_RID}/publish -maxdepth 1 -name "*.app" -print -quit)
           if [ -z "$APP_PATH" ]; then
-            echo "No .app bundle found; creating zip from desktop output."
-            (cd publish/desktop-macos && zip -r ../macos-bundle/SalmonEgg-macos.zip .)
-            exit 0
+            echo "No .app bundle found in Uno publish output"
+            exit 1
           fi
           cp -R "$APP_PATH" publish/macos-bundle/
-          DMG_NAME="SalmonEgg-macos.dmg"
-          hdiutil create -volname "SalmonEgg" -srcfolder "$APP_PATH" -ov -format UDZO "publish/dmg/$DMG_NAME"
+
+      - name: Publish macOS disk image
+        if: env.MACOS_APP_CODESIGN_KEY != '' && env.MACOS_DMG_CODESIGN_KEY != ''
+        shell: pwsh
+        run: |
+          cd SalmonEgg/SalmonEgg
+          $notaryArgs = @()
+          if (-not [string]::IsNullOrWhiteSpace($env:MACOS_NOTARY_PROFILE))
+          {
+            $notaryArgs += "-p:UnoMacOSNotarizeKeychainProfile=$env:MACOS_NOTARY_PROFILE"
+          }
+
+          dotnet publish `
+            -f net10.0-desktop `
+            -c ${{ env.CONFIGURATION }} `
+            -r $env:MACOS_RID `
+            -p:SelfContained=true `
+            -p:PackageFormat=dmg `
+            -p:CodesignKey=$env:MACOS_APP_CODESIGN_KEY `
+            -p:DiskImageSigningKey=$env:MACOS_DMG_CODESIGN_KEY `
+            @notaryArgs
+
+      - name: Collect macOS disk image
+        if: env.MACOS_APP_CODESIGN_KEY != '' && env.MACOS_DMG_CODESIGN_KEY != ''
+        run: |
+          set -euo pipefail
+          mkdir -p publish/dmg
+          DMG_PATH=$(find SalmonEgg/SalmonEgg/bin/${{ env.CONFIGURATION }}/net10.0-desktop/${MACOS_RID}/publish -maxdepth 1 -name "*.dmg" -print -quit)
+          if [ -z "$DMG_PATH" ]; then
+            echo "No .dmg found in Uno publish output"
+            exit 1
+          fi
+          cp "$DMG_PATH" publish/dmg/
 
       - name: Upload macOS bundle artifact
         uses: actions/upload-artifact@v5
@@ -97,11 +144,11 @@ jobs:
           path: publish/macos-bundle/*
 
       - name: Upload macOS .dmg artifact
+        if: env.MACOS_APP_CODESIGN_KEY != '' && env.MACOS_DMG_CODESIGN_KEY != ''
         uses: actions/upload-artifact@v5
         with:
           name: desktop-macos-dmg
           path: publish/dmg/*.dmg
-          if-no-files-found: ignore
 
   publish-release-assets:
     name: Publish Release Assets
@@ -130,6 +177,7 @@ jobs:
           path: macos-bundle
 
       - name: Download macOS .dmg artifact
+        if: github.event_name == 'release' && secrets.MACOS_APP_CODESIGN_KEY != '' && secrets.MACOS_DMG_CODESIGN_KEY != ''
         uses: actions/download-artifact@v5
         with:
           name: desktop-macos-dmg
@@ -155,20 +203,26 @@ jobs:
           fi
           (cd desktop && zip -r ../release-assets/SalmonEgg-desktop.zip .)
 
-          # Collect macOS bundle artifacts (.app or pre-zipped fallback)
+          # Zip macOS app bundle for release distribution
           if [ ! -d "macos-bundle" ]; then
             echo "Missing macos-bundle artifact directory"
             exit 1
           fi
-          cp -R macos-bundle/* release-assets/
-
-          # Copy DMG as-is
-          DMG_PATH=$(find macos-dmg -maxdepth 1 -name "*.dmg" -print -quit)
-          if [ -z "${DMG_PATH}" ]; then
-            echo "No .dmg file found in macos-dmg artifact"
+          APP_PATH=$(find macos-bundle -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "${APP_PATH}" ]; then
+            echo "No .app bundle found in macos-bundle artifact"
             exit 1
           fi
-          cp "${DMG_PATH}" release-assets/
+          APP_NAME=$(basename "${APP_PATH}")
+          (cd macos-bundle && zip -r "../release-assets/${APP_NAME}.zip" "${APP_NAME}")
+
+          # Copy DMG when signing is configured
+          if [ -d "macos-dmg" ]; then
+            DMG_PATH=$(find macos-dmg -maxdepth 1 -name "*.dmg" -print -quit)
+            if [ -n "${DMG_PATH}" ]; then
+              cp "${DMG_PATH}" release-assets/
+            fi
+          fi
 
       - name: Upload release assets
         shell: bash
