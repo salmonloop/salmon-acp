@@ -8,14 +8,20 @@ namespace SalmonEgg.Domain.Tests.Protocol;
 public sealed class SessionSetConfigOptionTypesTests
 {
     [Test]
-    public void SessionSetConfigOptionParams_Value_ShouldBe_String()
+    public void SessionSetConfigOptionParams_Value_Should_Deserialize_As_String()
     {
-        // Given: A SessionSetConfigOptionParams type
-        var property = typeof(SessionSetConfigOptionParams).GetProperty("Value");
+        var json = """
+        {
+          "sessionId": "test-session",
+          "configId": "test-config",
+          "value": "test-value"
+        }
+        """;
 
-        // Then: Property type should be string
-        Assert.That(property, Is.Not.Null);
-        Assert.That(property?.PropertyType, Is.EqualTo(typeof(string)));
+        var parsed = JsonSerializer.Deserialize<SessionSetConfigOptionParams>(json);
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.Value, Is.EqualTo("test-value"));
     }
 
     [Test]

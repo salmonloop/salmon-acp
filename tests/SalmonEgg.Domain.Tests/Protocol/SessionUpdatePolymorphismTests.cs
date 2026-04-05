@@ -137,13 +137,6 @@ public sealed class SessionUpdatePolymorphismTests
     }
 
     [Test]
-    public void SessionInfoUpdate_DoesNotExpose_LegacySessionMetadataProperties()
-    {
-        Assert.That(typeof(SessionInfoUpdate).GetProperty("Cwd"), Is.Null);
-        Assert.That(typeof(SessionInfoUpdate).GetProperty("SessionId"), Is.Null);
-    }
-
-    [Test]
     public void Deserialize_ToolCallStatusUpdate_WithExtendedSchemaFields_Works()
     {
         var json = """

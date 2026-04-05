@@ -10,14 +10,23 @@ namespace SalmonEgg.Domain.Tests.Protocol;
 public sealed class SessionPromptTypesTests
 {
     [Test]
-    public void SessionPromptParams_Prompt_ShouldBe_ListOfContentBlock()
+    public void SessionPromptParams_Prompt_Should_Deserialize_As_ContentBlock_List()
     {
-        // Given: A SessionPromptParams type
-        var property = typeof(SessionPromptParams).GetProperty("Prompt");
+        var json = """
+        {
+          "sessionId": "test-session",
+          "prompt": [
+            { "type": "text", "text": "Hello, world!" }
+          ]
+        }
+        """;
 
-        // Then: Property type should be List<ContentBlock>
-        Assert.That(property, Is.Not.Null);
-        Assert.That(property?.PropertyType, Is.EqualTo(typeof(List<ContentBlock>)));
+        var parsed = JsonSerializer.Deserialize<SessionPromptParams>(json);
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.Prompt, Is.Not.Null);
+        Assert.That(parsed.Prompt, Has.Count.EqualTo(1));
+        Assert.That(parsed.Prompt![0], Is.TypeOf<TextContentBlock>());
     }
 
     [Test]

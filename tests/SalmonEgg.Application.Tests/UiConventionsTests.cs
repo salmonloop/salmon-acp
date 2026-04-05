@@ -1,4 +1,7 @@
-using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Services;
 
@@ -6,6 +9,94 @@ namespace SalmonEgg.Application.Tests;
 
 public class UiConventionsTests
 {
+    private static CompilationUnitSyntax ReadCSharpSyntaxTree(string filePath)
+    {
+        var text = File.ReadAllText(filePath);
+        var parseOptions = new CSharpParseOptions(preprocessorSymbols: ["WINDOWS"]);
+        var tree = CSharpSyntaxTree.ParseText(text, parseOptions);
+        return tree.GetCompilationUnitRoot();
+    }
+
+    private static string GetInvocationMethodName(InvocationExpressionSyntax invocation)
+        => invocation.Expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+            GenericNameSyntax genericName => genericName.Identifier.ValueText,
+            _ => string.Empty
+        };
+
+    private static string? GetFirstGenericTypeArgumentName(InvocationExpressionSyntax invocation)
+    {
+        if (invocation.Expression is GenericNameSyntax directGeneric)
+        {
+            return directGeneric.TypeArgumentList.Arguments.FirstOrDefault()?.ToString();
+        }
+
+        if (invocation.Expression is MemberAccessExpressionSyntax memberAccess
+            && memberAccess.Name is GenericNameSyntax memberGeneric)
+        {
+            return memberGeneric.TypeArgumentList.Arguments.FirstOrDefault()?.ToString();
+        }
+
+        return null;
+    }
+
+    private static XDocument ReadXml(string filePath) => XDocument.Load(filePath);
+
+    private static XElement FindElementByXName(XDocument document, string elementLocalName, string xName)
+        => document
+            .Descendants()
+            .Single(element =>
+                string.Equals(element.Name.LocalName, elementLocalName, StringComparison.Ordinal)
+                && string.Equals(
+                    element.Attributes().FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "Name", StringComparison.Ordinal))?.Value,
+                    xName,
+                    StringComparison.Ordinal));
+
+    private static string? GetAttributeValueByLocalName(XElement element, string attributeLocalName)
+        => element.Attributes()
+            .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, attributeLocalName, StringComparison.Ordinal))
+            ?.Value;
+
+    private static List<string> EnumerateUiXamlFiles(string repoRoot)
+    {
+        var uiRoot = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg");
+        return Directory.EnumerateFiles(uiRoot, "*.xaml", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private static IEnumerable<string> EnumerateXmlTextValues(XDocument document)
+        => document
+            .Descendants()
+            .SelectMany(element =>
+                element.Attributes().Select(attribute => attribute.Value)
+                    .Concat(element.Nodes().OfType<XText>().Select(text => text.Value)));
+
+    private static HashSet<string> ReadXamlKeys(string filePath)
+    {
+        var doc = ReadXml(filePath);
+        return doc
+            .Descendants()
+            .Select(element => element.Attributes().FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "Key", StringComparison.Ordinal))?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static HashSet<string> ReadReswKeys(string filePath)
+    {
+        var doc = XDocument.Load(filePath);
+        return doc
+            .Descendants("data")
+            .Select(node => node.Attribute("name")?.Value)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -39,27 +130,25 @@ public class UiConventionsTests
 
         foreach (var file in files)
         {
-            var text = File.ReadAllText(file);
-
-            var initIndex = text.IndexOf("InitializeComponent();", StringComparison.Ordinal);
-            if (initIndex < 0)
+            var root = ReadCSharpSyntaxTree(file);
+            var invocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
+            var initInvocation = invocations.FirstOrDefault(invocation =>
+                string.Equals(GetInvocationMethodName(invocation), "InitializeComponent", StringComparison.Ordinal));
+            if (initInvocation is null)
             {
                 continue;
             }
 
-            // If the code-behind resolves VMs via DI, it must do so before InitializeComponent()
-            // to keep x:Bind stable (x:Bind is compile-time and does not rebind after assignment).
-            var diMatch = Regex.Match(
-                text,
-                @"\b(GetRequiredService|GetService|CreateScope)\b",
-                RegexOptions.CultureInvariant);
-
-            if (!diMatch.Success)
+            var initIndex = initInvocation.SpanStart;
+            var diInvocations = invocations.Where(invocation =>
             {
-                continue;
-            }
+                var methodName = GetInvocationMethodName(invocation);
+                return string.Equals(methodName, "GetRequiredService", StringComparison.Ordinal)
+                    || string.Equals(methodName, "GetService", StringComparison.Ordinal)
+                    || string.Equals(methodName, "CreateScope", StringComparison.Ordinal);
+            });
 
-            if (diMatch.Index > initIndex)
+            if (diInvocations.Any(invocation => invocation.SpanStart > initIndex))
             {
                 failures.Add($"{file}: DI resolution occurs after InitializeComponent()");
             }
@@ -73,10 +162,15 @@ public class UiConventionsTests
     {
         var repoRoot = FindRepoRoot();
         var diFile = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "DependencyInjection.cs");
-        var text = File.ReadAllText(diFile);
+        var root = ReadCSharpSyntaxTree(diFile);
+        var invocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
 
-        Assert.Contains("AddSingleton<ChatViewModel>", text);
-        Assert.DoesNotContain("AddTransient<ChatViewModel>", text);
+        Assert.Contains(invocations, invocation =>
+            string.Equals(GetInvocationMethodName(invocation), "AddSingleton", StringComparison.Ordinal)
+            && string.Equals(GetFirstGenericTypeArgumentName(invocation), "ChatViewModel", StringComparison.Ordinal));
+        Assert.DoesNotContain(invocations, invocation =>
+            string.Equals(GetInvocationMethodName(invocation), "AddTransient", StringComparison.Ordinal)
+            && string.Equals(GetFirstGenericTypeArgumentName(invocation), "ChatViewModel", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -84,15 +178,21 @@ public class UiConventionsTests
     {
         var repoRoot = FindRepoRoot();
         var diFile = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "DependencyInjection.cs");
-        var text = File.ReadAllText(diFile);
+        var root = ReadCSharpSyntaxTree(diFile);
+        var singletonRegistrations = root.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Where(invocation => string.Equals(GetInvocationMethodName(invocation), "AddSingleton", StringComparison.Ordinal))
+            .Select(invocation => GetFirstGenericTypeArgumentName(invocation))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains("AddSingleton<ISettingsChatConnection>", text);
-        Assert.Contains("AddSingleton<IChatLaunchWorkflow>", text);
-        Assert.Contains("AddSingleton<IAcpConnectionCommands>(sp =>", text);
-        Assert.Contains("AddSingleton<IAcpChatServiceFactory>", text);
-        Assert.Contains("AddSingleton<MainNavigationViewModel>(sp =>", text);
-        Assert.Contains("AddSingleton<INavigationCoordinator>(sp =>", text);
-        Assert.Contains("AddSingleton<AcpConnectionSettingsViewModel>(sp =>", text);
+        Assert.Contains("ISettingsChatConnection", singletonRegistrations);
+        Assert.Contains("IChatLaunchWorkflow", singletonRegistrations);
+        Assert.Contains("IAcpConnectionCommands", singletonRegistrations);
+        Assert.Contains("IAcpChatServiceFactory", singletonRegistrations);
+        Assert.Contains("MainNavigationViewModel", singletonRegistrations);
+        Assert.Contains("INavigationCoordinator", singletonRegistrations);
+        Assert.Contains("AcpConnectionSettingsViewModel", singletonRegistrations);
     }
 
     [Fact]
@@ -106,10 +206,14 @@ public class UiConventionsTests
             "Presentation",
             "Services",
             "MiniWindowCoordinator.cs");
-        var text = File.ReadAllText(coordinatorFile);
-
-        Assert.Contains("new MiniChatWindow()", text);
-        Assert.DoesNotContain("new Microsoft.UI.Xaml.Window()", text, StringComparison.Ordinal);
+        var root = ReadCSharpSyntaxTree(coordinatorFile);
+        var objectCreations = root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToList();
+        Assert.Contains(
+            objectCreations,
+            creation => string.Equals(creation.Type.ToString(), "MiniChatWindow", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            objectCreations,
+            creation => string.Equals(creation.Type.ToString(), "Microsoft.UI.Xaml.Window", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -127,12 +231,21 @@ public class UiConventionsTests
 
         Assert.True(File.Exists(windowFile), $"Expected mini window implementation at '{windowFile}'.");
 
-        var text = File.ReadAllText(windowFile);
+        var root = ReadCSharpSyntaxTree(windowFile);
+        var assignments = root.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
+        var invocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
+        var identifiers = root.DescendantNodes().OfType<IdentifierNameSyntax>().Select(node => node.Identifier.ValueText).ToArray();
+        var memberAccesses = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Select(node => node.ToString()).ToArray();
 
-        Assert.Contains("ExtendsContentIntoTitleBar = true", text);
-        Assert.Contains("SetTitleBar(", text);
-        Assert.Contains("InputNonClientPointerSource", text);
-        Assert.Contains("NonClientRegionKind.Passthrough", text);
+        Assert.Contains(
+            assignments,
+            assignment => string.Equals(assignment.Left.ToString(), "ExtendsContentIntoTitleBar", StringComparison.Ordinal)
+                && string.Equals(assignment.Right.ToString(), "true", StringComparison.Ordinal));
+        Assert.Contains(
+            invocations,
+            invocation => string.Equals(GetInvocationMethodName(invocation), "SetTitleBar", StringComparison.Ordinal));
+        Assert.Contains("InputNonClientPointerSource", identifiers);
+        Assert.Contains("NonClientRegionKind.Passthrough", memberAccesses);
     }
 
     [Fact]
@@ -150,19 +263,27 @@ public class UiConventionsTests
     {
         var repoRoot = FindRepoRoot();
         var diFile = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "DependencyInjection.cs");
-        var text = File.ReadAllText(diFile);
+        var root = ReadCSharpSyntaxTree(diFile);
+        var singletonRegistrations = root.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Where(invocation => string.Equals(GetInvocationMethodName(invocation), "AddSingleton", StringComparison.Ordinal))
+            .Select(invocation => GetFirstGenericTypeArgumentName(invocation))
+            .Where(name => !string.IsNullOrWhiteSpace(name));
 
-        Assert.DoesNotContain("AddSingleton<ICapabilityManager", text);
+        Assert.DoesNotContain("ICapabilityManager", singletonRegistrations);
     }
 
     [Fact]
     public void AcpClient_ShouldNotInstantiateCapabilityManagerInternally()
     {
-        var repoRoot = FindRepoRoot();
-        var clientFile = Path.Combine(repoRoot, "src", "SalmonEgg.Infrastructure", "Client", "AcpClient.cs");
-        var text = File.ReadAllText(clientFile);
+        var constructor = typeof(SalmonEgg.Infrastructure.Client.AcpClient)
+            .GetConstructors()
+            .OrderByDescending(ctor => ctor.GetParameters().Length)
+            .First();
 
-        Assert.DoesNotContain("new Services.CapabilityManager()", text);
+        Assert.DoesNotContain(
+            constructor.GetParameters(),
+            parameter => parameter.ParameterType == typeof(ICapabilityManager));
     }
 
     [Theory]
@@ -175,27 +296,40 @@ public class UiConventionsTests
     {
         var repoRoot = FindRepoRoot();
         var projectFile = Path.Combine(repoRoot, projectRoot, projectDirectory, projectFileName);
-        var text = File.ReadAllText(projectFile);
+        var xml = XDocument.Load(projectFile);
+        var root = xml.Root;
+        Assert.NotNull(root);
 
-        Assert.Contains("<TargetFrameworks>netstandard2.1;net10.0</TargetFrameworks>", text);
-        Assert.Contains(
-            "<ItemGroup Condition=\"'$(TargetFramework)' == 'netstandard2.1'\">",
-            text);
-        Assert.Matches(
-            "Condition=\"'\\$\\(TargetFramework\\)' == 'netstandard2\\.1'\"[\\s\\S]*<PackageReference Include=\"System\\.Text\\.Json\"",
-            text);
+        var targetFrameworks = root!
+            .Descendants("TargetFrameworks")
+            .Select(node => node.Value.Trim())
+            .FirstOrDefault();
+        Assert.Equal("netstandard2.1;net10.0", targetFrameworks);
+
+        var itemGroups = root
+            .Descendants("ItemGroup")
+            .Where(group => string.Equals(
+                group.Attribute("Condition")?.Value?.Trim(),
+                "'$(TargetFramework)' == 'netstandard2.1'",
+                StringComparison.Ordinal))
+            .ToList();
+        Assert.NotEmpty(itemGroups);
+
+        var hasScopedSystemTextJsonReference = itemGroups.Any(group =>
+            group.Elements("PackageReference").Any(packageReference =>
+                string.Equals(
+                    packageReference.Attribute("Include")?.Value?.Trim(),
+                    "System.Text.Json",
+                    StringComparison.Ordinal)));
+
+        Assert.True(hasScopedSystemTextJsonReference);
     }
 
     [Fact]
     public void Xaml_ShouldAvoidLegacySystemControlHighlightBrushes()
     {
         var repoRoot = FindRepoRoot();
-        var uiRoot = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg");
-
-        var files = Directory.EnumerateFiles(uiRoot, "*.xaml", SearchOption.AllDirectories)
-            .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var files = EnumerateUiXamlFiles(repoRoot);
 
         Assert.NotEmpty(files);
 
@@ -212,10 +346,11 @@ public class UiConventionsTests
         var failures = new List<string>();
         foreach (var file in files)
         {
-            var text = File.ReadAllText(file);
+            var doc = ReadXml(file);
+            var values = EnumerateXmlTextValues(doc).ToArray();
             foreach (var key in forbidden)
             {
-                if (text.Contains(key, StringComparison.Ordinal))
+                if (values.Any(value => value.Contains(key, StringComparison.Ordinal)))
                 {
                     failures.Add($"{file}: contains legacy resource '{key}'");
                 }
@@ -229,25 +364,22 @@ public class UiConventionsTests
     public void Xaml_ShouldNotUse_RuntimeBindingMarkupExtension()
     {
         var repoRoot = FindRepoRoot();
-        var uiRoot = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg");
-
-        var files = Directory.EnumerateFiles(uiRoot, "*.xaml", SearchOption.AllDirectories)
-            .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var files = EnumerateUiXamlFiles(repoRoot);
 
         Assert.NotEmpty(files);
 
         var failures = new List<string>();
         foreach (var file in files)
         {
-            var text = File.ReadAllText(file);
+            var doc = ReadXml(file);
+            var values = EnumerateXmlTextValues(doc).ToArray();
 
             // Enforce "all x:Bind" convention: runtime {Binding ...} is forbidden.
-            if (text.Contains("{Binding", StringComparison.Ordinal) ||
-                text.Contains("{ Binding", StringComparison.Ordinal) ||
-                text.Contains("{binding", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("{ binding", StringComparison.OrdinalIgnoreCase))
+            if (values.Any(value =>
+                    value.Contains("{Binding", StringComparison.Ordinal) ||
+                    value.Contains("{ Binding", StringComparison.Ordinal) ||
+                    value.Contains("{binding", StringComparison.OrdinalIgnoreCase) ||
+                    value.Contains("{ binding", StringComparison.OrdinalIgnoreCase)))
             {
                 failures.Add($"{file}: contains runtime '{{Binding}}' markup extension");
             }
@@ -270,13 +402,13 @@ public class UiConventionsTests
         var failures = new List<string>();
         foreach (var file in reswFiles)
         {
-            var text = File.ReadAllText(file);
-            if (!text.Contains("BottomPanelButton.ToolTipService.ToolTip", StringComparison.Ordinal))
+            var keys = ReadReswKeys(file);
+            if (!keys.Contains("BottomPanelButton.ToolTipService.ToolTip"))
             {
                 failures.Add($"{file}: missing BottomPanelButton.ToolTipService.ToolTip");
             }
 
-            if (text.Contains("<data name=\"BottomPanelButton.ToolTip\" ", StringComparison.Ordinal))
+            if (keys.Contains("BottomPanelButton.ToolTip"))
             {
                 failures.Add($"{file}: contains invalid BottomPanelButton.ToolTip key");
             }
@@ -290,16 +422,27 @@ public class UiConventionsTests
     {
         var repoRoot = FindRepoRoot();
         var mainPageXaml = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml");
-        var xamlText = File.ReadAllText(mainPageXaml);
-
-        Assert.Contains("x:Name=\"DiffPanelButton\"", xamlText);
-        Assert.Contains("x:Uid=\"DiffPanelButton\"", xamlText);
-        Assert.Contains("x:Name=\"TodoPanelButton\"", xamlText);
-        Assert.Contains("x:Uid=\"TodoPanelButton\"", xamlText);
-        Assert.DoesNotContain("ToolTipService.ToolTip=\"Diff\"", xamlText);
-        Assert.DoesNotContain("AutomationProperties.Name=\"Diff Panel\"", xamlText);
-        Assert.DoesNotContain("ToolTipService.ToolTip=\"Todo\"", xamlText);
-        Assert.DoesNotContain("AutomationProperties.Name=\"Todo Panel\"", xamlText);
+        var mainPage = ReadXml(mainPageXaml);
+        var diffButton = FindElementByXName(mainPage, "ToggleButton", "DiffPanelButton");
+        var todoButton = FindElementByXName(mainPage, "ToggleButton", "TodoPanelButton");
+        Assert.Equal("DiffPanelButton", GetAttributeValueByLocalName(diffButton, "Uid"));
+        Assert.Equal("TodoPanelButton", GetAttributeValueByLocalName(todoButton, "Uid"));
+        Assert.Contains(
+            diffButton.Attributes(),
+            attribute => string.Equals(attribute.Name.LocalName, "AutomationProperties.Name", StringComparison.Ordinal)
+                && string.Equals(attribute.Value, string.Empty, StringComparison.Ordinal));
+        Assert.Contains(
+            todoButton.Attributes(),
+            attribute => string.Equals(attribute.Name.LocalName, "AutomationProperties.Name", StringComparison.Ordinal)
+                && string.Equals(attribute.Value, string.Empty, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            diffButton.Attributes(),
+            attribute => string.Equals(attribute.Name.LocalName, "ToolTip", StringComparison.Ordinal)
+                && string.Equals(attribute.Value, "Diff", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            todoButton.Attributes(),
+            attribute => string.Equals(attribute.Name.LocalName, "ToolTip", StringComparison.Ordinal)
+                && string.Equals(attribute.Value, "Todo", StringComparison.Ordinal));
 
         var reswFiles = new[]
         {
@@ -311,23 +454,23 @@ public class UiConventionsTests
         var failures = new List<string>();
         foreach (var file in reswFiles)
         {
-            var text = File.ReadAllText(file);
-            if (!text.Contains("DiffPanelButton.ToolTipService.ToolTip", StringComparison.Ordinal))
+            var keys = ReadReswKeys(file);
+            if (!keys.Contains("DiffPanelButton.ToolTipService.ToolTip"))
             {
                 failures.Add($"{file}: missing DiffPanelButton.ToolTipService.ToolTip");
             }
 
-            if (!text.Contains("DiffPanelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name", StringComparison.Ordinal))
+            if (!keys.Contains("DiffPanelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name"))
             {
                 failures.Add($"{file}: missing DiffPanelButton automation name");
             }
 
-            if (!text.Contains("TodoPanelButton.ToolTipService.ToolTip", StringComparison.Ordinal))
+            if (!keys.Contains("TodoPanelButton.ToolTipService.ToolTip"))
             {
                 failures.Add($"{file}: missing TodoPanelButton.ToolTipService.ToolTip");
             }
 
-            if (!text.Contains("TodoPanelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name", StringComparison.Ordinal))
+            if (!keys.Contains("TodoPanelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name"))
             {
                 failures.Add($"{file}: missing TodoPanelButton automation name");
             }
@@ -344,40 +487,54 @@ public class UiConventionsTests
         var mainPageCodeBehind = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml.cs");
         var appXaml = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "App.xaml");
         var iconDictionaryXaml = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "Styles", "AuxiliaryPanelIcons.xaml");
-        var xamlText = File.ReadAllText(mainPageXaml);
         var codeBehindText = File.ReadAllText(mainPageCodeBehind);
-        var appXamlText = File.ReadAllText(appXaml);
-        var iconDictionaryText = File.ReadAllText(iconDictionaryXaml);
+        var mainPage = ReadXml(mainPageXaml);
+        var bottomButton = FindElementByXName(mainPage, "ToggleButton", "BottomPanelButton");
+        var diffButton = FindElementByXName(mainPage, "ToggleButton", "DiffPanelButton");
+        var todoButton = FindElementByXName(mainPage, "ToggleButton", "TodoPanelButton");
 
-        Assert.Contains("x:Name=\"BottomPanelButton\"", xamlText);
-        Assert.Contains("Style=\"{StaticResource TitleBarToggleButtonStyle}\"", xamlText);
-        Assert.Contains("ContentTemplate=\"{x:Bind GetBottomPanelButtonIconTemplate(LayoutVM.BottomPanelMode), Mode=OneWay}\"", xamlText);
-        Assert.Contains("IsChecked=\"{x:Bind LayoutVM.BottomPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Dock}\"", xamlText);
-        Assert.Contains("x:Name=\"DiffPanelButton\"", xamlText);
-        Assert.Contains("ContentTemplate=\"{x:Bind GetDiffPanelButtonIconTemplate(LayoutVM.RightPanelMode), Mode=OneWay}\"", xamlText);
-        Assert.Contains("IsChecked=\"{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Diff}\"", xamlText);
-        Assert.Contains("x:Name=\"TodoPanelButton\"", xamlText);
-        Assert.Contains("ContentTemplate=\"{x:Bind GetTodoPanelButtonIconTemplate(LayoutVM.RightPanelMode), Mode=OneWay}\"", xamlText);
-        Assert.Contains("IsChecked=\"{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Todo}\"", xamlText);
-        Assert.DoesNotContain("LayoutVM.DesiredRightPanelMode", xamlText, StringComparison.Ordinal);
-        Assert.DoesNotContain("LayoutVM.DesiredBottomPanelMode", xamlText, StringComparison.Ordinal);
-        Assert.DoesNotContain("BottomPanelVectorIcon", xamlText, StringComparison.Ordinal);
-        Assert.DoesNotContain("DiffPanelVectorIcon", xamlText, StringComparison.Ordinal);
-        Assert.DoesNotContain("TodoPanelVectorIcon", xamlText, StringComparison.Ordinal);
-        Assert.Contains("ms-appx:///Styles/AuxiliaryPanelIcons.xaml", appXamlText);
-        Assert.Contains("x:Key=\"BottomPanelTitleBarRegularIconTemplate\"", iconDictionaryText);
-        Assert.Contains("x:Key=\"BottomPanelTitleBarFilledIconTemplate\"", iconDictionaryText);
-        Assert.Contains("x:Key=\"DiffPanelTitleBarRegularIconTemplate\"", iconDictionaryText);
-        Assert.Contains("x:Key=\"DiffPanelTitleBarFilledIconTemplate\"", iconDictionaryText);
-        Assert.Contains("x:Key=\"TodoPanelTitleBarRegularIconTemplate\"", iconDictionaryText);
-        Assert.Contains("x:Key=\"TodoPanelTitleBarFilledIconTemplate\"", iconDictionaryText);
-        Assert.DoesNotContain("BottomPanelTitleBarToggleButtonStyle", iconDictionaryText, StringComparison.Ordinal);
-        Assert.DoesNotContain("DiffPanelTitleBarToggleButtonStyle", iconDictionaryText, StringComparison.Ordinal);
-        Assert.DoesNotContain("TodoPanelTitleBarToggleButtonStyle", iconDictionaryText, StringComparison.Ordinal);
+        Assert.Equal("{StaticResource TitleBarToggleButtonStyle}", GetAttributeValueByLocalName(bottomButton, "Style"));
+        Assert.Equal("{x:Bind GetBottomPanelButtonIconTemplate(LayoutVM.BottomPanelMode), Mode=OneWay}", GetAttributeValueByLocalName(bottomButton, "ContentTemplate"));
+        Assert.Equal("{x:Bind LayoutVM.BottomPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Dock}", GetAttributeValueByLocalName(bottomButton, "IsChecked"));
+        Assert.Equal("{x:Bind GetDiffPanelButtonIconTemplate(LayoutVM.RightPanelMode), Mode=OneWay}", GetAttributeValueByLocalName(diffButton, "ContentTemplate"));
+        Assert.Equal("{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Diff}", GetAttributeValueByLocalName(diffButton, "IsChecked"));
+        Assert.Equal("{x:Bind GetTodoPanelButtonIconTemplate(LayoutVM.RightPanelMode), Mode=OneWay}", GetAttributeValueByLocalName(todoButton, "ContentTemplate"));
+        Assert.Equal("{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Todo}", GetAttributeValueByLocalName(todoButton, "IsChecked"));
+
+        var allAttributeValues = mainPage
+            .Descendants()
+            .SelectMany(element => element.Attributes())
+            .Select(attribute => attribute.Value)
+            .ToArray();
+        Assert.DoesNotContain("LayoutVM.DesiredRightPanelMode", allAttributeValues);
+        Assert.DoesNotContain("LayoutVM.DesiredBottomPanelMode", allAttributeValues);
+        Assert.DoesNotContain("BottomPanelVectorIcon", allAttributeValues);
+        Assert.DoesNotContain("DiffPanelVectorIcon", allAttributeValues);
+        Assert.DoesNotContain("TodoPanelVectorIcon", allAttributeValues);
+        Assert.DoesNotContain("PreferWindowsAuxiliaryGlyphs", allAttributeValues);
+
+        var app = ReadXml(appXaml);
+        var appSources = app
+            .Descendants()
+            .Where(element => string.Equals(element.Name.LocalName, "ResourceDictionary", StringComparison.Ordinal))
+            .Select(element => GetAttributeValueByLocalName(element, "Source"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+        Assert.Contains("ms-appx:///Styles/AuxiliaryPanelIcons.xaml", appSources);
+
+        var iconKeys = ReadXamlKeys(iconDictionaryXaml);
+        Assert.Contains("BottomPanelTitleBarRegularIconTemplate", iconKeys);
+        Assert.Contains("BottomPanelTitleBarFilledIconTemplate", iconKeys);
+        Assert.Contains("DiffPanelTitleBarRegularIconTemplate", iconKeys);
+        Assert.Contains("DiffPanelTitleBarFilledIconTemplate", iconKeys);
+        Assert.Contains("TodoPanelTitleBarRegularIconTemplate", iconKeys);
+        Assert.Contains("TodoPanelTitleBarFilledIconTemplate", iconKeys);
+        Assert.DoesNotContain("BottomPanelTitleBarToggleButtonStyle", iconKeys);
+        Assert.DoesNotContain("DiffPanelTitleBarToggleButtonStyle", iconKeys);
+        Assert.DoesNotContain("TodoPanelTitleBarToggleButtonStyle", iconKeys);
         Assert.Contains("GetBottomPanelButtonIconTemplate", codeBehindText);
         Assert.Contains("GetDiffPanelButtonIconTemplate", codeBehindText);
         Assert.Contains("GetTodoPanelButtonIconTemplate", codeBehindText);
         Assert.Contains("GetAuxiliaryIconTemplate", codeBehindText);
-        Assert.DoesNotContain("PreferWindowsAuxiliaryGlyphs", xamlText);
     }
 }

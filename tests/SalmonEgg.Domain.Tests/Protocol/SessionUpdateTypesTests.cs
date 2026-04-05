@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text.Json;
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Protocol;
@@ -9,18 +8,20 @@ namespace SalmonEgg.Domain.Tests.Protocol;
 public sealed class SessionUpdateTypesTests
 {
     [Test]
-    public void SessionUpdateParams_Update_ShouldNotBe_Nullable()
+    public void SessionUpdateParams_Update_RoundTripsAsSessionUpdatePayload()
     {
-        // Given: A SessionUpdateParams type
-        var property = typeof(SessionUpdateParams).GetProperty("Update");
+        var sessionParams = new SessionUpdateParams
+        {
+            SessionId = "test-session",
+            Update = new CurrentModeUpdate { CurrentModeId = "test-mode" }
+        };
 
-        // Then: Property should not be nullable reference type
-        Assert.That(property, Is.Not.Null);
-        // Check that the property type is SessionUpdate, not SessionUpdate?
-        // Note: In C#, nullable reference types are a compile-time feature,
-        // so we check that the property doesn't have a nullable annotation
-        var propertyType = property!.PropertyType;
-        Assert.That(propertyType, Is.EqualTo(typeof(SessionUpdate)));
+        var json = JsonSerializer.Serialize(sessionParams);
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json);
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.SessionId, Is.EqualTo("test-session"));
+        Assert.That(parsed.Update, Is.TypeOf<CurrentModeUpdate>());
     }
 
     [Test]
@@ -43,10 +44,19 @@ public sealed class SessionUpdateTypesTests
     }
 
     [Test]
-    public void ConfigOptionUpdate_ConfigOptions_ShouldBe_ListOfConfigOption()
+    public void ConfigOptionUpdate_ConfigOptions_RoundTrips()
     {
-        var property = typeof(ConfigOptionUpdate).GetProperty("ConfigOptions");
-        Assert.That(property, Is.Not.Null);
-        Assert.That(property!.PropertyType, Is.EqualTo(typeof(List<ConfigOption>)));
+        var update = new ConfigOptionUpdate
+        {
+            ConfigOptions = [new ConfigOption { Id = "mode", Name = "Mode", Type = "select" }]
+        };
+
+        var json = JsonSerializer.Serialize(update);
+        var parsed = JsonSerializer.Deserialize<ConfigOptionUpdate>(json);
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.ConfigOptions, Is.Not.Null);
+        Assert.That(parsed.ConfigOptions!.Count, Is.EqualTo(1));
+        Assert.That(parsed.ConfigOptions[0].Id, Is.EqualTo("mode"));
     }
 }

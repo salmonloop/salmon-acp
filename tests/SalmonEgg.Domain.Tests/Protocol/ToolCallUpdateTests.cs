@@ -26,45 +26,25 @@ public sealed class ToolCallUpdateTests
     }
 
     [Test]
-    public void ToolCallUpdate_ToolCallId_ShouldBe_Required()
+    public void ToolCallUpdate_DeserializesKnownFields_AndIgnoresUnknownLegacyField()
     {
-        // Given: A ToolCallUpdate type
-        var property = typeof(ToolCallUpdate).GetProperty("ToolCallId");
+        var json = """
+        {
+          "toolCallId": "call-1",
+          "title": "Switch mode",
+          "kind": "switch_mode",
+          "status": "completed",
+          "toolCall": { "legacy": true }
+        }
+        """;
 
-        // Then: Property should exist
-        Assert.That(property, Is.Not.Null);
-        // Note: We check that it's not nullable by checking the property type
-        // For reference types, nullable reference types are a compile-time feature
-    }
+        var update = JsonSerializer.Deserialize<ToolCallUpdate>(json, _jsonOptions);
 
-    [Test]
-    public void ToolCallUpdate_Title_ShouldBe_Required()
-    {
-        // Given: A ToolCallUpdate type
-        var property = typeof(ToolCallUpdate).GetProperty("Title");
-
-        // Then: Property should exist
-        Assert.That(property, Is.Not.Null);
-    }
-
-    [Test]
-    public void ToolCallUpdate_Kind_ShouldBe_Required()
-    {
-        // Given: A ToolCallUpdate type
-        var property = typeof(ToolCallUpdate).GetProperty("Kind");
-
-        // Then: Property should exist
-        Assert.That(property, Is.Not.Null);
-    }
-
-    [Test]
-    public void ToolCallUpdate_Should_NotHave_ToolCall_Property()
-    {
-        // Given: A ToolCallUpdate type
-        var property = typeof(ToolCallUpdate).GetProperty("ToolCall");
-
-        // Then: Property should not exist (protocol doesn't define this field)
-        Assert.That(property, Is.Null);
+        Assert.That(update, Is.Not.Null);
+        Assert.That(update!.ToolCallId, Is.EqualTo("call-1"));
+        Assert.That(update.Title, Is.EqualTo("Switch mode"));
+        Assert.That(update.Kind, Is.EqualTo(ToolCallKind.SwitchMode));
+        Assert.That(update.Status, Is.EqualTo(ToolCallStatus.Completed));
     }
 
     [Test]

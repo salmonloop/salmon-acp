@@ -10,14 +10,24 @@ namespace SalmonEgg.Domain.Tests.Protocol;
 public sealed class SessionLoadTypesTests
 {
     [Test]
-    public void SessionLoadParams_McpServers_ShouldBe_ListOfMcpServer()
+    public void SessionLoadParams_McpServers_Should_Serialize_With_TypeDiscriminator()
     {
-        // Given: A SessionLoadParams type
-        var property = typeof(SessionLoadParams).GetProperty("McpServers");
+        var sessionParams = new SessionLoadParams
+        {
+            SessionId = "test-session",
+            Cwd = "/home/user/project",
+            McpServers =
+            [
+                new StdioMcpServer("test-server", "node", ["server.js"])
+            ]
+        };
 
-        // Then: Property type should be List<McpServer>
-        Assert.That(property, Is.Not.Null);
-        Assert.That(property?.PropertyType, Is.EqualTo(typeof(List<McpServer>)));
+        var json = JsonSerializer.Serialize(sessionParams);
+        var parsed = JsonDocument.Parse(json);
+
+        Assert.That(parsed.RootElement.TryGetProperty("mcpServers", out var mcpServers), Is.True);
+        Assert.That(mcpServers.ValueKind, Is.EqualTo(JsonValueKind.Array));
+        Assert.That(mcpServers[0].GetProperty("type").GetString(), Is.EqualTo("stdio"));
     }
 
     [Test]

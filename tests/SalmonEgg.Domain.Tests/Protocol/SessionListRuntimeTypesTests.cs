@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Protocol;
+using System.Text.Json;
 
 namespace SalmonEgg.Domain.Tests.Protocol;
 
@@ -7,14 +8,32 @@ namespace SalmonEgg.Domain.Tests.Protocol;
 public sealed class SessionListRuntimeTypesTests
 {
     [Test]
-    public void SessionListParams_Should_ExposeCursorProperty()
+    public void SessionListParams_SerializesCursorField()
     {
-        Assert.That(typeof(SessionListParams).GetProperty("Cursor"), Is.Not.Null);
+        var payload = new SessionListParams
+        {
+            Cwd = "/repo",
+            Cursor = "cursor-1"
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+
+        Assert.That(json, Does.Contain("\"cursor\":\"cursor-1\""));
     }
 
     [Test]
-    public void SessionListResponse_Should_ExposeNextCursorProperty()
+    public void SessionListResponse_DeserializesNextCursorField()
     {
-        Assert.That(typeof(SessionListResponse).GetProperty("NextCursor"), Is.Not.Null);
+        var json = """
+        {
+          "sessions": [],
+          "nextCursor": "cursor-2"
+        }
+        """;
+
+        var response = JsonSerializer.Deserialize<SessionListResponse>(json);
+
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.NextCursor, Is.EqualTo("cursor-2"));
     }
 }

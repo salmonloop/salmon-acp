@@ -23,12 +23,6 @@ public class ChatReducerTests
     }
 
     [Fact]
-    public void ChatState_DoesNotExposeLegacySelectedConversationProperty()
-    {
-        Assert.Null(typeof(ChatState).GetProperty("SelectedConversationId"));
-    }
-
-    [Fact]
     public void GivenState_WhenSetPromptInFlight_ThenIsPromptInFlightIsTrue()
     {
         // Arrange

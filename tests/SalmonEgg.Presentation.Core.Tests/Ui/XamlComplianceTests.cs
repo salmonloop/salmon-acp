@@ -1,6 +1,7 @@
 using System;
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Linq;
+using System.Xml.Linq;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Ui;
@@ -22,22 +23,20 @@ public sealed class XamlComplianceTests
     [InlineData("TodoPanelButton")]
     public void MainPage_IconButtonsHaveAutomationName(string elementName)
     {
-        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
-        var tag = FindElementTag(xaml, elementName);
+        var element = FindElementByName(@"SalmonEgg\SalmonEgg\MainPage.xaml", elementName);
 
         Assert.True(
-            tag.Contains("AutomationProperties.Name") || tag.Contains("x:Uid="),
+            HasAttributeByLocalName(element, "AutomationProperties.Name") || HasAttributeByLocalName(element, "Uid"),
             $"{elementName} must expose an accessible name via AutomationProperties.Name or x:Uid localization.");
     }
 
     [Fact]
     public void MainPage_SearchBoxHasAutomationName()
     {
-        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
-        var tag = FindElementTag(xaml, "TopSearchBox");
+        var element = FindElementByName(@"SalmonEgg\SalmonEgg\MainPage.xaml", "TopSearchBox");
 
         Assert.True(
-            tag.Contains("AutomationProperties.Name") || tag.Contains("x:Uid=\"TopSearchBox\""),
+            HasAttributeByLocalName(element, "AutomationProperties.Name") || HasXUid(element, "TopSearchBox"),
             "TopSearchBox must expose an accessible name via AutomationProperties.Name or x:Uid localization.");
     }
 
@@ -118,30 +117,30 @@ public sealed class XamlComplianceTests
     [Fact]
     public void ChatInputArea_IconButtonsAccessibleAndTouchSized()
     {
-        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
-        var sendTag = FindElementTag(xaml, "SendButton");
-        var cancelTag = FindElementTag(xaml, "CancelButton");
+        var sendButton = FindElementByName(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml", "SendButton");
+        var cancelButton = FindElementByName(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml", "CancelButton");
 
         Assert.True(
-            sendTag.Contains("AutomationProperties.Name") || sendTag.Contains("x:Uid=\"SendButton\""),
+            HasAttributeByLocalName(sendButton, "AutomationProperties.Name") || HasXUid(sendButton, "SendButton"),
             "SendButton must expose an accessible name via AutomationProperties.Name or x:Uid localization.");
         Assert.True(
-            cancelTag.Contains("AutomationProperties.Name") || cancelTag.Contains("x:Uid=\"CancelButton\""),
+            HasAttributeByLocalName(cancelButton, "AutomationProperties.Name") || HasXUid(cancelButton, "CancelButton"),
             "CancelButton must expose an accessible name via AutomationProperties.Name or x:Uid localization.");
-        Assert.Contains("MinWidth=\"44\"", sendTag);
-        Assert.Contains("MinHeight=\"44\"", sendTag);
-        Assert.Contains("MinWidth=\"44\"", cancelTag);
-        Assert.Contains("MinHeight=\"44\"", cancelTag);
+        Assert.Equal("44", GetAttributeByLocalName(sendButton, "MinWidth"));
+        Assert.Equal("44", GetAttributeByLocalName(sendButton, "MinHeight"));
+        Assert.Equal("44", GetAttributeByLocalName(cancelButton, "MinWidth"));
+        Assert.Equal("44", GetAttributeByLocalName(cancelButton, "MinHeight"));
     }
 
     [Fact]
     public void ChatInputArea_SendButtonUsesCommandBinding()
     {
-        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
-        var sendTag = FindElementTag(xaml, "SendButton");
+        var sendButton = FindElementByName(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml", "SendButton");
+        var commandBinding = GetAttributeByLocalName(sendButton, "Command");
+        var clickBinding = GetAttributeByLocalName(sendButton, "Click");
 
-        Assert.DoesNotContain("Click=\"OnSendClick\"", sendTag);
-        Assert.Contains("Command=\"{x:Bind SubmitCommand", sendTag);
+        Assert.NotEqual("OnSendClick", clickBinding);
+        Assert.StartsWith("{x:Bind SubmitCommand", commandBinding, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -415,15 +414,29 @@ public sealed class XamlComplianceTests
         throw new DirectoryNotFoundException("Repository root (SalmonEgg.sln) not found.");
     }
 
-    private static string FindElementTag(string xaml, string elementName)
+    private static XElement FindElementByName(string relativePath, string elementName)
     {
-        var pattern = $"<[^>]*x:Name=\\\"{Regex.Escape(elementName)}\\\"[^>]*>";
-        var match = Regex.Match(xaml, pattern, RegexOptions.Singleline);
-        if (!match.Success)
+        var document = XDocument.Parse(LoadXaml(relativePath));
+        var element = document.Descendants().FirstOrDefault(candidate =>
+            candidate.Attributes().Any(attribute =>
+                string.Equals(attribute.Name.LocalName, "Name", StringComparison.Ordinal)
+                && string.Equals(attribute.Value, elementName, StringComparison.Ordinal)));
+        if (element is null)
         {
-            throw new InvalidOperationException($"Element '{elementName}' not found in XAML.");
+            throw new InvalidOperationException($"Element '{elementName}' not found in XAML '{relativePath}'.");
         }
 
-        return match.Value;
+        return element;
     }
+
+    private static bool HasAttributeByLocalName(XElement element, string localName)
+        => element.Attributes().Any(attribute => string.Equals(attribute.Name.LocalName, localName, StringComparison.Ordinal));
+
+    private static string? GetAttributeByLocalName(XElement element, string localName)
+        => element.Attributes()
+            .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, localName, StringComparison.Ordinal))
+            ?.Value;
+
+    private static bool HasXUid(XElement element, string expectedValue)
+        => string.Equals(GetAttributeByLocalName(element, "Uid"), expectedValue, StringComparison.Ordinal);
 }

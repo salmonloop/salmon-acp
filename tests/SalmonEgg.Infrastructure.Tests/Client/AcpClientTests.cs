@@ -922,9 +922,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var result = await client.ListSessionsAsync(new SessionListParams());
             await responseTrigger;
 
-            var nextCursorProperty = typeof(SessionListResponse).GetProperty("NextCursor");
-            Assert.NotNull(nextCursorProperty);
-            Assert.Equal("cursor-2", nextCursorProperty!.GetValue(result) as string);
+            Assert.Equal("cursor-2", result.NextCursor);
         }
 
         private static async Task<JsonRpcResponse> WaitForResponseAsync(

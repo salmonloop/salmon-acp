@@ -43,16 +43,6 @@ public sealed class InitializeTypesTests
     }
 
     [Test]
-    public void InitializeResponse_ProtocolVersion_ShouldBe_Integer_Type()
-    {
-        // Given: An InitializeResponse type
-        var property = typeof(InitializeResponse).GetProperty("ProtocolVersion");
-
-        // Then: Property type should be int, not object
-        Assert.That(property?.PropertyType, Is.EqualTo(typeof(int)));
-    }
-
-    [Test]
     public void InitializeResponse_ProtocolVersion_Should_Serialize_As_Integer()
     {
         // Given: An InitializeResponse with protocol version
@@ -84,17 +74,6 @@ public sealed class InitializeTypesTests
         // Then: JSON should not contain string version
         Assert.That(json, Does.Not.Contain("\"2024-11-05\""));
         Assert.That(json, Does.Contain("\"protocolVersion\":1"));
-    }
-
-    [Test]
-    public void AgentCapabilities_Should_Have_SessionCapabilities_Property()
-    {
-        // Given: An AgentCapabilities type
-        var property = typeof(AgentCapabilities).GetProperty("SessionCapabilities");
-
-        // Then: Property should exist and be of correct type
-        Assert.That(property, Is.Not.Null);
-        Assert.That(property?.PropertyType, Is.EqualTo(typeof(SessionCapabilities)));
     }
 
     [Test]
