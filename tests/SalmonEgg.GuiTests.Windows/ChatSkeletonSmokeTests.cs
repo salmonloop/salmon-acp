@@ -1069,6 +1069,25 @@ public sealed class ChatSkeletonSmokeTests
                     "remote-first-open-immediate-local-switch-over-budget",
                     $"Local switch responsiveness exceeded budget. elapsedMs={localSwitchStopwatch.ElapsedMilliseconds} budgetMs={localSwitchBudgetMs}");
             }
+
+            // latest-intent contract: old remote activation completion must not rollback
+            // the current local selection after the local header has already settled.
+            var rollbackDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(4);
+            while (DateTime.UtcNow < rollbackDeadline)
+            {
+                var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(120));
+                if (header is not null
+                    && header.Name.Contains("GUI Remote Session 01", StringComparison.Ordinal))
+                {
+                    ThrowWithScreenshot(
+                        session,
+                        appData,
+                        "remote-first-open-immediate-local-switch-rolled-back",
+                        "Latest-intent regression: selection rolled back to remote after local switch.");
+                }
+
+                Thread.Sleep(40);
+            }
         }
         finally
         {

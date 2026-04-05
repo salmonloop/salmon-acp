@@ -8,6 +8,9 @@ SalmonEgg 是一个基于 Uno Platform 的跨平台原生应用程序，实现 A
 
 本项目采用 **MVVM (Model-View-ViewModel)** 架构模式结合 **Clean Architecture** 原则：
 
+> 行为级硬约束（会话切换 / 导航 / 搜索并发语义）见：`docs/hard-constraints-session-navigation-and-search.md`。  
+> 如与一般性描述冲突，以硬约束文档与 `AGENTS.md` 为准。
+
 ### 四层架构
 
 ```

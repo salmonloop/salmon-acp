@@ -203,8 +203,15 @@ public sealed class MainNavigationViewAdapter
             return false;
         }
 
-        return _viewModel.CurrentSelection is NavigationSelectionState.Session current
-            && string.Equals(current.SessionId, requestedSessionId, StringComparison.Ordinal);
+        if (_viewModel.CurrentSelection is not NavigationSelectionState.Session current
+            || !string.Equals(current.SessionId, requestedSessionId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Keep latest explicit user intent on activation cancellation/races.
+        // Only rollback when the requested session is no longer available.
+        return string.IsNullOrWhiteSpace(_viewModel.TryGetProjectIdForSession(requestedSessionId));
     }
 
     private void RestoreSelection(NavigationSelectionState selection)

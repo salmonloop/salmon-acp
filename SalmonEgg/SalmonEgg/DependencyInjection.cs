@@ -31,6 +31,7 @@ using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
+using SalmonEgg.Presentation.Core.Services.Search;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 using Uno.Extensions.Reactive;
 using SalmonEgg.Presentation.Core.Services;
@@ -347,6 +348,7 @@ public static class DependencyInjection
                 sp.GetRequiredService<IShellNavigationService>()));
 
         // Global search
+        services.AddSingleton<IGlobalSearchPipeline, DefaultGlobalSearchPipeline>();
         services.AddSingleton<GlobalSearchViewModel>();
 
         // Discover sessions

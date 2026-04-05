@@ -353,13 +353,23 @@
                                         <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
                                         <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
                                         <Setter Property="BorderThickness" Value="1" />
-                                        <Setter Property="Visibility" Value="{x:Bind SearchVM.HasAnyContent, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        <Setter Property="Visibility" Value="{x:Bind SearchVM.ShouldShowSearchPanelPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </Style>
                                 </Flyout.FlyoutPresenterStyle>
                                 <Grid x:Name="SearchPanelBorder"
                                       MinWidth="{x:Bind TopSearchBox.ActualWidth}"
                                       MaxWidth="{x:Bind TopSearchBox.ActualWidth}"
                                       HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Center"
+                                                Margin="12,12,12,0"
+                                                Spacing="8"
+                                                Visibility="{x:Bind SearchVM.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ProgressRing Width="16" Height="16" IsActive="True" />
+                                        <TextBlock Text="搜索中..."
+                                                   VerticalAlignment="Center"
+                                                   Opacity="0.8" />
+                                    </StackPanel>
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="400" HorizontalAlignment="Stretch">
                                         <StackPanel HorizontalAlignment="Stretch">
                                             <muxc:ItemsRepeater ItemsSource="{x:Bind SearchVM.ResultGroups, Mode=OneWay}" HorizontalAlignment="Stretch">
@@ -466,6 +476,13 @@
                                                Margin="0,40"
                                                Opacity="0.6"
                                                Visibility="{x:Bind SearchVM.IsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <TextBlock Text="搜索失败，请重试。"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Margin="0,40"
+                                               Opacity="0.8"
+                                               Visibility="{x:Bind SearchVM.IsError, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                 </Grid>
                             </Flyout>
                         </FlyoutBase.AttachedFlyout>

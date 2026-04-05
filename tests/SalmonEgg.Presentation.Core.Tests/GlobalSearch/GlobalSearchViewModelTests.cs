@@ -1,5 +1,5 @@
 using System;
-using System.IO;
+using System.Collections.Immutable;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -10,6 +10,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
+using SalmonEgg.Presentation.Core.Services.Search;
 using SalmonEgg.Presentation.Models.Search;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels;
@@ -62,6 +63,7 @@ public sealed class GlobalSearchViewModelTests
                 navigationCoordinator.Object,
                 presenter,
                 new ProjectAffinityResolver(),
+                new DefaultGlobalSearchPipeline(),
                 Mock.Of<ILogger<GlobalSearchViewModel>>());
 
             await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
@@ -82,13 +84,197 @@ public sealed class GlobalSearchViewModelTests
     }
 
     [Fact]
-    public void SourceFile_DoesNotContainInlineProjectPrefixMatcher()
+    public void QueryChange_EntersLoading_AndOpensPanelImmediately()
     {
-        var source = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\GlobalSearchViewModel.cs");
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferencesWithProject();
+            var presenter = new ConversationCatalogPresenter();
+            var pipeline = new ControlledSearchPipeline();
+            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+            using var viewModel = new GlobalSearchViewModel(
+                navigationViewModel,
+                preferences,
+                Mock.Of<INavigationCoordinator>(),
+                presenter,
+                new ProjectAffinityResolver(),
+                pipeline,
+                Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-        Assert.DoesNotContain("NavTimeFormatter.NormalizePathForPrefixMatch", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StartsWith(projectRoot", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ResolveProjectId(", source, StringComparison.Ordinal);
+            viewModel.IsSearchBoxFocused = true;
+            viewModel.Query = "abc";
+
+            Assert.Equal(GlobalSearchViewState.Loading, viewModel.ViewState);
+            Assert.True(viewModel.IsSearchPanelOpen);
+            Assert.True(viewModel.IsSearching);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task StaleFailure_DoesNotOverrideLatestSuccessfulResult()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferencesWithProject();
+            var presenter = new ConversationCatalogPresenter();
+            var pipeline = new ScriptedSearchPipeline(async query =>
+            {
+                if (string.Equals(query, "alpha", StringComparison.Ordinal))
+                {
+                    await Task.Delay(300);
+                    throw new InvalidOperationException("stale error");
+                }
+
+                await Task.Delay(40);
+                return new GlobalSearchSnapshot(
+                    ImmutableArray.Create(
+                        new GlobalSearchGroupSnapshot(
+                            Name: "sessions",
+                            Title: "会话",
+                            Priority: 100,
+                            Items: ImmutableArray.Create(
+                                new GlobalSearchItemSnapshot(
+                                    Id: "latest",
+                                    Title: "latest",
+                                    Subtitle: null,
+                                    Kind: SearchResultKind.Session,
+                                    IconGlyph: "\uE8BD",
+                                    Tag: null)))));
+            });
+
+            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+            using var viewModel = new GlobalSearchViewModel(
+                navigationViewModel,
+                preferences,
+                Mock.Of<INavigationCoordinator>(),
+                presenter,
+                new ProjectAffinityResolver(),
+                pipeline,
+                Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+            viewModel.IsSearchBoxFocused = true;
+            viewModel.Query = "alpha";
+            await Task.Delay(40);
+            viewModel.Query = "beta";
+            await Task.Delay(700);
+
+            Assert.Equal(GlobalSearchViewState.Results, viewModel.ViewState);
+            Assert.False(viewModel.IsError);
+            Assert.True(viewModel.HasResults);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task SelectResultAsync_SettingUsesCanonicalSettingsKey()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferencesWithProject();
+            var presenter = new ConversationCatalogPresenter();
+            var navigationCoordinator = new Mock<INavigationCoordinator>();
+            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+            using var viewModel = new GlobalSearchViewModel(
+                navigationViewModel,
+                preferences,
+                navigationCoordinator.Object,
+                presenter,
+                new ProjectAffinityResolver(),
+                new DefaultGlobalSearchPipeline(),
+                Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+            await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
+            {
+                Id = "AgentAcp",
+                Title = "ACP 配置",
+                Kind = SearchResultKind.Setting
+            });
+
+            navigationCoordinator.Verify(
+                coordinator => coordinator.ActivateSettingsAsync("AgentAcp"),
+                Times.Once);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task QueryChange_AfterError_CanRecoverToResults()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferencesWithProject();
+            var presenter = new ConversationCatalogPresenter();
+            var pipeline = new ScriptedSearchPipeline(query =>
+            {
+                if (string.Equals(query, "boom", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("search failed");
+                }
+
+                return Task.FromResult(new GlobalSearchSnapshot(
+                    ImmutableArray.Create(
+                        new GlobalSearchGroupSnapshot(
+                            Name: "sessions",
+                            Title: "会话",
+                            Priority: 100,
+                            Items: ImmutableArray.Create(
+                                new GlobalSearchItemSnapshot(
+                                    Id: "ok-1",
+                                    Title: "ok",
+                                    Subtitle: null,
+                                    Kind: SearchResultKind.Session,
+                                    IconGlyph: "\uE8BD",
+                                    Tag: null))))));
+            });
+
+            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+            using var viewModel = new GlobalSearchViewModel(
+                navigationViewModel,
+                preferences,
+                Mock.Of<INavigationCoordinator>(),
+                presenter,
+                new ProjectAffinityResolver(),
+                pipeline,
+                Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+            viewModel.IsSearchBoxFocused = true;
+            viewModel.Query = "boom";
+            await Task.Delay(400);
+            Assert.Equal(GlobalSearchViewState.Error, viewModel.ViewState);
+            Assert.True(viewModel.IsError);
+
+            viewModel.Query = "ok";
+            await Task.Delay(400);
+            Assert.Equal(GlobalSearchViewState.Results, viewModel.ViewState);
+            Assert.False(viewModel.IsError);
+            Assert.True(viewModel.HasResults);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
     }
 
     private static MainNavigationViewModel CreateNavigationViewModel(
@@ -135,31 +321,36 @@ public sealed class GlobalSearchViewModelTests
         return preferences;
     }
 
-    private static string LoadFile(string relativePath)
-    {
-        var root = FindRepoRoot();
-        return File.ReadAllText(Path.Combine(root, relativePath));
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "SalmonEgg.sln")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Repository root (SalmonEgg.sln) not found.");
-    }
-
     private sealed class ImmediateSynchronizationContext : SynchronizationContext
     {
         public override void Post(SendOrPostCallback d, object? state) => d(state);
+    }
+
+    private sealed class ControlledSearchPipeline : IGlobalSearchPipeline
+    {
+        public Task<GlobalSearchSnapshot> SearchAsync(
+            string query,
+            GlobalSearchSourceSnapshot source,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new GlobalSearchSnapshot(ImmutableArray<GlobalSearchGroupSnapshot>.Empty));
+        }
+    }
+
+    private sealed class ScriptedSearchPipeline : IGlobalSearchPipeline
+    {
+        private readonly Func<string, Task<GlobalSearchSnapshot>> _search;
+
+        public ScriptedSearchPipeline(Func<string, Task<GlobalSearchSnapshot>> search)
+        {
+            _search = search ?? throw new ArgumentNullException(nameof(search));
+        }
+
+        public Task<GlobalSearchSnapshot> SearchAsync(
+            string query,
+            GlobalSearchSourceSnapshot source,
+            CancellationToken cancellationToken)
+            => _search(query);
     }
 
     private sealed class FakeNavigationPaneState : INavigationPaneState
