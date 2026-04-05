@@ -50,18 +50,23 @@ public sealed class BindingCoordinator : IConversationBindingCommands
         }
     }
 
+    public ValueTask<BindingUpdateResult> ClearBindingAsync(string conversationId)
+        => UpdateBindingAsync(conversationId, remoteSessionId: null, boundProfileId: null);
+
     private async Task<bool> WaitForProjectedBindingAsync(
         ConversationBindingSlice expectedBinding,
         int timeoutMilliseconds = 500,
         int pollDelayMilliseconds = 10)
     {
+        var expectsClearedBinding = string.IsNullOrWhiteSpace(expectedBinding.RemoteSessionId)
+            && string.IsNullOrWhiteSpace(expectedBinding.ProfileId);
         var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
         while (DateTime.UtcNow < timeoutAt)
         {
             var state = await _chatStore.State;
             var currentState = state ?? ChatState.Empty;
             var actualBinding = currentState.ResolveBinding(expectedBinding.ConversationId);
-            if (actualBinding == expectedBinding)
+            if ((expectsClearedBinding && actualBinding is null) || actualBinding == expectedBinding)
             {
                 return true;
             }
@@ -71,6 +76,7 @@ public sealed class BindingCoordinator : IConversationBindingCommands
 
         var finalStateValue = await _chatStore.State;
         var finalState = finalStateValue ?? ChatState.Empty;
-        return finalState.ResolveBinding(expectedBinding.ConversationId) == expectedBinding;
+        var finalBinding = finalState.ResolveBinding(expectedBinding.ConversationId);
+        return (expectsClearedBinding && finalBinding is null) || finalBinding == expectedBinding;
     }
 }

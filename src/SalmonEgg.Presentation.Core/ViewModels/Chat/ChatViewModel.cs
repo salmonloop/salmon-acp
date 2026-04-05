@@ -3147,7 +3147,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         await _conversationWorkspace
-            .ApplySessionInfoUpdateAsync(conversationId, update.Title, updatedAtUtc: ParseSessionUpdatedAtUtc(update.UpdatedAt))
+            .ApplySessionInfoUpdateAsync(
+                conversationId,
+                update.Title,
+                updatedAtUtc: ParseSessionUpdatedAtUtc(update.UpdatedAt),
+                allowRegisterWhenMissing: true)
             .ConfigureAwait(true);
 
         if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
@@ -6407,6 +6411,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 sessionInfo.Title,
                 cwd: sessionInfo.Cwd,
                 updatedAtUtc: ParseSessionUpdatedAtUtc(sessionInfo.UpdatedAt),
+                allowRegisterWhenMissing: true,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 

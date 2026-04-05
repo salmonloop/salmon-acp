@@ -192,10 +192,20 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             return new ConversationMutationResult(false, false, "ConversationIdMissing");
         }
 
-        var clearsActiveConversation = string.Equals(activeConversationId, conversationId, StringComparison.Ordinal);
         try
         {
             removeConversation(_conversationWorkspace, conversationId);
+
+            var clearBindingResult = await _bindingCommands.ClearBindingAsync(conversationId).ConfigureAwait(false);
+            if (clearBindingResult.Status is not BindingUpdateStatus.Success)
+            {
+                return new ConversationMutationResult(false, false, clearBindingResult.ErrorMessage ?? "BindingClearFailed");
+            }
+
+            var currentState = await _chatStore.State ?? ChatState.Empty;
+            var hydratedConversationId = currentState.HydratedConversationId;
+            var clearsActiveConversation = string.Equals(conversationId, hydratedConversationId, StringComparison.Ordinal)
+                || string.Equals(activeConversationId, conversationId, StringComparison.Ordinal);
             if (clearsActiveConversation)
             {
                 await _chatStore.Dispatch(new SelectConversationAction(null));

@@ -779,6 +779,132 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task ApplySessionInfoUpdateAsync_UnknownConversation_DoesNotRecreateConversation()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1", "alpha")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        workspace.DeleteConversation("session-1");
+        Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
+
+        await workspace.ApplySessionInfoUpdateAsync(
+            "session-1",
+            title: "zombie",
+            updatedAtUtc: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
+        Assert.Null(workspace.GetConversationSnapshot("session-1"));
+        Assert.Null(sessionManager.GetSession("session-1"));
+    }
+
+    [Fact]
+    public async Task ApplySessionInfoUpdateAsync_DeletedConversation_WithAllowRegister_DoesNotResurrectConversation()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                CreateTextMessage("m-1", "alpha")
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        workspace.DeleteConversation("session-1");
+        Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
+
+        await workspace.ApplySessionInfoUpdateAsync(
+            "session-1",
+            title: "zombie",
+            updatedAtUtc: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            allowRegisterWhenMissing: true);
+
+        Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
+        Assert.Null(workspace.GetConversationSnapshot("session-1"));
+        Assert.Null(sessionManager.GetSession("session-1"));
+    }
+
+    [Fact]
+    public void UpsertConversationSnapshot_DeletedConversation_DoesNotResurrectConversation()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [CreateTextMessage("m-1", "alpha")],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.DeleteConversation("session-1");
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [CreateTextMessage("m-2", "late")],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+
+        Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
+        Assert.Null(workspace.GetConversationSnapshot("session-1"));
+    }
+
+    [Fact]
+    public void UpdateRemoteBinding_DeletedConversation_DoesNotResurrectConversation()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [CreateTextMessage("m-1", "alpha")],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.DeleteConversation("session-1");
+
+        workspace.UpdateRemoteBinding("session-1", remoteSessionId: "remote-zombie", boundProfileId: "profile-zombie");
+
+        Assert.DoesNotContain("session-1", workspace.GetKnownConversationIds());
+        Assert.Null(workspace.GetRemoteBinding("session-1"));
+    }
+
+    [Fact]
     public async Task ConversationCatalogFacade_DeleteConversation_DoesNotBlockUiThread()
     {
         var syncContext = new ImmediateSynchronizationContext();

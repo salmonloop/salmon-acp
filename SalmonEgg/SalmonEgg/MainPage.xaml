@@ -168,13 +168,16 @@
                 <NavigationViewItem.ContextFlyout>
                     <MenuFlyout Closed="OnSessionNavFlyoutClosed">
                         <MenuFlyoutItem x:Uid="SessionNavArchiveItem"
+                                        AutomationProperties.AutomationId="MainNav.Session.Context.Archive"
                                         Click="OnSessionArchiveMenuItemClick"
                                         CommandParameter="{x:Bind}"
                                         IsEnabled="{x:Bind IsPlaceholder, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}" />
                         <MenuFlyoutItem x:Uid="SessionNavMoveItem"
+                                        AutomationProperties.AutomationId="MainNav.Session.Context.Move"
                                         Click="OnSessionMoveMenuItemClick"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="SessionNavRenameItem"
+                                        AutomationProperties.AutomationId="MainNav.Session.Context.Rename"
                                         Click="OnSessionRenameMenuItemClick"
                                         CommandParameter="{x:Bind}" />
                     </MenuFlyout>
@@ -559,6 +562,17 @@
                            ContentTransitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}" />
                 </NavigationView.Content>
             </NavigationView>
+
+            <Button x:Name="AutomationArchiveSelectedButton"
+                    Grid.Column="0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Width="1"
+                    Height="1"
+                    Opacity="0.01"
+                    Visibility="{x:Bind IsGuiAutomationMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                    AutomationProperties.AutomationId="MainNav.Session.AutomationArchiveSelected"
+                    Click="OnAutomationArchiveSelectedClick" />
 
             <controls:ResizeGrip x:Name="LeftNavResizer"
                                  Grid.Column="0"

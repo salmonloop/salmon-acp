@@ -81,6 +81,7 @@ public sealed partial class MainPage : Page
     public AppPreferencesViewModel Preferences { get; }
     public MainNavigationViewModel NavVM { get; }
     public GlobalSearchViewModel SearchVM { get; }
+    public bool IsGuiAutomationMode { get; }
     private readonly ChatViewModel _chatViewModel;
     public ChatViewModel ChatVM => _chatViewModel;
     public ShellLayoutViewModel LayoutVM { get; }
@@ -104,6 +105,10 @@ public sealed partial class MainPage : Page
         _metricsProvider = App.ServiceProvider.GetRequiredService<WindowMetricsProvider>();
         _metricsSink = App.ServiceProvider.GetRequiredService<IShellLayoutMetricsSink>();
         _navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();
+        IsGuiAutomationMode = string.Equals(
+            Environment.GetEnvironmentVariable("SALMONEGG_GUI"),
+            "1",
+            StringComparison.Ordinal);
 
         this.InitializeComponent();
         _mainNavigationContentSyncAdapter = new MainNavigationContentSyncAdapter(_navigationCoordinator);
@@ -129,6 +134,27 @@ public sealed partial class MainPage : Page
         // 4. Default to Start view on launch
         EnsureStartContent();
         BootLogDebug("MainPage: navigated to StartView");
+    }
+
+    private void OnAutomationArchiveSelectedClick(object sender, RoutedEventArgs e)
+    {
+        if (!IsGuiAutomationMode)
+        {
+            return;
+        }
+
+        var selectedSessionId = (MainNavView.SelectedItem as SessionNavItemViewModel)?.SessionId
+            ?? ((MainNavView.SelectedItem as NavigationViewItem)?.DataContext is SessionNavItemViewModel navSession
+                ? navSession.SessionId
+                : null)
+            ?? _chatViewModel.CurrentSessionId;
+
+        if (string.IsNullOrWhiteSpace(selectedSessionId))
+        {
+            return;
+        }
+
+        _chatViewModel.ArchiveConversation(selectedSessionId);
     }
 
     private static void BootLogDebug(string message)
@@ -356,20 +382,24 @@ public sealed partial class MainPage : Page
 
     private void OnSessionArchiveMenuItemClick(object sender, RoutedEventArgs e)
     {
+        BootLogDebug("Session archive menu clicked.");
         if (sender is not MenuFlyoutItem item || item.CommandParameter is not SessionNavItemViewModel session)
         {
+            BootLogDebug("Session archive menu ignored: invalid sender/parameter.");
             return;
         }
 
         if (session.IsPlaceholder || string.IsNullOrWhiteSpace(session.SessionId))
         {
+            BootLogDebug($"Session archive menu ignored: placeholder={session.IsPlaceholder} sessionId={session.SessionId ?? "<null>"}.");
             return;
         }
 
-        _pendingArchiveSessionId = session.SessionId;
-        _archiveOnFlyoutClosed.Request(session.SessionId, () =>
+        BootLogDebug($"Session archive command scheduled: sessionId={session.SessionId}.");
+        _pendingArchiveSessionId = null;
+        _ = DispatcherQueue.TryEnqueue(() =>
         {
-            _ = DispatcherQueue.TryEnqueue(() => _ = session.ArchiveCommand.ExecuteAsync(null));
+            _ = session.ArchiveCommand.ExecuteAsync(null);
         });
     }
 

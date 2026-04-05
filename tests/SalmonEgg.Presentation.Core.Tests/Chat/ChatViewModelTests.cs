@@ -759,20 +759,21 @@ public class ChatViewModelTests
         await using var fixture = CreateViewModel(conversationActivationCoordinator: activation.Object);
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.BottomPanelTabs.Count >= 2));
 
         var outputTab = fixture.ViewModel.BottomPanelTabs[1];
         Assert.Equal("output", outputTab.Id);
         fixture.ViewModel.SelectedBottomPanelTab = outputTab;
-        await Task.Delay(50);
-        Assert.Equal("output", fixture.ViewModel.SelectedBottomPanelTab?.Id);
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.SelectedBottomPanelTab?.Id, "output", StringComparison.Ordinal)));
 
         fixture.ViewModel.ArchiveConversation("session-1");
 
         activation.Verify(a => a.ArchiveConversationAsync("session-1", "session-1", It.IsAny<CancellationToken>()), Times.Once);
 
-        Assert.Empty(fixture.ViewModel.BottomPanelTabs);
-        Assert.Null(fixture.ViewModel.SelectedBottomPanelTab);
+        await WaitForConditionAsync(() => Task.FromResult(
+            fixture.ViewModel.BottomPanelTabs.Count == 0
+            && fixture.ViewModel.SelectedBottomPanelTab is null));
 
         // If store selection ever toggles away and back, previous selection must not revive.
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-2" });
@@ -836,11 +837,12 @@ public class ChatViewModelTests
         await using var fixture = CreateViewModel(conversationActivationCoordinator: activation.Object);
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.BottomPanelTabs.Count >= 2));
 
         var outputTab = fixture.ViewModel.BottomPanelTabs[1];
         fixture.ViewModel.SelectedBottomPanelTab = outputTab;
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.SelectedBottomPanelTab?.Id, "output", StringComparison.Ordinal)));
 
         fixture.ViewModel.ArchiveConversation("session-1");
 
@@ -903,9 +905,93 @@ public class ChatViewModelTests
         await mutationCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.NotEmpty(fixture.ViewModel.BottomPanelTabs);
 
-        syncContext.RunAll();
-        Assert.Empty(fixture.ViewModel.BottomPanelTabs);
-        Assert.Null(fixture.ViewModel.SelectedBottomPanelTab);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                fixture.ViewModel.BottomPanelTabs.Count == 0
+                && fixture.ViewModel.SelectedBottomPanelTab is null);
+        });
+    }
+
+    [Fact]
+    public async Task ArchiveConversation_AfterRemoteSessionInfoUpdate_DoesNotResurrectArchivedConversation()
+    {
+        var chatService = CreateConnectedChatService();
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object);
+
+        await fixture.Workspace.RegisterConversationAsync("session-1");
+        await fixture.DispatchAsync(new SetBindingSliceAction(new ConversationBindingSlice("session-1", "remote-1", "profile-1")));
+        await fixture.DispatchAsync(new SelectConversationAction("session-1"));
+
+        fixture.ViewModel.ArchiveConversation("session-1");
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return !fixture.Workspace.GetKnownConversationIds().Contains("session-1", StringComparer.Ordinal)
+                && state.ResolveBinding("session-1") is null;
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs(
+                "remote-1",
+                new SessionInfoUpdate
+                {
+                    Title = "zombie",
+                    UpdatedAt = "2026-04-05T14:00:00Z"
+                }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return !fixture.Workspace.GetKnownConversationIds().Contains("session-1", StringComparer.Ordinal)
+                && fixture.Workspace.GetConversationSnapshot("session-1") is null
+                && state.ResolveBinding("session-1") is null;
+        });
+    }
+
+    [Fact]
+    public async Task DeleteConversation_AfterRemoteSessionInfoUpdate_DoesNotResurrectDeletedConversation()
+    {
+        var chatService = CreateConnectedChatService();
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object);
+
+        await fixture.Workspace.RegisterConversationAsync("session-1");
+        await fixture.DispatchAsync(new SetBindingSliceAction(new ConversationBindingSlice("session-1", "remote-1", "profile-1")));
+        await fixture.DispatchAsync(new SelectConversationAction("session-1"));
+
+        fixture.ViewModel.DeleteConversation("session-1");
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return !fixture.Workspace.GetKnownConversationIds().Contains("session-1", StringComparer.Ordinal)
+                && state.ResolveBinding("session-1") is null;
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs(
+                "remote-1",
+                new SessionInfoUpdate
+                {
+                    Title = "zombie-delete",
+                    UpdatedAt = "2026-04-05T14:00:00Z"
+                }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return !fixture.Workspace.GetKnownConversationIds().Contains("session-1", StringComparer.Ordinal)
+                && fixture.Workspace.GetConversationSnapshot("session-1") is null
+                && state.ResolveBinding("session-1") is null;
+        });
     }
 
     [Fact]

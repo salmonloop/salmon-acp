@@ -8,6 +8,8 @@ using System.Threading;
 using FlaUI.Core.Definitions;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
 
 namespace SalmonEgg.GuiTests.Windows;
@@ -237,8 +239,65 @@ internal sealed class WindowsGuiAppSession : IDisposable
             return;
         }
 
+        try
+        {
+            var point = element.GetClickablePoint();
+            Mouse.Click(point);
+            return;
+        }
+        catch
+        {
+        }
+
+        string elementId;
+        try
+        {
+            elementId = element.AutomationId;
+        }
+        catch
+        {
+            elementId = "<unknown>";
+        }
+
         throw new InvalidOperationException(
-            $"Element '{element.AutomationId}' does not support Invoke or SelectionItem patterns.");
+            $"Element '{elementId}' does not support Invoke or SelectionItem patterns.");
+    }
+
+    public void OpenContextMenu(AutomationElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+
+        var clickablePoint = element.GetClickablePoint();
+        Mouse.RightClick(clickablePoint);
+    }
+
+    public void OpenContextMenuWithKeyboard(AutomationElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+
+        element.Focus();
+        Keyboard.Press(VirtualKeyShort.SHIFT);
+        try
+        {
+            Keyboard.Press(VirtualKeyShort.F10);
+            Keyboard.Release(VirtualKeyShort.F10);
+        }
+        finally
+        {
+            Keyboard.Release(VirtualKeyShort.SHIFT);
+        }
+    }
+
+    public void PressEscape()
+    {
+        Keyboard.Press(VirtualKeyShort.ESCAPE);
+        Keyboard.Release(VirtualKeyShort.ESCAPE);
+    }
+
+    public void PressEnter()
+    {
+        Keyboard.Press(VirtualKeyShort.RETURN);
+        Keyboard.Release(VirtualKeyShort.RETURN);
     }
 
     public bool? TryGetIsSelected(string automationId)

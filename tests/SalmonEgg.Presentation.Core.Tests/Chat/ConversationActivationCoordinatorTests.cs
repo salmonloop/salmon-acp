@@ -578,6 +578,88 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.Null(currentState.HydratedConversationId);
     }
 
+    [Fact]
+    public async Task ArchiveConversation_ClearsBindingSlice_ToPreventArchivedConversationResurrection()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences(syncContext);
+        var workspaceStore = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        using var workspace = CreateWorkspace(workspaceStore, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        var state = State.Value(new object(), () => ChatState.Empty);
+        await state.Update(
+            current => ChatReducer.Reduce(
+                current,
+                new SetBindingSliceAction(new ConversationBindingSlice("session-1", "remote-1", "profile-1"))),
+            default);
+        var chatStore = CreateChatStore(state);
+        var connectionStore = CreateConnectionStore();
+        var bindingCommands = new BindingCoordinator(workspace, chatStore);
+        var coordinator = new ConversationActivationCoordinator(
+            workspace,
+            bindingCommands,
+            chatStore,
+            connectionStore,
+            Mock.Of<ILogger<ConversationActivationCoordinator>>());
+
+        var result = await coordinator.ArchiveConversationAsync("session-1", activeConversationId: null);
+
+        Assert.True(result.Succeeded);
+        var currentState = await state ?? ChatState.Empty;
+        Assert.Null(currentState.ResolveBinding("session-1"));
+    }
+
+    [Fact]
+    public async Task DeleteConversation_ClearsBindingSlice_ToPreventDeletedConversationResurrection()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences(syncContext);
+        var workspaceStore = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        using var workspace = CreateWorkspace(workspaceStore, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        var state = State.Value(new object(), () => ChatState.Empty);
+        await state.Update(
+            current => ChatReducer.Reduce(
+                current,
+                new SetBindingSliceAction(new ConversationBindingSlice("session-1", "remote-1", "profile-1"))),
+            default);
+        var chatStore = CreateChatStore(state);
+        var connectionStore = CreateConnectionStore();
+        var bindingCommands = new BindingCoordinator(workspace, chatStore);
+        var coordinator = new ConversationActivationCoordinator(
+            workspace,
+            bindingCommands,
+            chatStore,
+            connectionStore,
+            Mock.Of<ILogger<ConversationActivationCoordinator>>());
+
+        var result = await coordinator.DeleteConversationAsync("session-1", activeConversationId: null);
+
+        Assert.True(result.Succeeded);
+        var currentState = await state ?? ChatState.Empty;
+        Assert.Null(currentState.ResolveBinding("session-1"));
+    }
+
     private static IChatStore CreateChatStore(IState<ChatState> state)
     {
         return new ChatStore(state);

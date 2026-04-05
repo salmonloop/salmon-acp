@@ -918,6 +918,73 @@ public sealed class ChatSkeletonSmokeTests
     }
 
     [SkippableFact]
+    public void ArchiveRemoteSession_DuringHydration_RemoteSessionUpdateDoesNotResurrectSessionItem()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "2200");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicSlowRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 40,
+                includeLocalConversation: true,
+                localMessageCount: 4);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            const string remoteAutomationId = "MainNav.Session.gui-remote-conversation-01";
+            var remoteItem = session.FindByAutomationId(remoteAutomationId, TimeSpan.FromSeconds(15));
+            session.ActivateElement(remoteItem);
+
+            var sawOverlayStatus = session.WaitUntilVisible("ChatView.LoadingOverlayStatus", TimeSpan.FromSeconds(8));
+            Assert.True(sawOverlayStatus, "Remote hydration did not start before archive flow.");
+
+            remoteItem = session.FindByAutomationId(remoteAutomationId, TimeSpan.FromSeconds(5));
+            session.ActivateElement(remoteItem);
+            var archiveAutomationButton = session.FindByAutomationId(
+                "MainNav.Session.AutomationArchiveSelected",
+                TimeSpan.FromSeconds(5));
+            session.ActivateElement(archiveAutomationButton);
+            Thread.Sleep(120);
+
+            var removedDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+            while (DateTime.UtcNow < removedDeadline
+                && session.TryFindByAutomationId(remoteAutomationId, TimeSpan.FromMilliseconds(120)) is not null)
+            {
+                Thread.Sleep(120);
+            }
+
+            if (session.TryFindByAutomationId(remoteAutomationId, TimeSpan.FromMilliseconds(120)) is not null)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "archive-remote-during-hydration-not-removed",
+                    "Archived remote session item is still visible in navigation.");
+            }
+
+            var stabilityDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);
+            while (DateTime.UtcNow < stabilityDeadline)
+            {
+                if (session.TryFindByAutomationId(remoteAutomationId, TimeSpan.FromMilliseconds(120)) is not null)
+                {
+                    ThrowWithScreenshot(
+                        session,
+                        appData,
+                        "archive-remote-during-hydration-resurrected",
+                        "Archived remote session item reappeared after ongoing remote updates.");
+                }
+
+                Thread.Sleep(150);
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
+    [SkippableFact]
     public void SelectLargeCachedRemoteSession_FirstOpen_HeaderVisibleWithinBudget()
     {
         // Performance guardrail: first-open of a large cached session should not regress into
@@ -1550,7 +1617,7 @@ public sealed class ChatSkeletonSmokeTests
         }
 
         throw new Xunit.Sdk.XunitException(
-            $"{message}{Environment.NewLine}Screenshot: {screenshotDescriptor}{Environment.NewLine}boot.log:{Environment.NewLine}{appData.ReadBootLogTail()}");
+            $"{message}{Environment.NewLine}Screenshot: {screenshotDescriptor}{Environment.NewLine}boot.log:{Environment.NewLine}{appData.ReadBootLogTail()}{Environment.NewLine}conversations:{Environment.NewLine}{appData.ReadConversationsJson()}");
     }
 
     private static void ActivateNavItem(
