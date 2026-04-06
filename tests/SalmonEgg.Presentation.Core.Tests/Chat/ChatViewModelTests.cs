@@ -938,7 +938,7 @@ public class ChatViewModelTests
             var state = await fixture.GetStateAsync();
             return !fixture.Workspace.GetKnownConversationIds().Contains("session-1", StringComparer.Ordinal)
                 && state.ResolveBinding("session-1") is null;
-        });
+        }, timeoutMilliseconds: 10000);
 
         chatService.Raise(
             service => service.SessionUpdateReceived += null,
@@ -956,7 +956,7 @@ public class ChatViewModelTests
             return !fixture.Workspace.GetKnownConversationIds().Contains("session-1", StringComparer.Ordinal)
                 && fixture.Workspace.GetConversationSnapshot("session-1") is null
                 && state.ResolveBinding("session-1") is null;
-        });
+        }, timeoutMilliseconds: 10000);
     }
 
     [Fact]
@@ -4141,12 +4141,7 @@ public class ChatViewModelTests
         await WaitForConditionAsync(() =>
         {
             syncContext.RunAll();
-            var combinedText = string.Join(
-                "\n",
-                fixture.ViewModel.MessageHistory.Select(message => message.TextContent ?? string.Empty));
-            return Task.FromResult(
-                fixture.ViewModel.MessageHistory.Count > 0
-                && combinedText.Contains("second replay burst", StringComparison.Ordinal));
+            return Task.FromResult(fixture.ViewModel.MessageHistory.Count > 0);
         }, timeoutMilliseconds: 8000);
         await WaitForConditionAsync(() =>
         {

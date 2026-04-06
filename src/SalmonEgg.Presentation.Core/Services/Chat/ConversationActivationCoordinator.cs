@@ -103,7 +103,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
         => RemoveConversationAsync(
             conversationId,
             activeConversationId,
-            static (workspace, id) => workspace.ArchiveConversation(id),
+            ConversationRemovalMode.Archive,
             cancellationToken);
 
     public Task<ConversationMutationResult> DeleteConversationAsync(
@@ -113,7 +113,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
         => RemoveConversationAsync(
             conversationId,
             activeConversationId,
-            static (workspace, id) => workspace.DeleteConversation(id),
+            ConversationRemovalMode.Delete,
             cancellationToken);
 
     private async Task SyncSelectedProfileFromConversationBindingAsync(
@@ -185,7 +185,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
     private async Task<ConversationMutationResult> RemoveConversationAsync(
         string conversationId,
         string? activeConversationId,
-        Action<ChatConversationWorkspace, string> removeConversation,
+        ConversationRemovalMode removalMode,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(conversationId))
@@ -198,35 +198,18 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             async token =>
             {
                 token.ThrowIfCancellationRequested();
-                var currentState = await _chatStore.State ?? ChatState.Empty;
-                var hydratedConversationId = currentState.HydratedConversationId;
-                var clearsActiveConversation = string.Equals(conversationId, hydratedConversationId, StringComparison.Ordinal)
-                    || string.Equals(activeConversationId, conversationId, StringComparison.Ordinal);
-                var previousBinding = currentState.ResolveBinding(conversationId);
+                var transactionContext = await CaptureRemovalTransactionContextAsync(conversationId, activeConversationId).ConfigureAwait(false);
 
                 try
                 {
-                    var clearBindingResult = await _bindingCommands.ClearBindingAsync(conversationId).ConfigureAwait(false);
-                    if (clearBindingResult.Status is not BindingUpdateStatus.Success)
-                    {
-                        return new ConversationMutationResult(false, false, clearBindingResult.ErrorMessage ?? "BindingClearFailed");
-                    }
-
-                    if (clearsActiveConversation)
-                    {
-                        await _chatStore.Dispatch(new SelectConversationAction(null));
-                    }
-
-                    removeConversation(_conversationWorkspace, conversationId);
-                    return new ConversationMutationResult(true, clearsActiveConversation, null);
+                    return await ExecuteRemovalTransactionAsync(
+                        transactionContext,
+                        removalMode).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     await TryCompensateMutationFailureAsync(
-                        conversationId,
-                        previousBinding,
-                        hydratedConversationId,
-                        clearsActiveConversation).ConfigureAwait(false);
+                        transactionContext).ConfigureAwait(false);
                     _logger.LogError(ex, "Conversation mutation failed (ConversationId={ConversationId})", conversationId);
                     return new ConversationMutationResult(false, false, ex.Message);
                 }
@@ -234,27 +217,73 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task TryCompensateMutationFailureAsync(
+    private async Task<RemovalTransactionContext> CaptureRemovalTransactionContextAsync(
         string conversationId,
-        ConversationBindingSlice? previousBinding,
-        string? previousHydratedConversationId,
-        bool clearedActiveConversation)
+        string? activeConversationId)
+    {
+        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var hydratedConversationId = currentState.HydratedConversationId;
+        var clearsActiveConversation = string.Equals(conversationId, hydratedConversationId, StringComparison.Ordinal)
+            || string.Equals(activeConversationId, conversationId, StringComparison.Ordinal);
+
+        return new RemovalTransactionContext(
+            conversationId,
+            clearsActiveConversation,
+            hydratedConversationId,
+            currentState.ResolveBinding(conversationId));
+    }
+
+    private async Task<ConversationMutationResult> ExecuteRemovalTransactionAsync(
+        RemovalTransactionContext context,
+        ConversationRemovalMode removalMode)
+    {
+        var clearBindingResult = await _bindingCommands.ClearBindingAsync(context.ConversationId).ConfigureAwait(false);
+        if (clearBindingResult.Status is not BindingUpdateStatus.Success)
+        {
+            return new ConversationMutationResult(false, false, clearBindingResult.ErrorMessage ?? "BindingClearFailed");
+        }
+
+        if (context.ClearsActiveConversation)
+        {
+            await _chatStore.Dispatch(new SelectConversationAction(null));
+        }
+
+        ApplyConversationRemoval(context.ConversationId, removalMode);
+        return new ConversationMutationResult(true, context.ClearsActiveConversation, null);
+    }
+
+    private void ApplyConversationRemoval(string conversationId, ConversationRemovalMode removalMode)
+    {
+        switch (removalMode)
+        {
+            case ConversationRemovalMode.Archive:
+                _conversationWorkspace.ArchiveConversation(conversationId);
+                break;
+            case ConversationRemovalMode.Delete:
+                _conversationWorkspace.DeleteConversation(conversationId);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(removalMode), removalMode, "Unknown removal mode.");
+        }
+    }
+
+    private async Task TryCompensateMutationFailureAsync(RemovalTransactionContext context)
     {
         try
         {
-            if (previousBinding is not null)
+            if (context.PreviousBinding is not null)
             {
                 await _bindingCommands
                     .UpdateBindingAsync(
-                        conversationId,
-                        previousBinding.RemoteSessionId,
-                        previousBinding.ProfileId)
+                        context.ConversationId,
+                        context.PreviousBinding.RemoteSessionId,
+                        context.PreviousBinding.ProfileId)
                     .ConfigureAwait(false);
             }
 
-            if (clearedActiveConversation)
+            if (context.ClearsActiveConversation)
             {
-                await _chatStore.Dispatch(new SelectConversationAction(previousHydratedConversationId));
+                await _chatStore.Dispatch(new SelectConversationAction(context.PreviousHydratedConversationId));
             }
         }
         catch (Exception compensationEx)
@@ -262,7 +291,19 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             _logger.LogWarning(
                 compensationEx,
                 "Conversation mutation compensation failed (ConversationId={ConversationId})",
-                conversationId);
+                context.ConversationId);
         }
+    }
+
+    private sealed record RemovalTransactionContext(
+        string ConversationId,
+        bool ClearsActiveConversation,
+        string? PreviousHydratedConversationId,
+        ConversationBindingSlice? PreviousBinding);
+
+    private enum ConversationRemovalMode
+    {
+        Archive,
+        Delete
     }
 }
