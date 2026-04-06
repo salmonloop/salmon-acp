@@ -71,6 +71,27 @@ public sealed class NavigationSmokeTests
     }
 
     [SkippableFact]
+    public void TitleBarPanelButtons_Toggle_ChangesBottomPanelState()
+    {
+        using var _ = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01");
+        session.ActivateElement(sessionItem);
+        session.FindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(10));
+
+        var bottomPanelButton = session.FindByAutomationId("TitleBar.BottomPanel");
+        Skip.IfNot(bottomPanelButton.Patterns.Toggle.IsSupported, "TitleBar.BottomPanel does not expose TogglePattern in current UIA backend.");
+
+        var before = bottomPanelButton.Patterns.Toggle.Pattern.ToggleState.Value;
+        bottomPanelButton.Patterns.Toggle.Pattern.Toggle();
+        Thread.Sleep(120);
+
+        var after = session.FindByAutomationId("TitleBar.BottomPanel").Patterns.Toggle.Pattern.ToggleState.Value;
+        Assert.NotEqual(before, after);
+    }
+
+    [SkippableFact]
     public void MoreSessionsDialog_SelectsOverflowSession_AndUpdatesChatHeader()
     {
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(sessionCount: 21);

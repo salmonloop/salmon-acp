@@ -499,6 +499,7 @@
                                 Margin="0,0,8,0">
                         <ToggleButton x:Name="BottomPanelButton"
                                        x:Uid="BottomPanelButton"
+                                       AutomationProperties.AutomationId="TitleBar.BottomPanel"
                                        Tag="BottomPanel"
                                        Style="{StaticResource TitleBarToggleButtonStyle}"
                                        Content="Icon"
@@ -507,6 +508,7 @@
                                        IsChecked="{x:Bind LayoutVM.BottomPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Dock}" />
                         <ToggleButton x:Name="DiffPanelButton"
                                       x:Uid="DiffPanelButton"
+                                      AutomationProperties.AutomationId="TitleBar.DiffPanel"
                                       Tag="Diff"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       AutomationProperties.Name=""
@@ -516,6 +518,7 @@
                                       IsChecked="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=Diff}" />
                         <ToggleButton x:Name="TodoPanelButton"
                                       x:Uid="TodoPanelButton"
+                                      AutomationProperties.AutomationId="TitleBar.TodoPanel"
                                       Tag="Todo"
                                       Style="{StaticResource TitleBarToggleButtonStyle}"
                                       AutomationProperties.Name=""

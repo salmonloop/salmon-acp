@@ -208,6 +208,20 @@ internal sealed class WindowsGuiAppSession : IDisposable
     public void InvokeButton(string automationId)
     {
         var button = FindByAutomationId(automationId);
+
+        if (automationId.StartsWith("TitleBar.", StringComparison.Ordinal))
+        {
+            try
+            {
+                var point = button.GetClickablePoint();
+                Mouse.Click(point);
+                return;
+            }
+            catch
+            {
+            }
+        }
+
         ActivateElement(button);
     }
 
@@ -322,6 +336,24 @@ internal sealed class WindowsGuiAppSession : IDisposable
         try
         {
             return element.Name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public string? TryGetHelpText(string automationId, TimeSpan? timeout = null)
+    {
+        var element = TryFindByAutomationId(automationId, timeout ?? TimeSpan.FromSeconds(2));
+        if (element == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return element.Properties.HelpText.TryGetValue(out var value) ? value : null;
         }
         catch
         {
