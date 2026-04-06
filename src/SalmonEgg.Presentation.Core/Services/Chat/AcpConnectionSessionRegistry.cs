@@ -15,6 +15,20 @@ public sealed record AcpConnectionSession(
     public DateTime LastUsedUtc { get; init; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// Publishes fine-grained connection lifecycle events keyed by profileId.
+/// Subscribers (e.g. AgentProfileItemViewModel) can react without polling the registry.
+/// NOTE: Events may be raised on any thread; subscribers must dispatch to the UI thread themselves.
+/// </summary>
+public interface IAcpConnectionSessionEvents
+{
+    /// <summary>
+    /// Raised after a session is upserted (isConnected=true) or removed (isConnected=false).
+    /// Parameters: (profileId, isConnected).
+    /// </summary>
+    event Action<string, bool>? ProfileConnectionChanged;
+}
+
 public interface IAcpConnectionSessionRegistry
 {
     bool TryGetByProfile(string profileId, out AcpConnectionSession session);
@@ -34,10 +48,13 @@ public interface IAcpConnectionSessionRegistry
     IReadOnlyList<AcpConnectionSession> GetSnapshot();
 }
 
-public sealed class InMemoryAcpConnectionSessionRegistry : IAcpConnectionSessionRegistry
+public sealed class InMemoryAcpConnectionSessionRegistry : IAcpConnectionSessionRegistry, IAcpConnectionSessionEvents
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, AcpConnectionSession> _sessionsByProfile = new(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public event Action<string, bool>? ProfileConnectionChanged;
 
     public bool TryGetByProfile(string profileId, out AcpConnectionSession session)
     {
@@ -76,19 +93,33 @@ public sealed class InMemoryAcpConnectionSessionRegistry : IAcpConnectionSession
                 LastUsedUtc = session.LastUsedUtc == default ? DateTime.UtcNow : session.LastUsedUtc
             };
         }
+
+        // Raise outside the lock to avoid potential deadlocks from re-entrant subscribers.
+        ProfileConnectionChanged?.Invoke(session.ProfileId, true);
     }
 
     public bool RemoveByProfile(string profileId)
     {
+        bool removed;
         lock (_gate)
         {
-            return _sessionsByProfile.Remove(profileId);
+            removed = _sessionsByProfile.Remove(profileId);
         }
+
+        if (removed)
+        {
+            ProfileConnectionChanged?.Invoke(profileId, false);
+        }
+
+        return removed;
     }
 
     public bool RemoveByService(IChatService service, out string profileId)
     {
         ArgumentNullException.ThrowIfNull(service);
+        bool removed = false;
+        profileId = string.Empty;
+
         lock (_gate)
         {
             foreach (var pair in _sessionsByProfile)
@@ -97,13 +128,18 @@ public sealed class InMemoryAcpConnectionSessionRegistry : IAcpConnectionSession
                 {
                     profileId = pair.Key;
                     _sessionsByProfile.Remove(pair.Key);
-                    return true;
+                    removed = true;
+                    break;
                 }
             }
         }
 
-        profileId = string.Empty;
-        return false;
+        if (removed)
+        {
+            ProfileConnectionChanged?.Invoke(profileId, false);
+        }
+
+        return removed;
     }
 
     public IReadOnlyList<AcpConnectionSession> RemoveWhere(Func<AcpConnectionSession, bool> predicate)
@@ -128,6 +164,16 @@ public sealed class InMemoryAcpConnectionSessionRegistry : IAcpConnectionSession
             foreach (var key in keysToRemove)
             {
                 _sessionsByProfile.Remove(key);
+            }
+        }
+
+        // Raise after all mutations are complete so subscribers see a consistent view.
+        var handler = ProfileConnectionChanged;
+        if (handler != null)
+        {
+            foreach (var session in removed)
+            {
+                handler(session.ProfileId, false);
             }
         }
 

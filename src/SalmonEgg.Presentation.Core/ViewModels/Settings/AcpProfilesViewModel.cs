@@ -8,15 +8,26 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
 
-public partial class AcpProfilesViewModel : ObservableObject
+public partial class AcpProfilesViewModel : ObservableObject, IDisposable
 {
     private readonly IConfigurationService _configurationService;
     private readonly AppPreferencesViewModel _preferences;
     private readonly ILogger<AcpProfilesViewModel> _logger;
     private readonly SynchronizationContext _syncContext;
+
+    // ── Dependencies for per-profile item ViewModels ─────────────────────────
+    // Null when the registry/events are not registered (e.g., lightweight contexts
+    // such as profile editing that don't need connection status).
+    private readonly IAcpConnectionSessionRegistry? _sessionRegistry;
+    private readonly IAcpConnectionSessionEvents? _sessionEvents;
+    private readonly ISettingsAcpConnectionCommands? _connectionCommands;
+    private readonly ILoggerFactory? _loggerFactory;
+
+    // ── Existing contract (kept for backward-compat with ChatViewModel etc.) ──
 
     [ObservableProperty]
     private ObservableCollection<ServerConfiguration> _profiles = new();
@@ -25,8 +36,42 @@ public partial class AcpProfilesViewModel : ObservableObject
     private ServerConfiguration? _selectedProfile;
 
     [ObservableProperty]
+    private AgentProfileItemViewModel? _selectedProfileItem;
+
+    [ObservableProperty]
     private bool _isLoading;
 
+    partial void OnSelectedProfileItemChanged(AgentProfileItemViewModel? value)
+    {
+        if (value != null)
+        {
+            var profile = Profiles.FirstOrDefault(p => p.Id == value.ProfileId);
+            if (SelectedProfile != profile)
+            {
+                SelectedProfile = profile;
+            }
+        }
+        else
+        {
+            SelectedProfile = null;
+        }
+    }
+
+    // ── New: per-profile item VMs for the Settings card list ─────────────────
+
+    /// <summary>
+    /// One <see cref="AgentProfileItemViewModel"/> per profile, each carrying its own
+    /// connection state. Bound by <c>AcpConnectionSettingsPage</c> instead of raw
+    /// <see cref="Profiles"/>. Populated by <see cref="RefreshAsync"/>.
+    /// </summary>
+    public ObservableCollection<AgentProfileItemViewModel> ProfileItems { get; } = new();
+
+    // ── Constructors ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Minimal constructor (no connection-state support). Used in scenarios that only
+    /// need profile CRUD without live status (e.g., DiscoverSessionsViewModel).
+    /// </summary>
     public AcpProfilesViewModel(
         IConfigurationService configurationService,
         AppPreferencesViewModel preferences,
@@ -37,6 +82,27 @@ public partial class AcpProfilesViewModel : ObservableObject
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
     }
+
+    /// <summary>
+    /// Full constructor with connection-state support. Used by the Settings page.
+    /// </summary>
+    public AcpProfilesViewModel(
+        IConfigurationService configurationService,
+        AppPreferencesViewModel preferences,
+        ILogger<AcpProfilesViewModel> logger,
+        IAcpConnectionSessionRegistry sessionRegistry,
+        IAcpConnectionSessionEvents sessionEvents,
+        ISettingsAcpConnectionCommands connectionCommands,
+        ILoggerFactory loggerFactory)
+        : this(configurationService, preferences, logger)
+    {
+        _sessionRegistry = sessionRegistry ?? throw new ArgumentNullException(nameof(sessionRegistry));
+        _sessionEvents = sessionEvents ?? throw new ArgumentNullException(nameof(sessionEvents));
+        _connectionCommands = connectionCommands ?? throw new ArgumentNullException(nameof(connectionCommands));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+    }
+
+    // ── Public helpers (unchanged contract) ───────────────────────────────────
 
     public async Task RefreshIfEmptyAsync()
     {
@@ -51,6 +117,8 @@ public partial class AcpProfilesViewModel : ObservableObject
         _preferences.LastSelectedServerId = profile?.Id;
     }
 
+    // ── Commands ──────────────────────────────────────────────────────────────
+
     [RelayCommand]
     public async Task RefreshAsync()
     {
@@ -63,14 +131,13 @@ public partial class AcpProfilesViewModel : ObservableObject
             var ordered = configs.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 
             var tcs = new TaskCompletionSource<bool>();
-            
-            // Re-capture current sync context if possible, or use the one from constructor
             var syncContext = SynchronizationContext.Current ?? _syncContext;
-            
+
             syncContext.Post(_ =>
             {
                 try
                 {
+                    // ── Update legacy flat list (backward compat) ────────────
                     Profiles.Clear();
                     foreach (var cfg in ordered)
                     {
@@ -81,6 +148,10 @@ public partial class AcpProfilesViewModel : ObservableObject
                     {
                         SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
                     }
+
+                    // ── Rebuild per-profile item VMs ─────────────────────────
+                    RebuildProfileItems(ordered);
+
                     tcs.TrySetResult(true);
                 }
                 catch (Exception ex)
@@ -113,7 +184,7 @@ public partial class AcpProfilesViewModel : ObservableObject
         try
         {
             await _configurationService.DeleteConfigurationAsync(profile.Id).ConfigureAwait(false);
-            
+
             var syncContext = SynchronizationContext.Current ?? _syncContext;
             syncContext.Post(_ =>
             {
@@ -121,6 +192,14 @@ public partial class AcpProfilesViewModel : ObservableObject
                 if (SelectedProfile?.Id == profile.Id)
                 {
                     SelectedProfile = null;
+                }
+
+                // Remove the matching item VM.
+                var item = ProfileItems.FirstOrDefault(vm => vm.ProfileId == profile.Id);
+                if (item != null)
+                {
+                    ProfileItems.Remove(item);
+                    item.Dispose();
                 }
             }, null);
         }
@@ -164,6 +243,61 @@ public partial class AcpProfilesViewModel : ObservableObject
         await SaveAsync(profile).ConfigureAwait(false);
     }
 
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Rebuilds <see cref="ProfileItems"/> to match <paramref name="ordered"/>,
+    /// reusing existing item VMs where possible to preserve live state.
+    /// Must be called on the UI thread.
+    /// </summary>
+    private void RebuildProfileItems(ServerConfiguration[] ordered)
+    {
+        // Dispose item VMs that no longer have a corresponding config.
+        var toRemove = ProfileItems
+            .Where(vm => ordered.All(cfg => cfg.Id != vm.ProfileId))
+            .ToArray();
+
+        foreach (var vm in toRemove)
+        {
+            ProfileItems.Remove(vm);
+            vm.Dispose();
+        }
+
+        // Add or update item VMs in order.
+        for (int i = 0; i < ordered.Length; i++)
+        {
+            var config = ordered[i];
+            var existing = ProfileItems.FirstOrDefault(vm => vm.ProfileId == config.Id);
+
+            if (existing == null)
+            {
+                var itemVm = CreateProfileItemViewModel(config);
+                if (itemVm != null)
+                {
+                    ProfileItems.Insert(i, itemVm);
+                }
+            }
+            // Note: we don't re-order existing VMs for performance (a future enhancement).
+        }
+    }
+
+    private AgentProfileItemViewModel? CreateProfileItemViewModel(ServerConfiguration config)
+    {
+        // Only create item VMs when the connection dependencies were provided.
+        if (_sessionRegistry == null || _sessionEvents == null ||
+            _connectionCommands == null || _loggerFactory == null)
+        {
+            return null;
+        }
+
+        return new AgentProfileItemViewModel(
+            config,
+            _sessionRegistry,
+            _sessionEvents,
+            _connectionCommands,
+            _loggerFactory.CreateLogger<AgentProfileItemViewModel>());
+    }
+
     private void SelectById(string? id)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -174,7 +308,19 @@ public partial class AcpProfilesViewModel : ObservableObject
         var syncContext = SynchronizationContext.Current ?? _syncContext;
         syncContext.Post(_ =>
         {
-            SelectedProfile = Profiles.FirstOrDefault(p => p.Id == id);
+            var profile = Profiles.FirstOrDefault(p => p.Id == id);
+            SelectedProfile = profile;
+            SelectedProfileItem = ProfileItems.FirstOrDefault(vm => vm.ProfileId == id);
         }, null);
+    }
+
+    // ── IDisposable ───────────────────────────────────────────────────────────
+
+    public void Dispose()
+    {
+        foreach (var vm in ProfileItems)
+        {
+            vm.Dispose();
+        }
     }
 }

@@ -52,16 +52,16 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             );
 
             _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("initialize"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var initTrigger = Task.Run(async () => {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(1, JsonSerializer.SerializeToElement(initResponse, parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+                .Returns<string, CancellationToken>((_, _) =>
+                {
+                    var response = new JsonRpcResponse(1, JsonSerializer.SerializeToElement(initResponse, parser.Options));
+                    _transportMock.Raise(
+                        t => t.MessageReceived += null,
+                        new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+                    return Task.FromResult(true);
+                });
 
             await client.InitializeAsync(new InitializeParams(new ClientInfo("Test", "1.0.0"), new ClientCapabilities()));
-            await initTrigger;
 
             return client;
         }

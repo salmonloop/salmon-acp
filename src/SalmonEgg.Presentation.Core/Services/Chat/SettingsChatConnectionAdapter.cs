@@ -127,6 +127,27 @@ internal sealed class CompositeSettingsChatConnection : ISettingsChatConnection
     public Task ConnectToAcpProfileAsync(ServerConfiguration profile) => _commands.ConnectToAcpProfileAsync(profile);
 }
 
+/// <summary>
+/// Breaks the DI circular dependency between <see cref="AcpProfilesViewModel"/> and <see cref="ChatViewModel"/>
+/// by deferring resolution of <see cref="ISettingsChatConnection"/> until the first connect/disconnect call.
+/// </summary>
+public sealed class LazySettingsAcpConnectionCommandsAdapter : ISettingsAcpConnectionCommands
+{
+    private readonly Lazy<ISettingsChatConnection> _inner;
+
+    public LazySettingsAcpConnectionCommandsAdapter(Lazy<ISettingsChatConnection> inner)
+    {
+        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+    }
+
+    public IAsyncRelayCommand InitializeAndConnectCommand => _inner.Value.InitializeAndConnectCommand;
+
+    public IAsyncRelayCommand DisconnectCommand => _inner.Value.DisconnectCommand;
+
+    public Task ConnectToAcpProfileAsync(ServerConfiguration profile)
+        => _inner.Value.ConnectToAcpProfileAsync(profile);
+}
+
 public sealed class SettingsChatConnectionAdapter : ISettingsChatConnection
 {
     private readonly ChatViewModel _chatViewModel;

@@ -22,6 +22,8 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
     private readonly ISettingsAcpConnectionState _connectionState;
     private readonly ISettingsAcpConnectionCommands _connectionCommands;
     private readonly ISettingsAcpTransportConfiguration _transportConfig;
+    private readonly IAcpConnectionSessionRegistry? _registry;
+    private readonly IAcpConnectionSessionEvents? _sessionEvents;
     private bool _suppressPathMappingProjection;
     private bool _disposed;
 
@@ -49,6 +51,18 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     [ObservableProperty]
     private HydrationCompletionModeOptionViewModel? _selectedHydrationCompletionMode;
+
+    [ObservableProperty]
+    private string? _selectedProfileAgentName;
+
+    [ObservableProperty]
+    private string? _selectedProfileAgentVersion;
+
+    [ObservableProperty]
+    private string? _selectedProfileStatus;
+
+    [ObservableProperty]
+    private string? _selectedProfileEndpoint;
 
     public string SelectedTransportName => SelectedTransport?.Name ?? string.Empty;
     public string SelectedHydrationCompletionModeDescription => SelectedHydrationCompletionMode?.Description ?? string.Empty;
@@ -115,7 +129,16 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AcpProfilesViewModel profiles,
         AppPreferencesViewModel preferences,
         ILogger<AcpConnectionSettingsViewModel> logger)
-        : this(chat, chat, chat.TransportConfig, profiles, preferences, logger, chat)
+        : this(
+            chat,
+            chat,
+            chat.TransportConfig,
+            profiles,
+            registry: null,
+            sessionEvents: null,
+            preferences,
+            logger,
+            chat)
     {
     }
 
@@ -126,7 +149,36 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AcpProfilesViewModel profiles,
         AppPreferencesViewModel preferences,
         ILogger<AcpConnectionSettingsViewModel> logger)
-        : this(connectionState, connectionCommands, transportConfig, profiles, preferences, logger, null)
+        : this(
+            connectionState,
+            connectionCommands,
+            transportConfig,
+            profiles,
+            registry: null,
+            sessionEvents: null,
+            preferences,
+            logger,
+            chatFacade: null)
+    {
+    }
+
+    public AcpConnectionSettingsViewModel(
+        ISettingsChatConnection chat,
+        AcpProfilesViewModel profiles,
+        IAcpConnectionSessionRegistry registry,
+        IAcpConnectionSessionEvents sessionEvents,
+        AppPreferencesViewModel preferences,
+        ILogger<AcpConnectionSettingsViewModel> logger)
+        : this(
+            chat,
+            chat,
+            chat.TransportConfig,
+            profiles,
+            registry,
+            sessionEvents,
+            preferences,
+            logger,
+            chat)
     {
     }
 
@@ -135,6 +187,8 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         ISettingsAcpConnectionCommands connectionCommands,
         ISettingsAcpTransportConfiguration transportConfig,
         AcpProfilesViewModel profiles,
+        IAcpConnectionSessionRegistry? registry,
+        IAcpConnectionSessionEvents? sessionEvents,
         AppPreferencesViewModel preferences,
         ILogger<AcpConnectionSettingsViewModel> logger,
         ISettingsChatConnection? chatFacade)
@@ -142,10 +196,12 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
         _connectionCommands = connectionCommands ?? throw new ArgumentNullException(nameof(connectionCommands));
         _transportConfig = transportConfig ?? throw new ArgumentNullException(nameof(transportConfig));
-        Chat = chatFacade ?? new CompositeSettingsChatConnection(_connectionState, _connectionCommands, _transportConfig);
         Profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
+        _registry = registry;
+        _sessionEvents = sessionEvents;
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        Chat = chatFacade ?? new CompositeSettingsChatConnection(_connectionState, _connectionCommands, _transportConfig);
 
         SelectedTransport = TransportOptions.FirstOrDefault(o => o.Type == _transportConfig.SelectedTransportType)
                             ?? TransportOptions.First();
@@ -156,13 +212,20 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         Profiles.Profiles.CollectionChanged += OnProfilesCollectionChanged;
         _preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _preferences.ProjectPathMappings.CollectionChanged += OnProjectPathMappingsCollectionChanged;
+        if (_sessionEvents != null)
+        {
+            _sessionEvents.ProfileConnectionChanged += OnProfileConnectionChanged;
+        }
+
         SelectedHydrationCompletionMode = ResolveHydrationCompletionModeOption(_preferences.AcpHydrationCompletionMode);
         RefreshPathMappingRows();
+        RefreshDiagnostics();
     }
 
     private void OnProfilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(AgentDisplayName));
+        RefreshDiagnostics();
         RefreshPathMappingRows();
     }
 
@@ -171,6 +234,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         if (e.PropertyName == nameof(AppPreferencesViewModel.LastSelectedServerId))
         {
             OnPropertyChanged(nameof(AgentDisplayName));
+            RefreshDiagnostics();
         }
 
         if (e.PropertyName == nameof(AppPreferencesViewModel.AcpHydrationCompletionMode))
@@ -185,11 +249,13 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     private void OnProfilesPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(AcpProfilesViewModel.SelectedProfile))
+        if (e.PropertyName != nameof(AcpProfilesViewModel.SelectedProfile) &&
+            e.PropertyName != nameof(AcpProfilesViewModel.SelectedProfileItem))
         {
             return;
         }
 
+        RefreshDiagnostics();
         OnPropertyChanged(nameof(CanEditPathMappings));
         AddPathMappingCommand.NotifyCanExecuteChanged();
         RefreshPathMappingRows();
@@ -309,6 +375,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         finally
         {
             OnPropertyChanged(nameof(AgentDisplayName));
+            RefreshDiagnostics();
         }
     }
 
@@ -339,6 +406,10 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to handle ACP connection toggle (ShouldConnect={ShouldConnect})", shouldConnect);
+        }
+        finally
+        {
+            RefreshDiagnostics();
         }
     }
 
@@ -483,6 +554,47 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         Profiles.Profiles.CollectionChanged -= OnProfilesCollectionChanged;
         _preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         _preferences.ProjectPathMappings.CollectionChanged -= OnProjectPathMappingsCollectionChanged;
+        if (_sessionEvents != null)
+        {
+            _sessionEvents.ProfileConnectionChanged -= OnProfileConnectionChanged;
+        }
+    }
+
+    private void OnProfileConnectionChanged(string profileId, bool isConnected)
+    {
+        if (profileId == Profiles.SelectedProfile?.Id)
+        {
+            RefreshDiagnostics();
+        }
+    }
+
+    private void RefreshDiagnostics()
+    {
+        var profile = Profiles.SelectedProfileItem;
+        var profileId = profile?.ProfileId;
+        if (profileId != null && _registry != null)
+        {
+            SelectedProfileEndpoint = profile?.EndpointDescription;
+            if (_registry.TryGetByProfile(profileId, out var session))
+            {
+                SelectedProfileAgentName = session.InitializeResponse?.AgentInfo?.Name;
+                SelectedProfileAgentVersion = session.InitializeResponse?.AgentInfo?.Version;
+                SelectedProfileStatus = "Connected";
+            }
+            else
+            {
+                SelectedProfileAgentName = null;
+                SelectedProfileAgentVersion = null;
+                SelectedProfileStatus = "Disconnected";
+            }
+        }
+        else
+        {
+            SelectedProfileAgentName = _connectionState.AgentName;
+            SelectedProfileAgentVersion = _connectionState.AgentVersion;
+            SelectedProfileStatus = ConnectionStatusText;
+            SelectedProfileEndpoint = CurrentEndpointDisplay;
+        }
     }
 }
 

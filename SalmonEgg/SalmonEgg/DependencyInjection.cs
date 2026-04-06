@@ -55,10 +55,9 @@ public static class DependencyInjection
         ConfigureLogging(services);
         RegisterDomainServices(services);
         RegisterInfrastructureServices(services);
-        RegisterApplicationServices(services);
-        RegisterViewModels(services);
         return services;
     }
+
 
     private static void ConfigureLogging(IServiceCollection services)
     {
@@ -128,30 +127,13 @@ public static class DependencyInjection
         services.AddSingleton<IPlatformCapabilityService, PlatformCapabilityService>();
         services.AddSingleton<IAppStartupService, AppStartupService>();
         services.AddSingleton<IAppLanguageService, AppLanguageService>();
-
-        // Configuration Manager
         services.AddSingleton<IConfigurationService, ConfigurationManager>();
-
-        // Validator
-        // Validator
         services.AddSingleton<IValidator<ServerConfiguration>, ServerConfigurationValidator>();
-
-        // Transport Layer Factory
         services.AddSingleton<SalmonEgg.Domain.Interfaces.ITransportFactory, TransportFactory>();
-
-
-        // Diagnostics & platform shell
         services.AddSingleton<IDiagnosticsBundleService, SalmonEgg.Infrastructure.Services.DiagnosticsBundleService>();
         services.AddSingleton<ILiveLogStreamService, SalmonEgg.Infrastructure.Services.LiveLogStreamService>();
         services.AddSingleton<IPlatformShellService, SalmonEgg.Infrastructure.Services.PlatformShellService>();
 
-        }
-
-    private static void RegisterApplicationServices(IServiceCollection services)
-    {
-        var chatServiceDecorator = CreateChatServiceDecorator();
-
-        // MVUX Chat Store
         services.AddSingleton<IState<ChatState>>(sp => State.Value(sp, () => ChatState.Empty));
         services.AddSingleton<IChatStore, ChatStore>();
         services.AddSingleton<IState<ChatConnectionState>>(sp => State.Value(sp, () => ChatConnectionState.Empty));
@@ -160,7 +142,6 @@ public static class DependencyInjection
             new AcpConnectionCoordinator(
                 sp.GetRequiredService<IChatConnectionStore>(),
                 sp.GetRequiredService<ILogger<AcpConnectionCoordinator>>()));
-        services.AddSingleton<IAcpConnectionSessionRegistry, InMemoryAcpConnectionSessionRegistry>();
         services.AddSingleton(sp =>
             AcpConnectionEvictionOptionsLoader.Load(
                 sp.GetRequiredService<IAppSettingsService>(),
@@ -184,7 +165,6 @@ public static class DependencyInjection
             new AcpSessionCommandOrchestrator(
                 sp.GetRequiredService<ILogger<AcpSessionCommandOrchestrator>>()));
 
-        // MVUX Shell Layout Store
         services.AddSingleton<IShellLayoutStore>(sp =>
         {
             var initialState = ShellLayoutState.Default;
@@ -194,17 +174,13 @@ public static class DependencyInjection
             return new ShellLayoutStore(state, snapshot, initialState, initialSnapshot);
         });
         services.AddSingleton<IShellLayoutMetricsSink, ShellLayoutMetricsSink>();
-
-        // Use Cases
         services.AddTransient<ConnectToServerUseCase>();
         services.AddTransient<DisconnectUseCase>();
         services.AddTransient<SendMessageUseCase>();
-
-        // Application Services
         services.AddSingleton<IConnectionService, ConnectionService>();
         services.AddSingleton<IMessageService, MessageService>();
 
-        // Chat Service Factory (supporting dynamic creation)
+        var chatServiceDecorator = CreateChatServiceDecorator();
         services.AddSingleton<ChatServiceFactory>(sp =>
         {
             var transportFactory = sp.GetRequiredService<ITransportFactory>();
@@ -222,42 +198,6 @@ public static class DependencyInjection
                 logger,
                 chatServiceDecorator);
         });
-        services.AddSingleton<IAcpChatServiceFactory>(sp =>
-            new AcpChatServiceFactoryAdapter(sp.GetRequiredService<ChatServiceFactory>()));
-        services.AddSingleton<IAcpConnectionCommands>(sp =>
-        {
-            _ = sp.GetRequiredService<AcpConnectionEvictionOptionsBridge>();
-            return new AcpChatCoordinator(
-                sp.GetRequiredService<IAcpChatServiceFactory>(),
-                sp.GetRequiredService<ILogger<AcpChatCoordinator>>(),
-                sp.GetRequiredService<IAcpConnectionCoordinator>(),
-                sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
-                sp.GetRequiredService<IAcpConnectionSessionCleaner>(),
-                sp.GetRequiredService<IAcpConnectionPoolManager>(),
-                sp.GetRequiredService<IAcpSessionCommandOrchestrator>());
-        });
-
-        // Chat Service (default instance using default transport)
-        services.AddSingleton<IChatService>(sp =>
-        {
-            var factory = sp.GetRequiredService<ChatServiceFactory>();
-            return factory.CreateDefaultChatService();
-        });
-
-        // Error Recovery Service
-        services.AddSingleton<IErrorRecoveryService>(sp =>
-        {
-            var chatService = sp.GetRequiredService<IChatService>();
-            var pathValidator = sp.GetRequiredService<IPathValidator>();
-            var errorLogger = sp.GetRequiredService<IErrorLogger>();
-            return new ErrorRecoveryService(chatService, pathValidator, errorLogger);
-        });
-    }
-
-    private static void RegisterViewModels(IServiceCollection services)
-    {
-        // Existing ViewModels (Legacy)
-        services.AddTransient<MainViewModel>();
         services.AddTransient<ConfigurationEditorViewModel>();
         services.AddSingleton<IConversationWorkspacePreferences>(sp =>
             new AppPreferencesConversationWorkspacePreferences(sp.GetRequiredService<AppPreferencesViewModel>()));
@@ -274,8 +214,38 @@ public static class DependencyInjection
             new NavigationProjectPreferencesAdapter(sp.GetRequiredService<AppPreferencesViewModel>()));
         services.AddSingleton<INavigationProjectSelectionStore>(sp =>
             new NavigationProjectSelectionStoreAdapter(sp.GetRequiredService<AppPreferencesViewModel>()));
+        // ACP chat service factory — adapts ChatServiceFactory to the IAcpChatServiceFactory seam
+        // used by AcpChatCoordinator.
+        services.AddSingleton<IAcpChatServiceFactory>(sp =>
+            new AcpChatServiceFactoryAdapter(sp.GetRequiredService<ChatServiceFactory>()));
+        services.AddSingleton<IAcpConnectionCommands>(sp =>
+        {
+            _ = sp.GetRequiredService<AcpConnectionEvictionOptionsBridge>();
+            return new AcpChatCoordinator(
+                sp.GetRequiredService<IAcpChatServiceFactory>(),
+                sp.GetRequiredService<ILogger<AcpChatCoordinator>>(),
+                sp.GetRequiredService<IAcpConnectionCoordinator>(),
+                sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
+                sp.GetRequiredService<IAcpConnectionSessionCleaner>(),
+                sp.GetRequiredService<IAcpConnectionPoolManager>(),
+                sp.GetRequiredService<IAcpSessionCommandOrchestrator>());
+        });
+        services.AddSingleton<IChatService>(sp =>
+        {
+            var factory = sp.GetRequiredService<ChatServiceFactory>();
+            return factory.CreateDefaultChatService();
+        });
+        services.AddSingleton<IErrorRecoveryService>(sp =>
+        {
+            var chatService = sp.GetRequiredService<IChatService>();
+            var pathValidator = sp.GetRequiredService<IPathValidator>();
+            var errorLogger = sp.GetRequiredService<IErrorLogger>();
+            return new ErrorRecoveryService(chatService, pathValidator, errorLogger);
+        });
+
         services.AddSingleton<ChatViewModel>();
         services.AddSingleton<IConversationSessionSwitcher>(sp => sp.GetRequiredService<ChatViewModel>());
+
         services.AddSingleton<ChatShellViewModel>();
         services.AddSingleton<ConversationCatalogFacade>();
         services.AddSingleton<IConversationCatalog>(sp => sp.GetRequiredService<ConversationCatalogFacade>());
@@ -376,14 +346,49 @@ public static class DependencyInjection
         // General settings
         services.AddSingleton<GeneralSettingsViewModel>();
 
-        // ACP connection profiles (server presets)
-        services.AddSingleton<AcpProfilesViewModel>();
+        // ACP session registry: single source of truth for per-profile connection sessions.
+        // Registered as a singleton concrete type first, then aliased to both interfaces
+        // so ChatViewModel coordinator and Settings-page ViewModels share the same instance.
+        services.AddSingleton<InMemoryAcpConnectionSessionRegistry>();
+        services.AddSingleton<IAcpConnectionSessionRegistry>(sp =>
+            sp.GetRequiredService<InMemoryAcpConnectionSessionRegistry>());
+        services.AddSingleton<IAcpConnectionSessionEvents>(sp =>
+            sp.GetRequiredService<InMemoryAcpConnectionSessionRegistry>());
+
+        // ISettingsAcpConnectionCommands is implemented by ISettingsChatConnection.
+        // Use a Lazy wrapper to defer resolution and break the circular dependency:
+        //   AcpProfilesViewModel → ISettingsAcpConnectionCommands
+        //                        → ISettingsChatConnection
+        //                        → ChatViewModel
+        //                        → AcpProfilesViewModel  (cycle!).
+        // The Lazy<T> is only instantiated when AgentProfileItemViewModel first calls ConnectAsync,
+        // by which time the DI graph is fully resolved.
+        services.AddSingleton<ISettingsAcpConnectionCommands>(sp =>
+        {
+            var lazy = new Lazy<ISettingsChatConnection>(
+                () => sp.GetRequiredService<ISettingsChatConnection>());
+            return new LazySettingsAcpConnectionCommandsAdapter(lazy);
+        });
+
+        // ACP connection profiles — use full constructor so ProfileItems gets connection dependencies.
+        services.AddSingleton<AcpProfilesViewModel>(sp =>
+            new AcpProfilesViewModel(
+                sp.GetRequiredService<IConfigurationService>(),
+                sp.GetRequiredService<AppPreferencesViewModel>(),
+                sp.GetRequiredService<ILogger<AcpProfilesViewModel>>(),
+                sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
+                sp.GetRequiredService<IAcpConnectionSessionEvents>(),
+                sp.GetRequiredService<ISettingsAcpConnectionCommands>(),
+                sp.GetRequiredService<ILoggerFactory>()));
+
 
         // ACP connection settings page view model (wraps Chat + Profiles)
         services.AddSingleton<AcpConnectionSettingsViewModel>(sp =>
             new AcpConnectionSettingsViewModel(
                 sp.GetRequiredService<ISettingsChatConnection>(),
                 sp.GetRequiredService<AcpProfilesViewModel>(),
+                sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
+                sp.GetRequiredService<IAcpConnectionSessionEvents>(),
                 sp.GetRequiredService<AppPreferencesViewModel>(),
                 sp.GetRequiredService<ILogger<AcpConnectionSettingsViewModel>>()));
 

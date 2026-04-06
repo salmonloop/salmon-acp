@@ -30,78 +30,6 @@
         <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
             <controls:ResponsiveSettingsHost.Child>
                 <StackPanel Spacing="28">
-                    <!-- Overview -->
-                    <StackPanel Spacing="12">
-                        <TextBlock x:Uid="Acp_OverviewTitle"
-                                   Text="当前连接状态"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
-                                   Foreground="{ThemeResource AccentBrush}"/>
-
-                        <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="16">
-                            <StackPanel Spacing="12">
-                                <Grid ColumnDefinitions="Auto,*,Auto"
-                                      ColumnSpacing="14"
-                                      VerticalAlignment="Center">
-                                    <Viewbox Width="56" Height="56" VerticalAlignment="Center">
-                                        <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                                  Glyph="&#xE774;"
-                                                  Foreground="{ThemeResource AccentBrush}"/>
-                                    </Viewbox>
-
-                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind ViewModel.AgentDisplayName, Mode=OneWay}"
-                                                   FontSize="18"
-                                                   FontWeight="SemiBold"/>
-                                        <TextBlock Text="{x:Bind ViewModel.ConnectionStatusText, Mode=OneWay}"
-                                                   Opacity="0.7"
-                                                   FontSize="12"/>
-                                    </StackPanel>
-
-                                    <ToggleSwitch Grid.Column="2"
-                                                  x:Uid="Acp_ConnectionToggle"
-                                                  Header="连接"
-                                                  OnContent="开"
-                                                  OffContent="关"
-                                                  IsOn="{x:Bind ViewModel.Chat.IsConnected, Mode=OneWay}"
-                                                  IsEnabled="{x:Bind ViewModel.Chat.IsConnecting, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
-                                                  Toggled="OnConnectionToggleToggled"/>
-                                </Grid>
-
-                                <Grid ColumnDefinitions="Auto,*"
-                                      RowDefinitions="Auto,Auto"
-                                      ColumnSpacing="12"
-                                      RowSpacing="6">
-                                    <TextBlock Grid.Row="0" Grid.Column="0"
-                                               x:Uid="Acp_TransportLabel"
-                                               Text="传输协议"
-                                               Opacity="0.7"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="1"
-                                               Text="{x:Bind ViewModel.SelectedTransportName, Mode=OneWay}"
-                                               Opacity="0.9"/>
-
-                                    <TextBlock Grid.Row="1" Grid.Column="0"
-                                               x:Uid="Acp_EndpointLabel"
-                                               Text="端点"
-                                               Opacity="0.7"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="1"
-                                               Text="{x:Bind ViewModel.CurrentEndpointDisplay, Mode=OneWay}"
-                                               Opacity="0.9"
-                                               TextWrapping="Wrap"/>
-                                </Grid>
-
-                                <TextBlock Text="{x:Bind ViewModel.Chat.ConnectionErrorMessage, Mode=OneWay}"
-                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                           Visibility="{x:Bind ViewModel.Chat.HasConnectionError, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
                     <!-- Profiles -->
                     <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*,Auto">
@@ -130,17 +58,16 @@
                                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8">
-                            <ListView ItemsSource="{x:Bind ViewModel.Profiles.Profiles, Mode=OneWay}"
-                                      SelectedItem="{x:Bind ViewModel.Profiles.SelectedProfile, Mode=TwoWay}"
+                            <ListView ItemsSource="{x:Bind ViewModel.Profiles.ProfileItems, Mode=OneWay}"
+                                      SelectedItem="{x:Bind ViewModel.Profiles.SelectedProfileItem, Mode=TwoWay}"
                                       SelectionMode="Single"
                                       MinHeight="140"
                                       Background="Transparent"
-                                      ItemContainerStyle="{StaticResource AgentListItemStyle}"
-                                      DoubleTapped="OnProfilesDoubleTapped">
+                                      ItemContainerStyle="{StaticResource AgentListItemStyle}">
                                 <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="models:ServerConfiguration">
+                                    <DataTemplate x:DataType="vm:AgentProfileItemViewModel">
                                         <Grid Padding="14,10"
-                                              ColumnDefinitions="Auto,*,Auto"
+                                              ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                                               ColumnSpacing="12">
                                             <Border Width="36"
                                                     Height="36"
@@ -159,13 +86,44 @@
                                                 <TextBlock Text="{x:Bind Name}"
                                                            FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{x:Bind SubtitleDisplay}"
+                                                <TextBlock Text="{x:Bind EndpointDescription}"
                                                            FontSize="12"
                                                            Opacity="0.65"
                                                            TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
 
-                                            <Button Grid.Column="2"
+                                            <Grid Grid.Column="2" VerticalAlignment="Center">
+                                                <Border CornerRadius="12"
+                                                        Padding="8,4"
+                                                        Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                        Visibility="{x:Bind IsConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Text="{x:Bind StatusLabel, Mode=OneWay}"
+                                                               FontSize="12"
+                                                               FontWeight="Medium"
+                                                               Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                                </Border>
+
+                                                <Border CornerRadius="12"
+                                                        Padding="8,4"
+                                                        Background="{ThemeResource SystemFillColorNeutralBrush}"
+                                                        Visibility="{x:Bind IsNotConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Text="{x:Bind StatusLabel, Mode=OneWay}"
+                                                               FontSize="12"
+                                                               FontWeight="Medium"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </Border>
+                                            </Grid>
+
+                                            <ToggleSwitch Grid.Column="3"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,8,0"
+                                                          OffContent=""
+                                                          OnContent=""
+                                                          IsOn="{x:Bind IsConnected, Mode=OneWay}"
+                                                          IsEnabled="{x:Bind IsConnecting, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                                                          Toggled="OnProfileConnectionToggleToggled"/>
+
+                                            <Button Grid.Column="4"
                                                     Style="{StaticResource SubtleButtonStyle}"
                                                     VerticalAlignment="Center"
                                                     x:Uid="Acp_ProfileMore"
@@ -175,18 +133,13 @@
                                                 </Button.Content>
                                                 <Button.Flyout>
                                                     <MenuFlyout>
-                                                        <MenuFlyoutItem x:Uid="Acp_ProfileConnect"
-                                                                        Text="连接"
-                                                                        Tag="{x:Bind}"
-                                                                        Click="OnConnectProfileMenuClick"/>
-                                                        <MenuFlyoutSeparator/>
                                                         <MenuFlyoutItem x:Uid="Acp_ProfileEdit"
                                                                         Text="编辑"
-                                                                        Tag="{x:Bind}"
+                                                                        Tag="{x:Bind ProfileId}"
                                                                         Click="OnEditProfileMenuClick"/>
                                                         <MenuFlyoutItem x:Uid="Acp_ProfileDelete"
                                                                         Text="删除"
-                                                                        Tag="{x:Bind}"
+                                                                        Tag="{x:Bind ProfileId}"
                                                                         Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                                                         Click="OnDeleteProfileMenuClick"/>
                                                     </MenuFlyout>
@@ -323,14 +276,20 @@
                                            Text="连接相关信息"
                                            FontWeight="Medium"/>
                                 <Grid ColumnDefinitions="Auto,*"
-                                      RowDefinitions="Auto,Auto"
+                                      RowDefinitions="Auto,Auto,Auto,Auto"
                                       ColumnSpacing="12"
                                       RowSpacing="6">
                                     <TextBlock Grid.Row="0" Grid.Column="0" x:Uid="Acp_DiagnosticsAgentLabel" Text="Agent" Opacity="0.7"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.Chat.AgentName, Mode=OneWay}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileAgentName, Mode=OneWay}"/>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" x:Uid="Acp_DiagnosticsVersionLabel" Text="版本" Opacity="0.7"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.Chat.AgentVersion, Mode=OneWay}" Opacity="0.85"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileAgentVersion, Mode=OneWay}" Opacity="0.85"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" x:Uid="Acp_DiagnosticsStatusLabel" Text="状态" Opacity="0.7"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileStatus, Mode=OneWay}" Opacity="0.85"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" x:Uid="Acp_DiagnosticsEndpointLabel" Text="Endpoint" Opacity="0.7"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileEndpoint, Mode=OneWay}" Opacity="0.85"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
