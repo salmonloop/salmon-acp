@@ -62,19 +62,9 @@ public static class ShellLayoutReducer
 
     private static ShellLayoutState ApplyWindowMetrics(ShellLayoutState state, WindowMetricsChanged metrics)
     {
-        var updated = state with
+        return state with
         {
             WindowMetrics = new WindowMetrics(metrics.Width, metrics.Height, metrics.EffectiveWidth, metrics.EffectiveHeight)
         };
-
-        var previousMode = ShellLayoutPolicy.Compute(state).NavPaneDisplayMode;
-        var nextMode = ShellLayoutPolicy.Compute(updated).NavPaneDisplayMode;
-        if (previousMode != NavigationPaneDisplayMode.Minimal && nextMode == NavigationPaneDisplayMode.Minimal)
-        {
-            // Entering the narrowest tier should start from a collapsed nav pane.
-            updated = updated with { UserNavOpenIntent = false };
-        }
-
-        return updated;
     }
 }

@@ -36,6 +36,29 @@ public class ShellLayoutPolicyTests
     }
 
     [Fact]
+    public void Policy_ChangesTitleBarInteractiveRegionToken_WhenSearchOrAuxVisibilityChanges()
+    {
+        var defaultSnapshot = ShellLayoutPolicy.Compute(ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(1200, 700, 1200, 700),
+            IsChatContext = false
+        });
+        var chatSnapshot = ShellLayoutPolicy.Compute(ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(1200, 700, 1200, 700),
+            IsChatContext = true
+        });
+        var minimalSnapshot = ShellLayoutPolicy.Compute(ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(500, 700, 500, 700),
+            IsChatContext = true
+        });
+
+        Assert.NotEqual(defaultSnapshot.TitleBarInteractiveRegionToken, chatSnapshot.TitleBarInteractiveRegionToken);
+        Assert.NotEqual(chatSnapshot.TitleBarInteractiveRegionToken, minimalSnapshot.TitleBarInteractiveRegionToken);
+    }
+
+    [Fact]
     public void Policy_Uses_TitleBarInsetsHeight()
     {
         var state = ShellLayoutState.Default with { TitleBarInsetsHeight = 60 };
@@ -128,8 +151,7 @@ public class ShellLayoutPolicyTests
 
     [Theory]
     [InlineData(800, NavigationPaneDisplayMode.Compact)]
-    [InlineData(500, NavigationPaneDisplayMode.Minimal)]
-    public void Policy_Allows_UserToOpenPane_InOverlayModes(double width, NavigationPaneDisplayMode expectedMode)
+    public void Policy_Allows_UserToOpenPane_InCompactMode(double width, NavigationPaneDisplayMode expectedMode)
     {
         var state = ShellLayoutState.Default with
         {
@@ -141,6 +163,21 @@ public class ShellLayoutPolicyTests
 
         Assert.Equal(expectedMode, snapshot.NavPaneDisplayMode);
         Assert.True(snapshot.IsNavPaneOpen);
+    }
+
+    [Fact]
+    public void Policy_AlwaysCollapsesPane_InMinimalMode()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            UserNavOpenIntent = true,
+            WindowMetrics = new WindowMetrics(500, 700, 500, 700)
+        };
+
+        var snapshot = ShellLayoutPolicy.Compute(state);
+
+        Assert.Equal(NavigationPaneDisplayMode.Minimal, snapshot.NavPaneDisplayMode);
+        Assert.False(snapshot.IsNavPaneOpen);
     }
 
     [Fact]

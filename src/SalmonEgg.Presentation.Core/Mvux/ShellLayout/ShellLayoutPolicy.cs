@@ -29,7 +29,9 @@ public static class ShellLayoutPolicy
         var isOpen = mode switch
         {
             NavigationPaneDisplayMode.Expanded => state.UserNavOpenIntent != false,
-            _ => state.UserNavOpenIntent == true
+            NavigationPaneDisplayMode.Compact => state.UserNavOpenIntent == true,
+            NavigationPaneDisplayMode.Minimal => false,
+            _ => false
         };
 
         var searchVisible = mode != NavigationPaneDisplayMode.Minimal;
@@ -43,6 +45,9 @@ public static class ShellLayoutPolicy
             && mode != NavigationPaneDisplayMode.Minimal;
         var canToggleBottomPanel = maxBottomPanelHeight >= BottomPanelMinHeight;
         var showAuxiliaryTitleBarButtons = state.IsChatContext;
+        var hasSearchRegion = searchVisible;
+        var hasAuxiliaryRegion = showAuxiliaryTitleBarButtons;
+        var titleBarInteractiveRegionToken = (hasSearchRegion ? 1 : 0) | (hasAuxiliaryRegion ? 2 : 0);
 
         var canShowSimultaneousAuxiliaryPanels =
             availableWidth >= MinimumDualPanelWidth && availableHeight >= MinimumDualPanelHeight;
@@ -129,6 +134,7 @@ public static class ShellLayoutPolicy
             canToggleRightPanels,
             canToggleRightPanels,
             canToggleBottomPanel,
-            showAuxiliaryTitleBarButtons);
+            showAuxiliaryTitleBarButtons,
+            titleBarInteractiveRegionToken);
     }
 }

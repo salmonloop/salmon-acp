@@ -1017,7 +1017,7 @@ public sealed partial class MainPage : Page
 
     private void OnLayoutViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ShellLayoutViewModel.ShowAuxiliaryTitleBarButtons))
+        if (e.PropertyName == nameof(ShellLayoutViewModel.TitleBarInteractiveRegionToken))
         {
 #if WINDOWS
             RefreshTitleBarInteractiveRegions();

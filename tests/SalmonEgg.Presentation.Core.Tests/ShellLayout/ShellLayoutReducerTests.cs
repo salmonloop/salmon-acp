@@ -40,7 +40,7 @@ public class ShellLayoutReducerTests
     }
 
     [Fact]
-    public void Reducer_EnteringMinimal_CollapsesPane_AndClearsOpenIntent()
+    public void Reducer_EnteringMinimal_CollapsesPane_AndPreservesOpenIntent()
     {
         var state = ShellLayoutState.Default with
         {
@@ -52,7 +52,7 @@ public class ShellLayoutReducerTests
 
         Assert.Equal(NavigationPaneDisplayMode.Minimal, reduced.Snapshot.NavPaneDisplayMode);
         Assert.False(reduced.Snapshot.IsNavPaneOpen);
-        Assert.False(reduced.State.UserNavOpenIntent);
+        Assert.True(reduced.State.UserNavOpenIntent);
     }
 
     [Fact]
@@ -70,8 +70,30 @@ public class ShellLayoutReducerTests
             new WindowMetricsChanged(520, 700, 520, 700));
 
         Assert.Equal(NavigationPaneDisplayMode.Minimal, resizedWithinMinimal.Snapshot.NavPaneDisplayMode);
-        Assert.True(resizedWithinMinimal.Snapshot.IsNavPaneOpen);
+        Assert.False(resizedWithinMinimal.Snapshot.IsNavPaneOpen);
         Assert.True(resizedWithinMinimal.State.UserNavOpenIntent);
+    }
+
+    [Fact]
+    public void Reducer_ExitMinimal_RestoresExpandedPaneWhenUserIntentWasOpen()
+    {
+        var expanded = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(1200, 700, 1200, 700),
+            UserNavOpenIntent = true
+        };
+
+        var minimal = ShellLayoutReducer.Reduce(
+            expanded,
+            new WindowMetricsChanged(500, 700, 500, 700));
+        var backToExpanded = ShellLayoutReducer.Reduce(
+            minimal.State,
+            new WindowMetricsChanged(1200, 700, 1200, 700));
+
+        Assert.Equal(NavigationPaneDisplayMode.Minimal, minimal.Snapshot.NavPaneDisplayMode);
+        Assert.False(minimal.Snapshot.IsNavPaneOpen);
+        Assert.Equal(NavigationPaneDisplayMode.Expanded, backToExpanded.Snapshot.NavPaneDisplayMode);
+        Assert.True(backToExpanded.Snapshot.IsNavPaneOpen);
     }
 
     [Fact]
@@ -101,5 +123,16 @@ public class ShellLayoutReducerTests
 
         Assert.True(reduced.State.IsChatContext);
         Assert.True(reduced.Snapshot.ShowAuxiliaryTitleBarButtons);
+    }
+
+    [Fact]
+    public void Reducer_ContentContextChange_ChangesTitleBarInteractiveRegionToken()
+    {
+        var state = ShellLayoutState.Default with { IsChatContext = false };
+        var before = ShellLayoutPolicy.Compute(state);
+
+        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(IsChatContext: true));
+
+        Assert.NotEqual(before.TitleBarInteractiveRegionToken, reduced.Snapshot.TitleBarInteractiveRegionToken);
     }
 }

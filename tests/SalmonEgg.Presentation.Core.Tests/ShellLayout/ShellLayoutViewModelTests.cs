@@ -197,11 +197,13 @@ public class ShellLayoutViewModelTests
             false, 0, 0, new LayoutPadding(4, 0, 4, 0), new LayoutPadding(0, 0, 0, 0), 60,
             false, false, 0, RightPanelMode.None, false, 0, BottomPanelMode.None, false, 0,
             false, false, false,
-            true), default);
+            true,
+            42), default);
 
         await WaitForConditionAsync(() => vm.ShowAuxiliaryTitleBarButtons);
 
         Assert.True(vm.ShowAuxiliaryTitleBarButtons);
+        Assert.Equal(42, vm.TitleBarInteractiveRegionToken);
     }
 
     [Fact]

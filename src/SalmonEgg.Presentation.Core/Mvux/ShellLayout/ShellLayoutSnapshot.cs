@@ -23,4 +23,5 @@ public sealed record ShellLayoutSnapshot(
     bool CanToggleDiffPanel = true,
     bool CanToggleTodoPanel = true,
     bool CanToggleBottomPanel = true,
-    bool ShowAuxiliaryTitleBarButtons = false);
+    bool ShowAuxiliaryTitleBarButtons = false,
+    int TitleBarInteractiveRegionToken = 0);

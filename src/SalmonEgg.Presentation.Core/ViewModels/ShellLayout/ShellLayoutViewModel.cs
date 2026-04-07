@@ -42,6 +42,7 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _canToggleTodoPanel;
     [ObservableProperty] private bool _canToggleBottomPanel;
     [ObservableProperty] private bool _showAuxiliaryTitleBarButtons;
+    [ObservableProperty] private int _titleBarInteractiveRegionToken;
     [ObservableProperty] private RightPanelMode _desiredRightPanelMode;
     [ObservableProperty] private BottomPanelMode _desiredBottomPanelMode;
     [ObservableProperty] private double _leftNavResizerLeft;
@@ -131,6 +132,7 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
         CanToggleTodoPanel = snapshot.CanToggleTodoPanel;
         CanToggleBottomPanel = snapshot.CanToggleBottomPanel;
         ShowAuxiliaryTitleBarButtons = snapshot.ShowAuxiliaryTitleBarButtons;
+        TitleBarInteractiveRegionToken = snapshot.TitleBarInteractiveRegionToken;
         IsNavResizerVisible = snapshot.IsNavResizerVisible;
         LeftNavResizerLeft = snapshot.LeftNavResizerLeft;
     }
