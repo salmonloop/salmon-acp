@@ -292,7 +292,7 @@
                 Loaded="OnAppTitleBarLoaded"
                 SizeChanged="OnAppTitleBarSizeChanged"
                 Height="{x:Bind LayoutVM.TitleBarHeight, Mode=OneWay}">
-            <Grid>
+            <Grid x:Name="AppTitleBarLayoutRoot">
                 <Grid x:Name="TitleBarDragRegion" Background="Transparent" />
                 <Grid x:Name="AppTitleBarContent"
                       Padding="{x:Bind LayoutVM.TitleBarPadding, Mode=OneWay, Converter={StaticResource PaddingConverter}}">

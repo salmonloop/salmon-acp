@@ -75,6 +75,7 @@ public sealed partial class MainPage : Page
 #endif
 #if WINDOWS
     private AppWindowTitleBar? _appWindowTitleBar;
+    private Microsoft.UI.Xaml.Controls.TitleBar? _winuiTitleBarControl;
     private InputNonClientPointerSource? _titleBarPointerSource;
     private XamlRoot? _observedTitleBarXamlRoot;
 #endif
@@ -689,7 +690,7 @@ public sealed partial class MainPage : Page
     {
 #if WINDOWS
         AttachTitleBarXamlRootChanged();
-        if (_appWindowTitleBar is null || _titleBarPointerSource is null)
+        if (_appWindowTitleBar is null)
         {
             ConfigureTitleBar();
         }
@@ -961,11 +962,14 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        EnsureWinUiTitleBarControl();
+        var titleBarElement = (UIElement?)_winuiTitleBarControl ?? AppTitleBar;
+
         try
         {
             window.ExtendsContentIntoTitleBar = true;
-            // Use the full custom title bar and mark interactive controls as passthrough regions.
-            window.SetTitleBar(AppTitleBar);
+            // Prefer the WinUI TitleBar control path. If creation failed, fallback to legacy host.
+            window.SetTitleBar(titleBarElement);
         }
         catch
         {
@@ -997,14 +1001,71 @@ public sealed partial class MainPage : Page
         // but preserve system hover/pressed visuals (including the Close button red state).
         _appWindowTitleBar.ButtonBackgroundColor = Colors.Transparent;
         _appWindowTitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        _titleBarPointerSource = InputNonClientPointerSource.GetForWindowId(window.AppWindow.Id);
+        _titleBarPointerSource = _winuiTitleBarControl is null
+            ? InputNonClientPointerSource.GetForWindowId(window.AppWindow.Id)
+            : null;
         RefreshTitleBarInteractiveRegions();
 #endif
     }
 
 #if WINDOWS
+    private void EnsureWinUiTitleBarControl()
+    {
+        if (_winuiTitleBarControl is not null || AppTitleBar is null || AppTitleBarLayoutRoot is null || AppTitleBarContent is null)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(AppTitleBar.Child, AppTitleBarLayoutRoot))
+        {
+            return;
+        }
+
+        if (TitleBarLeftButtons is null || TopSearchBox is null || TitleBarRightButtons is null)
+        {
+            return;
+        }
+
+        DetachElementFromVisualParent(TitleBarLeftButtons);
+        DetachElementFromVisualParent(TopSearchBox);
+        DetachElementFromVisualParent(TitleBarRightButtons);
+
+        AppTitleBarContent.Visibility = Visibility.Collapsed;
+        if (TitleBarDragRegion is not null)
+        {
+            TitleBarDragRegion.Visibility = Visibility.Collapsed;
+        }
+
+        AppTitleBar.Child = null;
+        _winuiTitleBarControl = new Microsoft.UI.Xaml.Controls.TitleBar
+        {
+            Background = new SolidColorBrush(Colors.Transparent),
+            IsBackButtonVisible = false,
+            IsPaneToggleButtonVisible = false,
+            LeftHeader = TitleBarLeftButtons,
+            Content = TopSearchBox,
+            RightHeader = TitleBarRightButtons,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        AppTitleBar.Child = _winuiTitleBarControl;
+    }
+
+    private static void DetachElementFromVisualParent(FrameworkElement element)
+    {
+        if (element.Parent is Panel panel)
+        {
+            panel.Children.Remove(element);
+        }
+    }
+
     private void RefreshTitleBarInteractiveRegions()
     {
+        if (_winuiTitleBarControl is not null)
+        {
+            return;
+        }
+
         UpdateTitleBarInteractiveRegions();
         _ = DispatcherQueue.TryEnqueue(UpdateTitleBarInteractiveRegions);
     }
