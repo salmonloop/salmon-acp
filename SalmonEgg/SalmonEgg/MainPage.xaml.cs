@@ -76,6 +76,7 @@ public sealed partial class MainPage : Page
 #if WINDOWS
     private AppWindowTitleBar? _appWindowTitleBar;
     private InputNonClientPointerSource? _titleBarPointerSource;
+    private XamlRoot? _observedTitleBarXamlRoot;
 #endif
 
     public AppPreferencesViewModel Preferences { get; }
@@ -173,6 +174,7 @@ public sealed partial class MainPage : Page
         _metricsProvider.Detach();
         ContentFrame.NavigationFailed -= OnContentFrameNavigationFailed;
 #if WINDOWS
+        DetachTitleBarXamlRootChanged();
         _trayIcon?.Dispose();
         _trayIcon = null;
 #endif
@@ -597,6 +599,10 @@ public sealed partial class MainPage : Page
         BottomPanelButton.Visibility = visibility;
         DiffPanelButton.Visibility = visibility;
         TodoPanelButton.Visibility = visibility;
+
+#if WINDOWS
+        RefreshTitleBarInteractiveRegions();
+#endif
     }
 
     private void OnRightPanelResizerPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -682,14 +688,20 @@ public sealed partial class MainPage : Page
     private void OnAppTitleBarLoaded(object sender, RoutedEventArgs e)
     {
 #if WINDOWS
-        UpdateTitleBarInteractiveRegions();
+        AttachTitleBarXamlRootChanged();
+        if (_appWindowTitleBar is null || _titleBarPointerSource is null)
+        {
+            ConfigureTitleBar();
+        }
+
+        RefreshTitleBarInteractiveRegions();
 #endif
     }
 
     private void OnAppTitleBarSizeChanged(object sender, SizeChangedEventArgs e)
     {
 #if WINDOWS
-        UpdateTitleBarInteractiveRegions();
+        RefreshTitleBarInteractiveRegions();
 #endif
     }
 
@@ -943,6 +955,12 @@ public sealed partial class MainPage : Page
         }
 
 #if WINDOWS
+        AttachTitleBarXamlRootChanged();
+        if (!AppWindowTitleBar.IsCustomizationSupported() || AppTitleBar.XamlRoot is null)
+        {
+            return;
+        }
+
         try
         {
             window.ExtendsContentIntoTitleBar = true;
@@ -980,11 +998,54 @@ public sealed partial class MainPage : Page
         _appWindowTitleBar.ButtonBackgroundColor = Colors.Transparent;
         _appWindowTitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
         _titleBarPointerSource = InputNonClientPointerSource.GetForWindowId(window.AppWindow.Id);
-        UpdateTitleBarInteractiveRegions();
+        RefreshTitleBarInteractiveRegions();
 #endif
     }
 
 #if WINDOWS
+    private void RefreshTitleBarInteractiveRegions()
+    {
+        UpdateTitleBarInteractiveRegions();
+        _ = DispatcherQueue.TryEnqueue(UpdateTitleBarInteractiveRegions);
+    }
+
+    private void AttachTitleBarXamlRootChanged()
+    {
+        var xamlRoot = AppTitleBar?.XamlRoot;
+        if (ReferenceEquals(_observedTitleBarXamlRoot, xamlRoot))
+        {
+            return;
+        }
+
+        if (_observedTitleBarXamlRoot is not null)
+        {
+            _observedTitleBarXamlRoot.Changed -= OnTitleBarXamlRootChanged;
+        }
+
+        _observedTitleBarXamlRoot = xamlRoot;
+        if (_observedTitleBarXamlRoot is not null)
+        {
+            _observedTitleBarXamlRoot.Changed += OnTitleBarXamlRootChanged;
+        }
+    }
+
+    private void DetachTitleBarXamlRootChanged()
+    {
+        if (_observedTitleBarXamlRoot is null)
+        {
+            return;
+        }
+
+        _observedTitleBarXamlRoot.Changed -= OnTitleBarXamlRootChanged;
+        _observedTitleBarXamlRoot = null;
+    }
+
+    private void OnTitleBarXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
+    {
+        AttachTitleBarXamlRootChanged();
+        RefreshTitleBarInteractiveRegions();
+    }
+
     private void UpdateTitleBarInteractiveRegions()
     {
         if (AppTitleBar is null || _titleBarPointerSource is null || AppTitleBar.XamlRoot is null)
