@@ -15,6 +15,7 @@ public sealed class WindowMetricsProvider
 
     private Window? _window;
     private AppWindowTitleBar? _titleBar;
+    private FrameworkElement? _contentRoot;
 
     public void Attach(Window window, AppWindowTitleBar? titleBar)
     {
@@ -22,12 +23,17 @@ public sealed class WindowMetricsProvider
 
         _window = window;
         _titleBar = titleBar;
+        _contentRoot = _window.Content as FrameworkElement;
 
         _window.SizeChanged += OnSizeChanged;
         _window.Activated += OnActivated;
+        if (_contentRoot != null)
+        {
+            _contentRoot.SizeChanged += OnContentRootSizeChanged;
+        }
 
         // Initial report
-        _ = _sink.ReportWindowMetrics(_window.Bounds.Width, _window.Bounds.Height, _window.Bounds.Width, _window.Bounds.Height);
+        ReportWindowMetrics(_window.Bounds.Width, _window.Bounds.Height);
 
         if (_titleBar != null)
         {
@@ -42,14 +48,19 @@ public sealed class WindowMetricsProvider
             _window.SizeChanged -= OnSizeChanged;
             _window.Activated -= OnActivated;
         }
+        if (_contentRoot != null)
+        {
+            _contentRoot.SizeChanged -= OnContentRootSizeChanged;
+        }
 
         _window = null;
         _titleBar = null;
+        _contentRoot = null;
     }
 
     private void OnSizeChanged(object sender, WindowSizeChangedEventArgs e)
     {
-        _ = _sink.ReportWindowMetrics(e.Size.Width, e.Size.Height, e.Size.Width, e.Size.Height);
+        ReportWindowMetrics(e.Size.Width, e.Size.Height);
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs e)
@@ -60,10 +71,34 @@ public sealed class WindowMetricsProvider
         }
     }
 
+    private void OnContentRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        ReportWindowMetrics(_window.Bounds.Width, _window.Bounds.Height);
+    }
+
     private void ReportTitleBarInsets(AppWindowTitleBar titleBar)
     {
         var (left, right, height) = GetTitleBarInsets(titleBar);
         _ = _sink.ReportTitleBarInsets(left, right, height);
+    }
+
+    private void ReportWindowMetrics(double width, double height)
+    {
+        var content = _window?.Content as FrameworkElement;
+        var contentActualWidth = content?.ActualWidth ?? 0;
+        var contentActualHeight = content?.ActualHeight ?? 0;
+        var (effectiveWidth, effectiveHeight) = ShellLayoutMetricsNormalizer.ResolveEffectiveSize(
+            width,
+            height,
+            contentActualWidth,
+            contentActualHeight);
+
+        _ = _sink.ReportWindowMetrics(width, height, effectiveWidth, effectiveHeight);
     }
 
     private static (double Left, double Right, double Height) GetTitleBarInsets(AppWindowTitleBar titleBar)

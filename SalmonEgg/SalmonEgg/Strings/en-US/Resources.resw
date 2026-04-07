@@ -580,6 +580,9 @@
   <data name="TodoPanelButton.ToolTipService.ToolTip" xml:space="preserve">
     <value>Todo</value>
   </data>
+  <data name="TitleBarAuxiliaryPanelUnavailable.ToolTip" xml:space="preserve">
+    <value>Unavailable at the current window size</value>
+  </data>
   <data name="TodoPanelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
     <value>Todo Panel</value>
   </data>

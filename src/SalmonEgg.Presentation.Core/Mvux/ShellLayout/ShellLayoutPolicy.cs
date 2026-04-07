@@ -39,14 +39,15 @@ public static class ShellLayoutPolicy
         var maxRightPanelWidth = Math.Min(RightPanelMaxWidth, availableWidth);
         var contentHeight = Math.Max(0, availableHeight - state.TitleBarInsetsHeight);
         var maxBottomPanelHeight = Math.Min(BottomPanelMaxHeight, Math.Max(0, contentHeight - MinimumChatRegionHeight));
-        var canToggleRightPanels = maxRightPanelWidth >= RightPanelMinWidth;
+        var canToggleRightPanels = maxRightPanelWidth >= RightPanelMinWidth
+            && mode != NavigationPaneDisplayMode.Minimal;
         var canToggleBottomPanel = maxBottomPanelHeight >= BottomPanelMinHeight;
 
         var canShowSimultaneousAuxiliaryPanels =
             availableWidth >= MinimumDualPanelWidth && availableHeight >= MinimumDualPanelHeight;
 
         var rightPanelEligible = state.DesiredRightPanelMode != RightPanelMode.None
-            && maxRightPanelWidth >= RightPanelMinWidth;
+            && canToggleRightPanels;
         var bottomPanelEligible = state.DesiredBottomPanelMode != BottomPanelMode.None
             && maxBottomPanelHeight >= BottomPanelMinHeight;
 

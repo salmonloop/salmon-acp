@@ -153,6 +153,26 @@ public sealed class NavigationSmokeTests
     }
 
     [SkippableFact]
+    public void MinimalMode_Resize_CollapsesLeftPane()
+    {
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        ResizeMainWindow(width: 500, height: 900);
+        Thread.Sleep(1500);
+
+        var startItem = session.TryFindByAutomationId("MainNav.Start", TimeSpan.FromSeconds(2));
+        var addProjectItem = session.TryFindByAutomationId("MainNav.AddProject", TimeSpan.FromSeconds(2));
+
+        var startVisible = startItem is not null && !TryGetIsOffscreen(startItem);
+        var addProjectVisible = addProjectItem is not null && !TryGetIsOffscreen(addProjectItem);
+
+        Assert.False(
+            startVisible || addProjectVisible,
+            $"Expected minimal mode to collapse the left pane at width=500. StartVisible={startVisible}, AddProjectVisible={addProjectVisible}.{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void CollapsedPane_AddProject_DoesNotLeakExpandedLabel()
     {
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();

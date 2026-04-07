@@ -2,7 +2,6 @@ using System;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
-using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 
 namespace SalmonEgg.Presentation.Converters;
 
@@ -10,25 +9,18 @@ public sealed class NavigationPaneDisplayModeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
-        if (value is ShellLayoutViewModel layout)
-        {
-            return Convert(layout.NavPaneDisplayMode, layout.IsNavPaneOpen);
-        }
-
         if (value is NavigationPaneDisplayMode mode)
         {
-            return Convert(mode, isPaneOpen: true);
+            return Convert(mode);
         }
 
         return NavigationViewPaneDisplayMode.Auto;
     }
 
-    private static NavigationViewPaneDisplayMode Convert(NavigationPaneDisplayMode mode, bool isPaneOpen)
+    private static NavigationViewPaneDisplayMode Convert(NavigationPaneDisplayMode mode)
         => mode switch
         {
-            NavigationPaneDisplayMode.Expanded => isPaneOpen
-                ? NavigationViewPaneDisplayMode.Left
-                : NavigationViewPaneDisplayMode.LeftCompact,
+            NavigationPaneDisplayMode.Expanded => NavigationViewPaneDisplayMode.Left,
             NavigationPaneDisplayMode.Compact => NavigationViewPaneDisplayMode.LeftCompact,
             NavigationPaneDisplayMode.Minimal => NavigationViewPaneDisplayMode.LeftMinimal,
             _ => NavigationViewPaneDisplayMode.Auto

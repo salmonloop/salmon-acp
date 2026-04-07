@@ -8,7 +8,7 @@ public static class ShellLayoutReducer
     {
         var next = action switch
         {
-            WindowMetricsChanged m => state with { WindowMetrics = new WindowMetrics(m.Width, m.Height, m.EffectiveWidth, m.EffectiveHeight) },
+            WindowMetricsChanged m => ApplyWindowMetrics(state, m),
             TitleBarInsetsChanged t => state with
             {
                 TitleBarPadding = new LayoutPadding(t.Left, 0, t.Right, 0),
@@ -57,5 +57,23 @@ public static class ShellLayoutReducer
         };
         var snapshot = ShellLayoutPolicy.Compute(next);
         return new ShellLayoutReduced(next, snapshot);
+    }
+
+    private static ShellLayoutState ApplyWindowMetrics(ShellLayoutState state, WindowMetricsChanged metrics)
+    {
+        var updated = state with
+        {
+            WindowMetrics = new WindowMetrics(metrics.Width, metrics.Height, metrics.EffectiveWidth, metrics.EffectiveHeight)
+        };
+
+        var previousMode = ShellLayoutPolicy.Compute(state).NavPaneDisplayMode;
+        var nextMode = ShellLayoutPolicy.Compute(updated).NavPaneDisplayMode;
+        if (previousMode != NavigationPaneDisplayMode.Minimal && nextMode == NavigationPaneDisplayMode.Minimal)
+        {
+            // Entering the narrowest tier should start from a collapsed nav pane.
+            updated = updated with { UserNavOpenIntent = false };
+        }
+
+        return updated;
     }
 }

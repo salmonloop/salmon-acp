@@ -580,6 +580,9 @@
   <data name="TodoPanelButton.ToolTipService.ToolTip" xml:space="preserve">
     <value>待办</value>
   </data>
+  <data name="TitleBarAuxiliaryPanelUnavailable.ToolTip" xml:space="preserve">
+    <value>当前窗口尺寸下不可用</value>
+  </data>
   <data name="TodoPanelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
     <value>待办面板</value>
   </data>

@@ -40,6 +40,41 @@ public class ShellLayoutReducerTests
     }
 
     [Fact]
+    public void Reducer_EnteringMinimal_CollapsesPane_AndClearsOpenIntent()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(900, 700, 900, 700),
+            UserNavOpenIntent = true
+        };
+
+        var reduced = ShellLayoutReducer.Reduce(state, new WindowMetricsChanged(500, 700, 500, 700));
+
+        Assert.Equal(NavigationPaneDisplayMode.Minimal, reduced.Snapshot.NavPaneDisplayMode);
+        Assert.False(reduced.Snapshot.IsNavPaneOpen);
+        Assert.False(reduced.State.UserNavOpenIntent);
+    }
+
+    [Fact]
+    public void Reducer_StayingInMinimal_DoesNotOverrideFreshUserOpenIntent()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(500, 700, 500, 700),
+            UserNavOpenIntent = false
+        };
+
+        var toggledOpen = ShellLayoutReducer.Reduce(state, new NavToggleRequested("TitleBar"));
+        var resizedWithinMinimal = ShellLayoutReducer.Reduce(
+            toggledOpen.State,
+            new WindowMetricsChanged(520, 700, 520, 700));
+
+        Assert.Equal(NavigationPaneDisplayMode.Minimal, resizedWithinMinimal.Snapshot.NavPaneDisplayMode);
+        Assert.True(resizedWithinMinimal.Snapshot.IsNavPaneOpen);
+        Assert.True(resizedWithinMinimal.State.UserNavOpenIntent);
+    }
+
+    [Fact]
     public void Reducer_Toggle_Uses_CurrentOpenState()
     {
         var state = ShellLayoutState.Default with { WindowMetrics = new WindowMetrics(1200, 700, 1200, 700) };

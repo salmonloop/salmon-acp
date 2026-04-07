@@ -64,6 +64,21 @@ public class ShellLayoutPolicyTests
     }
 
     [Fact]
+    public void Policy_Disables_RightPanelToggles_InMinimalMode()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(620, 700, 620, 700)
+        };
+
+        var snapshot = ShellLayoutPolicy.Compute(state);
+
+        Assert.Equal(NavigationPaneDisplayMode.Minimal, snapshot.NavPaneDisplayMode);
+        Assert.False(snapshot.CanToggleDiffPanel);
+        Assert.False(snapshot.CanToggleTodoPanel);
+    }
+
+    [Fact]
     public void Policy_Disables_BottomPanelToggle_WhenBottomPanelCannotRender()
     {
         var state = ShellLayoutState.Default with
@@ -75,6 +90,22 @@ public class ShellLayoutPolicyTests
         var snapshot = ShellLayoutPolicy.Compute(state);
 
         Assert.False(snapshot.CanToggleBottomPanel);
+    }
+
+    [Fact]
+    public void Policy_Hides_RightPanel_InMinimalMode_EvenWhenDesired()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            DesiredRightPanelMode = RightPanelMode.Diff,
+            WindowMetrics = new WindowMetrics(620, 700, 620, 700)
+        };
+
+        var snapshot = ShellLayoutPolicy.Compute(state);
+
+        Assert.Equal(NavigationPaneDisplayMode.Minimal, snapshot.NavPaneDisplayMode);
+        Assert.False(snapshot.RightPanelVisible);
+        Assert.Equal(RightPanelMode.None, snapshot.RightPanelMode);
     }
 
     [Fact]

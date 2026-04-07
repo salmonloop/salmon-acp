@@ -552,6 +552,36 @@ public sealed partial class MainPage : Page
             ? "TodoPanelTitleBarFilledIconTemplate"
             : "TodoPanelTitleBarRegularIconTemplate");
 
+    private string GetBottomPanelButtonToolTip(bool canToggle)
+        => GetAuxiliaryPanelButtonToolTip(
+            canToggle,
+            "BottomPanelButton.ToolTipService.ToolTip",
+            "Bottom Panel");
+
+    private string GetDiffPanelButtonToolTip(bool canToggle)
+        => GetAuxiliaryPanelButtonToolTip(
+            canToggle,
+            "DiffPanelButton.ToolTipService.ToolTip",
+            "Diff");
+
+    private string GetTodoPanelButtonToolTip(bool canToggle)
+        => GetAuxiliaryPanelButtonToolTip(
+            canToggle,
+            "TodoPanelButton.ToolTipService.ToolTip",
+            "Todo");
+
+    private static string GetAuxiliaryPanelButtonToolTip(
+        bool canToggle,
+        string enabledResourceKey,
+        string enabledFallback)
+    {
+        return canToggle
+            ? ResolveResourceString(enabledResourceKey, enabledFallback)
+            : ResolveResourceString(
+                "TitleBarAuxiliaryPanelUnavailable.ToolTip",
+                "Not available at the current window size");
+    }
+
     private DataTemplate GetAuxiliaryIconTemplate(string resourceKey)
     {
         if (Resources.TryGetValue(resourceKey, out var localValue) && localValue is DataTemplate localTemplate)
