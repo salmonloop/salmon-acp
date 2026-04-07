@@ -52,12 +52,10 @@
                     <SymbolIcon Symbol="Home" />
                 </NavigationViewItem.Icon>
                 <NavigationViewItem.Content>
-                    <Grid Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxLines="1"
-                                   VerticalAlignment="Center" />
-                    </Grid>
+                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="1"
+                               VerticalAlignment="Center" />
                 </NavigationViewItem.Content>
             </NavigationViewItem>
         </DataTemplate>
@@ -69,12 +67,10 @@
                     <SymbolIcon Symbol="Find" />
                 </NavigationViewItem.Icon>
                 <NavigationViewItem.Content>
-                    <Grid Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxLines="1"
-                                   VerticalAlignment="Center" />
-                    </Grid>
+                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="1"
+                               VerticalAlignment="Center" />
                 </NavigationViewItem.Content>
             </NavigationViewItem>
         </DataTemplate>
@@ -92,12 +88,10 @@
                     <SymbolIcon Symbol="Add" />
                 </NavigationViewItem.Icon>
                 <NavigationViewItem.Content>
-                    <Grid Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock x:Uid="NavAddProjectLabel"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxLines="1"
-                                   VerticalAlignment="Center" />
-                    </Grid>
+                    <TextBlock x:Uid="NavAddProjectLabel"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="1"
+                               VerticalAlignment="Center" />
                 </NavigationViewItem.Content>
             </NavigationViewItem>
         </DataTemplate>
@@ -115,8 +109,7 @@
                 </NavigationViewItem.Icon>
 
                 <NavigationViewItem.Content>
-                    <Grid ColumnDefinitions="*"
-                          Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Grid ColumnDefinitions="*">
                         <TextBlock Text="{x:Bind Title, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis"
                                    MaxLines="1"
@@ -144,8 +137,7 @@
 
                 <NavigationViewItem.Content>
                     <Grid ColumnDefinitions="Auto,*,Auto"
-                          ColumnSpacing="8"
-                          Visibility="{x:Bind IsPaneOpen, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                          ColumnSpacing="8">
                         <ProgressRing Width="14"
                                       Height="14"
                                       IsActive="{x:Bind IsPlaceholder, Mode=OneWay}"
