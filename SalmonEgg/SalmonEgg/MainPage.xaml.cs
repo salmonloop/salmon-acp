@@ -120,6 +120,7 @@ public sealed partial class MainPage : Page
             TitleBarLeftButtons,
             TopSearchBox,
             TitleBarRightButtons,
+            TitleBarToggleLeftNavButton,
             TitleBarBackButton,
             ContentFrame,
             DispatcherQueue,
@@ -485,7 +486,7 @@ public sealed partial class MainPage : Page
         {
             NavigateTo(typeof(ChatView));
         }
-        UpdateBackButtonState();
+        _titleBarAdapter.UpdateBackButtonState();
     }
 
     private void ResetChatAuxiliaryPanelsOnChatExit()
@@ -500,7 +501,7 @@ public sealed partial class MainPage : Page
         {
             NavigateTo(pageType);
         }
-        UpdateBackButtonState();
+        _titleBarAdapter.UpdateBackButtonState();
     }
 
     private void EnsureStartContent()
@@ -509,7 +510,7 @@ public sealed partial class MainPage : Page
         {
             NavigateTo(typeof(StartView));
         }
-        UpdateBackButtonState();
+        _titleBarAdapter.UpdateBackButtonState();
     }
 
     private void EnsureSettingsContent(string key)
@@ -524,7 +525,7 @@ public sealed partial class MainPage : Page
             // SettingsShellPage is already loaded; ask it to switch section without resetting the shell.
             (ContentFrame.Content as SalmonEgg.Presentation.Views.SettingsShellPage)?.NavigateToSection(key);
         }
-        UpdateBackButtonState();
+        _titleBarAdapter.UpdateBackButtonState();
     }
 
     private string GetRightPanelTitle(RightPanelMode mode, string? planTitle)
@@ -700,7 +701,7 @@ public sealed partial class MainPage : Page
             ResetChatAuxiliaryPanelsOnChatExit();
         }
 
-        UpdateBackButtonState();
+        _titleBarAdapter.UpdateBackButtonState();
         _mainNavigationContentSyncAdapter.OnFrameNavigated(e.SourcePageType);
         // Selection sync is handled by OnNavigationViewModelPropertyChanged
         // when the coordinator updates the shell selection state. Calling
@@ -715,10 +716,7 @@ public sealed partial class MainPage : Page
 
     private void OnTitleBarBackClick(object sender, RoutedEventArgs e)
     {
-        if (ContentFrame?.CanGoBack == true)
-        {
-            ContentFrame.GoBack();
-        }
+        _titleBarAdapter.TryGoBack();
     }
 
     private async void OnToggleLeftNavClick(object sender, RoutedEventArgs e)
@@ -752,29 +750,11 @@ public sealed partial class MainPage : Page
 
     private void UpdateNavPaneToggleUi(bool? isOpenOverride = null)
     {
-        if (MainNavView == null || TitleBarToggleLeftNavButton == null)
-        {
-            return;
-        }
-
         var isOpen = isOpenOverride ?? LayoutVM.IsNavPaneOpen;
-        ToolTipService.SetToolTip(
-            TitleBarToggleLeftNavButton,
+        _titleBarAdapter.UpdateNavToggleToolTip(
             ResolveResourceString(
                 isOpen ? "TitleBarToggleLeftNavButtonCollapse.ToolTip" : "TitleBarToggleLeftNavButtonExpand.ToolTip",
                 isOpen ? "Collapse Sidebar" : "Expand Sidebar"));
-    }
-
-    private void UpdateBackButtonState()
-    {
-        if (TitleBarBackButton == null || ContentFrame == null)
-        {
-            return;
-        }
-
-        // Better UX than a permanently-disabled button in the title bar.
-        TitleBarBackButton.Visibility = ContentFrame.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
-        TitleBarBackButton.IsEnabled = ContentFrame.CanGoBack;
     }
 
     private void OnMainNavPaneOpened(NavigationView sender, object args)

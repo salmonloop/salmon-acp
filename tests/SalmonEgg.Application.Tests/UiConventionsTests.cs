@@ -537,4 +537,22 @@ public class UiConventionsTests
         Assert.Contains("GetTodoPanelButtonIconTemplate", codeBehindText);
         Assert.Contains("GetAuxiliaryIconTemplate", codeBehindText);
     }
+
+    [Fact]
+    public void AppTheme_ShouldKeepNavigationViewPaneBackgroundStableAcrossDisplayModes()
+    {
+        var repoRoot = FindRepoRoot();
+        var appXaml = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "App.xaml");
+        var appText = File.ReadAllText(appXaml);
+        var keys = ReadXamlKeys(appXaml);
+
+        Assert.Contains("NavigationViewDefaultPaneBackground", keys);
+        Assert.Contains("NavigationViewExpandedPaneBackground", keys);
+        Assert.Contains("NavigationViewTopPaneBackground", keys);
+
+        Assert.Contains("x:Key=\"NavigationViewDefaultPaneBackground\"", appText);
+        Assert.Contains("x:Key=\"NavigationViewExpandedPaneBackground\"", appText);
+        Assert.Contains("x:Key=\"NavigationViewTopPaneBackground\"", appText);
+        Assert.Contains("ResourceKey=\"LayerOnAcrylicFillColorDefaultBrush\"", appText);
+    }
 }

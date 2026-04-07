@@ -28,6 +28,7 @@ public sealed class MainWindowTitleBarAdapter : IDisposable
     private readonly FrameworkElement _titleBarLeftButtons;
     private readonly FrameworkElement _titleBarSearchBox;
     private readonly FrameworkElement _titleBarRightButtons;
+    private readonly Button _titleBarToggleLeftNavButton;
     private readonly Button _titleBarBackButton;
     private readonly Frame _contentFrame;
     private readonly DispatcherQueue _dispatcherQueue;
@@ -54,6 +55,7 @@ public sealed class MainWindowTitleBarAdapter : IDisposable
         FrameworkElement titleBarLeftButtons,
         FrameworkElement titleBarSearchBox,
         FrameworkElement titleBarRightButtons,
+        Button titleBarToggleLeftNavButton,
         Button titleBarBackButton,
         Frame contentFrame,
         DispatcherQueue dispatcherQueue,
@@ -66,6 +68,7 @@ public sealed class MainWindowTitleBarAdapter : IDisposable
         _titleBarLeftButtons = titleBarLeftButtons ?? throw new ArgumentNullException(nameof(titleBarLeftButtons));
         _titleBarSearchBox = titleBarSearchBox ?? throw new ArgumentNullException(nameof(titleBarSearchBox));
         _titleBarRightButtons = titleBarRightButtons ?? throw new ArgumentNullException(nameof(titleBarRightButtons));
+        _titleBarToggleLeftNavButton = titleBarToggleLeftNavButton ?? throw new ArgumentNullException(nameof(titleBarToggleLeftNavButton));
         _titleBarBackButton = titleBarBackButton ?? throw new ArgumentNullException(nameof(titleBarBackButton));
         _contentFrame = contentFrame ?? throw new ArgumentNullException(nameof(contentFrame));
         _dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
@@ -105,7 +108,7 @@ public sealed class MainWindowTitleBarAdapter : IDisposable
         }
 
         _titleBarLeftButtons.Visibility = Visibility.Visible;
-        _titleBarBackButton.IsEnabled = _contentFrame.CanGoBack;
+        UpdateBackButtonState();
 
         var appWindow = window.AppWindow;
         if (appWindow?.TitleBar is null)
@@ -160,6 +163,27 @@ public sealed class MainWindowTitleBarAdapter : IDisposable
 #if WINDOWS
         RefreshInteractiveRegions();
 #endif
+    }
+
+    public void UpdateBackButtonState()
+    {
+        var canGoBack = _contentFrame.CanGoBack;
+        // Better UX than a permanently-disabled button in the title bar.
+        _titleBarBackButton.Visibility = canGoBack ? Visibility.Visible : Visibility.Collapsed;
+        _titleBarBackButton.IsEnabled = canGoBack;
+    }
+
+    public void TryGoBack()
+    {
+        if (_contentFrame.CanGoBack)
+        {
+            _contentFrame.GoBack();
+        }
+    }
+
+    public void UpdateNavToggleToolTip(string tooltipText)
+    {
+        ToolTipService.SetToolTip(_titleBarToggleLeftNavButton, tooltipText);
     }
 
     public void Detach()
