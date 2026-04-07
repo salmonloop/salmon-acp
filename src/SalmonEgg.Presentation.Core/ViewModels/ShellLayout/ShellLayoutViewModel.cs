@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using Uno.Extensions.Reactive;
 
@@ -10,6 +11,7 @@ namespace SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 
 public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
 {
+    private readonly IShellLayoutStore _store;
     private readonly IState<ShellLayoutSnapshot>? _snapshotState;
     private readonly IState<ShellLayoutState>? _desiredState;
     private readonly SynchronizationContext _syncContext;
@@ -42,6 +44,7 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
 
     public ShellLayoutViewModel(IShellLayoutStore store, SynchronizationContext? syncContext = null)
     {
+        _store = store;
         _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
         ApplySnapshot(store.CurrentSnapshot);
         ApplyDesiredState(store.CurrentState);
@@ -129,6 +132,18 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
         DesiredRightPanelMode = state.DesiredRightPanelMode;
         DesiredBottomPanelMode = state.DesiredBottomPanelMode;
     }
+
+    [RelayCommand]
+    private async Task ToggleDiffPanelAsync()
+        => await _store.Dispatch(new ToggleRightPanelRequested(RightPanelMode.Diff));
+
+    [RelayCommand]
+    private async Task ToggleTodoPanelAsync()
+        => await _store.Dispatch(new ToggleRightPanelRequested(RightPanelMode.Todo));
+
+    [RelayCommand]
+    private async Task ToggleBottomPanelAsync()
+        => await _store.Dispatch(new ToggleBottomPanelRequested());
 
     public void Dispose()
     {

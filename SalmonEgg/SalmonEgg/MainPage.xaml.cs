@@ -527,96 +527,6 @@ public sealed partial class MainPage : Page
         UpdateBackButtonState();
     }
 
-    private async void OnRightPanelButtonClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement element || element.Tag is not string tag)
-        {
-#if DEBUG
-            App.BootLog("TitleBarClick RightPanel ignored: invalid sender/tag");
-#endif
-            return;
-        }
-
-        var targetMode = tag switch
-        {
-            "Diff" => RightPanelMode.Diff,
-            "Todo" => RightPanelMode.Todo,
-            _ => RightPanelMode.None
-        };
-
-        if (targetMode == RightPanelMode.None)
-        {
-#if DEBUG
-            App.BootLog("TitleBarClick RightPanel ignored: unknown tag=" + tag);
-#endif
-            return;
-        }
-
-        try
-        {
-#if DEBUG
-            App.BootLog(
-                "TitleBarClick RightPanel start "
-                + "Tag=" + tag
-                + " TargetMode=" + targetMode
-                + " IsChatPageActive=" + IsChatPageActive()
-                + " RightPanelMode=" + LayoutVM.RightPanelMode
-                + " DesiredRightPanelMode=" + LayoutVM.DesiredRightPanelMode
-                + " CanShowSimultaneousAuxPanels=" + LayoutVM.CanShowSimultaneousAuxiliaryPanels);
-#endif
-            await _metricsSink.ReportToggleRightPanel(targetMode);
-#if DEBUG
-            App.BootLog(
-                "TitleBarClick RightPanel done "
-                + "Tag=" + tag
-                + " TargetMode=" + targetMode
-                + " RightPanelMode=" + LayoutVM.RightPanelMode
-                + " DesiredRightPanelMode=" + LayoutVM.DesiredRightPanelMode);
-#endif
-        }
-        catch (Exception ex)
-        {
-#if DEBUG
-            App.BootLog("TitleBarClick RightPanel failed: " + ex.GetType().Name);
-#endif
-        }
-    }
-
-    private async void OnBottomPanelButtonClick(object sender, RoutedEventArgs e)
-    {
-        if (!IsChatPageActive())
-        {
-#if DEBUG
-            App.BootLog("TitleBarClick BottomPanel ignored: IsChatPageActive=false");
-#endif
-            return;
-        }
-
-        try
-        {
-#if DEBUG
-            App.BootLog(
-                "TitleBarClick BottomPanel start "
-                + "BottomPanelMode=" + LayoutVM.BottomPanelMode
-                + " DesiredBottomPanelMode=" + LayoutVM.DesiredBottomPanelMode
-                + " CanShowSimultaneousAuxPanels=" + LayoutVM.CanShowSimultaneousAuxiliaryPanels);
-#endif
-            await _metricsSink.ReportToggleBottomPanel();
-#if DEBUG
-            App.BootLog(
-                "TitleBarClick BottomPanel done "
-                + "BottomPanelMode=" + LayoutVM.BottomPanelMode
-                + " DesiredBottomPanelMode=" + LayoutVM.DesiredBottomPanelMode);
-#endif
-        }
-        catch (Exception ex)
-        {
-#if DEBUG
-            App.BootLog("TitleBarClick BottomPanel failed: " + ex.GetType().Name);
-#endif
-        }
-    }
-
     private string GetRightPanelTitle(RightPanelMode mode, string? planTitle)
     {
         return mode switch
@@ -941,9 +851,6 @@ public sealed partial class MainPage : Page
         var value = ResourceLoader.GetString(resourceKey);
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
-
-    private bool IsChatPageActive()
-        => IsChatPageType(ContentFrame?.CurrentSourcePageType);
 
     private static bool IsChatPageType(Type? pageType)
         => pageType == typeof(ChatView);

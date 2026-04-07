@@ -138,6 +138,32 @@ public class ShellLayoutViewModelTests
         Assert.False(vm.BottomPanelVisible);
     }
 
+    [Fact]
+    public async Task ViewModel_ToggleRightPanelCommands_DispatchExpectedIntent()
+    {
+        await using var store = new FakeShellLayoutStore();
+        using var vm = new ShellLayoutViewModel(store);
+
+        await vm.ToggleDiffPanelCommand.ExecuteAsync(null);
+        await vm.ToggleTodoPanelCommand.ExecuteAsync(null);
+
+        Assert.Contains(store.DispatchedActions, action =>
+            action is ToggleRightPanelRequested { TargetMode: RightPanelMode.Diff });
+        Assert.Contains(store.DispatchedActions, action =>
+            action is ToggleRightPanelRequested { TargetMode: RightPanelMode.Todo });
+    }
+
+    [Fact]
+    public async Task ViewModel_ToggleBottomPanelCommand_DispatchExpectedIntent()
+    {
+        await using var store = new FakeShellLayoutStore();
+        using var vm = new ShellLayoutViewModel(store);
+
+        await vm.ToggleBottomPanelCommand.ExecuteAsync(null);
+
+        Assert.Contains(store.DispatchedActions, action => action is ToggleBottomPanelRequested);
+    }
+
     private static async Task WaitForConditionAsync(
         System.Func<bool> predicate,
         int maxAttempts = 20,
@@ -157,6 +183,7 @@ public class ShellLayoutViewModelTests
     private sealed class FakeShellLayoutStore : IShellLayoutStore, IAsyncDisposable
     {
         private readonly IState<ShellLayoutState> _state;
+        public List<ShellLayoutAction> DispatchedActions { get; } = new();
 
         public FakeShellLayoutStore(ShellLayoutState? initialState = null)
         {
@@ -172,7 +199,15 @@ public class ShellLayoutViewModelTests
         public IState<ShellLayoutState> StateState => _state;
         public ShellLayoutState CurrentState { get; private set; }
         public ShellLayoutSnapshot CurrentSnapshot { get; private set; }
-        public ValueTask Dispatch(ShellLayoutAction action) => ValueTask.CompletedTask;
+        public async ValueTask Dispatch(ShellLayoutAction action)
+        {
+            DispatchedActions.Add(action);
+            var reduced = ShellLayoutReducer.Reduce(CurrentState, action);
+            CurrentState = reduced.State;
+            CurrentSnapshot = reduced.Snapshot;
+            await _state.Update(_ => CurrentState, default);
+            await SnapshotState.Update(_ => CurrentSnapshot, default);
+        }
 
         public async ValueTask DisposeAsync()
         {
