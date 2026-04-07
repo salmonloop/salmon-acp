@@ -496,7 +496,7 @@
                                 Orientation="Horizontal"
                                 Spacing="8"
                                 VerticalAlignment="Center"
-                                Margin="0,0,8,0">
+                                Margin="0">
                         <ToggleButton x:Name="BottomPanelButton"
                                        x:Uid="BottomPanelButton"
                                        AutomationProperties.AutomationId="TitleBar.BottomPanel"

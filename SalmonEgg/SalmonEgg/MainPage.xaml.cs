@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 #if WINDOWS
 using Microsoft.UI;
 using Microsoft.UI.Input;
@@ -90,6 +91,7 @@ public sealed partial class MainPage : Page
     private readonly WindowMetricsProvider _metricsProvider;
     private readonly IShellLayoutMetricsSink _metricsSink;
     private readonly INavigationCoordinator _navigationCoordinator;
+    private readonly ILogger<MainPage> _logger;
     private readonly MainNavigationContentSyncAdapter _mainNavigationContentSyncAdapter;
     private readonly MainNavigationViewAdapter _mainNavigationViewAdapter;
     private readonly SalmonEgg.Presentation.Logic.SearchInteractionLogic _searchLogic = new();
@@ -107,6 +109,7 @@ public sealed partial class MainPage : Page
         _metricsProvider = App.ServiceProvider.GetRequiredService<WindowMetricsProvider>();
         _metricsSink = App.ServiceProvider.GetRequiredService<IShellLayoutMetricsSink>();
         _navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();
+        _logger = App.ServiceProvider.GetRequiredService<ILogger<MainPage>>();
         IsGuiAutomationMode = string.Equals(
             Environment.GetEnvironmentVariable("SALMONEGG_GUI"),
             "1",
@@ -524,32 +527,94 @@ public sealed partial class MainPage : Page
         UpdateBackButtonState();
     }
 
-    private void OnRightPanelButtonClick(object sender, RoutedEventArgs e)
+    private async void OnRightPanelButtonClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement element && element.Tag is string tag)
+        if (sender is not FrameworkElement element || element.Tag is not string tag)
         {
-            var targetMode = tag switch
-            {
-                "Diff" => RightPanelMode.Diff,
-                "Todo" => RightPanelMode.Todo,
-                _ => RightPanelMode.None
-            };
-
-            if (targetMode != RightPanelMode.None)
-            {
-                _metricsSink.ReportToggleRightPanel(targetMode);
-            }
-        }
-    }
-
-    private void OnBottomPanelButtonClick(object sender, RoutedEventArgs e)
-    {
-        if (!IsChatPageActive())
-        {
+#if DEBUG
+            App.BootLog("TitleBarClick RightPanel ignored: invalid sender/tag");
+#endif
             return;
         }
 
-        _metricsSink.ReportToggleBottomPanel();
+        var targetMode = tag switch
+        {
+            "Diff" => RightPanelMode.Diff,
+            "Todo" => RightPanelMode.Todo,
+            _ => RightPanelMode.None
+        };
+
+        if (targetMode == RightPanelMode.None)
+        {
+#if DEBUG
+            App.BootLog("TitleBarClick RightPanel ignored: unknown tag=" + tag);
+#endif
+            return;
+        }
+
+        try
+        {
+#if DEBUG
+            App.BootLog(
+                "TitleBarClick RightPanel start "
+                + "Tag=" + tag
+                + " TargetMode=" + targetMode
+                + " IsChatPageActive=" + IsChatPageActive()
+                + " RightPanelMode=" + LayoutVM.RightPanelMode
+                + " DesiredRightPanelMode=" + LayoutVM.DesiredRightPanelMode
+                + " CanShowSimultaneousAuxPanels=" + LayoutVM.CanShowSimultaneousAuxiliaryPanels);
+#endif
+            await _metricsSink.ReportToggleRightPanel(targetMode);
+#if DEBUG
+            App.BootLog(
+                "TitleBarClick RightPanel done "
+                + "Tag=" + tag
+                + " TargetMode=" + targetMode
+                + " RightPanelMode=" + LayoutVM.RightPanelMode
+                + " DesiredRightPanelMode=" + LayoutVM.DesiredRightPanelMode);
+#endif
+        }
+        catch (Exception ex)
+        {
+#if DEBUG
+            App.BootLog("TitleBarClick RightPanel failed: " + ex.GetType().Name);
+#endif
+        }
+    }
+
+    private async void OnBottomPanelButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (!IsChatPageActive())
+        {
+#if DEBUG
+            App.BootLog("TitleBarClick BottomPanel ignored: IsChatPageActive=false");
+#endif
+            return;
+        }
+
+        try
+        {
+#if DEBUG
+            App.BootLog(
+                "TitleBarClick BottomPanel start "
+                + "BottomPanelMode=" + LayoutVM.BottomPanelMode
+                + " DesiredBottomPanelMode=" + LayoutVM.DesiredBottomPanelMode
+                + " CanShowSimultaneousAuxPanels=" + LayoutVM.CanShowSimultaneousAuxiliaryPanels);
+#endif
+            await _metricsSink.ReportToggleBottomPanel();
+#if DEBUG
+            App.BootLog(
+                "TitleBarClick BottomPanel done "
+                + "BottomPanelMode=" + LayoutVM.BottomPanelMode
+                + " DesiredBottomPanelMode=" + LayoutVM.DesiredBottomPanelMode);
+#endif
+        }
+        catch (Exception ex)
+        {
+#if DEBUG
+            App.BootLog("TitleBarClick BottomPanel failed: " + ex.GetType().Name);
+#endif
+        }
     }
 
     private string GetRightPanelTitle(RightPanelMode mode, string? planTitle)
@@ -689,6 +754,9 @@ public sealed partial class MainPage : Page
     private void OnAppTitleBarLoaded(object sender, RoutedEventArgs e)
     {
 #if WINDOWS
+#if DEBUG
+        App.BootLog("TitleBarDiag OnAppTitleBarLoaded");
+#endif
         AttachTitleBarXamlRootChanged();
         if (_appWindowTitleBar is null)
         {
@@ -703,6 +771,7 @@ public sealed partial class MainPage : Page
     {
 #if WINDOWS
         RefreshTitleBarInteractiveRegions();
+        LogTitleBarRightMetrics("OnAppTitleBarSizeChanged");
 #endif
     }
 
@@ -952,13 +1021,22 @@ public sealed partial class MainPage : Page
         var window = App.MainWindowInstance;
         if (window == null || AppTitleBar is null || TitleBarDragRegion is null)
         {
+#if DEBUG
+            App.BootLog("TitleBarDiag ConfigureTitleBar skipped: window/AppTitleBar/TitleBarDragRegion missing");
+#endif
             return;
         }
 
 #if WINDOWS
+#if DEBUG
+        App.BootLog("TitleBarDiag ConfigureTitleBar enter");
+#endif
         AttachTitleBarXamlRootChanged();
         if (!AppWindowTitleBar.IsCustomizationSupported() || AppTitleBar.XamlRoot is null)
         {
+#if DEBUG
+            App.BootLog("TitleBarDiag ConfigureTitleBar skipped: customization unsupported or XamlRoot null");
+#endif
             return;
         }
 
@@ -973,6 +1051,9 @@ public sealed partial class MainPage : Page
         }
         catch
         {
+#if DEBUG
+            App.BootLog("TitleBarDiag ConfigureTitleBar skipped: SetTitleBar threw");
+#endif
             return;
         }
 
@@ -989,6 +1070,9 @@ public sealed partial class MainPage : Page
         var appWindow = window.AppWindow;
         if (appWindow?.TitleBar == null)
         {
+#if DEBUG
+            App.BootLog("TitleBarDiag ConfigureTitleBar skipped: AppWindow.TitleBar null");
+#endif
             return;
         }
 
@@ -1005,6 +1089,11 @@ public sealed partial class MainPage : Page
             ? InputNonClientPointerSource.GetForWindowId(window.AppWindow.Id)
             : null;
         RefreshTitleBarInteractiveRegions();
+        LogTitleBarRightMetrics("ConfigureTitleBar");
+        _ = DispatcherQueue.TryEnqueue(() => LogTitleBarRightMetrics("ConfigureTitleBar.Deferred"));
+#if DEBUG
+        App.BootLog("TitleBarDiag ConfigureTitleBar complete");
+#endif
 #endif
     }
 
@@ -1057,6 +1146,70 @@ public sealed partial class MainPage : Page
         {
             panel.Children.Remove(element);
         }
+    }
+
+    private void LogTitleBarRightMetrics(string source)
+    {
+#if DEBUG
+        if (_appWindowTitleBar is null)
+        {
+            App.BootLog("TitleBarMetricsSkipped Source=" + source + " Reason=AppWindowTitleBarNull");
+            return;
+        }
+
+        if (AppTitleBar is null || TitleBarRightButtons is null)
+        {
+            App.BootLog("TitleBarMetricsSkipped Source=" + source + " Reason=TitleBarElementsNull");
+            return;
+        }
+
+        if (AppTitleBar.ActualWidth <= 0 || TitleBarRightButtons.ActualWidth <= 0)
+        {
+            App.BootLog(
+                "TitleBarMetricsSkipped "
+                + "Source=" + source
+                + " Reason=ZeroWidth"
+                + " AppTitleBarWidth=" + AppTitleBar.ActualWidth
+                + " RightButtonsWidth=" + TitleBarRightButtons.ActualWidth);
+            return;
+        }
+
+        try
+        {
+            var transform = TitleBarRightButtons.TransformToVisual(AppTitleBar);
+            var origin = transform.TransformPoint(new Point(0, 0));
+            var rightButtonsRight = origin.X + TitleBarRightButtons.ActualWidth;
+            var rightGap = AppTitleBar.ActualWidth - rightButtonsRight;
+
+            _logger.LogDebug(
+                "TitleBar metrics Source={Source} LeftInset={LeftInset} RightInset={RightInset} TitleBarHeight={TitleBarHeight} TitleBarWidth={TitleBarWidth} RightButtonsX={RightButtonsX} RightButtonsWidth={RightButtonsWidth} RightButtonsRight={RightButtonsRight} RightGap={RightGap}",
+                source,
+                _appWindowTitleBar.LeftInset,
+                _appWindowTitleBar.RightInset,
+                _appWindowTitleBar.Height,
+                AppTitleBar.ActualWidth,
+                origin.X,
+                TitleBarRightButtons.ActualWidth,
+                rightButtonsRight,
+                rightGap);
+            App.BootLog(
+                "TitleBarMetrics "
+                + "Source=" + source
+                + " LeftInset=" + _appWindowTitleBar.LeftInset
+                + " RightInset=" + _appWindowTitleBar.RightInset
+                + " TitleBarHeight=" + _appWindowTitleBar.Height
+                + " TitleBarWidth=" + AppTitleBar.ActualWidth
+                + " RightButtonsX=" + origin.X
+                + " RightButtonsWidth=" + TitleBarRightButtons.ActualWidth
+                + " RightButtonsRight=" + rightButtonsRight
+                + " RightGap=" + rightGap);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "TitleBar metrics capture failed Source={Source}", source);
+            App.BootLog("TitleBarMetricsCaptureFailed Source=" + source + " Exception=" + ex.GetType().Name);
+        }
+#endif
     }
 
     private void RefreshTitleBarInteractiveRegions()
