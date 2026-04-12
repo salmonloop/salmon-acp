@@ -285,13 +285,13 @@ public sealed class GlobalSearchViewModelTests
             Mock.Of<IConversationCatalog>(),
             new NavigationProjectPreferencesAdapter(preferences),
             Mock.Of<IUiInteractionService>(),
-            Mock.Of<IShellNavigationService>(),
             Mock.Of<INavigationCoordinator>(),
             Mock.Of<ILogger<MainNavigationViewModel>>(),
             new FakeNavigationPaneState(),
             Mock.Of<IShellLayoutMetricsSink>(),
             new NavigationSelectionProjector(),
             new ShellSelectionStateStore(),
+            new ShellNavigationRuntimeStateStore(),
             presenter,
             new ProjectAffinityResolver());
     }

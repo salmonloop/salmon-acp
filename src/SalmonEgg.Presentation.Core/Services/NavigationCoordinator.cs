@@ -39,7 +39,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         _logger = logger ?? NullLogger<NavigationCoordinator>.Instance;
     }
 
-    public async Task ActivateStartAsync()
+    public async Task<bool> ActivateStartAsync(string? projectIdForNewSession = null)
     {
         try
         {
@@ -48,13 +48,18 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             var navigationResult = await NavigateToStartAsync(activationToken).ConfigureAwait(true);
             if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
             {
+                ClearPendingSessionPreviewState();
+                _projectSelectionStore.RememberSelectedProject(projectIdForNewSession);
                 _runtimeState.CurrentShellContent = ShellNavigationContent.Start;
                 _selectionSink.SetSelection(NavigationSelectionState.StartSelection);
+                return true;
             }
         }
         catch
         {
         }
+
+        return false;
     }
 
     public async Task ActivateDiscoverSessionsAsync()
@@ -66,6 +71,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             var navigationResult = await NavigateToDiscoverSessionsAsync(activationToken).ConfigureAwait(true);
             if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
             {
+                ClearPendingSessionPreviewState();
                 _runtimeState.CurrentShellContent = ShellNavigationContent.DiscoverSessions;
                 _selectionSink.SetSelection(NavigationSelectionState.DiscoverSessionsSelection);
             }
@@ -87,6 +93,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 .ConfigureAwait(true);
             if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
             {
+                ClearPendingSessionPreviewState();
                 _runtimeState.CurrentShellContent = ShellNavigationContent.Settings;
                 _selectionSink.SetSelection(NavigationSelectionState.SettingsSelection);
             }
@@ -241,14 +248,17 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         switch (content)
         {
             case ShellNavigationContent.Start:
+                ClearPendingSessionPreviewState();
                 _selectionSink.SetSelection(NavigationSelectionState.StartSelection);
                 return;
 
             case ShellNavigationContent.DiscoverSessions:
+                ClearPendingSessionPreviewState();
                 _selectionSink.SetSelection(NavigationSelectionState.DiscoverSessionsSelection);
                 return;
 
             case ShellNavigationContent.Settings:
+                ClearPendingSessionPreviewState();
                 _selectionSink.SetSelection(NavigationSelectionState.SettingsSelection);
                 return;
 
@@ -279,6 +289,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 _runtimeState.ActiveSessionActivationVersion = 0;
                 if (committed)
                 {
+                    _runtimeState.DesiredSessionId = null;
                     _runtimeState.CommittedSessionId = request.SessionId;
                     _runtimeState.CommittedSessionActivationVersion = request.Version;
                 }
@@ -286,6 +297,13 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         }
 
         request.CancellationTokenSource.Dispose();
+    }
+
+    private void ClearPendingSessionPreviewState()
+    {
+        _runtimeState.DesiredSessionId = null;
+        _runtimeState.IsSessionActivationInProgress = false;
+        _runtimeState.ActiveSessionActivationVersion = 0;
     }
 
     private bool IsLatestActivationToken(long activationToken)

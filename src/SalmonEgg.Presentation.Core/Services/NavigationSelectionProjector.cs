@@ -5,7 +5,7 @@ using SalmonEgg.Presentation.ViewModels.Navigation;
 
 namespace SalmonEgg.Presentation.Core.Services;
 
-public sealed class NavigationSelectionProjector
+public sealed class NavigationSelectionProjector : INavigationSelectionProjector
 {
     public NavigationViewProjection Project(
         NavigationSelectionState selection,
@@ -50,14 +50,14 @@ public sealed class NavigationSelectionProjector
                 {
                     activeProjects.Add(projectItem.ProjectId);
 
-                    return new NavigationViewProjection(
-                        // Keep semantic selection at session level, but when pane is closed
-                        // project the control selection onto the parent project item.
-                        // This aligns compact/minimal collapsed behavior with NavigationView hierarchy UX.
-                        ControlSelectedItem: isPaneOpen ? sessionItem : projectItem,
-                        IsSettingsSelected: false,
-                        ActiveProjectIds: activeProjects,
-                        SelectedSessionIds: selectedSessions);
+                    if (!isPaneOpen)
+                    {
+                        return new NavigationViewProjection(
+                            ControlSelectedItem: projectItem,
+                            IsSettingsSelected: false,
+                            ActiveProjectIds: activeProjects,
+                            SelectedSessionIds: selectedSessions);
+                    }
                 }
 
                 return new NavigationViewProjection(

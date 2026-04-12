@@ -318,7 +318,7 @@ public sealed class ConversationActivationCoordinatorTests
         var projectSelectionStore = new RecordingProjectSelectionStore();
         var coordinator = new NavigationCoordinator(
             selectionStore,
-            selectionStore,
+            new ShellNavigationRuntimeStateStore(),
             new ControlledConversationSessionSwitcher(activationGate.Task),
             projectSelectionStore,
             new StubShellNavigationService(ShellNavigationResult.Success()));

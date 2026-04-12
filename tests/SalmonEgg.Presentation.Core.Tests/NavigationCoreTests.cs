@@ -86,6 +86,55 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void MainPage_DoesNotOwnNavigationViewPaneSuppressionStateMachine()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+
+        Assert.DoesNotContain("_suppressNextPaneIntentFromDisplayModeTransition", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_suppressProjectExpansionSyncFromDisplayModeTransition", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReapplyNavPaneProjectionDeferred(", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShouldSyncProjectExpansion(", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_DoesNotKeepNavigationCoordinatorAsCodeBehindState()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+
+        Assert.DoesNotContain("private readonly INavigationCoordinator _navigationCoordinator;", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_DoesNotImperativelyMutateNavigationSelectionOrInvokeCoordinator()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+
+        Assert.DoesNotContain("MainNavView.SelectedItem =", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_navigationCoordinator.Activate", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_navigationCoordinator.SyncSelectionFromShellContent", code, StringComparison.Ordinal);
+        Assert.DoesNotContain(".SetSelection(", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainNavigationViewModel_DoesNotExposeLegacySelectedItemAlias()
+    {
+        var code = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\Navigation\MainNavigationViewModel.cs");
+
+        Assert.DoesNotContain("public object? SelectedItem =>", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("nameof(SelectedItem)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NavigationViewPanePresentationPolicy_DoesNotUseDualSuppressionFlags()
+    {
+        var code = LoadFile(@"src\SalmonEgg.Application\Common\Shell\NavigationViewPanePresentationPolicy.cs");
+
+        Assert.DoesNotContain("SuppressNextPaneIntentFromDisplayModeTransition", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("SuppressProjectExpansionSyncFromDisplayModeTransition", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainNavigationXaml_ExposesStableAutomationIds_ForGuiTesting()
     {
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml");
@@ -101,11 +150,11 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
-    public void MainNavigationXaml_UsesNativeChildSelectionProjection_ForProjectAncestorEmphasis()
+    public void MainNavigationXaml_DoesNotOverrideNativeChildSelectionProjection()
     {
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml");
 
-        Assert.Contains("IsChildSelected=\"{x:Bind IsActiveDescendant, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsChildSelected=\"{x:Bind IsActiveDescendant, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

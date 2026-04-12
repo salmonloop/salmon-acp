@@ -117,13 +117,13 @@ public sealed class MainNavigationViewModelPaneTests
             chatCatalog,
             CreateProjectPreferences(preferences),
             ui.Object,
-            shellNavigation.Object,
             navigationCoordinator,
             navLogger.Object,
             navState,
             metricsSink.Object,
             new NavigationSelectionProjector(),
             new ShellSelectionStateStore(),
+            new ShellNavigationRuntimeStateStore(),
             CreatePresenter((FakeChatSessionCatalog)chatCatalog),
             new ProjectAffinityResolver());
     }
@@ -211,7 +211,7 @@ public sealed class MainNavigationViewModelPaneTests
 
     private sealed class StubNavigationCoordinator : INavigationCoordinator
     {
-        public Task ActivateStartAsync() => Task.CompletedTask;
+        public Task<bool> ActivateStartAsync(string? projectIdForNewSession = null) => Task.FromResult(true);
 
         public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
 
@@ -222,5 +222,6 @@ public sealed class MainNavigationViewModelPaneTests
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
+
     }
 }

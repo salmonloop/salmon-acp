@@ -1,8 +1,9 @@
+using System.ComponentModel;
 using SalmonEgg.Presentation.Models.Navigation;
 
 namespace SalmonEgg.Presentation.Core.Services;
 
-public interface IShellNavigationRuntimeState
+public interface IShellNavigationRuntimeState : INotifyPropertyChanged
 {
     long LatestActivationToken { get; set; }
 

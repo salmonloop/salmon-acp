@@ -1003,7 +1003,7 @@ public sealed class ChatConversationWorkspaceTests
             .Returns(new NavigationSelectionState.Session("session-1"));
 
         var navigation = new Mock<INavigationCoordinator>();
-        navigation.Setup(n => n.ActivateStartAsync()).Returns(Task.CompletedTask);
+        navigation.Setup(n => n.ActivateStartAsync()).Returns(Task.FromResult(true));
 
         var facade = new ConversationCatalogFacade(
             workspace,

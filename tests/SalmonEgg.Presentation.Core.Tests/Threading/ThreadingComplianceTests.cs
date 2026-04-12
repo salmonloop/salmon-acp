@@ -35,7 +35,7 @@ public sealed class ThreadingComplianceTests
 
         var coordinator = new NavigationCoordinator(
             selectionStore,
-            selectionStore,
+            new ShellNavigationRuntimeStateStore(),
             switcher.Object,
             Mock.Of<INavigationProjectSelectionStore>(),
             shellNavigation.Object,

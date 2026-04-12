@@ -5,7 +5,7 @@ namespace SalmonEgg.Presentation.Core.Services;
 
 public interface INavigationCoordinator
 {
-    Task ActivateStartAsync();
+    Task<bool> ActivateStartAsync(string? projectIdForNewSession = null);
 
     Task ActivateDiscoverSessionsAsync();
 

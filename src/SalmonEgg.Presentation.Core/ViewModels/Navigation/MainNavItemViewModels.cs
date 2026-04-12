@@ -55,16 +55,8 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
     public bool IsActiveDescendant
     {
         get => _isActiveDescendant;
-        set
-        {
-            if (SetProperty(ref _isActiveDescendant, value))
-            {
-                OnPropertyChanged(nameof(HasActiveDescendantIndicator));
-            }
-        }
+        set => SetProperty(ref _isActiveDescendant, value);
     }
-
-    public bool HasActiveDescendantIndicator => IsActiveDescendant && IsPaneClosed;
 
     public ProjectNavItemViewModel(
         ProjectDefinition project, 
@@ -80,9 +72,9 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
         CreateSessionCommand = new AsyncRelayCommand(() => createSessionAsync(ProjectId));
     }
 
-    protected override void OnPaneStateChanged()
+    public void ReassertExpansion()
     {
-        OnPropertyChanged(nameof(HasActiveDescendantIndicator));
+        OnPropertyChanged(nameof(IsExpanded));
     }
 }
 

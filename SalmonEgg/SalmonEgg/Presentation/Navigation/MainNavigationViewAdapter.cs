@@ -1,9 +1,10 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using SalmonEgg.Application.Common.Shell;
+using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -17,21 +18,22 @@ namespace SalmonEgg.Presentation.Navigation;
 public sealed class MainNavigationViewAdapter
 {
     private readonly NavigationView _navigationView;
-    private readonly DispatcherQueue _dispatcherQueue;
     private readonly MainNavigationViewModel _viewModel;
     private readonly INavigationCoordinator _navigationCoordinator;
-    private long _sessionActivationRequestVersion;
+    private readonly DispatcherQueue _dispatcherQueue;
+    private NavigationViewPanePresentationState _panePresentationState = NavigationViewPanePresentationState.Default;
+    private NavigationViewPanePresentationMode _displayMode = NavigationViewPanePresentationMode.Expanded;
 
     public MainNavigationViewAdapter(
         NavigationView navigationView,
-        DispatcherQueue dispatcherQueue,
         MainNavigationViewModel viewModel,
-        INavigationCoordinator navigationCoordinator)
+        INavigationCoordinator navigationCoordinator,
+        DispatcherQueue dispatcherQueue)
     {
         _navigationView = navigationView ?? throw new ArgumentNullException(nameof(navigationView));
-        _dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
+        _dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
     }
 
     public async Task<bool> HandleItemInvokedAsync(NavigationViewItemInvokedEventArgs args)
@@ -39,10 +41,100 @@ public sealed class MainNavigationViewAdapter
         return await HandleItemInvokedCoreAsync(args).ConfigureAwait(true);
     }
 
+    public void ApplyPaneProjection(bool isPaneOpen)
+    {
+        if (_navigationView.IsPaneOpen != isPaneOpen)
+        {
+            _navigationView.IsPaneOpen = isPaneOpen;
+        }
+    }
+
+    public void SyncProjectExpansion(NavigationViewItemBase? itemContainer, bool isExpanded)
+    {
+        if (!_navigationView.IsPaneOpen)
+        {
+            return;
+        }
+
+        if ((itemContainer as FrameworkElement)?.DataContext is ProjectNavItemViewModel project)
+        {
+            _viewModel.SetProjectExpanded(project.ProjectId, isExpanded);
+        }
+    }
+
+    public void ReapplyProjectExpansionProjection()
+    {
+        foreach (var project in _viewModel.Items.OfType<ProjectNavItemViewModel>())
+        {
+            if (_navigationView.ContainerFromMenuItem(project) is not NavigationViewItem container)
+            {
+                continue;
+            }
+
+            var targetExpansion = NavigationViewPanePresentationPolicy.ResolveProjectExpansionProjection(
+                _displayMode,
+                _navigationView.IsPaneOpen,
+                project.IsExpanded);
+
+            if (!targetExpansion.HasValue)
+            {
+                continue;
+            }
+
+            if (container.IsExpanded != targetExpansion.Value)
+            {
+                container.IsExpanded = targetExpansion.Value;
+            }
+        }
+    }
+
+    public bool HandlePanePresentationChanged(
+        bool isPaneOpen,
+        bool isDisplayModeChanged,
+        NavigationViewPanePresentationMode displayMode,
+        bool desiredPaneOpen)
+    {
+        _displayMode = displayMode;
+
+        var decision = NavigationViewPanePresentationPolicy.Evaluate(
+            _panePresentationState,
+            isPaneOpen,
+            isDisplayModeChanged,
+            displayMode,
+            desiredPaneOpen);
+        _panePresentationState = decision.NextState;
+
+        if (decision.ShouldApplyPaneProjection)
+        {
+            ApplyPaneProjection(desiredPaneOpen);
+        }
+
+        if (decision.ShouldRefreshSelectionProjection
+            || decision.ShouldReassertExpandedProjects
+            || decision.ShouldReapplyProjectExpansionProjection)
+        {
+            ScheduleProjectionReplay(
+                decision.ShouldRefreshSelectionProjection,
+                decision.ShouldReassertExpandedProjects,
+                decision.ShouldReapplyProjectExpansionProjection,
+                decision.ShouldClearDisplayModeSuppressionAfterReplay);
+        }
+
+        return decision.ShouldReportPaneOpenIntent;
+    }
+
+    public void TrySyncProjectExpansion(NavigationViewItemBase? itemContainer, bool isExpanded)
+    {
+        if (!NavigationViewPanePresentationPolicy.ShouldSyncProjectExpansion(_panePresentationState))
+        {
+            return;
+        }
+
+        SyncProjectExpansion(itemContainer, isExpanded);
+    }
+
     private async Task<bool> HandleItemInvokedCoreAsync(NavigationViewItemInvokedEventArgs args)
     {
-        MarkNavigationIntentObserved();
-
         if (ReferenceEquals(args.InvokedItemContainer, _navigationView.SettingsItem))
         {
             await _navigationCoordinator.ActivateSettingsAsync("General").ConfigureAwait(true);
@@ -68,35 +160,22 @@ public sealed class MainNavigationViewAdapter
 
         if (NavItemTag.TryParseSession(tag, out var sessionId))
         {
-            var previousSelection = _viewModel.CurrentSelection;
             var sessionProjectId = (args.InvokedItemContainer as FrameworkElement)?.DataContext is SessionNavItemViewModel sessionItem
                 ? sessionItem.ProjectId
                 : _viewModel.TryGetProjectIdForSession(sessionId);
 
-            // Apply the user's latest intent immediately so projection does not briefly
-            // snap back to the previous session while activation is still in flight.
-            //
-            // IMPORTANT: We MUST call ActivateSessionAsync BEFORE SelectSession.
-            // ActivateSessionAsync (via NavigationCoordinator) calls PrimeSessionSwitchPreview,
-            // which sets the ViewModel's preview loading state. If we SelectSession first,
-            // the ViewModel might briefly project the session as "Active" but "Not Loading"
-            // (since the preview hasn't started yet), causing the "flash of empty chat".
-            var activationTask = _navigationCoordinator.ActivateSessionAsync(sessionId, sessionProjectId);
-            var requestVersion = Volatile.Read(ref _sessionActivationRequestVersion);
-            _viewModel.SelectSession(sessionId);
             // Never await remote session activation on the NavigationView UI event pipeline.
             // If we await here, the UI thread stays occupied until activation completes,
             // which causes multi-second "click has no response" freezes.
-            _ = ObserveSessionActivationAsync(activationTask, previousSelection, sessionId, requestVersion);
+            _ = _navigationCoordinator.ActivateSessionAsync(sessionId, sessionProjectId);
             return true;
         }
 
         if (NavItemTag.TryParseProject(tag, out _))
         {
-            // The native NavigationViewItem with MenuItemsSource handles expand/collapse
-            // automatically when the content area is clicked. IsExpanded TwoWay binding
-            // in ProjectNavTemplate synchronizes the result back to the ViewModel.
-            // Calling ToggleProjectExpanded here would cause a double-toggle (cancel out).
+            // Non-leaf project items are not navigation destinations. Let the native
+            // NavigationView hierarchy handle expand/collapse without translating the
+            // click into a semantic selection change.
             return true;
         }
 
@@ -114,93 +193,34 @@ public sealed class MainNavigationViewAdapter
 
         return false;
     }
-
-    private async Task ObserveSessionActivationAsync(
-        Task<bool> activationTask,
-        NavigationSelectionState previousSelection,
-        string requestedSessionId,
-        long requestVersion)
+    private void ScheduleProjectionReplay(
+        bool refreshSelectionProjection,
+        bool reassertExpandedProjects,
+        bool reapplyProjectExpansionProjection,
+        bool clearDisplayModeSuppressionAfterReplay)
     {
-        try
+        _ = _dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
         {
-            var activated = await activationTask.ConfigureAwait(false);
-            if (activated)
+            if (refreshSelectionProjection)
             {
-                return;
+                _viewModel.RefreshSelectionProjection();
             }
 
-            _ = _dispatcherQueue.TryEnqueue(() =>
+            if (reassertExpandedProjects)
             {
-                if (!ShouldRollbackSessionSelection(requestedSessionId, requestVersion))
-                {
-                    return;
-                }
+                _viewModel.ReassertExpandedProjects();
+            }
 
-                RestoreSelection(previousSelection);
-            });
-        }
-        catch
-        {
-            // Navigation coordinator already handles logging/fault state.
-            _ = _dispatcherQueue.TryEnqueue(() =>
+            if (reapplyProjectExpansionProjection)
             {
-                if (!ShouldRollbackSessionSelection(requestedSessionId, requestVersion))
-                {
-                    return;
-                }
+                ReapplyProjectExpansionProjection();
+            }
 
-                RestoreSelection(previousSelection);
-            });
-        }
+            if (clearDisplayModeSuppressionAfterReplay
+                && _panePresentationState.IsDisplayModeTransitionSuppressed)
+            {
+                _panePresentationState = NavigationViewPanePresentationState.Default;
+            }
+        });
     }
-
-    private bool ShouldRollbackSessionSelection(string requestedSessionId, long requestVersion)
-    {
-        if (requestVersion != Volatile.Read(ref _sessionActivationRequestVersion))
-        {
-            return false;
-        }
-
-        if (_viewModel.CurrentSelection is not NavigationSelectionState.Session current
-            || !string.Equals(current.SessionId, requestedSessionId, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        // Keep latest explicit user intent on activation cancellation/races.
-        // Only rollback when the requested session is no longer available.
-        return string.IsNullOrWhiteSpace(_viewModel.TryGetProjectIdForSession(requestedSessionId));
-    }
-
-    private void RestoreSelection(NavigationSelectionState selection)
-    {
-        if (selection is NavigationSelectionState.Session selectedSession
-            && string.IsNullOrWhiteSpace(_viewModel.TryGetProjectIdForSession(selectedSession.SessionId)))
-        {
-            _viewModel.SelectStart();
-            return;
-        }
-
-        switch (selection)
-        {
-            case NavigationSelectionState.Start:
-                _viewModel.SelectStart();
-                break;
-            case NavigationSelectionState.DiscoverSessions:
-                _viewModel.SelectDiscoverSessions();
-                break;
-            case NavigationSelectionState.Settings:
-                _viewModel.SelectSettings();
-                break;
-            case NavigationSelectionState.Session session:
-                _viewModel.SelectSession(session.SessionId);
-                break;
-            default:
-                _viewModel.SelectStart();
-                break;
-        }
-    }
-
-    private void MarkNavigationIntentObserved()
-        => Interlocked.Increment(ref _sessionActivationRequestVersion);
 }

@@ -412,7 +412,7 @@ public sealed class ChatLaunchWorkflowTests
 
         public Action<string>? OnActivateSession { get; set; }
 
-        public Task ActivateStartAsync() => Task.CompletedTask;
+        public Task<bool> ActivateStartAsync(string? projectIdForNewSession = null) => Task.FromResult(true);
 
         public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
 
@@ -448,6 +448,7 @@ public sealed class ChatLaunchWorkflowTests
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
+
     }
 
     private sealed class ImmediateSynchronizationContext : SynchronizationContext

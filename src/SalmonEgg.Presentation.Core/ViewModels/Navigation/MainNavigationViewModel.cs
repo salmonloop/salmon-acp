@@ -29,16 +29,15 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly IChatSessionCatalog _chatSessionCatalogActions;
     private readonly INavigationProjectPreferences _projectPreferences;
     private readonly IUiInteractionService _ui;
-    private readonly IShellNavigationService _shellNavigation;
     private readonly INavigationCoordinator _navigationCoordinator;
     private readonly ILogger<MainNavigationViewModel> _logger;
     private readonly INavigationPaneState _navigationState;
     private readonly IShellLayoutMetricsSink _metricsSink;
-    private readonly NavigationSelectionProjector _selectionProjector;
+    private readonly INavigationSelectionProjector _selectionProjector;
     private readonly IConversationCatalogReadModel _conversationCatalogPresenter;
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly IShellSelectionReadModel _shellSelection;
-    private readonly IShellSelectionMutationSink _shellSelectionMutations;
+    private readonly IShellNavigationRuntimeState _shellRuntimeState;
     private readonly SynchronizationContext _syncContext;
     private readonly System.Collections.Specialized.NotifyCollectionChangedEventHandler _projectsChangedHandler;
     private readonly Timer _relativeTimeTimer;
@@ -60,18 +59,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     public SessionsLabelNavItemViewModel SessionsLabelItem { get; }
     public AddProjectNavItemViewModel AddProjectItem { get; }
 
-    private object? _selectedItem;
     private NavigationViewProjection _projection = new(
         ControlSelectedItem: null,
         IsSettingsSelected: false,
         ActiveProjectIds: new HashSet<string>(StringComparer.Ordinal),
         SelectedSessionIds: new HashSet<string>(StringComparer.Ordinal));
-
-    public object? SelectedItem
-    {
-        get => _selectedItem;
-        private set => SetProperty(ref _selectedItem, value);
-    }
 
     public NavigationSelectionState CurrentSelection => _shellSelection.CurrentSelection;
 
@@ -96,13 +88,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         OnPropertyChanged(nameof(IsPaneOpen));
         ApplySelectionProjection();
-        OnPropertyChanged(nameof(SelectedItem));
         _logger.LogDebug(
-            "Pane state changed IsPaneOpen={IsPaneOpen} CurrentSelection={CurrentSelection} ProjectedSelected={ProjectedSelected} VmSelected={VmSelected}",
+            "Pane state changed IsPaneOpen={IsPaneOpen} CurrentSelection={CurrentSelection} ProjectedSelected={ProjectedSelected}",
             _navigationState.IsPaneOpen,
             CurrentSelection,
-            _projection.ControlSelectedItem?.GetType().Name ?? "<null>",
-            SelectedItem?.GetType().Name ?? "<null>");
+            _projection.ControlSelectedItem?.GetType().Name ?? "<null>");
     }
 
     public IAsyncRelayCommand AddProjectCommand { get; }
@@ -111,28 +101,26 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         IConversationCatalog conversationCatalog,
         INavigationProjectPreferences projectPreferences,
         IUiInteractionService ui,
-        IShellNavigationService shellNavigation,
         INavigationCoordinator navigationCoordinator,
         ILogger<MainNavigationViewModel> logger,
         INavigationPaneState navigationState,
         IShellLayoutMetricsSink metricsSink,
-        NavigationSelectionProjector selectionProjector,
+        INavigationSelectionProjector selectionProjector,
         IShellSelectionReadModel shellSelection,
+        IShellNavigationRuntimeState shellRuntimeState,
         IConversationCatalogReadModel conversationCatalogPresenter,
         IProjectAffinityResolver projectAffinityResolver)
     {
         _chatSessionCatalogActions = conversationCatalog as IChatSessionCatalog ?? new ChatViewModelSessionCatalogAdapter(conversationCatalog);
         _projectPreferences = projectPreferences ?? throw new ArgumentNullException(nameof(projectPreferences));
         _ui = ui ?? throw new ArgumentNullException(nameof(ui));
-        _shellNavigation = shellNavigation ?? throw new ArgumentNullException(nameof(shellNavigation));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationState = navigationState ?? throw new ArgumentNullException(nameof(navigationState));
         _metricsSink = metricsSink ?? throw new ArgumentNullException(nameof(metricsSink));
         _selectionProjector = selectionProjector ?? throw new ArgumentNullException(nameof(selectionProjector));
         _shellSelection = shellSelection ?? throw new ArgumentNullException(nameof(shellSelection));
-        _shellSelectionMutations = shellSelection as IShellSelectionMutationSink
-            ?? throw new ArgumentException("Shell selection read model must also support mutations.", nameof(shellSelection));
+        _shellRuntimeState = shellRuntimeState ?? throw new ArgumentNullException(nameof(shellRuntimeState));
         _conversationCatalogPresenter = conversationCatalogPresenter ?? throw new ArgumentNullException(nameof(conversationCatalogPresenter));
         _projectAffinityResolver = projectAffinityResolver ?? throw new ArgumentNullException(nameof(projectAffinityResolver));
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
@@ -154,11 +142,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         placeholderProject.Children.Add(CreateLoadingPlaceholder());
         Items.Add(placeholderProject);
 
-        SelectedItem = StartItem;
         ApplySelectionProjection();
 
         _conversationCatalogPresenter.PropertyChanged += OnConversationCatalogPresenterPropertyChanged;
         _shellSelection.PropertyChanged += OnShellSelectionPropertyChanged;
+        _shellRuntimeState.PropertyChanged += OnShellRuntimeStatePropertyChanged;
         _projectsChangedHandler = (_, _) => RebuildTree();
         ((INotifyCollectionChanged)_projectPreferences.Projects).CollectionChanged += _projectsChangedHandler;
         ((INotifyCollectionChanged)_projectPreferences.ProjectPathMappings).CollectionChanged += _projectsChangedHandler;
@@ -177,6 +165,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _navigationState.PaneStateChanged -= OnServicePaneStateChanged;
         _conversationCatalogPresenter.PropertyChanged -= OnConversationCatalogPresenterPropertyChanged;
         _shellSelection.PropertyChanged -= OnShellSelectionPropertyChanged;
+        _shellRuntimeState.PropertyChanged -= OnShellRuntimeStatePropertyChanged;
         ((INotifyCollectionChanged)_projectPreferences.Projects).CollectionChanged -= _projectsChangedHandler;
         ((INotifyCollectionChanged)_projectPreferences.ProjectPathMappings).CollectionChanged -= _projectsChangedHandler;
         _relativeTimeTimer.Dispose();
@@ -228,46 +217,48 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             OnPropertyChanged(nameof(CurrentSelection));
             OnPropertyChanged(nameof(IsSettingsSelected));
             NormalizeSelectionAfterRebuild();
-        }
-    }
-
-    public void SelectStart()
-    {
-        SetSelectionState(NavigationSelectionState.StartSelection);
-    }
-
-    public void SelectDiscoverSessions()
-    {
-        SetSelectionState(NavigationSelectionState.DiscoverSessionsSelection);
-    }
-
-    public void SelectSettings()
-    {
-        SetSelectionState(NavigationSelectionState.SettingsSelection);
-    }
-
-    public void SelectSession(string sessionId)
-    {
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            SelectStart();
             return;
         }
 
-        SetSelectionState(new NavigationSelectionState.Session(sessionId));
+    }
 
-        if (!_sessionIndex.ContainsKey(sessionId))
+    private void OnShellRuntimeStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IShellNavigationRuntimeState.DesiredSessionId)
+            || e.PropertyName == nameof(IShellNavigationRuntimeState.IsSessionActivationInProgress))
         {
-            RebuildTree();
+            ApplySelectionProjection();
         }
     }
 
     public void RefreshSelectionProjection()
     {
         ApplySelectionProjection();
-        OnPropertyChanged(nameof(SelectedItem));
-        OnPropertyChanged(nameof(ProjectedControlSelectedItem));
-        OnPropertyChanged(nameof(IsSettingsSelected));
+    }
+
+    public void SetProjectExpanded(string projectId, bool isExpanded)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            return;
+        }
+
+        if (_projectVms.TryGetValue(projectId, out var projectVm)
+            && projectVm.IsExpanded != isExpanded)
+        {
+            projectVm.IsExpanded = isExpanded;
+        }
+    }
+
+    public void ReassertExpandedProjects()
+    {
+        foreach (var projectVm in _projectVms.Values)
+        {
+            if (projectVm.IsExpanded)
+            {
+                projectVm.ReassertExpansion();
+            }
+        }
     }
 
     public string? TryGetProjectIdForSession(string sessionId)
@@ -290,15 +281,13 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         try
         {
-            var navigationResult = await _shellNavigation.NavigateToStart().ConfigureAwait(true);
-            if (!navigationResult.Succeeded)
+            var activated = await _navigationCoordinator.ActivateStartAsync(normalizedId).ConfigureAwait(true);
+            if (!activated)
             {
                 return;
             }
 
-            _projectPreferences.LastSelectedProjectId = normalizedId;
             _pendingProjectIdForNewSession = normalizedId;
-            SelectStart();
         }
         catch
         {
@@ -684,7 +673,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }
         catch
         {
-            SetSelectionState(NavigationSelectionState.StartSelection);
+            _navigationCoordinator.SyncSelectionFromShellContent(ShellNavigationContent.Start);
         }
     }
 
@@ -697,76 +686,65 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         if (string.IsNullOrWhiteSpace(sessionSelection.SessionId))
         {
-            _shellSelectionMutations.SetSelection(NavigationSelectionState.StartSelection);
+            _navigationCoordinator.SyncSelectionFromShellContent(ShellNavigationContent.Start);
         }
-    }
-
-    private void SetSelectionState(NavigationSelectionState selection)
-    {
-        if (Equals(CurrentSelection, selection))
-        {
-            ApplySelectionProjection();
-            return;
-        }
-
-        _shellSelectionMutations.SetSelection(selection);
     }
 
     private void ApplySelectionProjection()
     {
-        if (CurrentSelection is NavigationSelectionState.Session selectionState
+        var previousProjection = _projection;
+        var projectedSelection = GetProjectedSelectionState();
+
+        if (projectedSelection is NavigationSelectionState.Session selectionState
             && !string.IsNullOrWhiteSpace(selectionState.SessionId)
             && _sessionIndex.TryGetValue(selectionState.SessionId, out var sessionItem))
         {
             _logger.LogDebug(
-                "SelectionProjection sessionId={SessionId} projectId={ProjectId} paneOpen={PaneOpen} projectIndexHas={ProjectIndexHas}",
+                "SelectionProjection sessionId={SessionId} projectId={ProjectId} paneOpen={PaneOpen} projectIndexHas={ProjectIndexHas} semantic={SemanticSelection} previewActive={PreviewActive}",
                 selectionState.SessionId,
                 sessionItem.ProjectId,
                 _navigationState.IsPaneOpen,
-                _projectIndex.ContainsKey(sessionItem.ProjectId));
+                _projectIndex.ContainsKey(sessionItem.ProjectId),
+                CurrentSelection,
+                _shellRuntimeState.IsSessionActivationInProgress);
         }
 
         var nextProjection = _selectionProjector.Project(
-            CurrentSelection,
+            projectedSelection,
             StartItem,
             DiscoverSessionsItem,
             _sessionIndex,
             _projectIndex,
             _navigationState.IsPaneOpen);
 
-        if (!_navigationState.IsPaneOpen
-            && CurrentSelection is NavigationSelectionState.Session selection
-            && !string.IsNullOrWhiteSpace(selection.SessionId)
-            && _sessionIndex.TryGetValue(selection.SessionId, out var selectedSession)
-            && _projectIndex.TryGetValue(selectedSession.ProjectId, out var selectedProject))
-        {
-            nextProjection = nextProjection with
-            {
-                ControlSelectedItem = selectedProject
-            };
-        }
-
-        if (CurrentSelection is NavigationSelectionState.Session
-            && nextProjection.ControlSelectedItem is null
-            && _projection.ControlSelectedItem is not null)
-        {
-            nextProjection = nextProjection with
-            {
-                ControlSelectedItem = _projection.ControlSelectedItem
-            };
-        }
-
         _projection = nextProjection;
         ApplyVisualSelectionState(_projection);
-        SelectedItem = _projection.ControlSelectedItem;
-        OnPropertyChanged(nameof(ProjectedControlSelectedItem));
-        OnPropertyChanged(nameof(IsSettingsSelected));
+        if (!ReferenceEquals(previousProjection.ControlSelectedItem, _projection.ControlSelectedItem))
+        {
+            OnPropertyChanged(nameof(ProjectedControlSelectedItem));
+        }
+
+        if (previousProjection.IsSettingsSelected != _projection.IsSettingsSelected)
+        {
+            OnPropertyChanged(nameof(IsSettingsSelected));
+        }
+    }
+
+    private NavigationSelectionState GetProjectedSelectionState()
+    {
+        if (!string.IsNullOrWhiteSpace(_shellRuntimeState.DesiredSessionId)
+            && _sessionIndex.ContainsKey(_shellRuntimeState.DesiredSessionId))
+        {
+            return new NavigationSelectionState.Session(_shellRuntimeState.DesiredSessionId);
+        }
+
+        return CurrentSelection;
     }
 
     private void ApplyVisualSelectionState(NavigationViewProjection projection)
     {
-        StartItem.IsLogicallySelected = CurrentSelection is NavigationSelectionState.Start;
-        DiscoverSessionsItem.IsLogicallySelected = CurrentSelection is NavigationSelectionState.DiscoverSessions;
+        StartItem.IsLogicallySelected = ReferenceEquals(projection.ControlSelectedItem, StartItem);
+        DiscoverSessionsItem.IsLogicallySelected = ReferenceEquals(projection.ControlSelectedItem, DiscoverSessionsItem);
         SessionsLabelItem.IsLogicallySelected = false;
         AddProjectItem.IsLogicallySelected = false;
 

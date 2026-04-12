@@ -650,13 +650,13 @@ public sealed class StartViewModelTests
             chat.ViewModel,
             new NavigationProjectPreferencesAdapter(preferences),
             ui.Object,
-            Mock.Of<IShellNavigationService>(),
             navigationCoordinator,
             navLogger.Object,
             navState,
             metricsSink.Object,
             new NavigationSelectionProjector(),
             new ShellSelectionStateStore(),
+            new ShellNavigationRuntimeStateStore(),
             chat.Presenter,
             new ProjectAffinityResolver());
     }

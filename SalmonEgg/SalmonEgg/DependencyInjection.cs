@@ -293,23 +293,24 @@ public static class DependencyInjection
                 sp.GetRequiredService<IConversationMutationPipeline>()));
 
         // Main shell navigation (Start + Projects -> Sessions tree)
-        services.AddSingleton<NavigationSelectionProjector>();
+        services.AddSingleton<INavigationSelectionProjector, NavigationSelectionProjector>();
         services.AddSingleton<ShellSelectionStateStore>();
+        services.AddSingleton<ShellNavigationRuntimeStateStore>();
         services.AddSingleton<IShellSelectionReadModel>(sp => sp.GetRequiredService<ShellSelectionStateStore>());
         services.AddSingleton<IShellSelectionMutationSink>(sp => sp.GetRequiredService<ShellSelectionStateStore>());
-        services.AddSingleton<IShellNavigationRuntimeState>(sp => sp.GetRequiredService<ShellSelectionStateStore>());
+        services.AddSingleton<IShellNavigationRuntimeState>(sp => sp.GetRequiredService<ShellNavigationRuntimeStateStore>());
         services.AddSingleton<MainNavigationViewModel>(sp =>
             new MainNavigationViewModel(
                 sp.GetRequiredService<IConversationCatalog>(),
                 sp.GetRequiredService<INavigationProjectPreferences>(),
                 sp.GetRequiredService<IUiInteractionService>(),
-                sp.GetRequiredService<IShellNavigationService>(),
                 sp.GetRequiredService<INavigationCoordinator>(),
                 sp.GetRequiredService<ILogger<MainNavigationViewModel>>(),
                 sp.GetRequiredService<INavigationPaneState>(),
                 sp.GetRequiredService<IShellLayoutMetricsSink>(),
-                sp.GetRequiredService<NavigationSelectionProjector>(),
+                sp.GetRequiredService<INavigationSelectionProjector>(),
                 sp.GetRequiredService<IShellSelectionReadModel>(),
+                sp.GetRequiredService<IShellNavigationRuntimeState>(),
                 sp.GetRequiredService<IConversationCatalogReadModel>(),
                 sp.GetRequiredService<IProjectAffinityResolver>()));
         services.AddSingleton<INavigationCoordinator>(sp =>

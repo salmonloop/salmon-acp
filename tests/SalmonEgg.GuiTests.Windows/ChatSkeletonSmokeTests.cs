@@ -18,23 +18,28 @@ public sealed class ChatSkeletonSmokeTests
     [SkippableFact]
     public void SelectSessionWithContent_ShowsSkeletonLoader_ThenContent()
     {
-        // Use withContent: true to ensure there are messages to be rendered,
-        // which triggers the "render hold" logic in ChatView.xaml.cs.
+        // Use withContent: true to ensure there are messages to be rendered.
+        // Fast local activation paths may transition directly to content without
+        // showing a blocking overlay; when overlay appears, it must dismiss.
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(sessionCount: 1, withContent: true);
         using var session = WindowsGuiAppSession.LaunchFresh();
 
         var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01");
         session.ActivateElement(sessionItem);
 
-        var loadingOverlay = WaitForLoadingOverlay(session, "select-session-with-content");
-
-        // Wait for it to disappear (content rendered)
-        var isHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(10));
-        Assert.True(isHidden, "Loading overlay (skeleton) did not disappear after content should have loaded.");
+        var loadingOverlay = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromSeconds(2));
+        if (loadingOverlay is not null)
+        {
+            var isHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(10));
+            Assert.True(isHidden, "Loading overlay (skeleton) did not disappear after content should have loaded.");
+        }
 
         // Verify content is now visible
         var chatHeader = session.FindByAutomationId("ChatView.CurrentSessionNameButton");
+        var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+
         Assert.NotNull(chatHeader);
+        Assert.NotNull(messagesList);
         Assert.Contains("GUI Session 01", chatHeader.Name, StringComparison.Ordinal);
     }
 

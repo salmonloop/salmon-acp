@@ -651,7 +651,7 @@ public sealed class DiscoverSessionsViewModelTests
 
         public (string SessionId, string? ProjectId)? LastActivation { get; private set; }
 
-        public Task ActivateStartAsync() => Task.CompletedTask;
+        public Task<bool> ActivateStartAsync(string? projectIdForNewSession = null) => Task.FromResult(true);
 
         public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
 
@@ -666,6 +666,7 @@ public sealed class DiscoverSessionsViewModelTests
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
+
     }
 
     private sealed class DelayedNavigationCoordinator : INavigationCoordinator
@@ -677,7 +678,7 @@ public sealed class DiscoverSessionsViewModelTests
             _activation = activation;
         }
 
-        public Task ActivateStartAsync() => Task.CompletedTask;
+        public Task<bool> ActivateStartAsync(string? projectIdForNewSession = null) => Task.FromResult(true);
 
         public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
 
@@ -688,6 +689,7 @@ public sealed class DiscoverSessionsViewModelTests
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
+
     }
 
     private sealed class ContextAssertingNavigationCoordinator : INavigationCoordinator
@@ -703,7 +705,7 @@ public sealed class DiscoverSessionsViewModelTests
 
         public bool WasCalledOnExpectedContext { get; private set; }
 
-        public Task ActivateStartAsync() => Task.CompletedTask;
+        public Task<bool> ActivateStartAsync(string? projectIdForNewSession = null) => Task.FromResult(true);
 
         public Task ActivateDiscoverSessionsAsync() => Task.CompletedTask;
 
@@ -718,6 +720,7 @@ public sealed class DiscoverSessionsViewModelTests
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
+
     }
 
     private sealed class FakeChatService : IChatService

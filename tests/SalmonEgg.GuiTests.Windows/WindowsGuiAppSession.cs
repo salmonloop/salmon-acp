@@ -205,9 +205,41 @@ internal sealed class WindowsGuiAppSession : IDisposable
         return TryFindByAutomationId(automationId, timeout) != null;
     }
 
+    public bool WaitUntilOnscreen(string automationId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var element = TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
+            if (element is not null && !TryGetIsOffscreen(element))
+            {
+                return true;
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return false;
+    }
+
     public void InvokeButton(string automationId)
     {
+        if (!WaitUntilOnscreen(automationId, TimeSpan.FromSeconds(5)))
+        {
+            throw new TimeoutException($"Button '{automationId}' is not onscreen.");
+        }
+
         var button = FindByAutomationId(automationId);
+        if (TryGetIsOffscreen(button))
+        {
+            throw new InvalidOperationException($"Button '{automationId}' is offscreen.");
+        }
+
+        if (button.Patterns.Invoke.IsSupported)
+        {
+            button.Patterns.Invoke.Pattern.Invoke();
+            return;
+        }
 
         if (automationId.StartsWith("TitleBar.", StringComparison.Ordinal))
         {
@@ -343,22 +375,89 @@ internal sealed class WindowsGuiAppSession : IDisposable
         }
     }
 
-    public string? TryGetHelpText(string automationId, TimeSpan? timeout = null)
+    public void FocusElement(AutomationElement element)
     {
-        var element = TryFindByAutomationId(automationId, timeout ?? TimeSpan.FromSeconds(2));
-        if (element == null)
+        ArgumentNullException.ThrowIfNull(element);
+        element.Focus();
+    }
+
+    public bool IsFocusWithinAutomationId(string automationId, int maxDepth = 16)
+    {
+        if (string.IsNullOrWhiteSpace(automationId))
         {
-            return null;
+            return false;
         }
 
+        return GetFocusedAutomationIdPath(maxDepth).Contains(automationId, StringComparer.Ordinal);
+    }
+
+    public bool IsFocusWithinAutomationIdPrefix(string prefix, int maxDepth = 16)
+    {
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            return false;
+        }
+
+        return GetFocusedAutomationIdPath(maxDepth)
+            .Any(id => id.StartsWith(prefix, StringComparison.Ordinal));
+    }
+
+    public IReadOnlyList<string> GetFocusedAutomationIdPath(int maxDepth = 16)
+    {
+        if (maxDepth < 1)
+        {
+            maxDepth = 1;
+        }
+
+        var path = new List<string>(maxDepth);
         try
         {
-            return element.Properties.HelpText.TryGetValue(out var value) ? value : null;
+            var current = _automation.FocusedElement();
+            var depth = 0;
+            while (current is not null && depth < maxDepth)
+            {
+                path.Add(SafeAutomationId(current));
+                current = current.Parent;
+                depth++;
+            }
         }
         catch
         {
-            return null;
+            return Array.Empty<string>();
         }
+
+        return path;
+    }
+
+    public string DescribeFocusedElement(int maxDepth = 8)
+    {
+        if (maxDepth < 1)
+        {
+            maxDepth = 1;
+        }
+
+        var segments = new List<string>(maxDepth);
+        try
+        {
+            var current = _automation.FocusedElement();
+            var depth = 0;
+            while (current is not null && depth < maxDepth)
+            {
+                var automationId = SafeAutomationId(current);
+                var controlType = SafeControlType(current);
+                segments.Add($"{automationId}[{controlType}]");
+                current = current.Parent;
+                depth++;
+            }
+        }
+        catch (Exception ex)
+        {
+            return $"<focus-error:{ex.GetType().Name}:{ex.Message}>";
+        }
+
+        return segments.Count == 0
+            ? "<focus-null>"
+            : string.Join(" > ", segments);
     }
 
     public void Dispose()
@@ -512,4 +611,31 @@ internal sealed class WindowsGuiAppSession : IDisposable
             return false;
         }
     }
+
+    private static string SafeAutomationId(AutomationElement element)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(element.AutomationId)
+                ? "<no-id>"
+                : element.AutomationId;
+        }
+        catch
+        {
+            return "<id-error>";
+        }
+    }
+
+    private static string SafeControlType(AutomationElement element)
+    {
+        try
+        {
+            return element.ControlType.ToString();
+        }
+        catch
+        {
+            return "Unknown";
+        }
+    }
+
 }

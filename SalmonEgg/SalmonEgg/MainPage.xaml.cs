@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Windowing;
 #endif
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
@@ -56,7 +57,6 @@ public sealed partial class MainPage : Page
     private bool _isResizingLeftNav;
     private double _leftNavResizeStartX;
     private double _leftNavResizeStartWidth;
-    private bool _suppressNextPaneIntentFromDisplayModeTransition;
 
     private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
     private readonly DeferredActionGate<string> _moveOnFlyoutClosed = new(StringComparer.Ordinal);
@@ -81,7 +81,6 @@ public sealed partial class MainPage : Page
     public ShellLayoutViewModel LayoutVM { get; }
     private readonly WindowMetricsProvider _metricsProvider;
     private readonly IShellLayoutMetricsSink _metricsSink;
-    private readonly INavigationCoordinator _navigationCoordinator;
     private readonly ILogger<MainPage> _logger;
     private readonly MainNavigationContentSyncAdapter _mainNavigationContentSyncAdapter;
     private readonly MainNavigationViewAdapter _mainNavigationViewAdapter;
@@ -100,7 +99,7 @@ public sealed partial class MainPage : Page
         LayoutVM = App.ServiceProvider.GetRequiredService<ShellLayoutViewModel>();
         _metricsProvider = App.ServiceProvider.GetRequiredService<WindowMetricsProvider>();
         _metricsSink = App.ServiceProvider.GetRequiredService<IShellLayoutMetricsSink>();
-        _navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();
+        var navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();
         _logger = App.ServiceProvider.GetRequiredService<ILogger<MainPage>>();
         IsGuiAutomationMode = string.Equals(
             Environment.GetEnvironmentVariable("SALMONEGG_GUI"),
@@ -108,8 +107,8 @@ public sealed partial class MainPage : Page
             StringComparison.Ordinal);
 
         this.InitializeComponent();
-        _mainNavigationContentSyncAdapter = new MainNavigationContentSyncAdapter(_navigationCoordinator);
-        _mainNavigationViewAdapter = new MainNavigationViewAdapter(MainNavView, DispatcherQueue, NavVM, _navigationCoordinator);
+        _mainNavigationContentSyncAdapter = new MainNavigationContentSyncAdapter(navigationCoordinator);
+        _mainNavigationViewAdapter = new MainNavigationViewAdapter(MainNavView, NavVM, navigationCoordinator, DispatcherQueue);
         _titleBarAdapter = new MainWindowTitleBarAdapter(
             AppTitleBar,
             AppTitleBarLayoutRoot,
@@ -611,6 +610,7 @@ public sealed partial class MainPage : Page
         UpdateNavPaneToggleUi();
         NavVM.RebuildTree();
         NavVM.RefreshSelectionProjection();
+        UpdateMainNavAutomationSelectionState();
         _ = _metricsSink.ReportContentContext(IsChatPageType(ContentFrame?.CurrentSourcePageType));
 #if WINDOWS
         InitializeTray();
@@ -658,7 +658,6 @@ public sealed partial class MainPage : Page
     private async void OnToggleLeftNavClick(object sender, RoutedEventArgs e)
     {
         BootLogDebug($"TitleBar ToggleSidebar Clicked: mode={LayoutVM.NavPaneDisplayMode} open={LayoutVM.IsNavPaneOpen}");
-        _suppressNextPaneIntentFromDisplayModeTransition = false;
         await _metricsSink.ReportNavToggle("TitleBarButton");
     }
 
@@ -695,66 +694,36 @@ public sealed partial class MainPage : Page
                 isOpen ? "Collapse Sidebar" : "Expand Sidebar"));
     }
 
-    private void ReapplyNavPaneProjectionDeferred(string source)
-    {
-        _ = DispatcherQueue.TryEnqueue(() =>
-        {
-            if (MainNavView.IsPaneOpen != LayoutVM.IsNavPaneOpen)
-            {
-                BootLogDebug($"MainNav PaneProjectionReapply: source={source} controlOpen={MainNavView.IsPaneOpen} storeOpen={LayoutVM.IsNavPaneOpen}");
-                MainNavView.IsPaneOpen = LayoutVM.IsNavPaneOpen;
-            }
-
-            NavVM.RefreshSelectionProjection();
-        });
-    }
-
     private void OnMainNavPanePresentationChanged(NavigationView sender, object args)
     {
+        var controlDisplayMode = args is NavigationViewDisplayModeChangedEventArgs modeChangedArgs
+            ? MapNavigationPaneDisplayMode(modeChangedArgs.DisplayMode)
+            : MapNavigationPaneDisplayMode(sender.DisplayMode);
+
         UpdateNavPaneToggleUi(sender.IsPaneOpen);
-        BootLogDebug($"MainNav PanePresentationChanged: args={args?.GetType().Name ?? "<null>"} senderPaneOpen={sender.IsPaneOpen} mode={LayoutVM.NavPaneDisplayMode} storeOpen={LayoutVM.IsNavPaneOpen}");
+        BootLogDebug($"MainNav PanePresentationChanged: args={args?.GetType().Name ?? "<null>"} senderPaneOpen={sender.IsPaneOpen} controlMode={controlDisplayMode} layoutMode={LayoutVM.NavPaneDisplayMode} storeOpen={LayoutVM.IsNavPaneOpen}");
+        UpdateMainNavAutomationSelectionState();
         _logger.LogDebug(
-            "NavView pane event {EventType} DisplayMode={DisplayMode} IsPaneOpen={IsPaneOpen} SelectedItem={SelectedItem} VmSelected={VmSelected} ProjectedSelected={ProjectedSelected} SettingsSelected={IsSettingsSelected}",
+            "NavView pane event {EventType} DisplayMode={DisplayMode} LayoutMode={LayoutMode} IsPaneOpen={IsPaneOpen} SelectedItem={SelectedItem} ProjectedSelected={ProjectedSelected} SemanticSelection={SemanticSelection} SettingsSelected={IsSettingsSelected}",
             args?.GetType().Name ?? "<null>",
+            controlDisplayMode,
             LayoutVM.NavPaneDisplayMode,
             sender.IsPaneOpen,
             DescribeNavSelection(sender.SelectedItem),
-            DescribeNavSelection(NavVM.SelectedItem),
             DescribeNavSelection(NavVM.ProjectedControlSelectedItem),
+            NavVM.CurrentSelection,
             NavVM.IsSettingsSelected);
 
-        var isDisplayModeChanged = args is NavigationViewDisplayModeChangedEventArgs;
-        var nonExpandedMode = LayoutVM.NavPaneDisplayMode != SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Expanded;
-        var hasStoreDrift = LayoutVM.IsNavPaneOpen != sender.IsPaneOpen;
+        var shouldReportPaneOpenIntent = _mainNavigationViewAdapter.HandlePanePresentationChanged(
+            isPaneOpen: sender.IsPaneOpen,
+            isDisplayModeChanged: args is NavigationViewDisplayModeChangedEventArgs,
+            displayMode: controlDisplayMode,
+            desiredPaneOpen: LayoutVM.IsNavPaneOpen);
 
-        // Only treat actual pane-open/pane-close events as intent signals.
-        // DisplayModeChanged is layout projection, not user toggle intent.
-        if (isDisplayModeChanged)
-        {
-            _suppressNextPaneIntentFromDisplayModeTransition = true;
-            BootLogDebug("MainNav PanePresentationChanged: armed display-mode suppression.");
-        }
-        else if (_suppressNextPaneIntentFromDisplayModeTransition)
-        {
-            _suppressNextPaneIntentFromDisplayModeTransition = false;
-            BootLogDebug("MainNav PanePresentationChanged: suppressed non-intent pane event after display-mode transition.");
-            if (hasStoreDrift)
-            {
-                ReapplyNavPaneProjectionDeferred("DisplayModeTransition");
-            }
-        }
-        else if (nonExpandedMode && hasStoreDrift)
+        if (shouldReportPaneOpenIntent)
         {
             BootLogDebug($"MainNav PanePresentationChanged: reporting pane intent senderPaneOpen={sender.IsPaneOpen} mode={LayoutVM.NavPaneDisplayMode}.");
             _ = _metricsSink.ReportNavPaneOpenIntent(sender.IsPaneOpen, source: "PanePresentationChanged");
-        }
-
-        if (isDisplayModeChanged)
-        {
-            // Window-size driven mode switches can recycle item containers without changing
-            // semantic selection state. Refresh projection so the single VM->adapter path
-            // reapplies control selection consistently.
-            NavVM.RefreshSelectionProjection();
         }
 
     }
@@ -762,20 +731,30 @@ public sealed partial class MainPage : Page
     private void OnMainNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         BootLogDebug($"MainNav SelectionChanged: selected={DescribeNavSelection(sender.SelectedItem)} settings={args.IsSettingsSelected}");
+        UpdateMainNavAutomationSelectionState();
         _logger.LogDebug(
-            "NavView selection changed SelectedItem={SelectedItem} SettingsSelected={IsSettingsSelected} VmSelected={VmSelected} ProjectedSelected={ProjectedSelected}",
+            "NavView selection changed SelectedItem={SelectedItem} SettingsSelected={IsSettingsSelected} ProjectedSelected={ProjectedSelected} SemanticSelection={SemanticSelection}",
             DescribeNavSelection(sender.SelectedItem),
             args.IsSettingsSelected,
-            DescribeNavSelection(NavVM.SelectedItem),
-            DescribeNavSelection(NavVM.ProjectedControlSelectedItem));
-        // Do NOT re-drive SelectedItem here. Selection is projected by x:Bind from
-        // MainNavigationViewModel.SelectedItem and should remain single-source.
+            DescribeNavSelection(NavVM.ProjectedControlSelectedItem),
+            NavVM.CurrentSelection);
+        // Do NOT re-drive selection here. The projected control selection is owned
+        // by MainNavigationViewModel -> adapter, and SelectionChanged stays observational.
+    }
+
+    private void OnMainNavItemExpanding(NavigationView sender, NavigationViewItemExpandingEventArgs args)
+    {
+        _mainNavigationViewAdapter.TrySyncProjectExpansion(args.ExpandingItemContainer, true);
+    }
+
+    private void OnMainNavItemCollapsed(NavigationView sender, NavigationViewItemCollapsedEventArgs args)
+    {
+        _mainNavigationViewAdapter.TrySyncProjectExpansion(args.CollapsedItemContainer, false);
     }
 
     private void OnNavigationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainNavigationViewModel.SelectedItem) ||
-            e.PropertyName == nameof(MainNavigationViewModel.ProjectedControlSelectedItem) ||
+        if (e.PropertyName == nameof(MainNavigationViewModel.ProjectedControlSelectedItem) ||
             e.PropertyName == nameof(MainNavigationViewModel.IsSettingsSelected))
         {
             if (!DispatcherQueue.HasThreadAccess)
@@ -786,24 +765,12 @@ public sealed partial class MainPage : Page
 
             BootLogDebug($"NavVM ProjectionChanged: current={NavVM.CurrentSelection}; projected={DescribeNavSelection(NavVM.ProjectedControlSelectedItem)}; settings={NavVM.IsSettingsSelected}");
             _logger.LogDebug(
-                "NavVM projection changed CurrentSelection={CurrentSelection} ProjectedSelected={ProjectedSelected} SettingsSelected={IsSettingsSelected} VmSelected={VmSelected}",
+                "NavVM projection changed CurrentSelection={CurrentSelection} ProjectedSelected={ProjectedSelected} SettingsSelected={IsSettingsSelected}",
                 NavVM.CurrentSelection,
                 DescribeNavSelection(NavVM.ProjectedControlSelectedItem),
-                NavVM.IsSettingsSelected,
-                DescribeNavSelection(NavVM.SelectedItem));
-
-            if (NavVM.IsSettingsSelected
-                && MainNavView.SettingsItem is not null
-                && !ReferenceEquals(MainNavView.SelectedItem, MainNavView.SettingsItem))
-            {
-                MainNavView.SelectedItem = MainNavView.SettingsItem;
-            }
-            else if (!NavVM.IsSettingsSelected
-                && NavVM.SelectedItem is not null
-                && !ReferenceEquals(MainNavView.SelectedItem, NavVM.SelectedItem))
-            {
-                MainNavView.SelectedItem = NavVM.SelectedItem;
-            }
+                NavVM.IsSettingsSelected);
+            // NavigationView.SelectedItem is projected through XAML binding.
+            UpdateMainNavAutomationSelectionState();
         }
     }
 
@@ -825,11 +792,16 @@ public sealed partial class MainPage : Page
 
     private void OnMainNavPaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)
     {
-        var mode = LayoutVM?.NavPaneDisplayMode
-            ?? SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Expanded;
+        var mode = MapNavigationPaneDisplayMode(sender.DisplayMode) switch
+        {
+            NavigationViewPanePresentationMode.Minimal => SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Minimal,
+            NavigationViewPanePresentationMode.Compact => SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Compact,
+            _ => SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Expanded
+        };
         if (mode != SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Expanded)
         {
             args.Cancel = false;
+            BootLogDebug($"MainNav PaneClosing: mode={mode} senderPaneOpen={sender.IsPaneOpen} desiredPaneOpen={LayoutVM?.IsNavPaneOpen == true} cancel={args.Cancel}");
             return;
         }
 
@@ -839,6 +811,7 @@ public sealed partial class MainPage : Page
         args.Cancel = ShellPanePolicy.ShouldCancelClosing(
             desiredPaneOpen: LayoutVM?.IsNavPaneOpen == true,
             isExpandedMode: mode == SalmonEgg.Presentation.Core.Mvux.ShellLayout.NavigationPaneDisplayMode.Expanded);
+        BootLogDebug($"MainNav PaneClosing: mode={mode} senderPaneOpen={sender.IsPaneOpen} desiredPaneOpen={LayoutVM?.IsNavPaneOpen == true} cancel={args.Cancel}");
     }
 
     // Manual resizer positioning removed as it is now handled by XAML binding to LayoutVM.LeftNavResizerLeft
@@ -852,6 +825,110 @@ public sealed partial class MainPage : Page
         null => "<null>",
         _ => selection.GetType().Name
     };
+
+    private static NavigationViewPanePresentationMode MapNavigationPaneDisplayMode(NavigationViewDisplayMode displayMode)
+        => displayMode switch
+        {
+            NavigationViewDisplayMode.Minimal => NavigationViewPanePresentationMode.Minimal,
+            NavigationViewDisplayMode.Compact => NavigationViewPanePresentationMode.Compact,
+            _ => NavigationViewPanePresentationMode.Expanded
+        };
+
+    private void UpdateMainNavAutomationSelectionState()
+    {
+        if (!IsGuiAutomationMode || MainNavAutomationSelectionStateText is null)
+        {
+            return;
+        }
+
+        var state = BuildMainNavAutomationSelectionState();
+        MainNavAutomationSelectionStateText.Text = state;
+        AutomationProperties.SetName(MainNavAutomationSelectionStateText, state);
+    }
+
+    private string BuildMainNavAutomationSelectionState()
+    {
+        var sessionItem = TryResolveCurrentSessionItem();
+        var projectItem = sessionItem is null ? null : TryResolveProjectItem(sessionItem.ProjectId);
+        var startItem = NavVM.StartItem;
+
+        var projectContainer = projectItem is null ? null : MainNavView.ContainerFromMenuItem(projectItem) as NavigationViewItem;
+        var sessionContainer = sessionItem is null ? null : MainNavView.ContainerFromMenuItem(sessionItem) as NavigationViewItem;
+        var startContainer = MainNavView.ContainerFromMenuItem(startItem) as NavigationViewItem;
+
+        var projectVisible = IsContainerVisible(projectContainer);
+        var sessionVisible = IsContainerVisible(sessionContainer) && (projectContainer?.IsExpanded ?? true);
+        var startVisible = IsContainerVisible(startContainer);
+        var projectChildSelected = projectContainer?.IsChildSelected == true;
+        var projectSelected = projectContainer?.IsSelected == true;
+        var sessionSelected = sessionContainer?.IsSelected == true;
+        var startSelected = startContainer?.IsSelected == true;
+        var projectExpanded = projectContainer?.IsExpanded == true;
+
+        var context = sessionVisible && sessionSelected
+            ? "Session"
+            : projectVisible && projectChildSelected
+                ? "Ancestor"
+                : startVisible && startSelected
+                    ? "Start"
+                    : "None";
+
+        return string.Join(
+            ";",
+            $"Context={context}",
+            $"NavSelected={DescribeNavSelection(MainNavView.SelectedItem)}",
+            $"Projected={DescribeNavSelection(NavVM.ProjectedControlSelectedItem)}",
+            $"ProjectVisible={projectVisible}",
+            $"ProjectSelected={projectSelected}",
+            $"ProjectChildSelected={projectChildSelected}",
+            $"ProjectExpanded={projectExpanded}",
+            $"SessionVisible={sessionVisible}",
+            $"SessionSelected={sessionSelected}",
+            $"StartVisible={startVisible}",
+            $"StartSelected={startSelected}");
+    }
+
+    private SessionNavItemViewModel? TryResolveCurrentSessionItem()
+    {
+        string? sessionId = null;
+        if (NavVM.CurrentSelection is NavigationSelectionState.Session currentSession)
+        {
+            sessionId = currentSession.SessionId;
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId) && NavVM.ProjectedControlSelectedItem is SessionNavItemViewModel projectedSession)
+        {
+            sessionId = projectedSession.SessionId;
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return null;
+        }
+
+        return NavVM.Items
+            .OfType<ProjectNavItemViewModel>()
+            .SelectMany(project => project.Children.OfType<SessionNavItemViewModel>())
+            .FirstOrDefault(session => string.Equals(session.SessionId, sessionId, StringComparison.Ordinal));
+    }
+
+    private ProjectNavItemViewModel? TryResolveProjectItem(string? projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            return null;
+        }
+
+        return NavVM.Items
+            .OfType<ProjectNavItemViewModel>()
+            .FirstOrDefault(project => string.Equals(project.ProjectId, projectId, StringComparison.Ordinal));
+    }
+
+    private static bool IsContainerVisible(Control? container)
+        => container is not null
+           && container.Visibility == Visibility.Visible
+           && container.ActualWidth > 0
+           && container.ActualHeight > 0;
 
     private static string ResolveResourceString(string resourceKey, string fallback)
     {
