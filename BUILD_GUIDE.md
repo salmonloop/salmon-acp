@@ -96,6 +96,7 @@ run.bat
 > 历史根因：脚本曾使用 PowerShell 中不可靠的 `$Cert.GetRSAPrivateKey()` 调用来判断私钥可用性，导致有效的 RSA 私钥被误判为不可用，进而每次重建新证书；现已改为标准的 `RSACertificateExtensions.GetRSAPrivateKey(...)`。
 > 工具链锁定：Windows SDK 10.0.26100.0，signtool 来自 SDK 10.0.22621.0。
 > Workload manifest：CI 固定 10.0.200-manifests.34a88a22；本地允许最新。
+> 验证口径：`dotnet build -f net10.0-windows10.0.26100.0` 不是本仓库的权威 WinUI 3 / MSIX 门禁；Windows 原生包请以 `build.bat msix` 或 `.tools/run-winui3-msix.ps1 -SkipInstall` 为准。`dotnet build` 主要用于 Core/Skia/Desktop/Wasm 验证。
 
 #### Visual Studio 调试（推荐 / 官方）
 在 `SalmonEgg.sln` 中将 `SalmonEgg` 设为启动项目，然后在工具栏的启动配置下拉列表中选择目标平台对应的 Launch Profile 即可按 F5 调试：
@@ -229,10 +230,13 @@ dotnet run --project SalmonEgg/SalmonEgg/SalmonEgg.csproj \
 # 1. 运行所有测试
 dotnet test
 
-# 2. 构建发布版本
+# 2. 构建 Core / Skia / Wasm 验证目标
 dotnet build --configuration Release
 
-# 3. 发布应用
+# 3. 验证 Windows 原生 MSIX 打包链路
+build.bat msix
+
+# 4. 发布应用
 ./build.bat        # Windows desktop
 ./build.bat msix   # Windows MSIX
 ./build.sh   # Linux/macOS

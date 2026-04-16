@@ -161,8 +161,11 @@ dotnet add SalmonEgg/SalmonEgg.csproj reference ../src/SalmonEgg.Infrastructure/
 # 恢复依赖
 dotnet restore
 
-# 构建解决方案
+# 构建解决方案（Core / Skia / Wasm 验证）
 dotnet build SalmonEgg.sln --configuration Release
+
+# Windows 原生 WinUI 3 / MSIX 验证
+build.bat msix
 ```
 
 ## 运行测试

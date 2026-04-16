@@ -41,7 +41,8 @@
    - stale success/error 不覆盖最新查询的搜索测试；
    - 会话切换 UI 响应性 smoke（远程首进 + 快速切换）。
 3. 合并前必须通过：
-   - `dotnet build`（Windows + Core target）；
+   - `dotnet build`（Core / Desktop / Wasm 验证）；
+   - Windows 原生包使用 `build.bat msix` 或等价的 `.tools/run-winui3-msix.ps1 -SkipInstall`，禁止把 `dotnet build -f net10.0-windows10.0.26100.0` 当作唯一门禁；
    - 目标测试集；
    - GUI smoke。
 
@@ -50,4 +51,3 @@
 2. 禁止同步阻塞（`.Result/.Wait`）进入切换/搜索主链路。
 3. 禁止“失败即强制回滚到旧会话”的默认策略。
 4. 禁止新增未落测试的关键并发/状态逻辑。
-

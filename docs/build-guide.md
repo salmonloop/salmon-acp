@@ -86,6 +86,7 @@ dotnet run --framework net10.0-browserwasm
 > 首次安装需要在“管理员 PowerShell”运行一次 `run.bat`，以将开发证书写入本机信任存储。
 > 证书复用：修复后的 `.tools/run-winui3-msix.ps1` 会复用同一张开发证书，不应再在每次 `run.bat msix` 时重建证书或反复要求安装证书。
 > 历史根因：脚本曾使用 PowerShell 中不可靠的 `$Cert.GetRSAPrivateKey()` 调用来判断私钥可用性，导致有效的 RSA 私钥被误判为不可用，进而每次重建新证书；现已改为标准的 `RSACertificateExtensions.GetRSAPrivateKey(...)`。
+> 验证口径：不要把 `dotnet build -f net10.0-windows10.0.26100.0` 当作 WinUI 3 / MSIX 的权威门禁；Windows 原生包请以 `build.bat msix` 或 `.tools/run-winui3-msix.ps1 -SkipInstall` 为准。常规 `dotnet build` 主要覆盖 Core / Skia / Wasm。
 
 ```bash
 # 运行（MSIX）
@@ -207,8 +208,8 @@ dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
 
 1. 打开 `SalmonEgg.sln`
 2. 设置启动项目为 `SalmonEgg`
-3. 选择目标框架（如 `net10.0-windows10.0.26100.0`）
-4. 按 F5 开始调试
+3. 对 Windows 原生运行优先选择 `SalmonEgg (MSIX Script Run)` 或 `SalmonEgg (MSIX Script Debug Attach)` Launch Profile
+4. 对 Skia / Wasm 再按目标框架选择对应 profile 并开始调试
 
 ### Visual Studio Code
 
