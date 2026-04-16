@@ -30,6 +30,14 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         [ObservableProperty]
         private string _textContent = string.Empty;
 
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(ShouldRenderMarkdown))]
+        [NotifyPropertyChangedFor(nameof(ShouldRenderPlainText))]
+        private ChatMarkdownRenderMode _markdownRenderMode = ChatMarkdownRenderMode.PlainStreaming;
+
+        [ObservableProperty]
+        private bool _isMarkdownFallbackSticky;
+
         // 图片内容
         [ObservableProperty]
         private string _imageData = string.Empty;
@@ -76,6 +84,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         public ChatMessageViewModel()
         {
             Timestamp = DateTime.Now;
+            RefreshMarkdownRenderMode();
         }
 
         public static ChatMessageViewModel CreateFromTextContent(string id, ContentBlock content, bool isOutgoing = false)
@@ -212,6 +221,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
 
         public bool HasTitle => !string.IsNullOrEmpty(Title);
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
+        public bool ShouldRenderMarkdown => MarkdownRenderMode == ChatMarkdownRenderMode.MarkdownReady;
+        public bool ShouldRenderPlainText => !ShouldRenderMarkdown;
        public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
        public bool HasAudioContent => !string.IsNullOrEmpty(AudioData);
        public bool HasToolCall => !string.IsNullOrEmpty(ToolCallId);
@@ -245,6 +256,29 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
        };
 
        public bool HasToolCallJson => !string.IsNullOrWhiteSpace(ToolCallJson);
+
+       public void MarkMarkdownRenderFailed()
+       {
+           IsMarkdownFallbackSticky = true;
+           RefreshMarkdownRenderMode();
+       }
+
+       partial void OnIsOutgoingChanged(bool value) => RefreshMarkdownRenderMode();
+
+       partial void OnContentTypeChanged(string value) => RefreshMarkdownRenderMode();
+
+       partial void OnTextContentChanged(string value) => RefreshMarkdownRenderMode();
+
+       partial void OnIsMarkdownFallbackStickyChanged(bool value) => RefreshMarkdownRenderMode();
+
+       private void RefreshMarkdownRenderMode()
+       {
+           MarkdownRenderMode = ChatMarkdownRenderPolicy.Resolve(
+               ContentType,
+               IsOutgoing,
+               TextContent,
+               IsMarkdownFallbackSticky);
+       }
     }
 
     /// <summary>
