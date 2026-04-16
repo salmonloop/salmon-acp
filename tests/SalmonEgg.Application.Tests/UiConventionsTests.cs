@@ -553,4 +553,73 @@ public class UiConventionsTests
         Assert.DoesNotContain("x:Key=\"NavigationViewExpandedPaneBackground\"", appText);
         Assert.DoesNotContain("x:Key=\"NavigationViewTopPaneBackground\"", appText);
     }
+
+    [Fact]
+    public void Xaml_ShouldNotOverrideNavigationViewPaneThemeResourceKeys()
+    {
+        var repoRoot = FindRepoRoot();
+        var xamlFiles = EnumerateUiXamlFiles(repoRoot);
+
+        var forbiddenKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "NavigationViewDefaultPaneBackground",
+            "NavigationViewExpandedPaneBackground",
+            "NavigationViewTopPaneBackground"
+        };
+
+        var violations = new List<string>();
+        foreach (var file in xamlFiles)
+        {
+            var keys = ReadXamlKeys(file);
+            var hit = keys.Where(forbiddenKeys.Contains).ToArray();
+            if (hit.Length > 0)
+            {
+                violations.Add($"{file}: {string.Join(", ", hit)}");
+            }
+        }
+
+        Assert.True(
+            violations.Count == 0,
+            "Do not override WinUI NavigationView pane theme resource keys in app XAML." + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Xaml_ShouldNotSetPaneBackgroundForNavigationShell()
+    {
+        var repoRoot = FindRepoRoot();
+        var xamlFiles = EnumerateUiXamlFiles(repoRoot);
+
+        var violations = new List<string>();
+        foreach (var file in xamlFiles)
+        {
+            var text = File.ReadAllText(file);
+            if (text.Contains("PaneBackground=", StringComparison.Ordinal))
+            {
+                violations.Add(file);
+            }
+        }
+
+        Assert.True(
+            violations.Count == 0,
+            "Navigation shell should keep native pane background behavior. Remove manual PaneBackground assignments." + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void SkiaThemeOverrides_ShouldStayIsolatedToSingleNavigationMarginKey()
+    {
+        var repoRoot = FindRepoRoot();
+        var skiaOverrides = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "Styles", "Skia", "SkiaThemeOverrides.xaml");
+
+        Assert.True(File.Exists(skiaOverrides), $"Expected Skia theme override dictionary at '{skiaOverrides}'.");
+
+        var keys = ReadXamlKeys(skiaOverrides);
+        Assert.Single(keys);
+        Assert.Contains("NavigationViewPaneContentGridMargin", keys);
+
+        var text = File.ReadAllText(skiaOverrides);
+        Assert.DoesNotContain("NavigationViewDefaultPaneBackground", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavigationViewExpandedPaneBackground", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavigationViewTopPaneBackground", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("PaneBackground=", text, StringComparison.Ordinal);
+    }
 }

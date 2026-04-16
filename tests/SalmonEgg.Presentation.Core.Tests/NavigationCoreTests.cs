@@ -359,6 +359,22 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void NavigationShell_CompensationPolicyFiles_AreRemoved()
+    {
+        var root = FindRepoRoot();
+
+        Assert.False(
+            File.Exists(Path.Combine(root, @"src\SalmonEgg.Application\Common\Shell\NavigationViewPanePresentationPolicy.cs")),
+            "NavigationViewPanePresentationPolicy.cs must remain removed. Do not reintroduce pane compensation policies.");
+        Assert.False(
+            File.Exists(Path.Combine(root, @"src\SalmonEgg.Application\Common\Shell\ShellPanePolicy.cs")),
+            "ShellPanePolicy.cs must remain removed. Do not reintroduce pane closing suppression policies.");
+        Assert.False(
+            File.Exists(Path.Combine(root, @"SalmonEgg\SalmonEgg\Presentation\Converters\NavigationPaneDisplayModeConverter.cs")),
+            "NavigationPaneDisplayModeConverter.cs must remain removed. PaneDisplayMode should stay native Auto.");
+    }
+
+    [Fact]
     public void MainNavigation_SessionFlyout_DefersDialogCommandsUntilFlyoutCloses()
     {
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml");
