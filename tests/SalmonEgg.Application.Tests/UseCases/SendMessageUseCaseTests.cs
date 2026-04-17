@@ -136,7 +136,7 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Arrange
             string? messageId = null;
-            
+
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((AcpMessage msg, CancellationToken ct) =>
@@ -179,7 +179,7 @@ namespace SalmonEgg.Application.Tests.UseCases
             // Arrange
             string? messageId = null;
             var parameters = new { name = "test", value = 123 };
-            
+
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((AcpMessage msg, CancellationToken ct) =>
@@ -220,13 +220,13 @@ namespace SalmonEgg.Application.Tests.UseCases
             // Arrange
             AcpMessage? capturedMessage = null;
             var parameters = new { name = "test", value = 123 };
-            
+
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((AcpMessage msg, CancellationToken ct) =>
                 {
                     capturedMessage = msg;
-                    
+
                     // 立即发送响应以避免超时
                     Task.Run(async () =>
                     {
@@ -238,7 +238,7 @@ namespace SalmonEgg.Application.Tests.UseCases
                             Result = JsonSerializer.SerializeToElement(new { status = "ok" })
                         });
                     });
-                    
+
                     return SendResult.Success(msg.Id);
                 });
 
@@ -262,13 +262,13 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Arrange
             AcpMessage? capturedMessage = null;
-            
+
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((AcpMessage msg, CancellationToken ct) =>
                 {
                     capturedMessage = msg;
-                    
+
                     // 立即发送响应以避免超时
                     Task.Run(async () =>
                     {
@@ -280,7 +280,7 @@ namespace SalmonEgg.Application.Tests.UseCases
                             Result = JsonSerializer.SerializeToElement(new { status = "ok" })
                         });
                     });
-                    
+
                     return SendResult.Success(msg.Id);
                 });
 
@@ -298,13 +298,13 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Arrange
             string? messageId = null;
-            
+
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((AcpMessage msg, CancellationToken ct) =>
                 {
                     messageId = msg.Id;
-                    
+
                     // 立即发送响应
                     Task.Run(async () =>
                     {
@@ -316,7 +316,7 @@ namespace SalmonEgg.Application.Tests.UseCases
                             Result = JsonSerializer.SerializeToElement(new { status = "ok" })
                         });
                     });
-                    
+
                     return SendResult.Success(msg.Id);
                 });
 

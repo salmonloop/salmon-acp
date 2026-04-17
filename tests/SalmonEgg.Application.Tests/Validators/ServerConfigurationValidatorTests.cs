@@ -160,8 +160,12 @@ public sealed class ServerConfigurationValidatorTests
     [Fact]
     public void Validate_WhenAuthenticationHasTokenOnly_ShouldNotHaveError()
     {
-        var configuration = new ServerConfiguration {
-            Id = "valid", Name = "valid", Transport = TransportType.Stdio, StdioCommand = "cmd",
+        var configuration = new ServerConfiguration
+        {
+            Id = "valid",
+            Name = "valid",
+            Transport = TransportType.Stdio,
+            StdioCommand = "cmd",
             Authentication = new AuthenticationConfig { Token = "token" }
         };
         var result = _validator.TestValidate(configuration);
@@ -171,8 +175,12 @@ public sealed class ServerConfigurationValidatorTests
     [Fact]
     public void Validate_WhenAuthenticationHasApiKeyOnly_ShouldNotHaveError()
     {
-        var configuration = new ServerConfiguration {
-            Id = "valid", Name = "valid", Transport = TransportType.Stdio, StdioCommand = "cmd",
+        var configuration = new ServerConfiguration
+        {
+            Id = "valid",
+            Name = "valid",
+            Transport = TransportType.Stdio,
+            StdioCommand = "cmd",
             Authentication = new AuthenticationConfig { ApiKey = "key" }
         };
         var result = _validator.TestValidate(configuration);
@@ -184,7 +192,7 @@ public sealed class ServerConfigurationValidatorTests
     {
         var configuration = new ServerConfiguration { Proxy = new ProxyConfig { Enabled = true, ProxyUrl = "" } };
         var result = _validator.TestValidate(configuration);
-        result.ShouldHaveValidationErrorFor(x => x.Proxy.ProxyUrl)
+        result.ShouldHaveValidationErrorFor(x => x.Proxy!.ProxyUrl)
             .WithErrorMessage("Proxy URL must be provided when proxy is enabled");
     }
 
@@ -193,29 +201,37 @@ public sealed class ServerConfigurationValidatorTests
     {
         var configuration = new ServerConfiguration { Proxy = new ProxyConfig { Enabled = true, ProxyUrl = "ftp://proxy.com" } };
         var result = _validator.TestValidate(configuration);
-        result.ShouldHaveValidationErrorFor(x => x.Proxy.ProxyUrl)
+        result.ShouldHaveValidationErrorFor(x => x.Proxy!.ProxyUrl)
             .WithErrorMessage("Invalid proxy URL format");
     }
 
     [Fact]
     public void Validate_WhenProxyEnabledWithValidUrl_ShouldNotHaveError()
     {
-        var configuration = new ServerConfiguration {
-            Id = "valid", Name = "valid", Transport = TransportType.Stdio, StdioCommand = "cmd",
+        var configuration = new ServerConfiguration
+        {
+            Id = "valid",
+            Name = "valid",
+            Transport = TransportType.Stdio,
+            StdioCommand = "cmd",
             Proxy = new ProxyConfig { Enabled = true, ProxyUrl = "http://proxy.com:8080" }
         };
         var result = _validator.TestValidate(configuration);
-        result.ShouldNotHaveValidationErrorFor(x => x.Proxy.ProxyUrl);
+        result.ShouldNotHaveValidationErrorFor(x => x.Proxy!.ProxyUrl);
     }
 
     [Fact]
     public void Validate_WhenProxyDisabledWithEmptyUrl_ShouldNotHaveError()
     {
-        var configuration = new ServerConfiguration {
-            Id = "valid", Name = "valid", Transport = TransportType.Stdio, StdioCommand = "cmd",
+        var configuration = new ServerConfiguration
+        {
+            Id = "valid",
+            Name = "valid",
+            Transport = TransportType.Stdio,
+            StdioCommand = "cmd",
             Proxy = new ProxyConfig { Enabled = false, ProxyUrl = "" }
         };
         var result = _validator.TestValidate(configuration);
-        result.ShouldNotHaveValidationErrorFor(x => x.Proxy.ProxyUrl);
+        result.ShouldNotHaveValidationErrorFor(x => x.Proxy!.ProxyUrl);
     }
 }
