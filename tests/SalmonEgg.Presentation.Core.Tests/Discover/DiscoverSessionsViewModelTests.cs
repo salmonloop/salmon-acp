@@ -55,7 +55,8 @@ public sealed class DiscoverSessionsViewModelTests
                                 Description = "No local project root match",
                                 UpdatedAt = "2026-03-28T10:00:00+08:00",
                                 Cwd = "/remote/worktree/service-a"
-                            },
+                            }
+,
                             new AgentSessionInfo
                             {
                                 SessionId = "remote-unclassified",
@@ -64,10 +65,15 @@ public sealed class DiscoverSessionsViewModelTests
                                 UpdatedAt = "2026-03-28T10:05:00+08:00",
                                 Cwd = null
                             }
+
                         }
+
                     }
+
                 }
-            };
+
+            }
+;
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 connectionFacade,
@@ -91,11 +97,14 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.False(unclassifiedRow.NeedsUserAttention);
             Assert.Contains("working directory", unclassifiedRow.AffinityStatusText, StringComparison.OrdinalIgnoreCase);
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task RefreshSessionsAsync_WhenRemoteListIsEmpty_UsesEmptyPhaseInsteadOfError()
@@ -113,7 +122,9 @@ public sealed class DiscoverSessionsViewModelTests
                 {
                     SessionListResponse = new SessionListResponse()
                 }
-            };
+
+            }
+;
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 connectionFacade,
@@ -128,11 +139,14 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.False(viewModel.IsListVisible);
             Assert.Empty(viewModel.AgentSessions);
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task LoadSessionAsync_WhenImportFailsAfterAwait_MarshalsErrorStateThroughUiContext()
@@ -149,7 +163,8 @@ public sealed class DiscoverSessionsViewModelTests
                 {
                     await Task.Delay(10);
                     return new DiscoverSessionImportResult(false, null, "导入失败");
-                });
+                }
+);
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 new FakeDiscoverSessionsConnectionFacade(),
@@ -162,11 +177,14 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.Equal("导入失败", viewModel.ErrorMessage);
             Assert.True(syncContext.PostCount > 0);
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task LoadSessionAsync_ActivatesImportedLocalConversationAndHydratesSharedChatFacade()
@@ -180,13 +198,15 @@ public sealed class DiscoverSessionsViewModelTests
             var connectionFacade = new FakeDiscoverSessionsConnectionFacade
             {
                 HydrateResult = true
-            };
+            }
+;
             var importCoordinator = new RecordingImportCoordinator(
                 new DiscoverSessionImportResult(true, "local-conversation-1", null));
             var navigationCoordinator = new StubNavigationCoordinator
             {
                 ActivationResult = true
-            };
+            }
+;
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 connectionFacade,
@@ -200,11 +220,14 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.Equal(1, connectionFacade.HydrateCalls);
             Assert.Null(viewModel.ErrorMessage);
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task LoadSessionAsync_WhenHydrationFails_SetsPageErrorState()
@@ -218,13 +241,15 @@ public sealed class DiscoverSessionsViewModelTests
             var connectionFacade = new FakeDiscoverSessionsConnectionFacade
             {
                 HydrateResult = false
-            };
+            }
+;
             var importCoordinator = new RecordingImportCoordinator(
                 new DiscoverSessionImportResult(true, "local-conversation-1", null));
             var navigationCoordinator = new StubNavigationCoordinator
             {
                 ActivationResult = true
-            };
+            }
+;
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 connectionFacade,
@@ -237,11 +262,14 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.Equal("导入后的会话历史加载失败，请检查 ACP 连接状态。", viewModel.ErrorMessage);
             Assert.Equal(1, connectionFacade.HydrateCalls);
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task LoadSessionAsync_AfterAsyncImport_MarshalsActivationAndHydrationBackToUiContext()
@@ -258,16 +286,19 @@ public sealed class DiscoverSessionsViewModelTests
                 HydrateResult = true,
                 ExpectedSynchronizationContext = syncContext,
                 RequireExpectedSynchronizationContextForHydrate = true
-            };
+            }
+;
             var importCoordinator = new DelayedImportCoordinator(async () =>
             {
                 await Task.Delay(10);
                 return new DiscoverSessionImportResult(true, "local-conversation-1", null);
-            });
+            }
+);
             var navigationCoordinator = new ContextAssertingNavigationCoordinator(syncContext)
             {
                 ActivationResult = true
-            };
+            }
+;
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 connectionFacade,
@@ -280,11 +311,14 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.True(connectionFacade.HydrateCalledOnExpectedContext);
             Assert.Null(viewModel.ErrorMessage);
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task LoadSessionAsync_WhileImportIsRunning_KeepsLifecycleLoadingVisible()
@@ -303,18 +337,21 @@ public sealed class DiscoverSessionsViewModelTests
                 importStarted.TrySetResult(null);
                 await allowImportCompletion.Task;
                 return new DiscoverSessionImportResult(true, "local-conversation-1", null);
-            });
+            }
+);
             using var viewModel = CreateViewModel(
                 profilesViewModel,
                 new FakeDiscoverSessionsConnectionFacade
                 {
                     HydrateResult = true
-                },
+                }
+,
                 importCoordinator,
                 new StubNavigationCoordinator
                 {
                     ActivationResult = true
-                });
+                }
+);
 
             var loadTask = viewModel.LoadSessionCommand.ExecuteAsync(CreateSessionItem());
 
@@ -325,11 +362,14 @@ public sealed class DiscoverSessionsViewModelTests
             allowImportCompletion.TrySetResult(null);
             await loadTask;
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     [Fact]
     public async Task LoadSessionAsync_WhileActivationAndHydrationAreRunning_KeepsLifecycleLoadingVisible()
@@ -362,9 +402,13 @@ public sealed class DiscoverSessionsViewModelTests
                                 UpdatedAt = "2026-03-27T12:00:00+08:00",
                                 Cwd = @"C:\repo\remote"
                             }
+
                         }
+
                     }
-                },
+
+                }
+,
                 OnHydrateAsync = async cancellationToken =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -372,14 +416,17 @@ public sealed class DiscoverSessionsViewModelTests
                     await allowHydrationCompletion.Task.WaitAsync(cancellationToken);
                     return true;
                 }
-            };
+
+            }
+;
 
             var navigationCoordinator = new DelayedNavigationCoordinator(async () =>
             {
                 activationStarted.TrySetResult(null);
                 await allowActivationCompletion.Task;
                 return true;
-            });
+            }
+);
 
             using var viewModel = CreateViewModel(
                 profilesViewModel,
@@ -405,11 +452,14 @@ public sealed class DiscoverSessionsViewModelTests
             allowHydrationCompletion.TrySetResult(null);
             await loadTask;
         }
+
         finally
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+
     }
+
 
     private static DiscoverSessionsViewModel CreateViewModel(
         AcpProfilesViewModel profilesViewModel,
@@ -429,6 +479,7 @@ public sealed class DiscoverSessionsViewModelTests
             uiDispatcher);
     }
 
+
     private static AcpProfilesViewModel CreateProfilesViewModel(ServerConfiguration profile)
     {
         var configurationService = new Mock<IConfigurationService>();
@@ -442,6 +493,7 @@ public sealed class DiscoverSessionsViewModelTests
         profilesViewModel.SelectedProfile = profile;
         return profilesViewModel;
     }
+
 
     private static AppPreferencesViewModel CreatePreferences()
     {
@@ -464,22 +516,24 @@ public sealed class DiscoverSessionsViewModelTests
             new ImmediateUiDispatcher());
     }
 
+
     private static ServerConfiguration CreateProfile()
-        => new()
-        {
-            Id = "profile-1",
-            Name = "Demo Agent",
-            Transport = TransportType.Stdio,
-            StdioCommand = "agent.exe"
-        };
+    => new()
+    {
+        Id = "profile-1",
+        Name = "Demo Agent",
+        Transport = TransportType.Stdio,
+        StdioCommand = "agent.exe"
+    }
+;
 
     private static DiscoverSessionItemViewModel CreateSessionItem()
-        => new(
-            "remote-session-1",
-            "Remote Session",
-            "Imported from ACP",
-            new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
-            @"C:\repo\remote");
+    => new(
+        "remote-session-1",
+        "Remote Session",
+        "Imported from ACP",
+        new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
+        @"C:\repo\remote");
 
     private sealed class CountingSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
@@ -497,17 +551,21 @@ public sealed class DiscoverSessionsViewModelTests
                 SetSynchronizationContext(this);
                 d(state);
             }
+
             finally
             {
                 SetSynchronizationContext(originalContext);
             }
+
         }
+
 
         public void Enqueue(Action action)
         {
             ArgumentNullException.ThrowIfNull(action);
             Post(_ => action(), null);
         }
+
 
         public Task EnqueueAsync(Action action)
         {
@@ -521,14 +579,18 @@ public sealed class DiscoverSessionsViewModelTests
                     action();
                     tcs.TrySetResult(null);
                 }
+
                 catch (Exception ex)
                 {
                     tcs.TrySetException(ex);
                 }
-            }, null);
+
+            }
+, null);
 
             return tcs.Task;
         }
+
 
         public Task EnqueueAsync(Func<Task> function)
         {
@@ -542,15 +604,20 @@ public sealed class DiscoverSessionsViewModelTests
                     await function().ConfigureAwait(false);
                     tcs.TrySetResult(null);
                 }
+
                 catch (Exception ex)
                 {
                     tcs.TrySetException(ex);
                 }
-            }, null);
+
+            }
+, null);
 
             return tcs.Task;
         }
+
     }
+
 
     private sealed class FakeDiscoverSessionsConnectionFacade : IDiscoverSessionsConnectionFacade
     {
@@ -567,11 +634,13 @@ public sealed class DiscoverSessionsViewModelTests
             private set => SetProperty(ref _isConnecting, value, nameof(IsConnecting));
         }
 
+
         public bool IsInitializing
         {
             get => _isInitializing;
             private set => SetProperty(ref _isInitializing, value, nameof(IsInitializing));
         }
+
 
         public bool IsConnected
         {
@@ -579,11 +648,13 @@ public sealed class DiscoverSessionsViewModelTests
             private set => SetProperty(ref _isConnected, value, nameof(IsConnected));
         }
 
+
         public string? ConnectionErrorMessage
         {
             get => _connectionErrorMessage;
             set => SetProperty(ref _connectionErrorMessage, value, nameof(ConnectionErrorMessage));
         }
+
 
         public IChatService? CurrentChatService { get; set; }
 
@@ -610,6 +681,7 @@ public sealed class DiscoverSessionsViewModelTests
             IsConnected = true;
         }
 
+
         public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -620,13 +692,16 @@ public sealed class DiscoverSessionsViewModelTests
                 return Task.FromResult(false);
             }
 
+
             if (OnHydrateAsync != null)
             {
                 return OnHydrateAsync(cancellationToken);
             }
 
+
             return Task.FromResult(HydrateResult);
         }
+
 
         private void SetProperty<T>(ref T field, T value, string propertyName)
         {
@@ -635,10 +710,13 @@ public sealed class DiscoverSessionsViewModelTests
                 return;
             }
 
+
             field = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
     }
+
 
     private sealed class RecordingImportCoordinator : IDiscoverSessionImportCoordinator
     {
@@ -648,6 +726,7 @@ public sealed class DiscoverSessionsViewModelTests
         {
             _result = result;
         }
+
 
         public (string RemoteSessionId, string? RemoteSessionCwd, string? ProfileId, string? RemoteSessionTitle)? LastRequest { get; private set; }
 
@@ -662,7 +741,9 @@ public sealed class DiscoverSessionsViewModelTests
             LastRequest = (remoteSessionId, remoteSessionCwd, profileId, remoteSessionTitle);
             return Task.FromResult(_result);
         }
+
     }
+
 
     private sealed class DelayedImportCoordinator : IDiscoverSessionImportCoordinator
     {
@@ -672,6 +753,7 @@ public sealed class DiscoverSessionsViewModelTests
         {
             _resultFactory = resultFactory;
         }
+
 
         public Task<DiscoverSessionImportResult> ImportAsync(
             string remoteSessionId,
@@ -683,7 +765,9 @@ public sealed class DiscoverSessionsViewModelTests
             cancellationToken.ThrowIfCancellationRequested();
             return _resultFactory();
         }
+
     }
+
 
     private sealed class StubImportCoordinator : IDiscoverSessionImportCoordinator
     {
@@ -697,7 +781,9 @@ public sealed class DiscoverSessionsViewModelTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new DiscoverSessionImportResult(true, "local-session", null));
         }
+
     }
+
 
     private sealed class StubNavigationCoordinator : INavigationCoordinator
     {
@@ -717,11 +803,14 @@ public sealed class DiscoverSessionsViewModelTests
             return Task.FromResult(ActivationResult);
         }
 
+
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
 
+
     }
+
 
     private sealed class DelayedNavigationCoordinator : INavigationCoordinator
     {
@@ -731,6 +820,7 @@ public sealed class DiscoverSessionsViewModelTests
         {
             _activation = activation;
         }
+
 
         public Task<bool> ActivateStartAsync(string? projectIdForNewSession = null) => Task.FromResult(true);
 
@@ -744,7 +834,9 @@ public sealed class DiscoverSessionsViewModelTests
         {
         }
 
+
     }
+
 
     private sealed class ContextAssertingNavigationCoordinator : INavigationCoordinator
     {
@@ -754,6 +846,7 @@ public sealed class DiscoverSessionsViewModelTests
         {
             _expectedSynchronizationContext = expectedSynchronizationContext;
         }
+
 
         public bool ActivationResult { get; set; } = true;
 
@@ -771,11 +864,14 @@ public sealed class DiscoverSessionsViewModelTests
             return Task.FromResult(WasCalledOnExpectedContext && ActivationResult);
         }
 
+
         public void SyncSelectionFromShellContent(ShellNavigationContent content)
         {
         }
 
+
     }
+
 
     private sealed class FakeChatService : IChatService
     {
@@ -803,11 +899,13 @@ public sealed class DiscoverSessionsViewModelTests
             remove { }
         }
 
+
         public event EventHandler<PermissionRequestEventArgs>? PermissionRequestReceived
         {
             add { }
             remove { }
         }
+
 
         public event EventHandler<FileSystemRequestEventArgs>? FileSystemRequestReceived
         {
@@ -815,11 +913,13 @@ public sealed class DiscoverSessionsViewModelTests
             remove { }
         }
 
+
         public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived
         {
             add { }
             remove { }
         }
+
 
         public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived
         {
@@ -827,11 +927,13 @@ public sealed class DiscoverSessionsViewModelTests
             remove { }
         }
 
+
         public event EventHandler<string>? ErrorOccurred
         {
             add { }
             remove { }
         }
+
 
         public Task<InitializeResponse> InitializeAsync(InitializeParams @params)
             => throw new NotSupportedException();
@@ -881,5 +983,7 @@ public sealed class DiscoverSessionsViewModelTests
         public void ClearHistory()
         {
         }
+
     }
+
 }
