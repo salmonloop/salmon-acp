@@ -158,15 +158,15 @@ namespace SalmonEgg.Infrastructure.Transport
                     }
                 }, cancellationToken).ConfigureAwait(false);
 
+                _stdin = _process.StandardInput;
+                _stdout = _process.StandardOutput;
+                _stderr = _process.StandardError;
+
                 // 等待进程真正启动（最多 5 秒）
                 await Task.Delay(500, cancellationToken).ConfigureAwait(false);
 
                 if (!_process.HasExited)
                 {
-                    _stdin = _process.StandardInput;
-                    _stdout = _process.StandardOutput;
-                    _stderr = _process.StandardError;
-
                     _debugFileWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] CONNECT: Process started PID={_process.Id}");
                     _debugFileWriter?.Flush();
 
@@ -188,6 +188,7 @@ namespace SalmonEgg.Infrastructure.Transport
                     _logger.Warning("[StdioTransport.Connect] 进程已退出，退出码={ExitCode}", _process.ExitCode);
                     _debugFileWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] CONNECT: Process exited immediately with code {_process.ExitCode}");
                     _debugFileWriter?.Flush();
+                    await DrainExitedProcessErrorAsync().ConfigureAwait(false);
                     OnErrorOccurred(new TransportErrorEventArgs($"进程启动后立即退出，退出码={_process.ExitCode}"));
                     return false;
                 }
@@ -402,6 +403,33 @@ namespace SalmonEgg.Infrastructure.Transport
             {
                 _logger.Error(ex, "[StdioTransport.ReadError] 错误读取循环出错");
                 OnErrorOccurred(new TransportErrorEventArgs($"读取错误流失败：{ex.Message}", ex));
+            }
+        }
+
+        private async Task DrainExitedProcessErrorAsync()
+        {
+            if (_stderr == null)
+            {
+                return;
+            }
+
+            while (true)
+            {
+                var line = await _stderr.ReadLineAsync().ConfigureAwait(false);
+                if (line == null)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                _debugFileWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] STDERR-EARLY-EXIT: {line}");
+                _debugFileWriter?.Flush();
+                _logger.Warning("[StdioTransport.Connect] 进程快速退出 stderr：{Line}", line);
+                OnErrorOccurred(new TransportErrorEventArgs($"进程错误：{line}"));
             }
         }
 
