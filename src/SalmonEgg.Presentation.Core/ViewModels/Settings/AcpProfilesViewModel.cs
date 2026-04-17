@@ -18,6 +18,7 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
     private readonly AppPreferencesViewModel _preferences;
     private readonly ILogger<AcpProfilesViewModel> _logger;
     private readonly SynchronizationContext _syncContext;
+    private readonly SemaphoreSlim _refreshSemaphore = new(1, 1);
 
     // ── Dependencies for per-profile item ViewModels ─────────────────────────
     // Null when the registry/events are not registered (e.g., lightweight contexts
@@ -112,6 +113,37 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
         }
     }
 
+    private Task MarshalToUiAsync(Action action)
+    {
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _syncContext.Post(_ =>
+        {
+            try
+            {
+                action();
+                tcs.TrySetResult(true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to execute action on UI thread");
+                tcs.TrySetException(ex);
+            }
+        }, null);
+
+        return tcs.Task;
+    }
+
+    private Task SetIsLoadingAsync(bool value)
+    {
+        return MarshalToUiAsync(() => IsLoading = value);
+    }
+
     public void MarkLastConnected(ServerConfiguration? profile)
     {
         _preferences.LastSelectedServerId = profile?.Id;
@@ -122,46 +154,36 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task RefreshAsync()
     {
-        if (IsLoading) return;
+        // Use semaphore to ensure mutual exclusivity and thread-safe check of loading state.
+        if (!await _refreshSemaphore.WaitAsync(0).ConfigureAwait(false))
+        {
+            return;
+        }
 
         try
         {
-            IsLoading = true;
+            await SetIsLoadingAsync(true).ConfigureAwait(false);
+            
             var configs = await _configurationService.ListConfigurationsAsync().ConfigureAwait(false);
             var ordered = configs.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 
-            var tcs = new TaskCompletionSource<bool>();
-            var syncContext = SynchronizationContext.Current ?? _syncContext;
-
-            syncContext.Post(_ =>
+            await MarshalToUiAsync(() =>
             {
-                try
+                // ── Update legacy flat list (backward compat) ────────────
+                Profiles.Clear();
+                foreach (var cfg in ordered)
                 {
-                    // ── Update legacy flat list (backward compat) ────────────
-                    Profiles.Clear();
-                    foreach (var cfg in ordered)
-                    {
-                        Profiles.Add(cfg);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(_preferences.LastSelectedServerId))
-                    {
-                        SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
-                    }
-
-                    // ── Rebuild per-profile item VMs ─────────────────────────
-                    RebuildProfileItems(ordered);
-
-                    tcs.TrySetResult(true);
+                    Profiles.Add(cfg);
                 }
-                catch (Exception ex)
+
+                if (!string.IsNullOrWhiteSpace(_preferences.LastSelectedServerId))
                 {
-                    _logger.LogError(ex, "Failed to update profiles on UI thread");
-                    tcs.TrySetException(ex);
+                    SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
                 }
-            }, null);
 
-            await tcs.Task.ConfigureAwait(false);
+                // ── Rebuild per-profile item VMs ─────────────────────────
+                RebuildProfileItems(ordered);
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -169,7 +191,8 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            IsLoading = false;
+            await SetIsLoadingAsync(false).ConfigureAwait(false);
+            _refreshSemaphore.Release();
         }
     }
 
@@ -185,8 +208,7 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
         {
             await _configurationService.DeleteConfigurationAsync(profile.Id).ConfigureAwait(false);
 
-            var syncContext = SynchronizationContext.Current ?? _syncContext;
-            syncContext.Post(_ =>
+            await MarshalToUiAsync(() =>
             {
                 Profiles.Remove(profile);
                 if (SelectedProfile?.Id == profile.Id)
@@ -201,7 +223,7 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
                     ProfileItems.Remove(item);
                     item.Dispose();
                 }
-            }, null);
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -305,13 +327,12 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var syncContext = SynchronizationContext.Current ?? _syncContext;
-        syncContext.Post(_ =>
+        _ = MarshalToUiAsync(() =>
         {
             var profile = Profiles.FirstOrDefault(p => p.Id == id);
             SelectedProfile = profile;
             SelectedProfileItem = ProfileItems.FirstOrDefault(vm => vm.ProfileId == id);
-        }, null);
+        });
     }
 
     // ── IDisposable ───────────────────────────────────────────────────────────
