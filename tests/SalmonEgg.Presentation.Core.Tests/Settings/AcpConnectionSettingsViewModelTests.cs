@@ -11,8 +11,9 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
-using SalmonEgg.Presentation.ViewModels.Settings;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Tests.Threading;
+using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Settings;
@@ -356,7 +357,8 @@ public sealed class AcpConnectionSettingsViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            logger.Object);
+            logger.Object,
+            new ImmediateUiDispatcher());
 
         await Task.Delay(10);
         return preferences;

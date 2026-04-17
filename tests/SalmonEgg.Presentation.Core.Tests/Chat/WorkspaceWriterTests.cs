@@ -11,6 +11,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
@@ -23,12 +24,12 @@ public sealed class WorkspaceWriterTests
     [Fact]
     public async Task FlushAsync_HydratedConversation_DoesNotAdvanceLastUpdatedAt()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var dispatcher = new ImmediateUiDispatcher();
         var store = new CapturingConversationStore();
         var sessionManager = new FakeSessionManager();
-        var preferences = CreatePreferences(syncContext);
-        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
-        using var writer = new WorkspaceWriter(workspace, TimeSpan.Zero, syncContext);
+        var preferences = CreatePreferences(dispatcher);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, dispatcher);
+        using var writer = new WorkspaceWriter(workspace, dispatcher, TimeSpan.Zero);
 
         var originalUpdatedAt = new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc);
         var message = CreateTextMessage("m-1", "hello");
@@ -64,12 +65,12 @@ public sealed class WorkspaceWriterTests
     [Fact]
     public async Task FlushAsync_BackgroundConversationSlices_ArePersistedToWorkspace()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var dispatcher = new ImmediateUiDispatcher();
         var store = new CapturingConversationStore();
         var sessionManager = new FakeSessionManager();
-        var preferences = CreatePreferences(syncContext);
-        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
-        using var writer = new WorkspaceWriter(workspace, TimeSpan.Zero, syncContext);
+        var preferences = CreatePreferences(dispatcher);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, dispatcher);
+        using var writer = new WorkspaceWriter(workspace, dispatcher, TimeSpan.Zero);
 
         writer.Enqueue(new ChatState(
             HydratedConversationId: "session-active",
@@ -101,50 +102,31 @@ public sealed class WorkspaceWriterTests
         IConversationStore store,
         ISessionManager sessionManager,
         AppPreferencesViewModel preferences,
-        SynchronizationContext syncContext)
-    {
-        var originalContext = SynchronizationContext.Current;
-        try
-        {
-            SynchronizationContext.SetSynchronizationContext(syncContext);
-            return new ChatConversationWorkspace(
-                sessionManager,
-                store,
-                new AppPreferencesConversationWorkspacePreferences(preferences),
-                Mock.Of<ILogger<ChatConversationWorkspace>>(),
-                syncContext);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
-    }
+        IUiDispatcher uiDispatcher)
+        => new(
+            sessionManager,
+            store,
+            new AppPreferencesConversationWorkspacePreferences(preferences),
+            Mock.Of<ILogger<ChatConversationWorkspace>>(),
+            uiDispatcher);
 
-    private static AppPreferencesViewModel CreatePreferences(SynchronizationContext syncContext)
+    private static AppPreferencesViewModel CreatePreferences(IUiDispatcher uiDispatcher)
     {
-        var originalContext = SynchronizationContext.Current;
-        try
-        {
-            SynchronizationContext.SetSynchronizationContext(syncContext);
-            var appSettingsService = new Mock<IAppSettingsService>();
-            appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
-            var startupService = new Mock<IAppStartupService>();
-            startupService.SetupGet(s => s.IsSupported).Returns(false);
-            var languageService = new Mock<IAppLanguageService>();
-            var capabilities = new Mock<IPlatformCapabilityService>();
-            var uiRuntime = new Mock<IUiRuntimeService>();
-            return new AppPreferencesViewModel(
-                appSettingsService.Object,
-                startupService.Object,
-                languageService.Object,
-                capabilities.Object,
-                uiRuntime.Object,
-                Mock.Of<ILogger<AppPreferencesViewModel>>());
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
+        var startupService = new Mock<IAppStartupService>();
+        startupService.SetupGet(s => s.IsSupported).Returns(false);
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        return new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            Mock.Of<ILogger<AppPreferencesViewModel>>(),
+            uiDispatcher);
     }
 
     private static ConversationMessageSnapshot CreateTextMessage(string id, string text)
@@ -155,11 +137,6 @@ public sealed class WorkspaceWriterTests
             TextContent = text,
             Timestamp = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
         };
-
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback d, object? state) => d(state);
-    }
 
     private sealed class CapturingConversationStore : IConversationStore
     {

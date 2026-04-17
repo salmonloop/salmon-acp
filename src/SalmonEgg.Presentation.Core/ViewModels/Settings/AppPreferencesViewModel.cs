@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Services;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -23,7 +24,7 @@ public partial class AppPreferencesViewModel : ObservableObject
     private readonly IPlatformCapabilityService _capabilities;
     private readonly IUiRuntimeService _uiRuntime;
     private readonly ILogger<AppPreferencesViewModel> _logger;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private CancellationTokenSource? _saveCts;
     private bool _suppressSave;
 
@@ -104,7 +105,8 @@ public partial class AppPreferencesViewModel : ObservableObject
         IAppLanguageService languageService,
         IPlatformCapabilityService capabilities,
         IUiRuntimeService uiRuntime,
-        ILogger<AppPreferencesViewModel> logger)
+        ILogger<AppPreferencesViewModel> logger,
+        IUiDispatcher uiDispatcher)
     {
         _appSettingsService = appSettingsService ?? throw new ArgumentNullException(nameof(appSettingsService));
         _startupService = startupService ?? throw new ArgumentNullException(nameof(startupService));
@@ -112,7 +114,7 @@ public partial class AppPreferencesViewModel : ObservableObject
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _uiRuntime = uiRuntime ?? throw new ArgumentNullException(nameof(uiRuntime));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         KeyBindings.CollectionChanged += OnKeyBindingsChanged;
         Projects.CollectionChanged += OnProjectsChanged;
         ProjectPathMappings.CollectionChanged += OnProjectPathMappingsChanged;
@@ -141,7 +143,7 @@ public partial class AppPreferencesViewModel : ObservableObject
                 _logger.LogWarning(ex, "Failed to query launch-on-startup state");
             }
 
-            _syncContext.Post(_ =>
+            _uiDispatcher.Enqueue(() =>
             {
                 Theme = settings.Theme;
                 // Default to enabled and mark "disable" as not yet supported in UI.
@@ -207,7 +209,7 @@ public partial class AppPreferencesViewModel : ObservableObject
                     _suppressSave = false;
                     ScheduleSave();
                 }
-            }, null);
+            });
 
             _ = _languageService.ApplyLanguageOverrideAsync(settings.Language);
         }
@@ -217,11 +219,11 @@ public partial class AppPreferencesViewModel : ObservableObject
         }
         finally
         {
-            _syncContext.Post(_ =>
+            _uiDispatcher.Enqueue(() =>
             {
                 IsLoaded = true;
                 _suppressSave = false;
-            }, null);
+            });
         }
     }
 

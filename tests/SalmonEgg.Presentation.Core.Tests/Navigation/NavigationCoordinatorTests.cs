@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
+using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Conversation;
@@ -1009,6 +1010,7 @@ public sealed class NavigationCoordinatorTests
         selectionStore ??= new ShellSelectionStateStore();
         runtimeState ??= new ShellNavigationRuntimeStateStore();
         navigationCoordinator ??= new StubNavigationCoordinator();
+        var uiDispatcher = SynchronizationContext.Current as IUiDispatcher ?? new ImmediateUiDispatcher();
 
         return new MainNavigationViewModel(
             chat.ViewModel,
@@ -1022,7 +1024,8 @@ public sealed class NavigationCoordinatorTests
             selectionStore,
             runtimeState,
             chat.Presenter,
-            new ProjectAffinityResolver());
+            new ProjectAffinityResolver(),
+            uiDispatcher);
     }
 
     private static NavigationCoordinator CreateCoordinator(
@@ -1069,9 +1072,31 @@ public sealed class NavigationCoordinatorTests
         }
     }
 
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
+    private sealed class ImmediateSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
+        public bool HasThreadAccess => true;
+
         public override void Post(SendOrPostCallback d, object? state) => d(state);
+
+        public void Enqueue(Action action) => action();
+
+        public Task EnqueueAsync(Action action)
+        {
+            try
+            {
+                action();
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
+        }
+
+        public async Task EnqueueAsync(Func<Task> function)
+        {
+            await function().ConfigureAwait(false);
+        }
     }
 
     private static ChatViewModelHarness CreateChatViewModel(
@@ -1079,6 +1104,7 @@ public sealed class NavigationCoordinatorTests
         AppPreferencesViewModel preferences,
         ISessionManager sessionManager)
     {
+        var uiDispatcher = syncContext as IUiDispatcher ?? new ImmediateUiDispatcher();
         var state = State.Value(new object(), () => ChatState.Empty);
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
@@ -1115,7 +1141,7 @@ public sealed class NavigationCoordinatorTests
             conversationStore.Object,
             new AppPreferencesConversationWorkspacePreferences(preferences),
             Mock.Of<ILogger<ChatConversationWorkspace>>(),
-            syncContext);
+            uiDispatcher);
         foreach (var session in sessionManager.GetAllSessions())
         {
             workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
@@ -1147,8 +1173,9 @@ public sealed class NavigationCoordinatorTests
                 chatStateProjector,
                 null,
                 connectionStore,
-                vmLogger.Object,
-                syncContext);
+                uiDispatcher,
+                Mock.Of<IConversationPreviewStore>(),
+                vmLogger.Object);
             return new ChatViewModelHarness(
                 viewModel,
                 state,
@@ -1255,7 +1282,8 @@ public sealed class NavigationCoordinatorTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
 
         preferences.Projects.Add(new ProjectDefinition
         {

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Services;
 using Uno.Extensions.Reactive;
 
 namespace SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
@@ -14,7 +15,7 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
     private readonly IShellLayoutStore _store;
     private readonly IState<ShellLayoutSnapshot>? _snapshotState;
     private readonly IState<ShellLayoutState>? _desiredState;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private readonly CancellationTokenSource _projectionCts = new();
     private IDisposable? _subscription;
     private IDisposable? _desiredSubscription;
@@ -47,10 +48,10 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
     [ObservableProperty] private BottomPanelMode _desiredBottomPanelMode;
     [ObservableProperty] private double _leftNavResizerLeft;
 
-    public ShellLayoutViewModel(IShellLayoutStore store, SynchronizationContext? syncContext = null)
+    public ShellLayoutViewModel(IShellLayoutStore store, IUiDispatcher uiDispatcher)
     {
         _store = store;
-        _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         ApplySnapshot(store.CurrentSnapshot);
         ApplyDesiredState(store.CurrentState);
         _desiredState = State.FromFeed(this, store.State);
@@ -196,14 +197,14 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
 
     private Task PostToUiAsync(Action action)
     {
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             action();
             return Task.CompletedTask;
         }
 
         var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(_ =>
+        _uiDispatcher.Enqueue(() =>
         {
             try
             {
@@ -214,7 +215,7 @@ public sealed partial class ShellLayoutViewModel : ObservableObject, IDisposable
             {
                 tcs.TrySetException(ex);
             }
-        }, null);
+        });
 
         return tcs.Task;
     }

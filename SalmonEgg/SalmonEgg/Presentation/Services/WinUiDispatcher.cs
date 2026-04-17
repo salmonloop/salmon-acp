@@ -21,6 +21,8 @@ public class WinUiDispatcher : IUiDispatcher
 
     public void Enqueue(Action action)
     {
+        ArgumentNullException.ThrowIfNull(action);
+
         var success = _queue.TryEnqueue(DispatcherQueuePriority.Normal, () =>
         {
             try
@@ -37,6 +39,7 @@ public class WinUiDispatcher : IUiDispatcher
         if (!success)
         {
             _logger.LogWarning("Failed to enqueue action to DispatcherQueue. The queue might be shutting down.");
+            throw new InvalidOperationException("Failed to enqueue action to DispatcherQueue. The queue might be shutting down.");
         }
     }
 
@@ -81,24 +84,58 @@ public class WinUiDispatcher : IUiDispatcher
 
     public async Task EnqueueAsync(Func<Task> function)
     {
+        ArgumentNullException.ThrowIfNull(function);
+
         if (HasThreadAccess)
         {
-            await function();
+            await function().ConfigureAwait(false);
             return;
         }
 
-        var tcs = new TaskCompletionSource<bool>();
-        var success = _queue.TryEnqueue(DispatcherQueuePriority.Normal, async () =>
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var success = _queue.TryEnqueue(DispatcherQueuePriority.Normal, () =>
         {
-            try
+            // Start the async function but do NOT await it inside the DispatcherQueueHandler.
+            // The handler must be synchronous (not async void) to avoid unobserved exceptions.
+            var task = function();
+            if (task.IsCompleted)
             {
-                await function();
-                tcs.TrySetResult(true);
+                // Fast path: function completed synchronously
+                if (task.IsFaulted)
+                {
+                    _logger.LogError(task.Exception?.InnerException, "Exception in enqueued async Func<Task>.");
+                    tcs.TrySetException(task.Exception!.InnerException ?? task.Exception);
+                }
+                else if (task.IsCanceled)
+                {
+                    tcs.TrySetCanceled();
+                }
+                else
+                {
+                    tcs.TrySetResult(true);
+                }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Exception in enqueued async Func<Task>.");
-                tcs.TrySetException(ex);
+                // Slow path: function is still running — hook up continuation
+                // that will signal the TCS when it completes.
+                _ = task.ContinueWith(static (completedTask, state) =>
+                {
+                    var (tcs, logger) = ((TaskCompletionSource<bool>, ILogger<WinUiDispatcher>))state!;
+                    if (completedTask.IsFaulted)
+                    {
+                        logger.LogError(completedTask.Exception?.InnerException, "Exception in enqueued async Func<Task>.");
+                        tcs.TrySetException(completedTask.Exception!.InnerException ?? completedTask.Exception);
+                    }
+                    else if (completedTask.IsCanceled)
+                    {
+                        tcs.TrySetCanceled();
+                    }
+                    else
+                    {
+                        tcs.TrySetResult(true);
+                    }
+                }, (tcs, _logger), TaskContinuationOptions.ExecuteSynchronously);
             }
         });
 
@@ -108,6 +145,6 @@ public class WinUiDispatcher : IUiDispatcher
             throw new InvalidOperationException("Failed to enqueue function to DispatcherQueue. The queue might be shutting down.");
         }
 
-        await tcs.Task;
+        await tcs.Task.ConfigureAwait(false);
     }
 }

@@ -6,6 +6,8 @@ using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Services;
+using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
 
@@ -51,7 +53,8 @@ public class AppPreferencesViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            logger.Object);
+            logger.Object,
+            new ImmediateUiDispatcher());
 
         await Task.Delay(10);
         uiRuntime.Invocations.Clear();
@@ -114,7 +117,8 @@ public class AppPreferencesViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            logger.Object);
+            logger.Object,
+            new ImmediateUiDispatcher());
 
         await Task.Delay(100);
 
@@ -171,7 +175,8 @@ public class AppPreferencesViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            logger.Object);
+            logger.Object,
+            new ImmediateUiDispatcher());
 
         await Task.Delay(100);
 

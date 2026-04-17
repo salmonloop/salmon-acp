@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
+using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Session;
@@ -584,7 +585,7 @@ public sealed class StartViewModelTests
             conversationStore.Object,
             new AppPreferencesConversationWorkspacePreferences(preferences),
             Mock.Of<ILogger<ChatConversationWorkspace>>(),
-            syncContext);
+            new ImmediateUiDispatcher());
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
@@ -606,8 +607,9 @@ public sealed class StartViewModelTests
                 chatStateProjector,
                 null,
                 connectionStore,
-                vmLogger.Object,
-                syncContext);
+                new ImmediateUiDispatcher(),
+                Mock.Of<IConversationPreviewStore>(),
+                vmLogger.Object);
             return new ChatViewModelHarness(viewModel, state, connectionState, conversationCatalogPresenter);
         }
         finally
@@ -633,7 +635,8 @@ public sealed class StartViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
     }
 
     private static MainNavigationViewModel CreateNavigationViewModel(
@@ -659,7 +662,8 @@ public sealed class StartViewModelTests
             new ShellSelectionStateStore(),
             new ShellNavigationRuntimeStateStore(),
             chat.Presenter,
-            new ProjectAffinityResolver());
+            new ProjectAffinityResolver(),
+            new ImmediateUiDispatcher());
     }
 
     private static StartViewModel CreateStartViewModel(

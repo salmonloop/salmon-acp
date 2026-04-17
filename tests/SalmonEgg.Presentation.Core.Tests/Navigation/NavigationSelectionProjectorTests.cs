@@ -18,12 +18,12 @@ public sealed class NavigationSelectionProjectorTests
     public void Project_UsesSessionControlSelection_WhenPaneIsOpen()
     {
         var navState = new FakeNavigationPaneState(isPaneOpen: true);
-        var start = new StartNavItemViewModel(navState);
+        var start = new StartNavItemViewModel(navState, new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
         var project = new ProjectNavItemViewModel(
             new ProjectDefinition { ProjectId = "project-1", Name = "Demo", RootPath = @"C:\repo\demo" },
             isSystemProject: false,
             createSessionAsync: _ => Task.CompletedTask,
-            navigationState: navState);
+            navigationState: navState, uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
         var session = new SessionNavItemViewModel(
             sessionId: "session-1",
             projectId: "project-1",
@@ -31,13 +31,13 @@ public sealed class NavigationSelectionProjectorTests
             relativeTimeText: "刚刚",
             ui: new NoopUiInteractionService(),
             chatSessionCatalog: new FakeChatSessionCatalog(),
-            navigationState: navState);
+            navigationState: navState, uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
 
         var projector = new NavigationSelectionProjector();
         var projection = projector.Project(
             new NavigationSelectionState.Session("session-1"),
             start,
-            new DiscoverSessionsNavItemViewModel(navState),
+            new DiscoverSessionsNavItemViewModel(navState, new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher()),
             new Dictionary<string, SessionNavItemViewModel> { ["session-1"] = session },
             new Dictionary<string, ProjectNavItemViewModel> { ["project-1"] = project });
 
@@ -51,12 +51,12 @@ public sealed class NavigationSelectionProjectorTests
     public void Project_KeepsSemanticSessionSelection_WhenPaneIsClosed()
     {
         var navState = new FakeNavigationPaneState(isPaneOpen: false);
-        var start = new StartNavItemViewModel(navState);
+        var start = new StartNavItemViewModel(navState, new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
         var project = new ProjectNavItemViewModel(
             new ProjectDefinition { ProjectId = "project-1", Name = "Demo", RootPath = @"C:\repo\demo" },
             isSystemProject: false,
             createSessionAsync: _ => Task.CompletedTask,
-            navigationState: navState);
+            navigationState: navState, uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
         var session = new SessionNavItemViewModel(
             sessionId: "session-1",
             projectId: "project-1",
@@ -64,13 +64,13 @@ public sealed class NavigationSelectionProjectorTests
             relativeTimeText: "刚刚",
             ui: new NoopUiInteractionService(),
             chatSessionCatalog: new FakeChatSessionCatalog(),
-            navigationState: navState);
+            navigationState: navState, uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
 
         var projector = new NavigationSelectionProjector();
         var projection = projector.Project(
             new NavigationSelectionState.Session("session-1"),
             start,
-            new DiscoverSessionsNavItemViewModel(navState),
+            new DiscoverSessionsNavItemViewModel(navState, new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher()),
             new Dictionary<string, SessionNavItemViewModel> { ["session-1"] = session },
             new Dictionary<string, ProjectNavItemViewModel> { ["project-1"] = project });
 
@@ -83,7 +83,7 @@ public sealed class NavigationSelectionProjectorTests
     public void Project_FallsBackToSessionSelection_WhenProjectMissingAndPaneClosed()
     {
         var navState = new FakeNavigationPaneState(isPaneOpen: false);
-        var start = new StartNavItemViewModel(navState);
+        var start = new StartNavItemViewModel(navState, new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
         var session = new SessionNavItemViewModel(
             sessionId: "session-1",
             projectId: "missing-project",
@@ -91,13 +91,13 @@ public sealed class NavigationSelectionProjectorTests
             relativeTimeText: "刚刚",
             ui: new NoopUiInteractionService(),
             chatSessionCatalog: new FakeChatSessionCatalog(),
-            navigationState: navState);
+            navigationState: navState, uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
 
         var projector = new NavigationSelectionProjector();
         var projection = projector.Project(
             new NavigationSelectionState.Session("session-1"),
             start,
-            new DiscoverSessionsNavItemViewModel(navState),
+            new DiscoverSessionsNavItemViewModel(navState, new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher()),
             new Dictionary<string, SessionNavItemViewModel> { ["session-1"] = session },
             new Dictionary<string, ProjectNavItemViewModel>());
 

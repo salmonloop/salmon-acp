@@ -99,7 +99,7 @@ public sealed class SessionNavItemViewModelTests
             relativeTimeText: "刚刚",
             ui: ui,
             chatSessionCatalog: chatSessionCatalog,
-            navigationState: new FakeNavigationPaneState());
+            navigationState: new FakeNavigationPaneState(), uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
 
     private sealed class FakeNavigationPaneState : INavigationPaneState
     {

@@ -7,6 +7,7 @@ using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -223,7 +224,7 @@ public sealed class AcpConnectionSessionCleanerTests
             inner,
             new AcpEventAdapter(
                 _ => { },
-                new SynchronizationContext(),
+                new ImmediateUiDispatcher(),
                 bufferLimit: 16,
                 resyncRequired: _ => { }));
 

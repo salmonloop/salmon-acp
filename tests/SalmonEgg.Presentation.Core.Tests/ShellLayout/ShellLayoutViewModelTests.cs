@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Uno.Extensions.Reactive;
 using Xunit;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 
 namespace SalmonEgg.Presentation.Core.Tests.ShellLayout;
@@ -14,7 +14,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_SeedsDefaultSnapshotImmediately()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         Assert.Equal(NavigationPaneDisplayMode.Expanded, vm.NavPaneDisplayMode);
         Assert.True(vm.IsNavPaneOpen);
@@ -34,7 +34,7 @@ public class ShellLayoutViewModelTests
             UserNavOpenIntent = false
         };
         await using var store = new FakeShellLayoutStore(initialState);
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         Assert.Equal(NavigationPaneDisplayMode.Compact, vm.NavPaneDisplayMode);
         Assert.False(vm.IsNavPaneOpen);
@@ -44,7 +44,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ProjectsSnapshot()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
             NavigationPaneDisplayMode.Compact, false, 300, 72,
@@ -62,11 +62,11 @@ public class ShellLayoutViewModelTests
     }
 
     [Fact]
-    public async Task ViewModel_ProjectsSnapshot_OnProvidedSynchronizationContext()
+    public async Task ViewModel_ProjectsSnapshot_OnProvidedDispatcher()
     {
         await using var store = new FakeShellLayoutStore();
-        var syncContext = new PumpingSynchronizationContext();
-        using var vm = new ShellLayoutViewModel(store, syncContext);
+        var dispatcher = new QueueingUiDispatcher();
+        using var vm = new ShellLayoutViewModel(store, dispatcher);
 
         await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
             NavigationPaneDisplayMode.Compact, false, 300, 72,
@@ -76,7 +76,7 @@ public class ShellLayoutViewModelTests
         await Task.Delay(50);
         Assert.True(vm.IsNavPaneOpen);
 
-        syncContext.RunAll();
+        dispatcher.RunAll();
 
         Assert.False(vm.IsNavPaneOpen);
         Assert.Equal(NavigationPaneDisplayMode.Compact, vm.NavPaneDisplayMode);
@@ -86,7 +86,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ProjectsBottomPanelSnapshot()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
             NavigationPaneDisplayMode.Expanded, true, 300, 72,
@@ -109,7 +109,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ProjectsDesiredModes_EvenWhenEffectiveIsSuppressed()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         // Simulate a narrow shell where right+bottom cannot be shown simultaneously.
         // User intent keeps both desired modes non-None, but policy suppresses the bottom panel.
@@ -142,7 +142,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ToggleRightPanelCommands_DispatchExpectedIntent()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await vm.ToggleDiffPanelCommand.ExecuteAsync(null);
         await vm.ToggleTodoPanelCommand.ExecuteAsync(null);
@@ -157,7 +157,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ToggleBottomPanelCommand_DispatchExpectedIntent()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await vm.ToggleBottomPanelCommand.ExecuteAsync(null);
 
@@ -168,7 +168,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ProjectsPanelToggleAvailability_FromSnapshot()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
             NavigationPaneDisplayMode.Compact, false, 300, 72,
@@ -190,7 +190,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_ProjectsAuxiliaryTitleBarButtonsVisibility_FromSnapshot()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
             NavigationPaneDisplayMode.Compact, false, 300, 72,
@@ -210,7 +210,7 @@ public class ShellLayoutViewModelTests
     public async Task ViewModel_DoesNotDispatchToggleCommands_WhenDisabled()
     {
         await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
             NavigationPaneDisplayMode.Compact, false, 300, 72,
@@ -279,30 +279,6 @@ public class ShellLayoutViewModelTests
         {
             await SnapshotState.DisposeAsync();
             await _state.DisposeAsync();
-        }
-    }
-
-    private sealed class PumpingSynchronizationContext : SynchronizationContext
-    {
-        private readonly Queue<(SendOrPostCallback? Callback, object? State)> _queue = new();
-
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            if (d is null)
-            {
-                return;
-            }
-
-            _queue.Enqueue((d, state));
-        }
-
-        public void RunAll()
-        {
-            while (_queue.Count > 0)
-            {
-                var work = _queue.Dequeue();
-                work.Callback?.Invoke(work.State);
-            }
         }
     }
 }

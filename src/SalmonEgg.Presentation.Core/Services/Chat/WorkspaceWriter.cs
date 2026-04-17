@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
+using SalmonEgg.Presentation.Core.Services;
 
 namespace SalmonEgg.Presentation.Core.Services.Chat;
 
@@ -21,7 +22,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
     private const int DefaultThrottleMilliseconds = 500;
 
     private readonly ChatConversationWorkspace _workspace;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private readonly TimeSpan _throttleWindow;
     private CancellationTokenSource? _flushCts;
     private PendingWrite? _pending;
@@ -30,11 +31,11 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
 
     public WorkspaceWriter(
         ChatConversationWorkspace workspace,
-        TimeSpan? throttleWindow = null,
-        SynchronizationContext? syncContext = null)
+        IUiDispatcher uiDispatcher,
+        TimeSpan? throttleWindow = null)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
-        _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _throttleWindow = throttleWindow ?? TimeSpan.FromMilliseconds(DefaultThrottleMilliseconds);
         _lastFlushAt = DateTime.MinValue;
     }
@@ -298,14 +299,14 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
     private Task PostToContextAsync(Action action, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             action();
             return Task.CompletedTask;
         }
 
         var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(_ =>
+        _uiDispatcher.Enqueue(() =>
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -322,7 +323,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             {
                 tcs.TrySetException(ex);
             }
-        }, null);
+        });
 
         return tcs.Task;
     }

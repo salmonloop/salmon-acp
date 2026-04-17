@@ -1,8 +1,8 @@
 using System;
-using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using Uno.Extensions.Reactive;
 using Xunit;
@@ -15,7 +15,7 @@ public class ShellLayoutNavigationStateAdapterTests
     public async Task Adapter_SeedsInitialPaneStateFromSnapshot()
     {
         await using var store = new TestShellLayoutStore();
-        using var adapter = new ShellLayoutNavigationStateAdapter(store);
+        using var adapter = new ShellLayoutNavigationStateAdapter(store, new ImmediateUiDispatcher());
 
         Assert.True(adapter.IsPaneOpen);
     }
@@ -29,37 +29,26 @@ public class ShellLayoutNavigationStateAdapterTests
                 WindowMetrics = new WindowMetrics(800, 720, 800, 720),
                 UserNavOpenIntent = false
             });
-        using var adapter = new ShellLayoutNavigationStateAdapter(store);
+        using var adapter = new ShellLayoutNavigationStateAdapter(store, new ImmediateUiDispatcher());
 
         Assert.False(adapter.IsPaneOpen);
     }
 
     [Fact]
-    public async Task Adapter_RaisesPaneStateChangedOnCapturedSynchronizationContext()
+    public async Task Adapter_RaisesPaneStateChangedWhenQueuedDispatcherRuns()
     {
-        var syncContext = new QueuedSynchronizationContext();
+        var dispatcher = new QueueingUiDispatcher();
         await using var store = new TestShellLayoutStore();
-        using var adapter = new ShellLayoutNavigationStateAdapter(store, syncContext);
+        using var adapter = new ShellLayoutNavigationStateAdapter(store, dispatcher);
         var changedCount = 0;
-        var raisedOnCapturedContext = false;
-        adapter.PaneStateChanged += (_, _) =>
-        {
-            changedCount++;
-            raisedOnCapturedContext = ReferenceEquals(SynchronizationContext.Current, syncContext);
-        };
+        adapter.PaneStateChanged += (_, _) => changedCount++;
 
         await store.SetPaneOpenAsync(false);
-
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(1);
-        while (syncContext.PendingPostCount == 0 && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(10);
-        }
+        await WaitForConditionAsync(() => adapter.IsPaneOpen == false);
 
         Assert.Equal(0, changedCount);
-        syncContext.DrainAll();
+        dispatcher.RunAll();
         Assert.Equal(1, changedCount);
-        Assert.True(raisedOnCapturedContext);
         Assert.False(adapter.IsPaneOpen);
     }
 
@@ -102,57 +91,16 @@ public class ShellLayoutNavigationStateAdapterTests
         }
     }
 
-    private sealed class QueuedSynchronizationContext : SynchronizationContext
+    private static async Task WaitForConditionAsync(Func<bool> predicate, int attempts = 20, int delayMs = 10)
     {
-        private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
-
-        public int PendingPostCount
+        for (var attempt = 0; attempt < attempts; attempt++)
         {
-            get
+            if (predicate())
             {
-                lock (_queue)
-                {
-                    return _queue.Count;
-                }
-            }
-        }
-
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            lock (_queue)
-            {
-                _queue.Enqueue((d, state));
-            }
-        }
-
-        public void DrainAll(int maxIterations = 32)
-        {
-            for (var i = 0; i < maxIterations; i++)
-            {
-                (SendOrPostCallback Callback, object? State) item;
-                lock (_queue)
-                {
-                    if (_queue.Count == 0)
-                    {
-                        return;
-                    }
-
-                    item = _queue.Dequeue();
-                }
-
-                var previous = Current;
-                SetSynchronizationContext(this);
-                try
-                {
-                    item.Callback(item.State);
-                }
-                finally
-                {
-                    SetSynchronizationContext(previous);
-                }
+                return;
             }
 
-            throw new InvalidOperationException("SynchronizationContext queue did not drain.");
+            await Task.Delay(delayMs);
         }
     }
 }

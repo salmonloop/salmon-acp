@@ -9,6 +9,7 @@ using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Application.UseCases;
 using SalmonEgg.Application.Validators;
 using SalmonEgg.Domain.Interfaces;
+using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
@@ -146,6 +147,7 @@ public static class DependencyInjection
         services.AddSingleton<IDiagnosticsBundleService, SalmonEgg.Infrastructure.Services.DiagnosticsBundleService>();
         services.AddSingleton<ILiveLogStreamService, SalmonEgg.Infrastructure.Services.LiveLogStreamService>();
         services.AddSingleton<IPlatformShellService, SalmonEgg.Infrastructure.Services.PlatformShellService>();
+        services.AddSingleton<IConversationPreviewStore, ConversationPreviewStore>();
 
         services.AddSingleton<IState<ChatState>>(sp => State.Value(sp, () => ChatState.Empty));
         services.AddSingleton<IChatStore, ChatStore>();
@@ -256,7 +258,11 @@ public static class DependencyInjection
             return new ErrorRecoveryService(chatService, pathValidator, errorLogger);
         });
 
-        services.AddSingleton<ChatViewModel>();
+        services.AddSingleton<ChatViewModel>(sp =>
+        {
+            var dispatcher = sp.GetRequiredService<IUiDispatcher>();
+            return ActivatorUtilities.CreateInstance<ChatViewModel>(sp, dispatcher);
+        });
         services.AddSingleton<IConversationSessionSwitcher>(sp => sp.GetRequiredService<ChatViewModel>());
 
         services.AddSingleton<ChatShellViewModel>();
@@ -288,11 +294,11 @@ public static class DependencyInjection
         services.AddSingleton<IConversationBindingCommands>(sp => sp.GetRequiredService<BindingCoordinator>());
         services.AddSingleton<IConversationMutationPipeline, ConversationMutationPipeline>();
         services.AddSingleton<IWorkspaceWriter>(sp =>
-            new WorkspaceWriter(sp.GetRequiredService<ChatConversationWorkspace>()));
-        services.AddSingleton<Func<Action<SessionUpdateEventArgs>, SynchronizationContext, Action<string?>?, AcpEventAdapter>>(sp =>
-            (handler, syncContext, resyncRequired) => new AcpEventAdapter(
+            new WorkspaceWriter(sp.GetRequiredService<ChatConversationWorkspace>(), sp.GetRequiredService<IUiDispatcher>()));
+        services.AddSingleton<Func<Action<SessionUpdateEventArgs>, IUiDispatcher, Action<string?>?, AcpEventAdapter>>(sp =>
+            (handler, dispatcher, resyncRequired) => new AcpEventAdapter(
                 handler,
-                syncContext,
+                dispatcher,
                 resyncRequired: resyncRequired,
                 logger: sp.GetService<ILogger<AcpEventAdapter>>()));
         services.AddSingleton<IConversationActivationCoordinator>(sp =>
@@ -324,7 +330,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<IShellSelectionReadModel>(),
                 sp.GetRequiredService<IShellNavigationRuntimeState>(),
                 sp.GetRequiredService<IConversationCatalogReadModel>(),
-                sp.GetRequiredService<IProjectAffinityResolver>()));
+                sp.GetRequiredService<IProjectAffinityResolver>(),
+                sp.GetRequiredService<IUiDispatcher>()));
         services.AddSingleton<INavigationCoordinator>(sp =>
             new NavigationCoordinator(
                 sp.GetRequiredService<IShellSelectionMutationSink>(),
@@ -414,7 +421,8 @@ public static class DependencyInjection
             new LiveLogViewerViewModel(
                 sp.GetRequiredService<ILiveLogStreamService>(),
                 sp.GetRequiredService<IAppDataService>().LogsDirectoryPath,
-                sp.GetRequiredService<ILogger<LiveLogViewerViewModel>>()));
+                sp.GetRequiredService<ILogger<LiveLogViewerViewModel>>(),
+                sp.GetRequiredService<IUiDispatcher>()));
         services.AddSingleton<DiagnosticsSettingsViewModel>();
         services.AddSingleton<AboutViewModel>();
 

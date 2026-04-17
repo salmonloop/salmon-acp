@@ -26,7 +26,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly IDiscoverSessionsConnectionFacade _connectionFacade;
     private readonly IDiscoverSessionImportCoordinator _importCoordinator;
     private readonly IProjectAffinityResolver _projectAffinityResolver;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private CancellationTokenSource? _refreshSessionsCts;
     private bool _disposed;
 
@@ -93,6 +93,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         AcpProfilesViewModel profilesViewModel,
         IDiscoverSessionsConnectionFacade connectionFacade,
         IDiscoverSessionImportCoordinator importCoordinator,
+        IUiDispatcher uiDispatcher,
         IProjectAffinityResolver? projectAffinityResolver = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -102,7 +103,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _connectionFacade = connectionFacade ?? throw new ArgumentNullException(nameof(connectionFacade));
         _importCoordinator = importCoordinator ?? throw new ArgumentNullException(nameof(importCoordinator));
         _projectAffinityResolver = projectAffinityResolver ?? new ProjectAffinityResolver();
-        _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
 
         _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
         _connectionFacade.PropertyChanged += OnConnectionFacadePropertyChanged;
@@ -115,14 +116,14 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             return;
         }
 
-        _syncContext.Post(_ =>
+        _uiDispatcher.Enqueue(() =>
         {
             OnPropertyChanged(nameof(SelectedProfile));
             OnPropertyChanged(nameof(HasSelectedProfile));
             OnPropertyChanged(nameof(HasNoSelectedProfile));
 
             _ = RefreshSessionsAsync();
-        }, null);
+        });
     }
 
     private void OnConnectionFacadePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -135,7 +136,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             return;
         }
 
-        _syncContext.Post(_ =>
+        _uiDispatcher.Enqueue(() =>
         {
             OnPropertyChanged(nameof(HasError));
             OnPropertyChanged(nameof(DisplayErrorMessage));
@@ -143,7 +144,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 SyncConnectionPhase();
             }
-        }, null);
+        });
     }
 
     [RelayCommand]
@@ -151,7 +152,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     {
         await _profilesViewModel.RefreshIfEmptyAsync().ConfigureAwait(false);
 
-        _syncContext.Post(_ =>
+        _uiDispatcher.Enqueue(() =>
         {
             OnPropertyChanged(nameof(AvailableProfiles));
             OnPropertyChanged(nameof(SelectedProfile));
@@ -169,7 +170,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 SelectedProfile = AvailableProfiles.First();
             }
-        }, null);
+        });
     }
 
     [RelayCommand]
@@ -455,14 +456,14 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
     private async Task PostToUiAsync(Action action)
     {
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             action();
             return;
         }
 
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(_ =>
+        _uiDispatcher.Enqueue(() =>
         {
             try
             {
@@ -473,7 +474,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 tcs.TrySetException(ex);
             }
-        }, null);
+        });
 
         await tcs.Task.ConfigureAwait(false);
     }
@@ -482,13 +483,13 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             return action();
         }
 
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(async _ =>
+        _uiDispatcher.Enqueue(async () =>
         {
             try
             {
@@ -499,7 +500,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 tcs.TrySetException(ex);
             }
-        }, null);
+        });
 
         return tcs.Task;
     }

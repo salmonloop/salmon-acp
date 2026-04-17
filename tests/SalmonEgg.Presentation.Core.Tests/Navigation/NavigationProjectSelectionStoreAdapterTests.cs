@@ -3,10 +3,10 @@ using Moq;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Services;
-using System.Threading;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Navigation;
@@ -38,37 +38,22 @@ public sealed class NavigationProjectSelectionStoreAdapterTests
 
     private static AppPreferencesViewModel CreatePreferences()
     {
-        var originalContext = SynchronizationContext.Current;
-        try
-        {
-            SynchronizationContext.SetSynchronizationContext(new ImmediateSynchronizationContext());
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
+        var startupService = new Mock<IAppStartupService>();
+        startupService.SetupGet(s => s.IsSupported).Returns(false);
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
 
-            var appSettingsService = new Mock<IAppSettingsService>();
-            appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
-            var startupService = new Mock<IAppStartupService>();
-            startupService.SetupGet(s => s.IsSupported).Returns(false);
-            var languageService = new Mock<IAppLanguageService>();
-            var capabilities = new Mock<IPlatformCapabilityService>();
-            var uiRuntime = new Mock<IUiRuntimeService>();
-            var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
-
-            return new AppPreferencesViewModel(
-                appSettingsService.Object,
-                startupService.Object,
-                languageService.Object,
-                capabilities.Object,
-                uiRuntime.Object,
-                prefsLogger.Object);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
-    }
-
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback d, object? state)
-            => d(state);
+        return new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
     }
 }

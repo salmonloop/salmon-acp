@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Immutable;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,6 +10,7 @@ using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services.Search;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Models.Search;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels;
@@ -26,255 +26,205 @@ public sealed class GlobalSearchViewModelTests
     [Fact]
     public async Task SelectResultAsync_SessionUsesResolverDerivedProjectId()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new ImmediateSynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
+        var preferences = CreatePreferencesWithProject();
+        preferences.ProjectPathMappings.Add(new ProjectPathMapping
         {
-            var preferences = CreatePreferencesWithProject();
-            preferences.ProjectPathMappings.Add(new ProjectPathMapping
-            {
-                ProfileId = "profile-1",
-                RemoteRootPath = "/remote/worktrees",
-                LocalRootPath = @"C:\repo"
-            });
+            ProfileId = "profile-1",
+            RemoteRootPath = "/remote/worktrees",
+            LocalRootPath = @"C:\repo"
+        });
 
-            var presenter = new ConversationCatalogPresenter();
-            presenter.SetLoading(false);
-            presenter.Refresh(
-            [
-                new ConversationCatalogItem(
-                    "session-1",
-                    "Remote Session",
-                    "/remote/worktrees/demo/feature",
-                    new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
-                    new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
-                    new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
-                    RemoteSessionId: "remote-1",
-                    BoundProfileId: "profile-1",
-                    ProjectAffinityOverrideProjectId: null)
-            ]);
+        var presenter = new ConversationCatalogPresenter();
+        presenter.SetLoading(false);
+        presenter.Refresh(
+        [
+            new ConversationCatalogItem(
+                "session-1",
+                "Remote Session",
+                "/remote/worktrees/demo/feature",
+                new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                RemoteSessionId: "remote-1",
+                BoundProfileId: "profile-1",
+                ProjectAffinityOverrideProjectId: null)
+        ]);
 
-            var navigationCoordinator = new Mock<INavigationCoordinator>();
-            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
-            using var viewModel = new GlobalSearchViewModel(
-                navigationViewModel,
-                preferences,
-                navigationCoordinator.Object,
-                presenter,
-                new ProjectAffinityResolver(),
-                new DefaultGlobalSearchPipeline(),
-                Mock.Of<ILogger<GlobalSearchViewModel>>());
+        var navigationCoordinator = new Mock<INavigationCoordinator>();
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            navigationCoordinator.Object,
+            presenter,
+            new ProjectAffinityResolver(),
+            new DefaultGlobalSearchPipeline(),
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-            await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
-            {
-                Id = "session-1",
-                Title = "Remote Session",
-                Kind = SearchResultKind.Session
-            });
-
-            navigationCoordinator.Verify(
-                coordinator => coordinator.ActivateSessionAsync("session-1", "project-1"),
-                Times.Once);
-        }
-        finally
+        await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
         {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+            Id = "session-1",
+            Title = "Remote Session",
+            Kind = SearchResultKind.Session
+        });
+
+        navigationCoordinator.Verify(
+            coordinator => coordinator.ActivateSessionAsync("session-1", "project-1"),
+            Times.Once);
     }
 
     [Fact]
     public void QueryChange_EntersLoading_AndOpensPanelImmediately()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new ImmediateSynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
-        {
-            var preferences = CreatePreferencesWithProject();
-            var presenter = new ConversationCatalogPresenter();
-            var pipeline = new ControlledSearchPipeline();
-            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
-            using var viewModel = new GlobalSearchViewModel(
-                navigationViewModel,
-                preferences,
-                Mock.Of<INavigationCoordinator>(),
-                presenter,
-                new ProjectAffinityResolver(),
-                pipeline,
-                Mock.Of<ILogger<GlobalSearchViewModel>>());
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var pipeline = new ControlledSearchPipeline();
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            Mock.Of<INavigationCoordinator>(),
+            presenter,
+            new ProjectAffinityResolver(),
+            pipeline,
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-            viewModel.IsSearchBoxFocused = true;
-            viewModel.Query = "abc";
+        viewModel.IsSearchBoxFocused = true;
+        viewModel.Query = "abc";
 
-            Assert.Equal(GlobalSearchViewState.Loading, viewModel.ViewState);
-            Assert.True(viewModel.IsSearchPanelOpen);
-            Assert.True(viewModel.IsSearching);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        Assert.Equal(GlobalSearchViewState.Loading, viewModel.ViewState);
+        Assert.True(viewModel.IsSearchPanelOpen);
+        Assert.True(viewModel.IsSearching);
     }
 
     [Fact]
     public async Task StaleFailure_DoesNotOverrideLatestSuccessfulResult()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new ImmediateSynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var pipeline = new ScriptedSearchPipeline(async query =>
         {
-            var preferences = CreatePreferencesWithProject();
-            var presenter = new ConversationCatalogPresenter();
-            var pipeline = new ScriptedSearchPipeline(async query =>
+            if (string.Equals(query, "alpha", StringComparison.Ordinal))
             {
-                if (string.Equals(query, "alpha", StringComparison.Ordinal))
-                {
-                    await Task.Delay(300);
-                    throw new InvalidOperationException("stale error");
-                }
+                await Task.Delay(300);
+                throw new InvalidOperationException("stale error");
+            }
 
-                await Task.Delay(40);
-                return new GlobalSearchSnapshot(
-                    ImmutableArray.Create(
-                        new GlobalSearchGroupSnapshot(
-                            Name: "sessions",
-                            Title: "会话",
-                            Priority: 100,
-                            Items: ImmutableArray.Create(
-                                new GlobalSearchItemSnapshot(
-                                    Id: "latest",
-                                    Title: "latest",
-                                    Subtitle: null,
-                                    Kind: SearchResultKind.Session,
-                                    IconGlyph: "\uE8BD",
-                                    Tag: null)))));
-            });
-
-            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
-            using var viewModel = new GlobalSearchViewModel(
-                navigationViewModel,
-                preferences,
-                Mock.Of<INavigationCoordinator>(),
-                presenter,
-                new ProjectAffinityResolver(),
-                pipeline,
-                Mock.Of<ILogger<GlobalSearchViewModel>>());
-
-            viewModel.IsSearchBoxFocused = true;
-            viewModel.Query = "alpha";
             await Task.Delay(40);
-            viewModel.Query = "beta";
-            await Task.Delay(700);
+            return new GlobalSearchSnapshot(
+                ImmutableArray.Create(
+                    new GlobalSearchGroupSnapshot(
+                        Name: "sessions",
+                        Title: "会话",
+                        Priority: 100,
+                        Items: ImmutableArray.Create(
+                            new GlobalSearchItemSnapshot(
+                                Id: "latest",
+                                Title: "latest",
+                                Subtitle: null,
+                                Kind: SearchResultKind.Session,
+                                IconGlyph: "\uE8BD",
+                                Tag: null)))));
+        });
 
-            Assert.Equal(GlobalSearchViewState.Results, viewModel.ViewState);
-            Assert.False(viewModel.IsError);
-            Assert.True(viewModel.HasResults);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            Mock.Of<INavigationCoordinator>(),
+            presenter,
+            new ProjectAffinityResolver(),
+            pipeline,
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+        viewModel.IsSearchBoxFocused = true;
+        viewModel.Query = "alpha";
+        await Task.Delay(40);
+        viewModel.Query = "beta";
+        await Task.Delay(700);
+
+        Assert.Equal(GlobalSearchViewState.Results, viewModel.ViewState);
+        Assert.False(viewModel.IsError);
+        Assert.True(viewModel.HasResults);
     }
 
     [Fact]
     public async Task SelectResultAsync_SettingUsesCanonicalSettingsKey()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new ImmediateSynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
-        {
-            var preferences = CreatePreferencesWithProject();
-            var presenter = new ConversationCatalogPresenter();
-            var navigationCoordinator = new Mock<INavigationCoordinator>();
-            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
-            using var viewModel = new GlobalSearchViewModel(
-                navigationViewModel,
-                preferences,
-                navigationCoordinator.Object,
-                presenter,
-                new ProjectAffinityResolver(),
-                new DefaultGlobalSearchPipeline(),
-                Mock.Of<ILogger<GlobalSearchViewModel>>());
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var navigationCoordinator = new Mock<INavigationCoordinator>();
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            navigationCoordinator.Object,
+            presenter,
+            new ProjectAffinityResolver(),
+            new DefaultGlobalSearchPipeline(),
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-            await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
-            {
-                Id = "AgentAcp",
-                Title = "ACP 配置",
-                Kind = SearchResultKind.Setting
-            });
-
-            navigationCoordinator.Verify(
-                coordinator => coordinator.ActivateSettingsAsync("AgentAcp"),
-                Times.Once);
-        }
-        finally
+        await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
         {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+            Id = "AgentAcp",
+            Title = "ACP 配置",
+            Kind = SearchResultKind.Setting
+        });
+
+        navigationCoordinator.Verify(
+            coordinator => coordinator.ActivateSettingsAsync("AgentAcp"),
+            Times.Once);
     }
 
     [Fact]
     public async Task QueryChange_AfterError_CanRecoverToResults()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new ImmediateSynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var pipeline = new ScriptedSearchPipeline(query =>
         {
-            var preferences = CreatePreferencesWithProject();
-            var presenter = new ConversationCatalogPresenter();
-            var pipeline = new ScriptedSearchPipeline(query =>
+            if (string.Equals(query, "boom", StringComparison.Ordinal))
             {
-                if (string.Equals(query, "boom", StringComparison.Ordinal))
-                {
-                    throw new InvalidOperationException("search failed");
-                }
+                throw new InvalidOperationException("search failed");
+            }
 
-                return Task.FromResult(new GlobalSearchSnapshot(
-                    ImmutableArray.Create(
-                        new GlobalSearchGroupSnapshot(
-                            Name: "sessions",
-                            Title: "会话",
-                            Priority: 100,
-                            Items: ImmutableArray.Create(
-                                new GlobalSearchItemSnapshot(
-                                    Id: "ok-1",
-                                    Title: "ok",
-                                    Subtitle: null,
-                                    Kind: SearchResultKind.Session,
-                                    IconGlyph: "\uE8BD",
-                                    Tag: null))))));
-            });
+            return Task.FromResult(new GlobalSearchSnapshot(
+                ImmutableArray.Create(
+                    new GlobalSearchGroupSnapshot(
+                        Name: "sessions",
+                        Title: "会话",
+                        Priority: 100,
+                        Items: ImmutableArray.Create(
+                            new GlobalSearchItemSnapshot(
+                                Id: "ok-1",
+                                Title: "ok",
+                                Subtitle: null,
+                                Kind: SearchResultKind.Session,
+                                IconGlyph: "\uE8BD",
+                                Tag: null))))));
+        });
 
-            using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
-            using var viewModel = new GlobalSearchViewModel(
-                navigationViewModel,
-                preferences,
-                Mock.Of<INavigationCoordinator>(),
-                presenter,
-                new ProjectAffinityResolver(),
-                pipeline,
-                Mock.Of<ILogger<GlobalSearchViewModel>>());
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            Mock.Of<INavigationCoordinator>(),
+            presenter,
+            new ProjectAffinityResolver(),
+            pipeline,
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-            viewModel.IsSearchBoxFocused = true;
-            viewModel.Query = "boom";
-            await Task.Delay(400);
-            Assert.Equal(GlobalSearchViewState.Error, viewModel.ViewState);
-            Assert.True(viewModel.IsError);
+        viewModel.IsSearchBoxFocused = true;
+        viewModel.Query = "boom";
+        await Task.Delay(400);
+        Assert.Equal(GlobalSearchViewState.Error, viewModel.ViewState);
+        Assert.True(viewModel.IsError);
 
-            viewModel.Query = "ok";
-            await Task.Delay(400);
-            Assert.Equal(GlobalSearchViewState.Results, viewModel.ViewState);
-            Assert.False(viewModel.IsError);
-            Assert.True(viewModel.HasResults);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        viewModel.Query = "ok";
+        await Task.Delay(400);
+        Assert.Equal(GlobalSearchViewState.Results, viewModel.ViewState);
+        Assert.False(viewModel.IsError);
+        Assert.True(viewModel.HasResults);
     }
 
     private static MainNavigationViewModel CreateNavigationViewModel(
@@ -293,7 +243,8 @@ public sealed class GlobalSearchViewModelTests
             new ShellSelectionStateStore(),
             new ShellNavigationRuntimeStateStore(),
             presenter,
-            new ProjectAffinityResolver());
+            new ProjectAffinityResolver(),
+            new ImmediateUiDispatcher());
     }
 
     private static AppPreferencesViewModel CreatePreferencesWithProject()
@@ -309,7 +260,8 @@ public sealed class GlobalSearchViewModelTests
             Mock.Of<IAppLanguageService>(),
             Mock.Of<IPlatformCapabilityService>(),
             Mock.Of<IUiRuntimeService>(),
-            Mock.Of<ILogger<AppPreferencesViewModel>>());
+            Mock.Of<ILogger<AppPreferencesViewModel>>(),
+            new ImmediateUiDispatcher());
 
         preferences.Projects.Add(new ProjectDefinition
         {
@@ -319,11 +271,6 @@ public sealed class GlobalSearchViewModelTests
         });
 
         return preferences;
-    }
-
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback d, object? state) => d(state);
     }
 
     private sealed class ControlledSearchPipeline : IGlobalSearchPipeline

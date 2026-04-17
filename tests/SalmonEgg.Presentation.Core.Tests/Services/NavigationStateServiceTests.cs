@@ -2,6 +2,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using Uno.Extensions.Reactive;
 using Xunit;
@@ -14,7 +16,7 @@ public class NavigationStateServiceTests
     public async Task IsPaneOpen_ShouldChangeStateAndNotify()
     {
         await using var store = new TestShellLayoutStore();
-        using var service = new NavigationStateService(store);
+        using var service = new NavigationStateService(store, new ImmediateUiDispatcher());
         using var signal = new ManualResetEventSlim(false);
         var changedCount = 0;
         service.PaneStateChanged += (_, _) => changedCount++;
@@ -32,7 +34,7 @@ public class NavigationStateServiceTests
     public async Task IsPaneOpen_ShouldNotNotifyIfValueIsSame()
     {
         await using var store = new TestShellLayoutStore();
-        using var service = new NavigationStateService(store);
+        using var service = new NavigationStateService(store, new ImmediateUiDispatcher());
         using var signal = new ManualResetEventSlim(false);
         service.PaneStateChanged += (_, _) => signal.Set();
 
@@ -58,7 +60,7 @@ public class NavigationStateServiceTests
                 WindowMetrics = new WindowMetrics(800, 720, 800, 720),
                 UserNavOpenIntent = false
             });
-        using var service = new NavigationStateService(store);
+        using var service = new NavigationStateService(store, new ImmediateUiDispatcher());
 
         Assert.False(service.IsPaneOpen);
     }
@@ -72,7 +74,7 @@ public class NavigationStateServiceTests
                 WindowMetrics = new WindowMetrics(800, 720, 800, 720),
                 UserNavOpenIntent = false
             });
-        var service = new NavigationStateService(store);
+        var service = new NavigationStateService(store, new ImmediateUiDispatcher());
 
         Assert.False(service.IsPaneOpen);
 

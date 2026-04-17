@@ -13,7 +13,9 @@ using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -24,7 +26,7 @@ public sealed class AcpConnectionCoordinatorTests
     [Fact]
     public async Task ResyncAsync_ReplaysBufferedUpdatesOnlyAfterSinkReset()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService
         {
             AgentCapabilities = new AgentCapabilities(loadSession: true)
@@ -38,7 +40,7 @@ public sealed class AcpConnectionCoordinatorTests
         AcpChatServiceAdapter? adapter = null;
         var eventAdapter = new AcpEventAdapter(
             update => adapter!.PublishBufferedUpdate(update),
-            syncContext);
+            uiDispatcher);
         adapter = new AcpChatServiceAdapter(inner, eventAdapter);
 
         var sink = new FakeSink
@@ -86,7 +88,7 @@ public sealed class AcpConnectionCoordinatorTests
         AcpChatServiceAdapter? adapter = null;
         var eventAdapter = new AcpEventAdapter(
             update => adapter!.PublishBufferedUpdate(update),
-            new ImmediateSynchronizationContext());
+            new ImmediateUiDispatcher());
         adapter = new AcpChatServiceAdapter(inner, eventAdapter);
 
         var sink = new FakeSink
@@ -112,7 +114,7 @@ public sealed class AcpConnectionCoordinatorTests
     [Fact]
     public async Task ResyncAsync_WhenAdapterWasAlreadyHydrated_ReplaysOnlyAfterSinkReset()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService
         {
             AgentCapabilities = new AgentCapabilities(loadSession: true)
@@ -121,7 +123,7 @@ public sealed class AcpConnectionCoordinatorTests
         AcpChatServiceAdapter? adapter = null;
         var eventAdapter = new AcpEventAdapter(
             update => adapter!.PublishBufferedUpdate(update),
-            syncContext);
+            uiDispatcher);
         adapter = new AcpChatServiceAdapter(inner, eventAdapter);
         adapter.MarkHydrated();
 
@@ -314,6 +316,8 @@ public sealed class AcpConnectionCoordinatorTests
 
         public IConversationBindingCommands ConversationBindingCommands { get; } = new NoopBindingCommands();
 
+        public IUiDispatcher Dispatcher { get; } = new ImmediateUiDispatcher();
+
         public int ResetHydratedConversationForResyncCalls { get; private set; }
         public int MarkConversationRemoteHydratedCalls { get; private set; }
         public SessionLoadResponse? AppliedLoadResponse { get; private set; }
@@ -364,10 +368,7 @@ public sealed class AcpConnectionCoordinatorTests
             => ValueTask.FromResult(BindingUpdateResult.Success());
     }
 
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback d, object? state) => d(state);
-    }
+    // Replaced ImmediateSynchronizationContext with ImmediateUiDispatcher from Threading/
 
     private class FakeChatService : IChatService
     {

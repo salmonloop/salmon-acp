@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -27,7 +28,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
     private readonly IAcpConnectionSessionEvents _events;
     private readonly ISettingsAcpConnectionCommands _commands;
     private readonly ILogger<AgentProfileItemViewModel> _logger;
-    private readonly SynchronizationContext _uiContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private bool _disposed;
 
     // ── Observable state ────────────────────────────────────────────────────
@@ -88,7 +89,8 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
         IAcpConnectionSessionRegistry registry,
         IAcpConnectionSessionEvents events,
         ISettingsAcpConnectionCommands commands,
-        ILogger<AgentProfileItemViewModel> logger)
+        ILogger<AgentProfileItemViewModel> logger,
+        IUiDispatcher uiDispatcher)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(registry);
@@ -101,9 +103,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
         _events = events;
         _commands = commands;
         _logger = logger;
-
-        // Capture the UI sync context at construction time (must be called on the UI thread).
-        _uiContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
 
         ProfileId = profile.Id;
         Name = profile.Name;
@@ -215,14 +215,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
 
     private void PostToUi(Action action)
     {
-        if (SynchronizationContext.Current == _uiContext)
-        {
-            action();
-        }
-        else
-        {
-            _uiContext.Post(_ => action(), null);
-        }
+        _uiDispatcher.Enqueue(action);
     }
 
     private static string BuildEndpointDescription(ServerConfiguration profile)

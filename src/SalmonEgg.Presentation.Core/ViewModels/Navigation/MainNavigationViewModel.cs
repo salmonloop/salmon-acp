@@ -40,7 +40,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly IShellSelectionReadModel _shellSelection;
     private readonly IShellNavigationRuntimeState _shellRuntimeState;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private readonly System.Collections.Specialized.NotifyCollectionChangedEventHandler _projectsChangedHandler;
     private readonly Timer _relativeTimeTimer;
     private static readonly TimeSpan RelativeTimeRefreshInterval = TimeSpan.FromSeconds(30);
@@ -77,13 +77,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private void OnServicePaneStateChanged(object? sender, EventArgs e)
     {
-        if (SynchronizationContext.Current != _syncContext)
-        {
-            _syncContext.Post(_ => ApplyPaneStateChanged(), null);
-            return;
-        }
-
-        ApplyPaneStateChanged();
+        _uiDispatcher.Enqueue(ApplyPaneStateChanged);
     }
 
     private void ApplyPaneStateChanged()
@@ -109,7 +103,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         IShellSelectionReadModel shellSelection,
         IShellNavigationRuntimeState shellRuntimeState,
         IConversationCatalogReadModel conversationCatalogPresenter,
-        IProjectAffinityResolver projectAffinityResolver)
+        IProjectAffinityResolver projectAffinityResolver,
+        IUiDispatcher uiDispatcher)
     {
         _chatSessionCatalogActions = conversationCatalog as IChatSessionCatalog ?? new ChatViewModelSessionCatalogAdapter(conversationCatalog);
         _projectPreferences = projectPreferences ?? throw new ArgumentNullException(nameof(projectPreferences));
@@ -123,13 +118,13 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _shellRuntimeState = shellRuntimeState ?? throw new ArgumentNullException(nameof(shellRuntimeState));
         _conversationCatalogPresenter = conversationCatalogPresenter ?? throw new ArgumentNullException(nameof(conversationCatalogPresenter));
         _projectAffinityResolver = projectAffinityResolver ?? throw new ArgumentNullException(nameof(projectAffinityResolver));
-        _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
 
-        StartItem = new StartNavItemViewModel(_navigationState);
-        DiscoverSessionsItem = new DiscoverSessionsNavItemViewModel(_navigationState);
-        SessionsLabelItem = new SessionsLabelNavItemViewModel(_navigationState);
-        AddProjectItem = new AddProjectNavItemViewModel(AddProjectCommand, _navigationState);
+        StartItem = new StartNavItemViewModel(_navigationState, _uiDispatcher);
+        DiscoverSessionsItem = new DiscoverSessionsNavItemViewModel(_navigationState, _uiDispatcher);
+        SessionsLabelItem = new SessionsLabelNavItemViewModel(_navigationState, _uiDispatcher);
+        AddProjectItem = new AddProjectNavItemViewModel(AddProjectCommand, _navigationState, _uiDispatcher);
 
         FooterItems.Add(DiscoverSessionsItem);
 
@@ -152,7 +147,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         ((INotifyCollectionChanged)_projectPreferences.ProjectPathMappings).CollectionChanged += _projectsChangedHandler;
 
         _relativeTimeTimer = new Timer(
-            _ => _syncContext.Post(__ => RefreshRelativeTimes(), null),
+            _ => _uiDispatcher.Enqueue(RefreshRelativeTimes),
             null,
             RelativeTimeRefreshInterval,
             RelativeTimeRefreshInterval);
@@ -313,6 +308,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             ui: _ui,
             chatSessionCatalog: _chatSessionCatalogActions,
             navigationState: _navigationState,
+            uiDispatcher: _uiDispatcher,
             isPlaceholder: true);
     }
 
@@ -393,7 +389,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             return;
         }
 
-        _syncContext.Post(_ => ProcessRebuildTreeRequests(), null);
+        _uiDispatcher.Enqueue(ProcessRebuildTreeRequests);
     }
 
     private void ProcessRebuildTreeRequests()
@@ -447,7 +443,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 var projectId = projectDef.ProjectId!;
                 if (!_projectVms.TryGetValue(projectId, out var projectVm))
                 {
-                    projectVm = new ProjectNavItemViewModel(projectDef, isSystem, PrepareStartForProjectAsync, _navigationState)
+                    projectVm = new ProjectNavItemViewModel(projectDef, isSystem, PrepareStartForProjectAsync, _navigationState, _uiDispatcher)
                     {
                         IsExpanded = true
                     };
@@ -573,7 +569,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                             relativeTimeText: relative,
                             ui: _ui,
                             chatSessionCatalog: _chatSessionCatalogActions,
-                            navigationState: _navigationState);
+                            navigationState: _navigationState,
+                            uiDispatcher: _uiDispatcher);
                 }
                 projectVm.Children.Insert(childIndex, sessionVm);
             }
@@ -600,7 +597,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 }
 
                 var showMore = new AsyncRelayCommand(() => ShowAllSessionsForProjectAsync(projectVm.ProjectId));
-                projectVm.Children.Insert(childIndex, new MoreSessionsNavItemViewModel(projectVm.ProjectId, remainingCount, showMore, _navigationState));
+                projectVm.Children.Insert(childIndex, new MoreSessionsNavItemViewModel(projectVm.ProjectId, remainingCount, showMore, _navigationState, _uiDispatcher));
             }
             childIndex++;
         }
@@ -808,7 +805,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         foreach (var (project, isSystem) in projects)
         {
-            var projectVm = new ProjectNavItemViewModel(project, isSystem, PrepareStartForProjectAsync, _navigationState)
+            var projectVm = new ProjectNavItemViewModel(project, isSystem, PrepareStartForProjectAsync, _navigationState, _uiDispatcher)
             {
                 IsExpanded = true
             };
@@ -831,7 +828,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                     relativeTimeText: relative,
                     ui: _ui,
                     chatSessionCatalog: _chatSessionCatalogActions,
-                    navigationState: _navigationState);
+                    navigationState: _navigationState,
+                    uiDispatcher: _uiDispatcher);
 
                 projectVm.Children.Add(vm);
             }
@@ -839,7 +837,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             if (remaining > 0)
             {
                 var showMore = new AsyncRelayCommand(() => ShowAllSessionsForProjectAsync(projectVm.ProjectId));
-                projectVm.Children.Add(new MoreSessionsNavItemViewModel(projectVm.ProjectId, remaining, showMore, _navigationState));
+                projectVm.Children.Add(new MoreSessionsNavItemViewModel(projectVm.ProjectId, remaining, showMore, _navigationState, _uiDispatcher));
             }
 
             if (IsConversationListLoading && projectVm.Children.Count == 0 && projectVm.ProjectId == UnclassifiedProjectId)
@@ -859,7 +857,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             Name = "未归类",
             RootPath = string.Empty
         };
-        var vm = new ProjectNavItemViewModel(project, isSystemProject: true, PrepareStartForProjectAsync, _navigationState) { IsExpanded = true };
+        var vm = new ProjectNavItemViewModel(project, isSystemProject: true, PrepareStartForProjectAsync, _navigationState, _uiDispatcher) { IsExpanded = true };
         _projectIndex[vm.ProjectId] = vm;
         return vm;
     }
@@ -893,7 +891,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 relativeTimeText: relative,
                 ui: _ui,
                 chatSessionCatalog: _chatSessionCatalogActions,
-                navigationState: _navigationState);
+                navigationState: _navigationState,
+                uiDispatcher: _uiDispatcher);
         }).ToList();
     }
 

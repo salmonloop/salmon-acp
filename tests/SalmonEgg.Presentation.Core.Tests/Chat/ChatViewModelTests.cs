@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
+using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Content;
@@ -108,6 +109,7 @@ public class ChatViewModelTests
         var capabilities = new Mock<IPlatformCapabilityService>();
         var uiRuntime = new Mock<IUiRuntimeService>();
         var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+        var uiDispatcher = syncContext as IUiDispatcher ?? new ImmediateUiDispatcher();
 
         var preferences = new AppPreferencesViewModel(
             appSettingsService.Object,
@@ -115,7 +117,8 @@ public class ChatViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            uiDispatcher);
 
         var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
         var profiles = new AcpProfilesViewModel(configurationService.Object, preferences, profilesLogger.Object, new ImmediateUiDispatcher());
@@ -133,7 +136,7 @@ public class ChatViewModelTests
             conversationStore.Object,
             new AppPreferencesConversationWorkspacePreferences(preferences),
             Mock.Of<ILogger<ChatConversationWorkspace>>(),
-            syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext());
+            uiDispatcher);
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
 
@@ -156,8 +159,9 @@ public class ChatViewModelTests
                 chatStateProjector,
                 null,
                 connectionStore,
+                uiDispatcher,
+                Mock.Of<IConversationPreviewStore>(),
                 vmLogger.Object,
-                syncContext,
                 acpConnectionCommands,
                 conversationActivationCoordinator: conversationActivationCoordinator,
                 bindingCommands: bindingCommands,
@@ -1618,6 +1622,7 @@ public class ChatViewModelTests
         var capabilities = new Mock<IPlatformCapabilityService>();
         var uiRuntime = new Mock<IUiRuntimeService>();
         var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+        var uiDispatcher = (IUiDispatcher)syncContext;
 
         var preferences = new AppPreferencesViewModel(
             appSettingsService.Object,
@@ -1625,7 +1630,8 @@ public class ChatViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            uiDispatcher);
 
         var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object, new ImmediateUiDispatcher());
@@ -1638,7 +1644,7 @@ public class ChatViewModelTests
             conversationStore.Object,
             new AppPreferencesConversationWorkspacePreferences(preferences),
             Mock.Of<ILogger<ChatConversationWorkspace>>(),
-            syncContext);
+            uiDispatcher);
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
         await using var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
@@ -1658,8 +1664,9 @@ public class ChatViewModelTests
             chatStateProjector,
             null,
             connectionStore,
-            vmLogger.Object,
-            syncContext);
+            uiDispatcher,
+            Mock.Of<IConversationPreviewStore>(),
+            vmLogger.Object);
 
         syncContext.RunAll();
         Assert.False(viewModel.IsTurnStatusVisible);
@@ -1707,6 +1714,7 @@ public class ChatViewModelTests
         var capabilities = new Mock<IPlatformCapabilityService>();
         var uiRuntime = new Mock<IUiRuntimeService>();
         var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+        var uiDispatcher = (IUiDispatcher)syncContext;
 
         var preferences = new AppPreferencesViewModel(
             appSettingsService.Object,
@@ -1714,7 +1722,8 @@ public class ChatViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            uiDispatcher);
 
         var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object, new ImmediateUiDispatcher());
@@ -1725,7 +1734,7 @@ public class ChatViewModelTests
             conversationStore.Object,
             new AppPreferencesConversationWorkspacePreferences(preferences),
             Mock.Of<ILogger<ChatConversationWorkspace>>(),
-            syncContext);
+            uiDispatcher);
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
         await using var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
@@ -1745,8 +1754,9 @@ public class ChatViewModelTests
             chatStateProjector,
             null,
             connectionStore,
-            vmLogger.Object,
-            syncContext);
+            uiDispatcher,
+            Mock.Of<IConversationPreviewStore>(),
+            vmLogger.Object);
 
         syncContext.RunAll();
         Assert.False(viewModel.IsTurnStatusVisible);
@@ -1761,7 +1771,7 @@ public class ChatViewModelTests
     [Fact]
     public async Task Dispose_DoesNotDisposeInjectedConversationWorkspace()
     {
-        var syncContext = new SynchronizationContext();
+        var syncContext = new ImmediateSynchronizationContext();
         var state = State.Value(new object(), () => ChatState.Empty);
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
@@ -1820,6 +1830,7 @@ public class ChatViewModelTests
         var capabilities = new Mock<IPlatformCapabilityService>();
         var uiRuntime = new Mock<IUiRuntimeService>();
         var prefsLogger = new Mock<ILogger<AppPreferencesViewModel>>();
+        var uiDispatcher = (IUiDispatcher)syncContext;
 
         var preferences = new AppPreferencesViewModel(
             appSettingsService.Object,
@@ -1827,7 +1838,8 @@ public class ChatViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            uiDispatcher);
 
         var profilesLogger = new Mock<ILogger<AcpProfilesViewModel>>();
         var profiles = new AcpProfilesViewModel(configService.Object, preferences, profilesLogger.Object, new ImmediateUiDispatcher());
@@ -1839,7 +1851,7 @@ public class ChatViewModelTests
             conversationStore.Object,
             new AppPreferencesConversationWorkspacePreferences(preferences),
             Mock.Of<ILogger<ChatConversationWorkspace>>(),
-            syncContext);
+            uiDispatcher);
         var miniWindow = new Mock<IMiniWindowCoordinator>();
         var conversationCatalogPresenter = new ConversationCatalogPresenter();
         var vmLogger = new Mock<ILogger<ChatViewModel>>();
@@ -1864,8 +1876,9 @@ public class ChatViewModelTests
                 chatStateProjector,
                 null,
                 connectionStore,
-                vmLogger.Object,
-                syncContext);
+                uiDispatcher,
+                Mock.Of<IConversationPreviewStore>(),
+                vmLogger.Object);
 
             viewModel.Dispose();
 
@@ -1942,10 +1955,12 @@ public class ChatViewModelTests
         Assert.False(viewModel.ShouldShowPlanEmpty);
     }
 
-    private sealed class QueueingSynchronizationContext : SynchronizationContext
+    private sealed class QueueingSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
         private readonly Queue<(SendOrPostCallback callback, object? state)> _work = new();
         private readonly object _gate = new();
+
+        public bool HasThreadAccess => ReferenceEquals(Current, this);
 
         public int PendingCount
         {
@@ -1969,6 +1984,54 @@ public class ChatViewModelTests
             {
                 _work.Enqueue((d, state));
             }
+        }
+
+        public void Enqueue(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            Post(_ => action(), null);
+        }
+
+        public Task EnqueueAsync(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(_ =>
+            {
+                try
+                {
+                    action();
+                    tcs.TrySetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, null);
+
+            return tcs.Task;
+        }
+
+        public Task EnqueueAsync(Func<Task> function)
+        {
+            ArgumentNullException.ThrowIfNull(function);
+
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(async _ =>
+            {
+                try
+                {
+                    await function().ConfigureAwait(false);
+                    tcs.TrySetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, null);
+
+            return tcs.Task;
         }
 
         public bool RunNext()
@@ -2032,9 +2095,31 @@ public class ChatViewModelTests
         }
     }
 
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
+    private sealed class ImmediateSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
+        public bool HasThreadAccess => true;
+
         public override void Post(SendOrPostCallback d, object? state) => d(state);
+
+        public void Enqueue(Action action) => action();
+
+        public Task EnqueueAsync(Action action)
+        {
+            try
+            {
+                action();
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
+        }
+
+        public async Task EnqueueAsync(Func<Task> function)
+        {
+            await function().ConfigureAwait(false);
+        }
     }
 
     private static Task AwaitWithSynchronizationContextAsync(SynchronizationContext syncContext, Task task)
@@ -3826,7 +3911,11 @@ public class ChatViewModelTests
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
-        await WaitForConditionAsync(() => Task.FromResult(fixture.Preferences.IsLoaded));
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.Preferences.IsLoaded);
+        });
         fixture.Preferences.AcpHydrationCompletionMode = "LoadResponse";
 
         var loadReturned = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -7359,6 +7448,11 @@ public class ChatViewModelTests
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.Preferences.IsLoaded);
+        });
 
         fixture.Preferences.Projects.Add(new ProjectDefinition
         {
@@ -7392,6 +7486,11 @@ public class ChatViewModelTests
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.Preferences.IsLoaded);
+        });
 
         fixture.Preferences.Projects.Add(new ProjectDefinition
         {
@@ -7428,6 +7527,11 @@ public class ChatViewModelTests
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.Preferences.IsLoaded);
+        });
 
         fixture.Preferences.Projects.Add(new ProjectDefinition
         {
@@ -7488,6 +7592,11 @@ public class ChatViewModelTests
             });
 
         await using var fixture = CreateViewModel(syncContext, conversationStore: conversationStore);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.Preferences.IsLoaded);
+        });
         fixture.Preferences.Projects.Add(new ProjectDefinition
         {
             ProjectId = "project-1",

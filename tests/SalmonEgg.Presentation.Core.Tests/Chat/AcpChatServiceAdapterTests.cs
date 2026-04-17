@@ -9,7 +9,9 @@ using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -20,9 +22,9 @@ public sealed class AcpChatServiceAdapterTests
     public void SessionUpdateReceived_BuffersUntilHydrated_ThenPublishes()
     {
         // Arrange
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, uiDispatcher);
         var updates = new List<SessionUpdateEventArgs>();
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
@@ -44,10 +46,10 @@ public sealed class AcpChatServiceAdapterTests
     public void SessionUpdateReceived_BufferOverflow_TriggersResyncRequired()
     {
         // Arrange
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
         var resyncRequired = false;
-        using var adapter = BuildAdapter(inner, syncContext, () => resyncRequired = true, bufferLimit: 1);
+        using var adapter = BuildAdapter(inner, uiDispatcher, () => resyncRequired = true, bufferLimit: 1);
         adapter.SessionUpdateReceived += (_, _) => { };
 
         // Act
@@ -61,10 +63,10 @@ public sealed class AcpChatServiceAdapterTests
     [Fact]
     public void BeginHydrationBuffering_LargeReplayDoesNotTriggerSteadyStateResyncLimit()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
         var resyncRequired = false;
-        using var adapter = BuildAdapter(inner, syncContext, () => resyncRequired = true, bufferLimit: 1);
+        using var adapter = BuildAdapter(inner, uiDispatcher, () => resyncRequired = true, bufferLimit: 1);
         var updates = new List<SessionUpdateEventArgs>();
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
@@ -83,9 +85,9 @@ public sealed class AcpChatServiceAdapterTests
     public void MarkHydrated_WithLowTrust_ReleasesBufferedUpdates()
     {
         // Arrange
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, uiDispatcher);
         var updates = new List<SessionUpdateEventArgs>();
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
@@ -103,9 +105,9 @@ public sealed class AcpChatServiceAdapterTests
     [Fact]
     public void BeginHydrationBuffering_WhenAlreadyHydrated_BuffersOnlyTargetSessionReplay()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, uiDispatcher);
         var updates = new List<SessionUpdateEventArgs>();
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
@@ -129,9 +131,9 @@ public sealed class AcpChatServiceAdapterTests
     [Fact]
     public void SuppressBufferedUpdates_DropsStaleReplayUntilNextHydrationAttempt()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, uiDispatcher);
         var updates = new List<SessionUpdateEventArgs>();
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
@@ -154,9 +156,9 @@ public sealed class AcpChatServiceAdapterTests
     [Fact]
     public void TryMarkHydrated_WhenAttemptIsStale_ReturnsFalseAndDoesNotDrainCurrentAttempt()
     {
-        var syncContext = new ImmediateSynchronizationContext();
+        var uiDispatcher = new ImmediateUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, uiDispatcher);
         var updates = new List<SessionUpdateEventArgs>();
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
@@ -174,11 +176,11 @@ public sealed class AcpChatServiceAdapterTests
     }
 
     [Fact]
-    public void MarkHydrated_WhenBufferedReplayIsLarge_YieldsBackToSynchronizationContextBetweenDrainPasses()
+    public void MarkHydrated_WhenBufferedReplayIsLarge_YieldsBackToDispatcherBetweenDrainPasses()
     {
-        var syncContext = new QueueingSynchronizationContext();
+        var dispatcher = new QueueingUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, dispatcher);
         var handledCount = 0;
         var markerObservedHandledCount = -1;
         adapter.SessionUpdateReceived += (_, _) => handledCount++;
@@ -191,10 +193,10 @@ public sealed class AcpChatServiceAdapterTests
         Assert.Equal(0, handledCount);
 
         adapter.MarkHydrated();
-        syncContext.Post(_ => markerObservedHandledCount = handledCount, null);
+        dispatcher.Enqueue(() => markerObservedHandledCount = handledCount);
 
-        syncContext.RunNext();
-        syncContext.RunNext();
+        dispatcher.RunNext();
+        dispatcher.RunNext();
 
         Assert.True(markerObservedHandledCount > 0, "Drain should begin before later UI work runs.");
         Assert.True(markerObservedHandledCount < 32, "Drain should yield before monopolizing the UI queue.");
@@ -203,9 +205,9 @@ public sealed class AcpChatServiceAdapterTests
     [Fact]
     public async Task WaitForBufferedUpdatesDrainedAsync_WhenDrainStopsEarlyDueToSuppress_Completes()
     {
-        var syncContext = new QueueingSynchronizationContext();
+        var dispatcher = new QueueingUiDispatcher();
         var inner = new FakeChatService();
-        using var adapter = BuildAdapter(inner, syncContext);
+        using var adapter = BuildAdapter(inner, dispatcher);
         var suppressed = false;
         var attemptId = adapter.BeginHydrationBufferingScope("remote-1");
         adapter.SessionUpdateReceived += (_, _) =>
@@ -227,7 +229,7 @@ public sealed class AcpChatServiceAdapterTests
         adapter.MarkHydrated(attemptId);
         var waitTask = adapter.WaitForBufferedUpdatesDrainedAsync(attemptId);
 
-        while (syncContext.RunNext())
+        while (dispatcher.RunNext())
         {
         }
 
@@ -237,48 +239,18 @@ public sealed class AcpChatServiceAdapterTests
 
     private static AcpChatServiceAdapter BuildAdapter(
         IChatService inner,
-        SynchronizationContext synchronizationContext,
+        IUiDispatcher uiDispatcher,
         Action? resyncRequired = null,
         int bufferLimit = 256)
     {
         AcpChatServiceAdapter? adapter = null;
         var eventAdapter = new AcpEventAdapter(
             update => adapter!.PublishBufferedUpdate(update),
-            synchronizationContext,
+            uiDispatcher,
             bufferLimit,
             resyncRequired);
         adapter = new AcpChatServiceAdapter(inner, eventAdapter);
         return adapter;
-    }
-
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            d(state);
-        }
-    }
-
-    private sealed class QueueingSynchronizationContext : SynchronizationContext
-    {
-        private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
-
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            _queue.Enqueue((d, state));
-        }
-
-        public bool RunNext()
-        {
-            if (_queue.Count == 0)
-            {
-                return false;
-            }
-
-            var (callback, state) = _queue.Dequeue();
-            callback(state);
-            return true;
-        }
     }
 
     private sealed class FakeChatService : IChatService

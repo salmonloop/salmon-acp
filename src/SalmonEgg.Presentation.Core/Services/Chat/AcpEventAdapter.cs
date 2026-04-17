@@ -7,7 +7,7 @@ using SalmonEgg.Domain.Services;
 namespace SalmonEgg.Presentation.Core.Services.Chat;
 
 /// <summary>
-/// Serializes ACP session updates onto a target synchronization context.
+/// Serializes ACP session updates onto a target UI dispatcher.
 /// Provides buffering, backpressure, and resync gating until hydration completes.
 /// </summary>
 public sealed class AcpEventAdapter
@@ -17,7 +17,7 @@ public sealed class AcpEventAdapter
     private const int DefaultHydrationReplayBufferLimit = 8192;
 
     private readonly Action<SessionUpdateEventArgs> _handler;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private readonly Action<string?>? _resyncRequired;
     private readonly ILogger<AcpEventAdapter>? _logger;
     private readonly Queue<SessionUpdateEventArgs> _buffer = new();
@@ -35,14 +35,14 @@ public sealed class AcpEventAdapter
 
     public AcpEventAdapter(
         Action<SessionUpdateEventArgs> handler,
-        SynchronizationContext syncContext,
+        IUiDispatcher uiDispatcher,
         int bufferLimit = DefaultBufferLimit,
         int hydrationReplayBufferLimit = DefaultHydrationReplayBufferLimit,
         Action<string?>? resyncRequired = null,
         ILogger<AcpEventAdapter>? logger = null)
     {
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
-        _syncContext = syncContext ?? throw new ArgumentNullException(nameof(syncContext));
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         if (bufferLimit <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(bufferLimit), "Buffer limit must be positive.");
@@ -63,13 +63,13 @@ public sealed class AcpEventAdapter
 
     public AcpEventAdapter(
         Action<SessionUpdateEventArgs> handler,
-        SynchronizationContext syncContext,
+        IUiDispatcher uiDispatcher,
         int bufferLimit,
         Action? resyncRequired,
         ILogger<AcpEventAdapter>? logger = null)
         : this(
             handler,
-            syncContext,
+            uiDispatcher,
             bufferLimit,
             DefaultHydrationReplayBufferLimit,
             resyncRequired is null ? null : _ => resyncRequired(),
@@ -314,16 +314,12 @@ public sealed class AcpEventAdapter
 
     private void PostDrain()
     {
-        _syncContext.Post(static state => ((AcpEventAdapter)state!).Drain(), this);
+        _uiDispatcher.Enqueue(Drain);
     }
 
     private void PostResyncRequired(Action<string?> resyncRequired, string? sessionId)
     {
-        _syncContext.Post(static state =>
-        {
-            var callbackState = ((Action<string?> Callback, string? SessionId))state!;
-            callbackState.Callback(callbackState.SessionId);
-        }, (resyncRequired, sessionId));
+        _uiDispatcher.Enqueue(() => resyncRequired(sessionId));
     }
 
     private void Drain()

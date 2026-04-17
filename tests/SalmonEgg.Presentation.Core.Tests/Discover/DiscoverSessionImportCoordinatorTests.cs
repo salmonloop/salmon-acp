@@ -10,7 +10,9 @@ using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Services;
 using Uno.Extensions.Reactive;
@@ -184,7 +186,7 @@ public sealed class DiscoverSessionImportCoordinatorTests
                 new CapturingConversationStore(),
                 new AppPreferencesConversationWorkspacePreferences(preferences),
                 Mock.Of<ILogger<ChatConversationWorkspace>>(),
-                syncContext);
+                new ImmediateUiDispatcher());
         }
         finally
         {
@@ -209,7 +211,8 @@ public sealed class DiscoverSessionImportCoordinatorTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
     }
 
     private sealed class ImmediateSynchronizationContext : SynchronizationContext

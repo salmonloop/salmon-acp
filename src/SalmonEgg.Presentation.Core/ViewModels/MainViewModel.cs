@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using SalmonEgg.Application.Services;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 
 namespace SalmonEgg.Presentation.ViewModels;
 
@@ -20,7 +21,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IConnectionService _connectionService;
     private readonly IMessageService _messageService;
     private readonly IConfigurationService _configService;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private IDisposable? _stateSubscription;
     private IDisposable? _notificationSubscription;
 
@@ -50,12 +51,13 @@ public partial class MainViewModel : ViewModelBase
         IConnectionService connectionService,
         IMessageService messageService,
         IConfigurationService configService,
+        IUiDispatcher uiDispatcher,
         ILogger<MainViewModel> logger) : base(logger)
     {
         _connectionService = connectionService ?? throw new ArgumentNullException(nameof(connectionService));
         _messageService = messageService ?? throw new ArgumentNullException(nameof(messageService));
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
-        _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         SubscribeToStateChanges();
         _ = LoadServersAsync();
     }
@@ -64,18 +66,18 @@ public partial class MainViewModel : ViewModelBase
     {
         _stateSubscription = _connectionService.ConnectionStateChanges.Subscribe(state =>
         {
-            _syncContext.Post(_ =>
+            _uiDispatcher.Enqueue(() =>
             {
                 CurrentConnectionState = state;
                 OnPropertyChanged(nameof(IsConnected));
                 ConnectCommand.NotifyCanExecuteChanged();
                 DisconnectCommand.NotifyCanExecuteChanged();
-            }, null);
+            });
         });
 
         _notificationSubscription = _messageService.Notifications.Subscribe(msg =>
         {
-            _syncContext.Post(_ =>
+            _uiDispatcher.Enqueue(() =>
             {
                 MessageHistory.Add(new MessageViewModel
                 {
@@ -86,7 +88,7 @@ public partial class MainViewModel : ViewModelBase
                     Timestamp = msg.Timestamp,
                     IsOutgoing = false
                 });
-            }, null);
+            });
         });
     }
 

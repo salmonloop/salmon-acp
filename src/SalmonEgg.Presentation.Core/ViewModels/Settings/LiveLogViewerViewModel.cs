@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using SalmonEgg.Presentation.Core.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -17,7 +18,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
     private readonly ILogger<LiveLogViewerViewModel> _logger;
     private readonly string _logsDirectoryPath;
     private readonly int _maxVisibleCharacters;
-    private SynchronizationContext? _synchronizationContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private CancellationTokenSource? _streamingCancellationTokenSource;
     private Task? _streamingTask;
     private bool _suppressExpansionSideEffects;
@@ -26,15 +27,16 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
         ILiveLogStreamService service,
         string logsDirectoryPath,
         ILogger<LiveLogViewerViewModel> logger,
+        IUiDispatcher uiDispatcher,
         int maxVisibleCharacters = DefaultMaxVisibleCharacters)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _logsDirectoryPath = logsDirectoryPath ?? throw new ArgumentNullException(nameof(logsDirectoryPath));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _maxVisibleCharacters = maxVisibleCharacters > 0
             ? maxVisibleCharacters
             : throw new ArgumentOutOfRangeException(nameof(maxVisibleCharacters));
-        _synchronizationContext = SynchronizationContext.Current;
         _visibleLogText = string.Empty;
         _statusText = "未启动";
         _isAutoFollowEnabled = true;
@@ -69,7 +71,6 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
 
     public async Task StartStreamingAsync()
     {
-        _synchronizationContext = SynchronizationContext.Current ?? _synchronizationContext;
         EnsureExpandedState(true);
         if (IsStreaming)
         {
@@ -316,32 +317,6 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
 
     private Task RunOnCapturedContextAsync(Action action)
     {
-        ArgumentNullException.ThrowIfNull(action);
-
-        if (_synchronizationContext is null || SynchronizationContext.Current == _synchronizationContext)
-        {
-            action();
-            return Task.CompletedTask;
-        }
-
-        var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _synchronizationContext.Post(
-            static state =>
-            {
-                var (callback, taskCompletionSource) = ((Action Callback, TaskCompletionSource<object?> TaskCompletionSource))state!;
-
-                try
-                {
-                    callback();
-                    taskCompletionSource.SetResult(null);
-                }
-                catch (Exception ex)
-                {
-                    taskCompletionSource.SetException(ex);
-                }
-            },
-            (action, completion));
-
-        return completion.Task;
+        return _uiDispatcher.EnqueueAsync(action);
     }
 }

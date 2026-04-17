@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
 
@@ -18,7 +17,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -34,7 +33,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -48,7 +47,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -65,7 +64,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -80,7 +79,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, maxVisibleCharacters: 8);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), maxVisibleCharacters: 8);
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -95,7 +94,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         Assert.True(viewModel.CanStartStreaming);
         Assert.False(viewModel.CanPauseStreaming);
@@ -108,7 +107,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -125,7 +124,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         viewModel.IsExpanded = true;
 
@@ -141,7 +140,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -152,40 +151,22 @@ public sealed class LiveLogViewerViewModelTests
     }
 
     [Fact]
-    public async Task StartStreamingAsync_CapturesCurrentSynchronizationContextForSubsequentUpdates()
+    public async Task StartStreamingAsync_UsesInjectedDispatcherForSubsequentUpdates()
     {
-        var originalContext = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(null);
+        var service = new TestLiveLogStreamService();
+        var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
+        var dispatcher = new QueueingUiDispatcher();
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, dispatcher);
 
-        try
-        {
-            var service = new TestLiveLogStreamService();
-            var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-            var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object);
-            var syncContext = new QueueingSynchronizationContext();
+        await viewModel.StartStreamingAsync();
+        await service.Started.Task;
+        await service.EmitAsync(new LiveLogStreamUpdate("C:/logs/app.log", "tick\n", hasFileSwitched: false));
 
-            SynchronizationContext.SetSynchronizationContext(syncContext);
-            await viewModel.StartStreamingAsync();
-            await service.Started.Task;
-            SynchronizationContext.SetSynchronizationContext(originalContext);
+        Assert.Equal(string.Empty, viewModel.VisibleLogText);
 
-            var emitTask = Task.Run(() =>
-                service.EmitAsync(new LiveLogStreamUpdate("C:/logs/app.log", "tick\n", hasFileSwitched: false)));
+        dispatcher.RunAll();
 
-            await Task.Delay(50);
-
-            Assert.False(emitTask.IsCompleted);
-            Assert.Equal(string.Empty, viewModel.VisibleLogText);
-
-            syncContext.DrainPostedCallbacks();
-            await emitTask;
-
-            Assert.Equal("tick\n", viewModel.VisibleLogText);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        Assert.Equal("tick\n", viewModel.VisibleLogText);
     }
 
     private sealed class TestLiveLogStreamService : ILiveLogStreamService
@@ -222,25 +203,6 @@ public sealed class LiveLogViewerViewModelTests
             var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
             return completion.Task;
-        }
-    }
-
-    private sealed class QueueingSynchronizationContext : SynchronizationContext
-    {
-        private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
-
-        public override void Post(SendOrPostCallback d, object? state)
-        {
-            _callbacks.Enqueue((d, state));
-        }
-
-        public void DrainPostedCallbacks()
-        {
-            while (_callbacks.Count > 0)
-            {
-                var (callback, state) = _callbacks.Dequeue();
-                callback(state);
-            }
         }
     }
 }

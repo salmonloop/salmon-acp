@@ -16,9 +16,9 @@ using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
-using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Discover;
@@ -418,13 +418,15 @@ public sealed class DiscoverSessionsViewModelTests
         INavigationCoordinator navigationCoordinator)
     {
         var projectPreferences = new NavigationProjectPreferencesAdapter(CreatePreferences());
+        var uiDispatcher = SynchronizationContext.Current as IUiDispatcher ?? new ImmediateUiDispatcher();
         return new DiscoverSessionsViewModel(
             Mock.Of<ILogger<DiscoverSessionsViewModel>>(),
             navigationCoordinator,
             projectPreferences,
             profilesViewModel,
             connectionFacade,
-            importCoordinator);
+            importCoordinator,
+            uiDispatcher);
     }
 
     private static AcpProfilesViewModel CreateProfilesViewModel(ServerConfiguration profile)
@@ -458,7 +460,8 @@ public sealed class DiscoverSessionsViewModelTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
     }
 
     private static ServerConfiguration CreateProfile()
@@ -478,11 +481,12 @@ public sealed class DiscoverSessionsViewModelTests
             new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
             @"C:\repo\remote");
 
-    private sealed class CountingSynchronizationContext : SynchronizationContext
+    private sealed class CountingSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
         private int _postCount;
 
         public int PostCount => Volatile.Read(ref _postCount);
+        public bool HasThreadAccess => ReferenceEquals(Current, this);
 
         public override void Post(SendOrPostCallback d, object? state)
         {
@@ -497,6 +501,54 @@ public sealed class DiscoverSessionsViewModelTests
             {
                 SetSynchronizationContext(originalContext);
             }
+        }
+
+        public void Enqueue(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            Post(_ => action(), null);
+        }
+
+        public Task EnqueueAsync(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(_ =>
+            {
+                try
+                {
+                    action();
+                    tcs.TrySetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, null);
+
+            return tcs.Task;
+        }
+
+        public Task EnqueueAsync(Func<Task> function)
+        {
+            ArgumentNullException.ThrowIfNull(function);
+
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(async _ =>
+            {
+                try
+                {
+                    await function().ConfigureAwait(false);
+                    tcs.TrySetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, null);
+
+            return tcs.Task;
         }
     }
 

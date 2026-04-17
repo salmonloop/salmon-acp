@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Session;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
@@ -13,8 +14,8 @@ public sealed partial class StartNavItemViewModel : MainNavItemViewModel
 {
     public string Title { get; } = "开始";
 
-    public StartNavItemViewModel(INavigationPaneState navigationState)
-        : base(navigationState)
+    public StartNavItemViewModel(INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
+        : base(navigationState, uiDispatcher)
     {
     }
 }
@@ -23,8 +24,8 @@ public sealed partial class DiscoverSessionsNavItemViewModel : MainNavItemViewMo
 {
     public string Title { get; } = "发现更多会话";
 
-    public DiscoverSessionsNavItemViewModel(INavigationPaneState navigationState)
-        : base(navigationState)
+    public DiscoverSessionsNavItemViewModel(INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
+        : base(navigationState, uiDispatcher)
     {
     }
 }
@@ -62,8 +63,9 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
         ProjectDefinition project, 
         bool isSystemProject, 
         Func<string, Task> createSessionAsync,
-        INavigationPaneState navigationState)
-        : base(navigationState)
+        INavigationPaneState navigationState,
+        IUiDispatcher uiDispatcher)
+        : base(navigationState, uiDispatcher)
     {
         ProjectId = project.ProjectId;
         _title = project.Name;
@@ -110,6 +112,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         IUiInteractionService ui,
         ChatViewModel chatViewModel,
         INavigationPaneState navigationState,
+        IUiDispatcher uiDispatcher,
         bool isPlaceholder = false)
         : this(
             sessionId,
@@ -119,6 +122,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
             ui,
             new ChatViewModelSessionCatalogAdapter(chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel))),
             navigationState,
+            uiDispatcher,
             isPlaceholder)
     {
     }
@@ -131,8 +135,9 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         IUiInteractionService ui,
         IChatSessionCatalog chatSessionCatalog,
         INavigationPaneState navigationState,
+        IUiDispatcher uiDispatcher,
         bool isPlaceholder = false)
-        : base(navigationState)
+        : base(navigationState, uiDispatcher)
     {
         SessionId = sessionId;
         ProjectId = projectId;
@@ -238,8 +243,8 @@ public sealed partial class MoreSessionsNavItemViewModel : MainNavItemViewModel
 
     public IAsyncRelayCommand ShowMoreCommand { get; }
 
-    public MoreSessionsNavItemViewModel(string projectId, int remainingCount, IAsyncRelayCommand showMoreCommand, INavigationPaneState navigationState)
-        : base(navigationState)
+    public MoreSessionsNavItemViewModel(string projectId, int remainingCount, IAsyncRelayCommand showMoreCommand, INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
+        : base(navigationState, uiDispatcher)
     {
         ProjectId = projectId;
         _count = remainingCount;

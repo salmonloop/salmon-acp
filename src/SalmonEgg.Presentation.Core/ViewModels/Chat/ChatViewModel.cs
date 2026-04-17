@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Interfaces;
+using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models;
@@ -87,7 +88,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private readonly IAcpSessionUpdateProjector _acpSessionUpdateProjector;
     private readonly IChatConnectionStore _chatConnectionStore;
     private IChatService? _chatService;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
+    private readonly IConversationPreviewStore _previewStore;
+    private long _activationVersion;
     private bool _disposed;
     private bool _autoConnectAttempted;
     private bool _suppressAcpProfileConnect;
@@ -734,8 +737,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         IChatStateProjector? chatStateProjector,
         IAcpSessionUpdateProjector? acpSessionUpdateProjector,
         IChatConnectionStore chatConnectionStore,
+        IUiDispatcher uiDispatcher,
+        IConversationPreviewStore previewStore,
         ILogger<ChatViewModel> logger,
-        SynchronizationContext? syncContext = null,
         IAcpConnectionCommands? acpConnectionCommands = null,
         IConversationActivationCoordinator? conversationActivationCoordinator = null,
         IConversationBindingCommands? bindingCommands = null,
@@ -765,7 +769,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _acpSessionUpdateProjector = acpSessionUpdateProjector ?? new AcpSessionUpdateProjector();
         _chatConnectionStore = chatConnectionStore ?? throw new ArgumentNullException(nameof(chatConnectionStore));
         _projectAffinityResolver = projectAffinityResolver ?? new ProjectAffinityResolver();
-        _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+        _previewStore = previewStore ?? throw new ArgumentNullException(nameof(previewStore));
         ApplyProjectAffinityOverrideCommand = new RelayCommand(ApplyProjectAffinityOverride, () => CanApplyProjectAffinityOverride);
         ClearProjectAffinityOverrideCommand = new RelayCommand(ClearProjectAffinityOverride, () => CanClearProjectAffinityOverride);
         _acpConnectionCommands = acpConnectionCommands
@@ -1076,6 +1081,44 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             RefreshProjectAffinityCorrectionState(projection.HydratedConversationId);
             ApplyProjectAffinityOverrideCommand.NotifyCanExecuteChanged();
             ClearProjectAffinityOverrideCommand.NotifyCanExecuteChanged();
+
+            // Save preview snapshot if we have a healthy transcript and not hydrating.
+            // Capture data on the UI thread first (projection.Transcript is only safe
+            // to read on the UI thread), then write to disk on a background thread.
+            if (projection.Transcript.Count > 0 && !projection.IsHydrating)
+            {
+                var conversationId = projection.HydratedConversationId;
+                if (!string.IsNullOrWhiteSpace(conversationId))
+                {
+                    // Materialize the transcript data on the UI thread to avoid
+                    // cross-thread access to the projection's immutable list.
+                    var previewEntries = projection.Transcript
+                        .Select(m => new SalmonEgg.Domain.Models.ConversationPreview.PreviewEntry(
+                            m.IsOutgoing ? "user" : "assistant",
+                            m.TextContent ?? "",
+                            m.Timestamp))
+                        .ToArray(); // ToArray() forces eager evaluation on UI thread
+
+                    var snapshotToSave = new SalmonEgg.Domain.Models.ConversationPreview.ConversationPreviewSnapshot(
+                        conversationId,
+                        previewEntries,
+                        DateTimeOffset.Now);
+
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _previewStore.SaveAsync(snapshotToSave).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError(ex,
+                                "Failed to save conversation preview for {ConversationId}",
+                                conversationId);
+                        }
+                    });
+                }
+            }
         }
         finally
         {
@@ -1624,29 +1667,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     /// WinUI and Uno collections (like MessageHistory) MUST be updated on the main thread
     /// to avoid random "The application called an interface that was marshalled for a different thread" crashes.
     /// </summary>
-    private Task PostToUiAsync(Action action)
-    {
-        if (SynchronizationContext.Current == _syncContext)
-        {
-            action();
-            return Task.CompletedTask;
-        }
-
-        var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(_ =>
-        {
-            try
-            {
-                action();
-                tcs.TrySetResult(null);
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
-        }, null);
-        return tcs.Task;
-    }
+    private Task PostToUiAsync(Action action) => _uiDispatcher.EnqueueAsync(action);
+    private Task PostToUiAsync(Func<Task> function) => _uiDispatcher.EnqueueAsync(function);
 
     public Task RestoreConversationsAsync()
         => RestoreAsync();
@@ -2569,11 +2591,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private async Task ApplySessionLoadResponseAsync(string conversationId, SessionLoadResponse response)
     {
+        var currentVersion = Interlocked.Read(ref _activationVersion);
         var delta = _acpSessionUpdateProjector.ProjectSessionLoad(response);
         await ApplySessionUpdateDeltaAsync(conversationId, delta).ConfigureAwait(true);
+        
         Logger.LogInformation(
-            "Session load state projected: {Count}",
-            delta.AvailableModes?.Count ?? 0);
+            "Session load state projected: {Count} (ActivationVersion: {Version})",
+            delta.AvailableModes?.Count ?? 0,
+            currentVersion);
     }
 
     [RelayCommand]
@@ -2619,19 +2644,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private void OnSessionUpdateReceived(object? sender, SessionUpdateEventArgs e)
     {
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             RecordSessionUpdateObservation(e.SessionId);
             TrackPendingSessionUpdate(ProcessSessionUpdateAsync(e));
             return;
         }
 
-        _syncContext.Post(static state =>
+        _uiDispatcher.Enqueue(() =>
         {
-            var (viewModel, args) = ((ChatViewModel ViewModel, SessionUpdateEventArgs Args))state!;
-            viewModel.RecordSessionUpdateObservation(args.SessionId);
-            viewModel.TrackPendingSessionUpdate(viewModel.ProcessSessionUpdateAsync(args));
-        }, (this, e));
+            RecordSessionUpdateObservation(e.SessionId);
+            TrackPendingSessionUpdate(ProcessSessionUpdateAsync(e));
+        });
     }
 
     private async Task ProcessSessionUpdateAsync(SessionUpdateEventArgs e)
@@ -3200,6 +3224,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         {
             return false;
         }
+        // Atomic activation tracking: every entry point that can change
+        // the active conversation must increment this counter so that
+        // stale preview injections and ACP updates can be rejected.
+        Interlocked.Increment(ref _activationVersion);
+
 
         if (await CanReuseWarmCurrentConversationAsync(sessionId, cancellationToken).ConfigureAwait(false))
         {
@@ -3466,11 +3495,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         Logger.LogError(ex, "Switching session failed (SessionId={SessionId})", sessionId);
 
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             SetError($"Failed to switch session: {ex.Message}");
             IsSessionActive = !string.IsNullOrWhiteSpace(CurrentSessionId);
-        }, null);
+        });
     }
 
     private ConversationActivationLease BeginConversationActivation(CancellationToken cancellationToken)
@@ -3748,8 +3776,74 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    public Task<bool> SwitchConversationAsync(string conversationId, CancellationToken cancellationToken = default)
-        => ActivateConversationCoreAsync(conversationId, awaitRemoteHydration: true, cancellationToken);
+    public async Task<bool> SwitchConversationAsync(string conversationId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId)) return false;
+
+        // _activationVersion is now incremented inside ActivateConversationCoreAsync.
+        // Capture the version *before* calling it so the preview path can check staleness.
+        var version = Interlocked.Read(ref _activationVersion);
+        bool previewApplied = false;
+
+        // Fast-path preview: load cached messages to show instantly
+        // while the real ACP hydration replays the authoritative transcript.
+        var preview = await _previewStore.LoadAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        if (preview != null && version == Interlocked.Read(ref _activationVersion))
+        {
+            await PostToUiAsync(() =>
+            {
+                if (version == Interlocked.Read(ref _activationVersion))
+                {
+                    var items = preview.Entries.Select(e => new ChatMessageViewModel
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        IsOutgoing = string.Equals(e.Sender, "user", StringComparison.OrdinalIgnoreCase),
+                        TextContent = e.Text,
+                        Timestamp = e.Timestamp.LocalDateTime
+                    }).ToList();
+
+                    ReplaceMessageHistory(items);
+                    IsHydrating = true;
+                    previewApplied = true;
+                }
+            }).ConfigureAwait(false);
+        }
+
+        try
+        {
+            var result = await ActivateConversationCoreAsync(conversationId, awaitRemoteHydration: true, cancellationToken).ConfigureAwait(false);
+
+            if (!result && previewApplied)
+            {
+                // Activation returned false (not an exception), but we showed a preview.
+                // Force a store projection to immediately clear the stale preview state.
+                await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
+            }
+
+            return result;
+        }
+        catch
+        {
+            // If we showed a preview but activation failed, roll back to prevent
+            // the UI from being stuck in IsHydrating=true with stale preview data.
+            if (previewApplied)
+            {
+                await PostToUiAsync(() =>
+                {
+                    if (Interlocked.Read(ref _activationVersion) != version + 1)
+                    {
+                        // Another activation has started since our failure - dont touch UI.
+                        return;
+                    }
+
+                    IsHydrating = false;
+                    ReplaceMessageHistory(Array.Empty<ChatMessageViewModel>());
+                }).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+    }
 
     Task<bool> IConversationSessionSwitcher.SwitchConversationAsync(string conversationId, CancellationToken cancellationToken)
         => ActivateConversationCoreAsync(conversationId, awaitRemoteHydration: false, cancellationToken);
@@ -3784,16 +3878,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             ApplySessionSwitchPreview(conversationId);
             return;
         }
 
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             ApplySessionSwitchPreview(conversationId);
-        }, null);
+        });
     }
 
     void IConversationActivationPreview.ClearSessionSwitchPreview(string conversationId)
@@ -3803,16 +3896,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             ApplySessionSwitchPreviewClear(conversationId);
             return;
         }
 
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             ApplySessionSwitchPreviewClear(conversationId);
-        }, null);
+        });
     }
 
     private void OnAskUserRequestReceived(object? sender, AskUserRequestEventArgs e)
@@ -3922,8 +4014,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private void OnPermissionRequestReceived(object? sender, PermissionRequestEventArgs e)
     {
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             try
             {
                 var viewModel = new PermissionRequestViewModel
@@ -3958,13 +4049,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 Logger.LogError(ex, "Error processing permission request");
             }
-        }, null);
+        });
     }
 
     private void OnFileSystemRequestReceived(object? sender, FileSystemRequestEventArgs e)
     {
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             try
             {
                 var viewModel = new FileSystemRequestViewModel
@@ -3995,13 +4085,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 Logger.LogError(ex, "Error processing file system request");
             }
-        }, null);
+        });
     }
 
     private void OnTerminalRequestReceived(object? sender, TerminalRequestEventArgs e)
     {
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             try
             {
                 Logger.LogInformation("Terminal request received: Method={Method}, TerminalId={TerminalId}", e.Method, e.TerminalId);
@@ -4011,16 +4100,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 Logger.LogError(ex, "Error processing terminal request");
             }
-        }, null);
+        });
     }
 
     private void OnErrorOccurred(object? sender, string error)
     {
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             SetError(error);
             Logger.LogError(error);
-        }, null);
+        });
     }
 
     private void UpdateAgentInfo()
@@ -4848,11 +4936,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _transientNotificationCts = new CancellationTokenSource();
         var token = _transientNotificationCts.Token;
 
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             TransientNotificationMessage = message.Trim();
             ShowTransientNotification = true;
-        }, null);
+        });
 
         _ = Task.Run(async () =>
         {
@@ -4870,7 +4957,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 return;
             }
 
-            _syncContext.Post(_ => { ShowTransientNotification = false; }, null);
+            _uiDispatcher.Enqueue(() => { ShowTransientNotification = false; });
         });
     }
 
@@ -5110,7 +5197,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public long ConnectionGeneration => Interlocked.Read(ref _connectionGeneration);
 
-    public SynchronizationContext SessionUpdateSynchronizationContext => _syncContext;
+    public IUiDispatcher Dispatcher => _uiDispatcher;
 
     public IConversationBindingCommands ConversationBindingCommands => _bindingCommands;
 
@@ -5721,7 +5808,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             ApplySelectedProfile(profile);
             return;
@@ -5765,7 +5852,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public void ReplaceChatService(IChatService? chatService)
     {
-        if (SynchronizationContext.Current == _syncContext)
+        if (_uiDispatcher.HasThreadAccess)
         {
             ApplyChatServiceReplacement(chatService);
             return;
@@ -6508,10 +6595,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private void ScheduleSessionSwitchOverlayDismissal(long activationVersion, string conversationId)
     {
-        _syncContext.Post(_ =>
-        {
+        _uiDispatcher.Enqueue(() => {
             DismissSessionSwitchOverlay(activationVersion, conversationId);
-        }, null);
+        });
     }
 
     private Task DismissSessionSwitchOverlayAsync(long activationVersion, string conversationId)

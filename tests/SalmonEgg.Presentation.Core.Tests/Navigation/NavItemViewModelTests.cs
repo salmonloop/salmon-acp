@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using Xunit;
@@ -14,7 +15,7 @@ public sealed class NavItemViewModelTests
     public void IsPaneClosed_Tracks_IsPaneOpen_And_Notifies()
     {
         var navState = new FakeNavigationPaneState();
-        var item = new DummyNavItem(navState);
+        var item = new DummyNavItem(navState, new ImmediateUiDispatcher());
         var notified = false;
         item.PropertyChanged += (_, e) =>
         {
@@ -36,7 +37,7 @@ public sealed class NavItemViewModelTests
     public void SessionsLabel_ExposesTitle()
     {
         var navState = new FakeNavigationPaneState();
-        var label = new SessionsLabelNavItemViewModel(navState);
+        var label = new SessionsLabelNavItemViewModel(navState, new ImmediateUiDispatcher());
 
         Assert.Equal("会话", label.Title);
     }
@@ -46,14 +47,14 @@ public sealed class NavItemViewModelTests
     {
         var navState = new FakeNavigationPaneState();
         var command = new AsyncRelayCommand(() => Task.CompletedTask);
-        var item = new AddProjectNavItemViewModel(command, navState);
+        var item = new AddProjectNavItemViewModel(command, navState, new ImmediateUiDispatcher());
 
         Assert.Same(command, item.AddProjectCommand);
     }
 
     private sealed class DummyNavItem : MainNavItemViewModel
     {
-        public DummyNavItem(INavigationPaneState navState) : base(navState) { }
+        public DummyNavItem(INavigationPaneState navState, IUiDispatcher uiDispatcher) : base(navState, uiDispatcher) { }
     }
 
     private sealed class FakeNavigationPaneState : INavigationPaneState

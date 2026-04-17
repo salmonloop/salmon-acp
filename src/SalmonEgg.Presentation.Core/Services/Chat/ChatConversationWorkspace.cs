@@ -20,7 +20,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
     private readonly IConversationWorkspacePreferences _preferences;
     private readonly INavigationProjectPreferences? _navigationProjectPreferences;
     private readonly ILogger<ChatConversationWorkspace> _logger;
-    private readonly SynchronizationContext _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private readonly object _stateGate = new();
     private readonly SemaphoreSlim _sessionSwitchGate = new(1, 1);
     private readonly Dictionary<string, ConversationBinding> _conversationBindings = new(StringComparer.Ordinal);
@@ -36,7 +36,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         IConversationStore conversationStore,
         IConversationWorkspacePreferences preferences,
         ILogger<ChatConversationWorkspace> logger,
-        SynchronizationContext? syncContext = null,
+        IUiDispatcher uiDispatcher,
         INavigationProjectPreferences? navigationProjectPreferences = null)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
@@ -44,7 +44,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _navigationProjectPreferences = navigationProjectPreferences;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _syncContext = syncContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
     }
 
     public bool IsConversationListLoading
@@ -1041,36 +1041,14 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             Description = source.Description
         };
 
-    private Task PostToContextAsync(Action action, CancellationToken cancellationToken)
+    private async Task PostToContextAsync(Action action, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (SynchronizationContext.Current == _syncContext)
+        await _uiDispatcher.EnqueueAsync(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             action();
-            return Task.CompletedTask;
-        }
-
-        var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _syncContext.Post(_ =>
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                tcs.TrySetCanceled(cancellationToken);
-                return;
-            }
-
-            try
-            {
-                action();
-                tcs.TrySetResult(null);
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
-        }, null);
-
-        return tcs.Task;
+        });
     }
 
     private void ThrowIfDisposed()

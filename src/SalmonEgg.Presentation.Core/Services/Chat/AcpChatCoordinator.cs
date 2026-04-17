@@ -456,7 +456,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         AcpChatServiceAdapter? wrappedService = null;
         var eventAdapter = new AcpEventAdapter(
             update => wrappedService!.PublishBufferedUpdate(update),
-            sink.SessionUpdateSynchronizationContext,
+            sink.Dispatcher,
             _sessionUpdateBufferLimit,
             resyncRequired: sourceSessionId => _ = HandleResyncRequiredAsync(
                 sink,

@@ -13,6 +13,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -764,7 +765,7 @@ public sealed class ConversationActivationCoordinatorTests
                 store,
                 new AppPreferencesConversationWorkspacePreferences(preferences),
                 Mock.Of<ILogger<ChatConversationWorkspace>>(),
-                syncContext);
+                new ImmediateUiDispatcher());
         }
         finally
         {
@@ -793,7 +794,8 @@ public sealed class ConversationActivationCoordinatorTests
                 languageService.Object,
                 capabilities.Object,
                 uiRuntime.Object,
-                prefsLogger.Object);
+                prefsLogger.Object,
+                new ImmediateUiDispatcher());
         }
         finally
         {

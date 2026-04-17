@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Domain.Models;
@@ -9,6 +8,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -23,46 +23,35 @@ public sealed class MainNavigationViewModelPaneTests
     [Fact]
     public void NavigationState_IsSharedAcrossViewModels()
     {
-        var originalContext = SynchronizationContext.Current;
-        var syncContext = new SynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(syncContext);
-        try
-        {
-            var navState = new FakeNavigationPaneState();
+        var navState = new FakeNavigationPaneState();
+        var sessionManager = new Mock<ISessionManager>();
+        var preferences = CreatePreferences();
+        var chatCatalog = CreateChatSessionCatalog();
 
-            var sessionManager = new Mock<ISessionManager>();
-            var preferences = CreatePreferences();
-            var chatCatalog = CreateChatSessionCatalog();
+        using var navVm = CreateNavigationViewModel(
+            chatCatalog,
+            sessionManager,
+            preferences,
+            navState);
 
-            using var navVm = CreateNavigationViewModel(
-                chatCatalog,
-                sessionManager,
-                preferences,
-                navState);
+        var startItem = new StartNavItemViewModel(navState, new ImmediateUiDispatcher());
 
-            var startItem = new StartNavItemViewModel(navState);
+        navState.SetPaneOpen(true);
 
-            navState.SetPaneOpen(true);
+        Assert.True(navVm.IsPaneOpen);
+        Assert.True(startItem.IsPaneOpen);
 
-            Assert.True(navVm.IsPaneOpen);
-            Assert.True(startItem.IsPaneOpen);
+        navState.SetPaneOpen(false);
 
-            navState.SetPaneOpen(false);
-
-            Assert.False(navVm.IsPaneOpen);
-            Assert.False(startItem.IsPaneOpen);
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(originalContext);
-        }
+        Assert.False(navVm.IsPaneOpen);
+        Assert.False(startItem.IsPaneOpen);
     }
 
     [Fact]
     public void NavigationState_TriggersPropertyChangeNotifications()
     {
         var navState = new FakeNavigationPaneState();
-        var item = new StartNavItemViewModel(navState);
+        var item = new StartNavItemViewModel(navState, new ImmediateUiDispatcher());
 
         bool isPaneOpenChangedCalled = false;
         item.PropertyChanged += (_, e) =>
@@ -125,7 +114,8 @@ public sealed class MainNavigationViewModelPaneTests
             new ShellSelectionStateStore(),
             new ShellNavigationRuntimeStateStore(),
             CreatePresenter((FakeChatSessionCatalog)chatCatalog),
-            new ProjectAffinityResolver());
+            new ProjectAffinityResolver(),
+            new ImmediateUiDispatcher());
     }
 
     private static FakeChatSessionCatalog CreateChatSessionCatalog(params string[] conversationIds)
@@ -148,7 +138,8 @@ public sealed class MainNavigationViewModelPaneTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
     }
 
     private static INavigationProjectPreferences CreateProjectPreferences(AppPreferencesViewModel preferences)

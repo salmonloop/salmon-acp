@@ -12,7 +12,9 @@ using SalmonEgg.Domain.Models.JsonRpc;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -1189,13 +1191,13 @@ public sealed class AcpChatCoordinatorTests
             RemoteUrl = "wss://agent.test"
         };
         var service = CreateChatService();
-        var syncContext = new QueueingSynchronizationContext();
+        var dispatcher = new QueueingUiDispatcher();
         var sink = new FakeSink
         {
             IsSessionActive = true,
             CurrentSessionId = "local-session-1",
             CurrentRemoteSessionId = "remote-session-1",
-            SessionUpdateSynchronizationContext = syncContext
+            Dispatcher = dispatcher
         };
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
@@ -1219,7 +1221,7 @@ public sealed class AcpChatCoordinatorTests
         service.Raise(
             x => x.SessionUpdateReceived += null,
             new SessionUpdateEventArgs("remote-session-1", new PlanUpdate(title: "two")));
-        syncContext.RunAll();
+        dispatcher.RunAll();
 
         connectionCoordinator.Verify(
             x => x.ResyncAsync(sink, It.IsAny<CancellationToken>()),
@@ -1238,13 +1240,13 @@ public sealed class AcpChatCoordinatorTests
         var secondCandidate = CreateChatService();
         var firstInitializeStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var allowFirstInitializeCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var syncContext = new QueueingSynchronizationContext();
+        var dispatcher = new QueueingUiDispatcher();
         var sink = new FakeSink
         {
             IsSessionActive = true,
             CurrentSessionId = "local-session-1",
             CurrentRemoteSessionId = "remote-session-1",
-            SessionUpdateSynchronizationContext = syncContext,
+            Dispatcher = dispatcher,
             SelectedProfileId = "profile-1"
         };
         var factory = new Mock<IAcpChatServiceFactory>();
@@ -1297,7 +1299,7 @@ public sealed class AcpChatCoordinatorTests
         firstCandidate.Raise(
             x => x.SessionUpdateReceived += null,
             new SessionUpdateEventArgs("remote-session-1", new PlanUpdate(title: "stale-two")));
-        syncContext.RunAll();
+        dispatcher.RunAll();
 
         connectionCoordinator.Verify(
             x => x.ResyncAsync(sink, It.IsAny<CancellationToken>()),
@@ -1403,7 +1405,7 @@ public sealed class AcpChatCoordinatorTests
         public string? CurrentSessionId { get; set; }
         public string? CurrentRemoteSessionId { get; set; }
         public string? SelectedProfileId { get; set; }
-        public SynchronizationContext SessionUpdateSynchronizationContext { get; set; } = new ImmediateSynchronizationContext();
+        public IUiDispatcher Dispatcher { get; set; } = new ImmediateUiDispatcher();
         public long ConnectionGeneration { get; set; }
         public string ActiveSessionCwd { get; set; } = string.Empty;
         public ConversationRemoteBindingState? ResolvedBinding { get; set; }
@@ -1509,29 +1511,34 @@ public sealed class AcpChatCoordinatorTests
         }
     }
 
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
+    private sealed class QueueingUiDispatcher : IUiDispatcher
     {
-        public override void Post(SendOrPostCallback d, object? state)
+        private readonly Queue<Action> _callbacks = new();
+
+        public bool HasThreadAccess => true;
+
+        public void Enqueue(Action action)
         {
-            d(state);
+            _callbacks.Enqueue(action);
         }
-    }
 
-    private sealed class QueueingSynchronizationContext : SynchronizationContext
-    {
-        private readonly Queue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
-
-        public override void Post(SendOrPostCallback d, object? state)
+        public Task EnqueueAsync(Action action)
         {
-            _callbacks.Enqueue((d, state));
+            _callbacks.Enqueue(action);
+            return Task.CompletedTask;
+        }
+
+        public Task EnqueueAsync(Func<Task> function)
+        {
+            _callbacks.Enqueue(() => function().GetAwaiter().GetResult());
+            return Task.CompletedTask;
         }
 
         public void RunAll()
         {
             while (_callbacks.Count > 0)
             {
-                var (callback, state) = _callbacks.Dequeue();
-                callback(state);
+                _callbacks.Dequeue()();
             }
         }
     }

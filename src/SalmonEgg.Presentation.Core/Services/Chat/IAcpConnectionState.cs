@@ -57,8 +57,7 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
 
     long ConnectionGeneration => 0;
 
-    SynchronizationContext SessionUpdateSynchronizationContext
-        => SynchronizationContext.Current ?? new SynchronizationContext();
+    IUiDispatcher Dispatcher { get; }
 
     IConversationBindingCommands ConversationBindingCommands { get; }
 

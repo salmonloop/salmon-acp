@@ -10,6 +10,7 @@ using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -313,7 +314,8 @@ public sealed class ChatLaunchWorkflowTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
     }
 
     private sealed class FakeChatLaunchWorkflowChatFacade : IChatLaunchWorkflowChatFacade
@@ -542,7 +544,7 @@ public sealed class ChatLaunchWorkflowTests
                 store,
                 new AppPreferencesConversationWorkspacePreferences(preferences),
                 Mock.Of<ILogger<ChatConversationWorkspace>>(),
-                synchronizationContext);
+                new ImmediateUiDispatcher());
         }
         finally
         {

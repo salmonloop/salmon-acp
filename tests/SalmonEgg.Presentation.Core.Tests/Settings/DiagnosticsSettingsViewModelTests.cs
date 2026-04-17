@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
@@ -22,7 +23,11 @@ public sealed class DiagnosticsSettingsViewModelTests
         var service = new Mock<ILiveLogStreamService>();
         var liveLogger = new Mock<ILogger<LiveLogViewerViewModel>>();
         var diagnosticsLogger = new Mock<ILogger<DiagnosticsSettingsViewModel>>();
-        var liveLogViewer = new LiveLogViewerViewModel(service.Object, paths.Object.LogsDirectoryPath, liveLogger.Object);
+        var liveLogViewer = new LiveLogViewerViewModel(
+            service.Object,
+            paths.Object.LogsDirectoryPath,
+            liveLogger.Object,
+            new ImmediateUiDispatcher());
 
         var viewModel = new DiagnosticsSettingsViewModel(
             chat,

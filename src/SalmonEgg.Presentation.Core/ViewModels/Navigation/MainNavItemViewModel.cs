@@ -4,21 +4,22 @@ using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Presentation.Services;
+using SalmonEgg.Presentation.Core.Services;
 
 namespace SalmonEgg.Presentation.ViewModels.Navigation;
 
 public abstract partial class MainNavItemViewModel : ObservableObject, IDisposable
 {
     protected readonly INavigationPaneState NavigationState;
-    private readonly SynchronizationContext? _syncContext;
+    private readonly IUiDispatcher _uiDispatcher;
     private bool _isLogicallySelected;
 
     public ObservableCollection<MainNavItemViewModel> Children { get; } = new();
 
-    protected MainNavItemViewModel(INavigationPaneState navigationState)
+    protected MainNavItemViewModel(INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
     {
         NavigationState = navigationState;
-        _syncContext = SynchronizationContext.Current;
+        _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         NavigationState.PaneStateChanged += OnServicePaneStateChanged;
     }
 
@@ -34,13 +35,7 @@ public abstract partial class MainNavItemViewModel : ObservableObject, IDisposab
 
     private void OnServicePaneStateChanged(object? sender, EventArgs e)
     {
-        if (_syncContext is not null && SynchronizationContext.Current != _syncContext)
-        {
-            _syncContext.Post(_ => ApplyPaneStateChanged(), null);
-            return;
-        }
-
-        ApplyPaneStateChanged();
+        _uiDispatcher.Enqueue(ApplyPaneStateChanged);
     }
 
     private void ApplyPaneStateChanged()
@@ -73,8 +68,8 @@ public sealed partial class SessionsLabelNavItemViewModel : MainNavItemViewModel
 {
     public string Title { get; } = "会话";
 
-    public SessionsLabelNavItemViewModel(INavigationPaneState navigationState)
-        : base(navigationState)
+    public SessionsLabelNavItemViewModel(INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
+        : base(navigationState, uiDispatcher)
     {
     }
 }
@@ -87,8 +82,8 @@ public sealed partial class AddProjectNavItemViewModel : MainNavItemViewModel
 {
     public IAsyncRelayCommand AddProjectCommand { get; }
 
-    public AddProjectNavItemViewModel(IAsyncRelayCommand addProjectCommand, INavigationPaneState navigationState)
-        : base(navigationState)
+    public AddProjectNavItemViewModel(IAsyncRelayCommand addProjectCommand, INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
+        : base(navigationState, uiDispatcher)
     {
         AddProjectCommand = addProjectCommand;
     }

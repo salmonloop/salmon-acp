@@ -11,6 +11,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Uno.Extensions.Reactive;
@@ -164,7 +165,7 @@ public sealed class BindingCoordinatorTests
                 store,
                 new AppPreferencesConversationWorkspacePreferences(preferences),
                 Mock.Of<ILogger<ChatConversationWorkspace>>(),
-                syncContext);
+                new ImmediateUiDispatcher());
         }
         finally
         {
@@ -193,7 +194,8 @@ public sealed class BindingCoordinatorTests
                 languageService.Object,
                 capabilities.Object,
                 uiRuntime.Object,
-                prefsLogger.Object);
+                prefsLogger.Object,
+                new ImmediateUiDispatcher());
         }
         finally
         {

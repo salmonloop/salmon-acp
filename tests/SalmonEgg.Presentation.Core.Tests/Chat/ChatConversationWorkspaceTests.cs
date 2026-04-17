@@ -14,6 +14,7 @@ using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -1209,7 +1210,7 @@ public sealed class ChatConversationWorkspaceTests
                 store,
                 new AppPreferencesConversationWorkspacePreferences(preferences),
                 Mock.Of<ILogger<ChatConversationWorkspace>>(),
-                syncContext);
+                new ImmediateUiDispatcher());
         }
         finally
         {
@@ -1236,7 +1237,8 @@ public sealed class ChatConversationWorkspaceTests
                 languageService.Object,
                 capabilities.Object,
                 uiRuntime.Object,
-                Mock.Of<ILogger<AppPreferencesViewModel>>());
+                Mock.Of<ILogger<AppPreferencesViewModel>>(),
+                new ImmediateUiDispatcher());
         }
         finally
         {

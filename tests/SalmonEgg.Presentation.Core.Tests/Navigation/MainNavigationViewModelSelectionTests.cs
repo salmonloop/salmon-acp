@@ -13,6 +13,7 @@ using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -460,7 +461,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 new ShellSelectionStateStore(),
                 new ShellNavigationRuntimeStateStore(),
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             navVm.RebuildTree();
 
@@ -560,7 +562,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 new ShellSelectionStateStore(),
                 new ShellNavigationRuntimeStateStore(),
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             navVm.RebuildTree();
 
@@ -647,7 +650,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 new ShellSelectionStateStore(),
                 new ShellNavigationRuntimeStateStore(),
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             navVm.RebuildTree();
 
@@ -713,7 +717,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 new ShellSelectionStateStore(),
                 new ShellNavigationRuntimeStateStore(),
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             await navVm.ShowAllSessionsForProjectAsync("project-1");
 
@@ -747,7 +752,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             var selectionStore = new ShellSelectionStateStore();
             var runtimeState = new ShellNavigationRuntimeStateStore();
-            var sentinelItem = new DiscoverSessionsNavItemViewModel(navState);
+            var sentinelItem = new DiscoverSessionsNavItemViewModel(navState, new ImmediateUiDispatcher());
 
             using var navVm = new MainNavigationViewModel(
                 chatCatalog,
@@ -765,7 +770,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 selectionStore,
                 runtimeState,
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             navVm.RebuildTree();
             SetSessionSelection(selectionStore, "session-1");
@@ -809,7 +815,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 selectionStore,
                 runtimeState,
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             navVm.RebuildTree();
 
@@ -864,7 +871,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 selectionStore,
                 runtimeState,
                 presenter,
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             navVm.RebuildTree();
 
@@ -1136,7 +1144,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 new ShellSelectionStateStore(),
                 new ShellNavigationRuntimeStateStore(),
                 CreatePresenter(chatCatalog),
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             await navVm.PrepareStartForProjectAsync("project-1");
 
@@ -1177,7 +1186,8 @@ public sealed class MainNavigationViewModelSelectionTests
                 new ShellSelectionStateStore(),
                 new ShellNavigationRuntimeStateStore(),
                 CreatePresenter(chatCatalog),
-                new ProjectAffinityResolver());
+                new ProjectAffinityResolver(),
+                new ImmediateUiDispatcher());
 
             await navVm.PrepareStartForProjectAsync("project-1");
 
@@ -1221,6 +1231,7 @@ public sealed class MainNavigationViewModelSelectionTests
         var presenter = CreatePresenter(chatCatalog);
         selectionStore = new ShellSelectionStateStore();
         runtimeState = new ShellNavigationRuntimeStateStore();
+        var uiDispatcher = SynchronizationContext.Current as IUiDispatcher ?? new ImmediateUiDispatcher();
 
         return new MainNavigationViewModel(
             chatCatalog,
@@ -1234,7 +1245,8 @@ public sealed class MainNavigationViewModelSelectionTests
             selectionStore,
             runtimeState,
             presenter,
-            new ProjectAffinityResolver());
+            new ProjectAffinityResolver(),
+            uiDispatcher);
     }
 
     private static ConversationCatalogPresenter CreatePresenter(IConversationCatalog chatCatalog)
@@ -1276,14 +1288,38 @@ public sealed class MainNavigationViewModelSelectionTests
         }
     }
 
-    private sealed class ImmediateSynchronizationContext : SynchronizationContext
+    private sealed class ImmediateSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
+        public bool HasThreadAccess => true;
+
         public override void Post(SendOrPostCallback d, object? state) => d(state);
+
+        public void Enqueue(Action action) => action();
+
+        public Task EnqueueAsync(Action action)
+        {
+            try
+            {
+                action();
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
+        }
+
+        public async Task EnqueueAsync(Func<Task> function)
+        {
+            await function().ConfigureAwait(false);
+        }
     }
 
-    private sealed class QueuedSynchronizationContext : SynchronizationContext
+    private sealed class QueuedSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
         private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
+
+        public bool HasThreadAccess => ReferenceEquals(Current, this);
 
         public int PendingPostCount
         {
@@ -1302,6 +1338,54 @@ public sealed class MainNavigationViewModelSelectionTests
             {
                 _queue.Enqueue((d, state));
             }
+        }
+
+        public void Enqueue(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            Post(_ => action(), null);
+        }
+
+        public Task EnqueueAsync(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(_ =>
+            {
+                try
+                {
+                    action();
+                    tcs.TrySetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, null);
+
+            return tcs.Task;
+        }
+
+        public Task EnqueueAsync(Func<Task> function)
+        {
+            ArgumentNullException.ThrowIfNull(function);
+
+            var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(async _ =>
+            {
+                try
+                {
+                    await function().ConfigureAwait(false);
+                    tcs.TrySetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }, null);
+
+            return tcs.Task;
         }
 
         public void DrainAll(int maxIterations = 64)
@@ -1361,7 +1445,8 @@ public sealed class MainNavigationViewModelSelectionTests
             languageService.Object,
             capabilities.Object,
             uiRuntime.Object,
-            prefsLogger.Object);
+            prefsLogger.Object,
+            new ImmediateUiDispatcher());
 
         preferences.Projects.Add(new ProjectDefinition
         {

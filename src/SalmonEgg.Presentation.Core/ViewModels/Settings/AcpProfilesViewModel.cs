@@ -304,7 +304,8 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
             _sessionRegistry,
             _sessionEvents,
             _connectionCommands,
-            _loggerFactory.CreateLogger<AgentProfileItemViewModel>());
+            _loggerFactory.CreateLogger<AgentProfileItemViewModel>(),
+            _dispatcher);
     }
 
     private void SelectById(string? id)
