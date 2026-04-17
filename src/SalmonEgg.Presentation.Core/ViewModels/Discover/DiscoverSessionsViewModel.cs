@@ -66,6 +66,18 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _ => null
     };
 
+    [ObservableProperty]
+    private DiscoverLayoutMode _layoutMode = DiscoverLayoutMode.Wide;
+
+    [ObservableProperty]
+    private DiscoverPaneMode _activePaneMode = DiscoverPaneMode.List;
+
+    public bool ShowProfilesPane => LayoutMode == DiscoverLayoutMode.Wide || ActivePaneMode == DiscoverPaneMode.List;
+
+    public bool ShowDetailsPane => LayoutMode == DiscoverLayoutMode.Wide || (ActivePaneMode == DiscoverPaneMode.Detail && SelectedProfile != null);
+
+    public bool ShowCompactBackButton => LayoutMode == DiscoverLayoutMode.Narrow && ActivePaneMode == DiscoverPaneMode.Detail;
+
     public bool IsListVisible => LoadPhase == DiscoverSessionsLoadPhase.Loaded;
 
     public bool ShowEmptyState => LoadPhase == DiscoverSessionsLoadPhase.Empty;
@@ -75,7 +87,22 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     public ServerConfiguration? SelectedProfile
     {
         get => _profilesViewModel.SelectedProfile;
-        set => _profilesViewModel.SelectedProfile = value;
+        set
+        {
+            if (_profilesViewModel.SelectedProfile == value) return;
+            _profilesViewModel.SelectedProfile = value;
+            if (value != null && LayoutMode == DiscoverLayoutMode.Narrow)
+            {
+                ActivePaneMode = DiscoverPaneMode.Detail;
+            }
+            else if (value == null)
+            {
+                ActivePaneMode = DiscoverPaneMode.List;
+            }
+            OnPropertyChanged(nameof(ShowProfilesPane));
+            OnPropertyChanged(nameof(ShowDetailsPane));
+            OnPropertyChanged(nameof(ShowCompactBackButton));
+        }
     }
 
     public bool HasSelectedProfile => SelectedProfile != null;
@@ -107,6 +134,38 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
         _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
         _connectionFacade.PropertyChanged += OnConnectionFacadePropertyChanged;
+    }
+
+    public void SetLayoutMode(DiscoverLayoutMode mode)
+    {
+        LayoutMode = mode;
+        OnPropertyChanged(nameof(ShowProfilesPane));
+        OnPropertyChanged(nameof(ShowDetailsPane));
+        OnPropertyChanged(nameof(ShowCompactBackButton));
+    }
+
+    [RelayCommand]
+    private void OpenProfileDetails()
+    {
+        if (LayoutMode == DiscoverLayoutMode.Narrow)
+        {
+            ActivePaneMode = DiscoverPaneMode.Detail;
+            OnPropertyChanged(nameof(ShowProfilesPane));
+            OnPropertyChanged(nameof(ShowDetailsPane));
+            OnPropertyChanged(nameof(ShowCompactBackButton));
+        }
+    }
+
+    [RelayCommand]
+    private void BackToProfiles()
+    {
+        if (LayoutMode == DiscoverLayoutMode.Narrow)
+        {
+            ActivePaneMode = DiscoverPaneMode.List;
+            OnPropertyChanged(nameof(ShowProfilesPane));
+            OnPropertyChanged(nameof(ShowDetailsPane));
+            OnPropertyChanged(nameof(ShowCompactBackButton));
+        }
     }
 
     private void OnProfilesViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -518,6 +577,18 @@ public enum DiscoverSessionsLoadPhase
     Loaded = 7,
     Empty = 8,
     Error = 9
+}
+
+public enum DiscoverLayoutMode
+{
+    Wide,
+    Narrow
+}
+
+public enum DiscoverPaneMode
+{
+    List,
+    Detail
 }
 
 public sealed class DiscoverSessionItemViewModel

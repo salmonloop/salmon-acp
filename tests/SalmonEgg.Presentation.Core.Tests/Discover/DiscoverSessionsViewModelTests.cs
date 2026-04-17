@@ -411,6 +411,151 @@ public sealed class DiscoverSessionsViewModelTests
         }
     }
 
+    [Fact]
+    public void InitialState_IsWideAndList()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        Assert.Equal(DiscoverLayoutMode.Wide, viewModel.LayoutMode);
+        Assert.Equal(DiscoverPaneMode.List, viewModel.ActivePaneMode);
+        Assert.True(viewModel.ShowProfilesPane);
+        Assert.True(viewModel.ShowDetailsPane);
+        Assert.False(viewModel.ShowCompactBackButton);
+    }
+
+    [Fact]
+    public void SetLayoutMode_Narrow_UpdatesShowProperties()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
+
+        Assert.Equal(DiscoverLayoutMode.Narrow, viewModel.LayoutMode);
+        Assert.Equal(DiscoverPaneMode.List, viewModel.ActivePaneMode);
+        Assert.True(viewModel.ShowProfilesPane);
+        Assert.False(viewModel.ShowDetailsPane);
+        Assert.False(viewModel.ShowCompactBackButton);
+    }
+
+    [Fact]
+    public void OpenProfileDetails_InNarrowMode_MovesToDetailPane()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
+        viewModel.OpenProfileDetailsCommand.Execute(null);
+
+        Assert.Equal(DiscoverPaneMode.Detail, viewModel.ActivePaneMode);
+        Assert.False(viewModel.ShowProfilesPane);
+        Assert.True(viewModel.ShowDetailsPane);
+        Assert.True(viewModel.ShowCompactBackButton);
+    }
+
+    [Fact]
+    public void BackToProfiles_InNarrowMode_ReturnsToListPane()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
+        viewModel.OpenProfileDetailsCommand.Execute(null);
+        viewModel.BackToProfilesCommand.Execute(null);
+
+        Assert.Equal(DiscoverPaneMode.List, viewModel.ActivePaneMode);
+        Assert.True(viewModel.ShowProfilesPane);
+        Assert.False(viewModel.ShowDetailsPane);
+    }
+
+    [Fact]
+    public void SelectingProfile_InNarrowMode_MovesToDetailPane()
+    {
+        var profile1 = CreateProfile();
+        var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
+        var profilesViewModel = CreateProfilesViewModel(profile1);
+        profilesViewModel.Profiles.Add(profile2);
+        
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
+        
+        // Act: change selection
+        viewModel.SelectedProfile = profile2;
+
+        Assert.Equal(DiscoverPaneMode.Detail, viewModel.ActivePaneMode);
+        Assert.True(viewModel.ShowDetailsPane);
+    }
+
+    [Fact]
+    public void ClearingProfileSelection_CoercesPaneToListMode()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
+        viewModel.OpenProfileDetailsCommand.Execute(null);
+        
+        // Act: clear selection
+        viewModel.SelectedProfile = null;
+
+        Assert.Equal(DiscoverPaneMode.List, viewModel.ActivePaneMode);
+        Assert.True(viewModel.ShowProfilesPane);
+    }
+
+    [Fact]
+    public void SwitchingToWideMode_ExposesBothPanes_PreservingSelection()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
+        viewModel.OpenProfileDetailsCommand.Execute(null);
+        
+        // Act: switch back to wide
+        viewModel.SetLayoutMode(DiscoverLayoutMode.Wide);
+
+        Assert.Equal(DiscoverLayoutMode.Wide, viewModel.LayoutMode);
+        Assert.True(viewModel.ShowProfilesPane);
+        Assert.True(viewModel.ShowDetailsPane);
+        Assert.Same(profile, viewModel.SelectedProfile);
+    }
+
     private static DiscoverSessionsViewModel CreateViewModel(
         AcpProfilesViewModel profilesViewModel,
         IDiscoverSessionsConnectionFacade connectionFacade,
