@@ -22,7 +22,8 @@ public readonly record struct AcpPromptDispatchResult(
 
 public readonly record struct AcpConnectionContext(
     string? ConversationId,
-    bool PreserveConversation)
+    bool PreserveConversation,
+    long? ActivationVersion = null)
 {
     public static AcpConnectionContext None { get; } = new(null, PreserveConversation: false);
 

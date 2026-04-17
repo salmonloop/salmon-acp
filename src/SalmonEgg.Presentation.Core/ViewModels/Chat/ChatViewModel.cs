@@ -2471,6 +2471,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             cancellationToken.ThrowIfCancellationRequested();
             await PrepareSelectedProfileConnectionAsync(profile, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            var scopedSink = CreateScopedAcpCoordinatorSink(connectionContext);
             await PostToUiAsync(() =>
             {
                 _suppressAutoConnectFromPreferenceChange = true;
@@ -2480,12 +2481,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             cancellationToken.ThrowIfCancellationRequested();
             var result = connectionContext.Equals(AcpConnectionContext.None)
                 ? await _acpConnectionCommands
-                    .ConnectToProfileAsync(profile, TransportConfig, this, cancellationToken)
+                    .ConnectToProfileAsync(profile, TransportConfig, scopedSink, cancellationToken)
                     .ConfigureAwait(false)
                 : await _acpConnectionCommands
-                    .ConnectToProfileAsync(profile, TransportConfig, this, connectionContext, cancellationToken)
+                    .ConnectToProfileAsync(profile, TransportConfig, scopedSink, connectionContext, cancellationToken)
                     .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            if (!IsCurrentConnectionContext(connectionContext))
+            {
+                return;
+            }
 
             await PostToUiAsync(() =>
             {
@@ -5792,6 +5797,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
+    private bool IsCurrentConnectionContext(AcpConnectionContext connectionContext)
+    {
+        if (_disposed || !connectionContext.ActivationVersion.HasValue)
+        {
+            return !_disposed;
+        }
+
+        return !IsActivationContextStale(connectionContext.ActivationVersion.Value, CancellationToken.None);
+    }
+
+    private IAcpChatCoordinatorSink CreateScopedAcpCoordinatorSink(AcpConnectionContext connectionContext)
+        => connectionContext.ActivationVersion.HasValue
+            ? new ScopedAcpChatCoordinatorSink(this, connectionContext)
+            : this;
+
     public void SelectProfile(ServerConfiguration profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -6084,7 +6104,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 conversationId,
                 binding,
                 profile.Id,
-                preserveConversation: true);
+                preserveConversation: true,
+                activationVersion);
             await ConnectToAcpProfileCoreAsync(profile, connectionContext, cancellationToken).ConfigureAwait(false);
             if (IsActivationContextStale(activationVersion, cancellationToken))
             {
@@ -6218,11 +6239,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         string? conversationId,
         ConversationBindingSlice? binding,
         string? profileId,
-        bool preserveConversation)
+        bool preserveConversation,
+        long? activationVersion = null)
     {
         if (!preserveConversation || string.IsNullOrWhiteSpace(conversationId))
         {
-            return new AcpConnectionContext(conversationId, PreserveConversation: false);
+            return new AcpConnectionContext(conversationId, PreserveConversation: false, ActivationVersion: activationVersion);
         }
 
         var hasMatchingRemoteBinding =
@@ -6230,7 +6252,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             && !string.IsNullOrWhiteSpace(binding?.ProfileId)
             && string.Equals(binding?.ProfileId, profileId, StringComparison.Ordinal);
 
-        return new AcpConnectionContext(conversationId, hasMatchingRemoteBinding);
+        return new AcpConnectionContext(conversationId, hasMatchingRemoteBinding, ActivationVersion: activationVersion);
     }
 
     private async Task<int> GetProjectedTranscriptCountAsync(string conversationId)
@@ -6664,6 +6686,204 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _remoteHydrationSessionUpdateBaselineCounts.Remove(conversationId);
         _remoteHydrationKnownTranscriptBaselineCounts.Remove(conversationId);
         _remoteHydrationKnownTranscriptGrowthGraceDeadlineUtc.Remove(conversationId);
+    }
+
+    private sealed class ScopedAcpChatCoordinatorSink : IAcpChatCoordinatorSink
+    {
+        private readonly ChatViewModel _owner;
+        private readonly AcpConnectionContext _connectionContext;
+        private readonly ScopedBindingCommands _bindingCommands;
+
+        public ScopedAcpChatCoordinatorSink(ChatViewModel owner, AcpConnectionContext connectionContext)
+        {
+            _owner = owner;
+            _connectionContext = connectionContext;
+            _bindingCommands = new ScopedBindingCommands(owner, connectionContext);
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged
+        {
+            add => _owner.PropertyChanged += value;
+            remove => _owner.PropertyChanged -= value;
+        }
+
+        public IChatService? CurrentChatService => _owner.CurrentChatService;
+        public bool IsConnected => _owner.IsConnected;
+        public bool IsConnecting => _owner.IsConnecting;
+        public bool IsInitializing => _owner.IsInitializing;
+        public bool IsSessionActive => _owner.IsSessionActive;
+        public bool IsAuthenticationRequired => _owner.IsAuthenticationRequired;
+        public string? ConnectionErrorMessage => _owner.ConnectionErrorMessage;
+        public string? AuthenticationHintMessage => _owner.AuthenticationHintMessage;
+        public string? AgentName => _owner.AgentName;
+        public string? AgentVersion => _owner.AgentVersion;
+        public string? CurrentSessionId => _owner.CurrentSessionId;
+        public bool IsHydrating => _owner.IsHydrating;
+        public bool IsInitialized => _owner.IsInitialized;
+        public string? CurrentRemoteSessionId => _owner.CurrentRemoteSessionId;
+        public string? SelectedProfileId => _owner.SelectedProfileId;
+        public long ConnectionGeneration => _owner.ConnectionGeneration;
+        public IUiDispatcher Dispatcher => _owner.Dispatcher;
+        public IConversationBindingCommands ConversationBindingCommands => _bindingCommands;
+
+        public ValueTask<ConversationRemoteBindingState?> GetCurrentRemoteBindingAsync(CancellationToken cancellationToken = default)
+            => _owner.GetCurrentRemoteBindingAsync(cancellationToken);
+
+        public ValueTask<ConversationRemoteBindingState?> GetConversationRemoteBindingAsync(
+            string conversationId,
+            CancellationToken cancellationToken = default)
+            => _owner.GetConversationRemoteBindingAsync(conversationId, cancellationToken);
+
+        public void SelectProfile(ServerConfiguration profile)
+        {
+            if (CanMutate())
+            {
+                _owner.SelectProfile(profile);
+            }
+        }
+
+        public Task SelectProfileAsync(ServerConfiguration profile, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.SelectProfileAsync(profile, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public void ReplaceChatService(IChatService? chatService)
+        {
+            if (CanMutate())
+            {
+                _owner.ReplaceChatService(chatService);
+            }
+        }
+
+        public Task ReplaceChatServiceAsync(IChatService? chatService, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.ReplaceChatServiceAsync(chatService, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)
+        {
+            if (CanMutate())
+            {
+                _owner.UpdateConnectionState(isConnecting, isConnected, isInitialized, errorMessage);
+            }
+        }
+
+        public void UpdateInitializationState(bool isInitializing)
+        {
+            if (CanMutate())
+            {
+                _owner.UpdateInitializationState(isInitializing);
+            }
+        }
+
+        public void UpdateAuthenticationState(bool isRequired, string? hintMessage)
+        {
+            if (CanMutate())
+            {
+                _owner.UpdateAuthenticationState(isRequired, hintMessage);
+            }
+        }
+
+        public void UpdateAgentIdentity(string? agentName, string? agentVersion)
+        {
+            if (CanMutate())
+            {
+                _owner.UpdateAgentIdentity(agentName, agentVersion);
+            }
+        }
+
+        public Task ResetHydratedConversationForResyncAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.ResetHydratedConversationForResyncAsync(cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public Task ResetConversationForResyncAsync(string conversationId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.ResetConversationForResyncAsync(conversationId, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public string GetActiveSessionCwdOrDefault() => _owner.GetActiveSessionCwdOrDefault();
+
+        public string GetSessionCwdOrDefault(string conversationId) => _owner.GetSessionCwdOrDefault(conversationId);
+
+        public Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.SetIsHydratingAsync(isHydrating, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public Task SetConversationHydratingAsync(
+            string conversationId,
+            bool isHydrating,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.SetConversationHydratingAsync(conversationId, isHydrating, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public Task MarkActiveConversationRemoteHydratedAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.MarkActiveConversationRemoteHydratedAsync(cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public Task MarkConversationRemoteHydratedAsync(
+            string conversationId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.MarkConversationRemoteHydratedAsync(conversationId, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public Task ApplyConversationSessionLoadResponseAsync(
+            string conversationId,
+            SessionLoadResponse response,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.ApplyConversationSessionLoadResponseAsync(conversationId, response, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        private bool CanMutate() => _owner.IsCurrentConnectionContext(_connectionContext);
+    }
+
+    private sealed class ScopedBindingCommands : IConversationBindingCommands
+    {
+        private readonly ChatViewModel _owner;
+        private readonly AcpConnectionContext _connectionContext;
+
+        public ScopedBindingCommands(ChatViewModel owner, AcpConnectionContext connectionContext)
+        {
+            _owner = owner;
+            _connectionContext = connectionContext;
+        }
+
+        public ValueTask<BindingUpdateResult> UpdateBindingAsync(string conversationId, string? remoteSessionId, string? boundProfileId)
+            => _owner.IsCurrentConnectionContext(_connectionContext)
+                ? _owner.ConversationBindingCommands.UpdateBindingAsync(conversationId, remoteSessionId, boundProfileId)
+                : ValueTask.FromResult(BindingUpdateResult.Success());
     }
 
     private sealed class NoopAcpConnectionCoordinator : IAcpConnectionCoordinator

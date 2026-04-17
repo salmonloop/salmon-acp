@@ -6700,6 +6700,195 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task SwitchConversationAsync_WhenStaleRemoteConnectCompletesLate_DoesNotReplaceCurrentIntentChatService()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-local", @"C:\repo\local");
+        await sessionManager.Object.CreateSessionAsync("conv-remote-1", @"C:\repo\remote-1");
+
+        var staleConnectStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowStaleConnectCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var staleService = CreateConnectedChatService();
+        staleService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
+
+        ViewModelFixture? fixture = null;
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        commands.Setup(x => x.ConnectToProfileAsync(
+                It.Is<ServerConfiguration>(profile => string.Equals(profile.Id, "profile-1", StringComparison.Ordinal)),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.Is<AcpConnectionContext>(context =>
+                    string.Equals(context.ConversationId, "conv-remote-1", StringComparison.Ordinal)
+                    && context.PreserveConversation),
+                It.IsAny<CancellationToken>()))
+            .Returns<ServerConfiguration, IAcpTransportConfiguration, IAcpChatCoordinatorSink, AcpConnectionContext, CancellationToken>(async (_, _, sink, _, _) =>
+            {
+                staleConnectStarted.TrySetResult(null);
+                await allowStaleConnectCompletion.Task;
+
+                sink.ReplaceChatService(staleService.Object);
+                sink.UpdateAgentIdentity("stale-agent", "1.0.0");
+                await fixture!.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
+                await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+
+                return new AcpTransportApplyResult(
+                    staleService.Object,
+                    new InitializeResponse(1, new AgentInfo("stale-agent", "1.0.0"), new AgentCapabilities(loadSession: true)));
+            });
+
+        commands.Setup(x => x.ConnectToProfileAsync(
+                It.IsAny<ServerConfiguration>(),
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("Unexpected non-context ACP connect path."));
+        commands.Setup(x => x.ApplyTransportConfigurationAsync(
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("Unexpected transport apply path."));
+        commands.Setup(x => x.ApplyTransportConfigurationAsync(
+                It.IsAny<IAcpTransportConfiguration>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<AcpConnectionContext>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("Unexpected transport apply path."));
+        commands.Setup(x => x.EnsureRemoteSessionAsync(
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("Unexpected remote session creation path."));
+        commands.Setup(x => x.SendPromptAsync(
+                It.IsAny<string>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("Unexpected prompt dispatch path."));
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("Unexpected prompt dispatch path."));
+        commands.Setup(x => x.CancelPromptAsync(
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        commands.Setup(x => x.DisconnectAsync(
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        fixture = CreateViewModel(syncContext, sessionManager: sessionManager, acpConnectionCommands: commands.Object);
+        await using (fixture)
+        {
+            fixture.Profiles.Profiles.Add(new ServerConfiguration { Id = "profile-1", Name = "Profile 1", Transport = TransportType.Stdio });
+            await syncContext.RunUntilCompletedAsync(fixture.ViewModel.RestoreAsync());
+
+            fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+                ConversationId: "conv-local",
+                Transcript:
+                [
+                    new ConversationMessageSnapshot
+                    {
+                        Id = "local-1",
+                        Timestamp = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                        IsOutgoing = true,
+                        ContentType = "text",
+                        TextContent = "local seed"
+                    }
+                ],
+                Plan: [],
+                ShowPlanPanel: false,
+                PlanTitle: null,
+                CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+            fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+                ConversationId: "conv-remote-1",
+                Transcript: [],
+                Plan: [],
+                ShowPlanPanel: false,
+                PlanTitle: null,
+                CreatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+            await fixture.UpdateStateAsync(state => state with
+            {
+                HydratedConversationId = "conv-local",
+                Transcript =
+                [
+                    new ConversationMessageSnapshot
+                    {
+                        Id = "local-1",
+                        Timestamp = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                        IsOutgoing = true,
+                        ContentType = "text",
+                        TextContent = "local seed"
+                    }
+                ],
+                Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                    .Add("conv-remote-1", new ConversationBindingSlice("conv-remote-1", "remote-1", "profile-1"))
+            });
+            syncContext.RunAll();
+
+            var staleSwitchTask = fixture.ViewModel.SwitchConversationAsync("conv-remote-1");
+            await WaitForConditionAsync(() =>
+            {
+                syncContext.RunAll();
+                return Task.FromResult(staleConnectStarted.Task.IsCompleted);
+            }, timeoutMilliseconds: 2500);
+
+            var returnToLocalTask = fixture.ViewModel.SwitchConversationAsync("conv-local");
+            allowStaleConnectCompletion.TrySetResult(null);
+
+            await syncContext.RunUntilCompletedAsync(returnToLocalTask);
+            await syncContext.RunUntilCompletedAsync(staleSwitchTask);
+
+            Assert.True(await returnToLocalTask);
+            Assert.False(await staleSwitchTask);
+            Assert.Equal("conv-local", fixture.ViewModel.CurrentSessionId);
+            Assert.Null(fixture.ViewModel.CurrentChatService);
+            Assert.Null(fixture.ViewModel.AgentName);
+            Assert.Null(fixture.ViewModel.AgentVersion);
+            Assert.Single(fixture.ViewModel.MessageHistory);
+            Assert.Contains("local seed", fixture.ViewModel.MessageHistory[0].TextContent, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task SwitchConversationAsync_RemoteBoundConversation_WhenRemoteHydrationFails_ReturnsFalse()
     {
         var syncContext = new ImmediateSynchronizationContext();
