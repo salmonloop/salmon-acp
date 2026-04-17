@@ -489,9 +489,19 @@ public class ChatViewModelTests
 
         await fixture.ViewModel.CreateNewSessionCommand.ExecuteAsync(null);
 
-        Assert.False(string.IsNullOrWhiteSpace(fixture.ViewModel.CurrentSessionId));
-        Assert.NotEqual("remote-1", fixture.ViewModel.CurrentSessionId);
-        Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
+        await WaitForConditionAsync(async () =>
+        {
+            var currentSessionId = fixture.ViewModel.CurrentSessionId;
+            var state = await fixture.GetStateAsync();
+            return !string.IsNullOrWhiteSpace(currentSessionId)
+                && !string.Equals("remote-1", currentSessionId, StringComparison.Ordinal)
+                && string.Equals("remote-1", fixture.ViewModel.CurrentRemoteSessionId, StringComparison.Ordinal)
+                && string.Equals(currentSessionId, state.HydratedConversationId, StringComparison.Ordinal)
+                && string.Equals(
+                    "remote-1",
+                    state.ResolveBinding(currentSessionId!)?.RemoteSessionId,
+                    StringComparison.Ordinal);
+        });
 
         var state = await fixture.GetStateAsync();
         Assert.Equal(fixture.ViewModel.CurrentSessionId, state.HydratedConversationId);
@@ -1345,7 +1355,9 @@ public class ChatViewModelTests
                 new ConversationBindingSlice("session-1", "remote-old", "profile-a")),
             HydratedConversationId = "session-1"
         });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.CurrentSessionId, "session-1", StringComparison.Ordinal)
+            && string.Equals(fixture.ViewModel.CurrentRemoteSessionId, "remote-old", StringComparison.Ordinal)));
 
         await fixture.UpdateStateAsync(state => state with
         {
@@ -1354,7 +1366,8 @@ public class ChatViewModelTests
                 "session-1",
                 new ConversationBindingSlice("session-1", "remote-new", "profile-a"))
         });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.CurrentRemoteSessionId, "remote-new", StringComparison.Ordinal)));
 
         chatService.Raise(
             x => x.SessionUpdateReceived += null,
@@ -1362,7 +1375,9 @@ public class ChatViewModelTests
                 "remote-new",
                 new AgentMessageUpdate(new TextContentBlock { Text = "fresh reply" })));
 
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(
+            fixture.ViewModel.MessageHistory.Count == 1
+            && string.Equals(fixture.ViewModel.MessageHistory[0].TextContent, "fresh reply", StringComparison.Ordinal)));
 
         var message = Assert.Single(fixture.ViewModel.MessageHistory);
         Assert.Equal("fresh reply", message.TextContent);
@@ -1414,7 +1429,9 @@ public class ChatViewModelTests
                 "session-1",
                 new ConversationBindingSlice("session-1", "remote-fresh", "profile-a"))
         });
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.CurrentSessionId, "session-1", StringComparison.Ordinal)
+            && string.Equals(fixture.ViewModel.CurrentRemoteSessionId, "remote-fresh", StringComparison.Ordinal)));
 
         await fixture.ViewModel.SetModeCommand.ExecuteAsync(new SessionModeViewModel { ModeId = "plan", ModeName = "Plan" });
 

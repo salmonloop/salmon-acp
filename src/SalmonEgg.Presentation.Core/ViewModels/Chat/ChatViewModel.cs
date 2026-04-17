@@ -1104,19 +1104,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                         previewEntries,
                         DateTimeOffset.Now);
 
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await _previewStore.SaveAsync(snapshotToSave).ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogError(ex,
-                                "Failed to save conversation preview for {ConversationId}",
-                                conversationId);
-                        }
-                    });
+                    _ = _previewStore.SaveAsync(snapshotToSave);
                 }
             }
         }

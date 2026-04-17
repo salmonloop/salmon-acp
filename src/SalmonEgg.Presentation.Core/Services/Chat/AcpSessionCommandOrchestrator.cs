@@ -64,6 +64,7 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
             throw new InvalidOperationException("No active local conversation is available for ACP session creation.");
         }
 
+        var selectedProfileId = sink.SelectedProfileId;
         var currentBinding = await sink.GetCurrentRemoteBindingAsync(cancellationToken).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(currentBinding?.RemoteSessionId))
         {
@@ -95,7 +96,7 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
             response = await chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
         }
 
-        await UpdateBindingForCurrentConversationAsync(sink, response.SessionId, sink.SelectedProfileId).ConfigureAwait(false);
+        await UpdateBindingForCurrentConversationAsync(sink, response.SessionId, selectedProfileId).ConfigureAwait(false);
         markHydrated();
         return new AcpRemoteSessionResult(response.SessionId, response, UsedExistingBinding: false);
     }

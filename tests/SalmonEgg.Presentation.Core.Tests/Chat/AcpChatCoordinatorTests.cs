@@ -822,7 +822,7 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
-    public async Task ApplyTransportConfigurationAsync_PreserveConversationWithExistingBinding_ResyncsWhenLoadSessionCapabilityIsAdvertised()
+    public async Task ApplyTransportConfigurationAsync_PreserveConversationWithExistingBinding_DoesNotHydrateDuringTransportApply()
     {
         var transport = new FakeTransportConfiguration
         {
@@ -843,10 +843,6 @@ public sealed class AcpChatCoordinatorTests
             .Setup(x => x.CreateChatService(TransportType.WebSocket, null, null, "wss://agent.test"))
             .Returns(service.Object);
 
-        service
-            .Setup(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(SessionLoadResponse.Completed);
-
         var sut = new AcpChatCoordinator(
             factory.Object,
             logger.Object,
@@ -856,14 +852,8 @@ public sealed class AcpChatCoordinatorTests
 
         await sut.ApplyTransportConfigurationAsync(transport, sink, preserveConversation: true);
 
-        service.Verify(
-            x => x.LoadSessionAsync(
-                It.Is<SessionLoadParams>(p =>
-                    p.SessionId == "remote-session-1" &&
-                    p.Cwd == sink.ActiveSessionCwd),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
-        Assert.Equal(1, sink.ResetHydratedConversationForResyncCalls);
+        service.Verify(x => x.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Equal(0, sink.ResetHydratedConversationForResyncCalls);
     }
 
     [Fact]
@@ -934,6 +924,41 @@ public sealed class AcpChatCoordinatorTests
         Assert.Equal("remote-session-1", sink.CurrentRemoteSessionId);
         Assert.Single(sink.BindingCommands.Updates);
         Assert.Equal("local-session-1", sink.BindingCommands.Updates[0].ConversationId);
+        Assert.Equal("profile-1", sink.BindingCommands.Updates[0].ProfileId);
+    }
+
+    [Fact]
+    public async Task EnsureRemoteSessionAsync_WhenSelectedProfileChangesWhilePending_UsesOriginalProfileBinding()
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            IsConnected = true,
+            IsInitialized = true,
+            IsSessionActive = true,
+            CurrentSessionId = "local-session-1",
+            ActiveSessionCwd = @"C:\repo\demo",
+            SelectedProfileId = "profile-1"
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        var createSessionTcs = new TaskCompletionSource<SessionNewResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        service
+            .Setup(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()))
+            .Returns(createSessionTcs.Task);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+        var ensureTask = sut.EnsureRemoteSessionAsync(sink, _ => Task.FromResult(true));
+
+        sink.SelectedProfileId = "profile-2";
+        createSessionTcs.SetResult(new SessionNewResponse("remote-session-1"));
+
+        var result = await ensureTask;
+
+        Assert.Equal("remote-session-1", result.RemoteSessionId);
+        Assert.Single(sink.BindingCommands.Updates);
         Assert.Equal("profile-1", sink.BindingCommands.Updates[0].ProfileId);
     }
 

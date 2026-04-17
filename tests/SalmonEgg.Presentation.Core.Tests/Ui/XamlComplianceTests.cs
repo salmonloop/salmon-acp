@@ -88,6 +88,7 @@ public sealed class XamlComplianceTests
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
 
+        Assert.Contains("IsExpanded=\"{x:Bind IsExpanded, Mode=TwoWay}\"", xaml);
         Assert.DoesNotContain("IsExpanded=\"{x:Bind IsExpanded, Mode=OneWay}\"", xaml);
         Assert.DoesNotContain("Expanding=\"OnMainNavItemExpanding\"", xaml);
         Assert.DoesNotContain("Collapsed=\"OnMainNavItemCollapsed\"", xaml);
@@ -418,6 +419,7 @@ public sealed class XamlComplianceTests
         Assert.Contains("x:Uid=\"DiscoverSessionsNoSelectionTitle\"", xaml);
         Assert.Contains("x:Uid=\"DiscoverSessionsConnectionError\"", xaml);
         Assert.Contains("x:Uid=\"DiscoverSessionsImportButton\"", xaml);
+        Assert.Contains("x:Uid=\"DiscoverSessionsBackButton\"", xaml);
     }
 
 

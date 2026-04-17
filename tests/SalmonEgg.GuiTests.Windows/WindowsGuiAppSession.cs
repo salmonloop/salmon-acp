@@ -152,12 +152,14 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public AutomationElement? FindVisibleText(string text, AutomationElement? scope = null, TimeSpan? timeout = null)
     {
+        var expectedText = NormalizeVisibleText(text);
+
         return RetryUntil(
             () => (scope ?? MainWindow)
                 .FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
                 .FirstOrDefault(element =>
                     !TryGetIsOffscreen(element)
-                    && string.Equals(element.Name, text, StringComparison.Ordinal)),
+                    && string.Equals(NormalizeVisibleText(element.Name), expectedText, StringComparison.Ordinal)),
             element => element != null,
             timeout ?? TimeSpan.FromSeconds(3),
             $"Visible text '{text}' was not found.");
@@ -180,7 +182,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
         return (scope ?? MainWindow)
             .FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
             .Where(element => !TryGetIsOffscreen(element) && !string.IsNullOrWhiteSpace(element.Name))
-            .Select(element => element.Name)
+            .Select(element => NormalizeVisibleText(element.Name))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
@@ -273,6 +275,20 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void ActivateElement(AutomationElement element)
     {
+        if (element.Patterns.SelectionItem.IsSupported)
+        {
+            try
+            {
+                element.Focus();
+            }
+            catch
+            {
+            }
+
+            element.Patterns.SelectionItem.Pattern.Select();
+            return;
+        }
+
         if (element.Patterns.Invoke.IsSupported)
         {
             element.Patterns.Invoke.Pattern.Invoke();
@@ -297,12 +313,6 @@ internal sealed class WindowsGuiAppSession : IDisposable
         catch
         {
             elementId = "<unknown>";
-        }
-
-        if (element.Patterns.SelectionItem.IsSupported)
-        {
-            element.Patterns.SelectionItem.Pattern.Select();
-            return;
         }
 
         throw new InvalidOperationException(
@@ -379,6 +389,19 @@ internal sealed class WindowsGuiAppSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(element);
         element.Focus();
+    }
+
+    private static string NormalizeVisibleText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            " ",
+            value
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 
     public bool IsFocusWithinAutomationId(string automationId, int maxDepth = 16)

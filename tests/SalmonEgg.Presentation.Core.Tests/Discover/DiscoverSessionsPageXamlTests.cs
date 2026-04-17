@@ -27,6 +27,30 @@ public sealed class DiscoverSessionsPageXamlTests
         Assert.DoesNotContain("Unclassified", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DiscoverSessionsPage_ResponsivePaneVisibility_IsViewModelDriven()
+    {
+        // Arrange
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+
+        // Assert
+        Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowProfilesPane, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowDetailsPane, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=\"800\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DiscoverSessionsPage_AdaptiveLayout_UsesNativeStates_AndAvoidsOpacityHack()
+    {
+        // Arrange
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+
+        // Assert
+        Assert.Contains("AdaptiveTrigger", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Uid=\"DiscoverSessionsBackButton\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActionBtn.Opacity", xaml, StringComparison.Ordinal);
+    }
+
     private static string LoadFile(string relativePath)
     {
         var root = FindRepoRoot();

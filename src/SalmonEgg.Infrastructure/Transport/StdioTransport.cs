@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,7 @@ namespace SalmonEgg.Infrastructure.Transport
         private readonly string _command;
         private readonly string[] _args;
         private readonly Encoding _encoding;
+        private readonly string _workingDirectory;
         private bool _disposed;
         private readonly object _lock = new();
 
@@ -70,11 +72,13 @@ namespace SalmonEgg.Infrastructure.Transport
             {
                 _command = "cmd.exe";
                 _args = new[] { "/c", resolvedCommand }.Concat(trimmedArgs).ToArray();
+                _workingDirectory = ResolveWorkingDirectory(resolvedCommand);
             }
             else
             {
                 _command = resolvedCommand;
                 _args = trimmedArgs;
+                _workingDirectory = ResolveWorkingDirectory(resolvedCommand);
             }
 
             _encoding = NormalizeTransportEncoding(encoding ?? Encoding.UTF8);
@@ -137,7 +141,7 @@ namespace SalmonEgg.Infrastructure.Transport
                     StandardInputEncoding = _encoding,
                     StandardOutputEncoding = _encoding,
                     StandardErrorEncoding = _encoding,
-                    WorkingDirectory = Environment.CurrentDirectory
+                    WorkingDirectory = _workingDirectory
                 };
 
                 _process = new Process { StartInfo = processInfo };
@@ -404,6 +408,99 @@ namespace SalmonEgg.Infrastructure.Transport
                 _logger.Error(ex, "[StdioTransport.ReadError] 错误读取循环出错");
                 OnErrorOccurred(new TransportErrorEventArgs($"读取错误流失败：{ex.Message}", ex));
             }
+        }
+
+        internal static string ResolveWorkingDirectory(string resolvedCommand, string? currentDirectory = null)
+        {
+            if (!string.IsNullOrWhiteSpace(resolvedCommand)
+                && Path.IsPathRooted(resolvedCommand))
+            {
+                var commandDirectory = Path.GetDirectoryName(resolvedCommand);
+                if (IsSafeWorkingDirectory(commandDirectory))
+                {
+                    return commandDirectory!;
+                }
+            }
+
+            var candidate = string.IsNullOrWhiteSpace(currentDirectory)
+                ? Environment.CurrentDirectory
+                : currentDirectory;
+            if (IsSafeWorkingDirectory(candidate))
+            {
+                return Path.GetFullPath(candidate!);
+            }
+
+            foreach (var fallback in GetFallbackWorkingDirectoryCandidates())
+            {
+                if (IsSafeWorkingDirectory(fallback, ensureExists: true))
+                {
+                    return Path.GetFullPath(fallback);
+                }
+            }
+
+            return Path.GetTempPath();
+        }
+
+        private static bool IsSafeWorkingDirectory(string? path, bool ensureExists = false)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                var fullPath = Path.GetFullPath(path);
+                if (IsWindowsAppsPath(fullPath))
+                {
+                    return false;
+                }
+
+                if (ensureExists)
+                {
+                    Directory.CreateDirectory(fullPath);
+                }
+
+                if (!Directory.Exists(fullPath))
+                {
+                    return false;
+                }
+
+                _ = File.GetAttributes(fullPath);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsWindowsAppsPath(string fullPath)
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return false;
+            }
+
+            var windowsAppsRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "WindowsApps");
+
+            return fullPath.StartsWith(windowsAppsRoot, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string[] GetFallbackWorkingDirectoryCandidates()
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            return
+            [
+                Path.Combine(localAppData, "SalmonEgg"),
+                localAppData,
+                userProfile,
+                Path.GetTempPath()
+            ];
         }
 
         private async Task DrainExitedProcessErrorAsync()

@@ -206,6 +206,27 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void MainNavigationXaml_BindsNativeSelectedItemToProjectedControlSelection()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml");
+
+        Assert.Contains(
+            "SelectedItem=\"{x:Bind NavVM.ProjectedControlSelectedItem, Mode=OneWay}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_TreeRebuildReliesOnProjectedSelectionBindingInsteadOfImperativeSelectedItemWriteback()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+
+        Assert.Contains("NavVM.TreeRebuilt += OnNavigationTreeRebuilt;", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainNavView.SelectedItem = NavVM.ProjectedControlSelectedItem;", code, StringComparison.Ordinal);
+        Assert.Contains("UpdateMainNavAutomationSelectionState();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainNavigationViewAdapter_ItemInvoked_DoesNotActivateNavigationDestinations()
     {
         var code = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Navigation\MainNavigationViewAdapter.cs");

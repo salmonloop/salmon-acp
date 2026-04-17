@@ -47,7 +47,9 @@ internal static class AtomicFile
                     // Fall back to non-atomic replace if File.Replace isn't supported by the underlying FS.
                 }
 
-                File.Delete(path);
+                File.Copy(tempPath, path, overwrite: true);
+                File.Delete(tempPath);
+                return;
             }
 
             File.Move(tempPath, path);

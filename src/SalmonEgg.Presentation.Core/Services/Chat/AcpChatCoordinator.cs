@@ -183,24 +183,11 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
                 }
             }
 
-            var hasExistingRemoteBinding = await HasExistingRemoteBindingAsync(
+            await TryMarkHydratedForConnectionContextAsync(
                 sink,
+                cachedSession.Service,
                 connectionContext,
                 applyToken).ConfigureAwait(false);
-            if (connectionContext.PreserveConversation
-                && hasExistingRemoteBinding
-                && cachedSession.Service.AgentCapabilities?.LoadSession == true)
-            {
-                await _connectionCoordinator.ResyncAsync(sink, applyToken).ConfigureAwait(false);
-            }
-            else
-            {
-                await TryMarkHydratedForConnectionContextAsync(
-                    sink,
-                    cachedSession.Service,
-                    connectionContext,
-                    applyToken).ConfigureAwait(false);
-            }
 
             return new AcpTransportApplyResult(cachedSession.Service, cachedSession.InitializeResponse);
         }
@@ -259,24 +246,11 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             await _connectionCoordinator.SetConnectedAsync(sink.SelectedProfileId, applyToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
 
-            var hasExistingRemoteBinding = await HasExistingRemoteBindingAsync(
+            await TryMarkHydratedForConnectionContextAsync(
                 sink,
+                wrappedService,
                 connectionContext,
                 applyToken).ConfigureAwait(false);
-            if (connectionContext.PreserveConversation
-                && hasExistingRemoteBinding
-                && wrappedService.AgentCapabilities?.LoadSession == true)
-            {
-                await _connectionCoordinator.ResyncAsync(sink, applyToken).ConfigureAwait(false);
-            }
-            else
-            {
-                await TryMarkHydratedForConnectionContextAsync(
-                    sink,
-                    wrappedService,
-                    connectionContext,
-                    applyToken).ConfigureAwait(false);
-            }
 
             _logger.LogInformation(
                 "ACP candidate committed. transport={TransportType} conversationId={ConversationId} preserveConversation={PreserveConversation}",
@@ -502,22 +476,6 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             currentBinding?.RemoteSessionId);
 
         await _connectionCoordinator.ResyncAsync(sink, applyScopeToken).ConfigureAwait(false);
-    }
-
-    private static async Task<bool> HasExistingRemoteBindingAsync(
-        IAcpChatCoordinatorSink sink,
-        AcpConnectionContext connectionContext,
-        CancellationToken cancellationToken)
-    {
-        if (!connectionContext.HasConversationTarget)
-        {
-            return false;
-        }
-
-        var binding = await sink
-            .GetConversationRemoteBindingAsync(connectionContext.ConversationId!, cancellationToken)
-            .ConfigureAwait(false);
-        return !string.IsNullOrWhiteSpace(binding?.RemoteSessionId);
     }
 
     private static async Task UpdateBindingForCurrentConversationAsync(

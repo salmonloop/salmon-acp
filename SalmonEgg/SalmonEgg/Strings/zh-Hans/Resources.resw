@@ -838,6 +838,12 @@
   <data name="DiscoverSessionsRefreshText.Text" xml:space="preserve">
     <value>刷新列表</value>
   </data>
+  <data name="DiscoverSessionsBackButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>返回节点列表</value>
+  </data>
+  <data name="DiscoverSessionsBackButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>返回节点列表</value>
+  </data>
   <data name="DiscoverSessionsConnectionError.Title" xml:space="preserve">
     <value>服务连接异常</value>
   </data>

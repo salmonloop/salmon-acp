@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -17,6 +18,7 @@ public class ConversationPreviewStore : IConversationPreviewStore
     private readonly IAppDataService _appDataService;
     private readonly ILogger<ConversationPreviewStore> _logger;
     private readonly string _previewsDirectory;
+    private readonly ConcurrentDictionary<string, PreviewSaveCoordinator> _saveCoordinators = new(StringComparer.Ordinal);
     private const string PreviewsDirectoryName = "conversation-previews";
 
     public ConversationPreviewStore(IAppDataService appDataService, ILogger<ConversationPreviewStore> logger)
@@ -68,14 +70,40 @@ public class ConversationPreviewStore : IConversationPreviewStore
             Directory.CreateDirectory(dir);
         }
 
+        var signature = ComputeContentSignature(snapshot);
+        var serialized = JsonSerializer.Serialize(snapshot, ConversationPreviewJsonContext.Default.ConversationPreviewSnapshot);
+        var coordinator = _saveCoordinators.GetOrAdd(snapshot.ConversationId, static _ => new PreviewSaveCoordinator());
+        Task completionTask;
+        lock (coordinator.Gate)
+        {
+            if (string.Equals(signature, coordinator.PendingWrite?.Signature, StringComparison.Ordinal))
+            {
+                completionTask = coordinator.PendingWriteCompletion?.Task ?? Task.CompletedTask;
+            }
+            else if (string.Equals(signature, coordinator.LastPersistedSignature, StringComparison.Ordinal))
+            {
+                completionTask = Task.CompletedTask;
+            }
+            else
+            {
+                coordinator.PendingWrite = new PendingPreviewWrite(filePath, serialized, signature);
+                coordinator.PendingWriteCompletion ??= new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                completionTask = coordinator.PendingWriteCompletion.Task;
+
+                if (coordinator.DrainTask is null || coordinator.DrainTask.IsCompleted)
+                {
+                    coordinator.DrainTask = DrainPendingWritesAsync(snapshot.ConversationId, coordinator);
+                }
+            }
+        }
+
         try
         {
-            var json = JsonSerializer.Serialize(snapshot, ConversationPreviewJsonContext.Default.ConversationPreviewSnapshot);
-            await AtomicFile.WriteUtf8AtomicAsync(filePath, json).ConfigureAwait(false);
+            await AwaitCompletionAsync(completionTask, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            _logger.LogError(ex, "Failed to save conversation preview for {ConversationId}", snapshot.ConversationId);
+            throw;
         }
     }
 
@@ -182,4 +210,90 @@ public class ConversationPreviewStore : IConversationPreviewStore
         }
         return true;
     }
+
+    private async Task DrainPendingWritesAsync(string conversationId, PreviewSaveCoordinator coordinator)
+    {
+        while (true)
+        {
+            PendingPreviewWrite? write;
+            TaskCompletionSource<object?>? completion;
+            lock (coordinator.Gate)
+            {
+                write = coordinator.PendingWrite;
+                completion = coordinator.PendingWriteCompletion;
+                coordinator.PendingWrite = null;
+                coordinator.PendingWriteCompletion = null;
+                if (write is null || completion is null)
+                {
+                    coordinator.DrainTask = null;
+                    return;
+                }
+            }
+
+            try
+            {
+                await AtomicFile.WriteUtf8AtomicAsync(write.Path, write.Serialized).ConfigureAwait(false);
+                lock (coordinator.Gate)
+                {
+                    coordinator.LastPersistedSignature = write.Signature;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save conversation preview for {ConversationId}", conversationId);
+            }
+            finally
+            {
+                completion.TrySetResult(null);
+            }
+        }
+    }
+
+    private static string ComputeContentSignature(ConversationPreviewSnapshot snapshot)
+    {
+        var hash = new HashCode();
+        hash.Add(snapshot.ConversationId, StringComparer.Ordinal);
+        hash.Add(snapshot.Entries.Count);
+
+        foreach (var entry in snapshot.Entries)
+        {
+            hash.Add(entry.Sender, StringComparer.Ordinal);
+            hash.Add(entry.Text, StringComparer.Ordinal);
+            hash.Add(entry.Timestamp.UtcTicks);
+        }
+
+        return hash.ToHashCode().ToString("X8");
+    }
+
+    private static async Task AwaitCompletionAsync(Task completionTask, CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            await completionTask.ConfigureAwait(false);
+            return;
+        }
+
+        var cancellationTask = Task.Delay(Timeout.Infinite, cancellationToken);
+        var finishedTask = await Task.WhenAny(completionTask, cancellationTask).ConfigureAwait(false);
+        if (finishedTask == cancellationTask)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        await completionTask.ConfigureAwait(false);
+    }
+
+    private sealed class PreviewSaveCoordinator
+    {
+        public object Gate { get; } = new();
+        public PendingPreviewWrite? PendingWrite { get; set; }
+        public TaskCompletionSource<object?>? PendingWriteCompletion { get; set; }
+        public Task? DrainTask { get; set; }
+        public string? LastPersistedSignature { get; set; }
+    }
+
+    private sealed record PendingPreviewWrite(
+        string Path,
+        string Serialized,
+        string Signature);
 }

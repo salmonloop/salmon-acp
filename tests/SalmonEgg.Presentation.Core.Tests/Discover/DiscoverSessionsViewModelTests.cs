@@ -207,6 +207,41 @@ public sealed class DiscoverSessionsViewModelTests
     }
 
     [Fact]
+    public async Task LoadSessionAsync_WhenSelectedProfileChangesWhilePending_UsesOriginalProfileBinding()
+    {
+        var syncContext = new InterceptingSynchronizationContext();
+        var originalContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var profile1 = CreateProfile();
+            var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
+            var profilesViewModel = CreateProfilesViewModel(profile1);
+            profilesViewModel.Profiles.Add(profile2);
+
+            var importCoordinator = new RecordingImportCoordinator(
+                new DiscoverSessionImportResult(false, null, "导入失败"));
+            using var viewModel = CreateViewModel(
+                profilesViewModel,
+                new FakeDiscoverSessionsConnectionFacade(),
+                importCoordinator,
+                new StubNavigationCoordinator());
+
+            syncContext.BeforeNextEnqueue = () => SetSelectedProfileWithoutNotification(profilesViewModel, profile2);
+
+            await viewModel.LoadSessionCommand.ExecuteAsync(CreateSessionItem());
+
+            Assert.Equal(
+                ("remote-session-1", @"C:\repo\remote", "profile-1", "Remote Session"),
+                importCoordinator.LastRequest);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task LoadSessionAsync_WhenHydrationFails_SetsPageErrorState()
     {
         var originalContext = SynchronizationContext.Current;
@@ -505,8 +540,8 @@ public sealed class DiscoverSessionsViewModelTests
 
         viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
         
-        // Act: change selection
-        viewModel.SelectedProfile = profile2;
+        // Act: change selection through the shared profiles VM path used by the real ListView binding
+        profilesViewModel.SelectedProfile = profile2;
 
         Assert.Equal(DiscoverPaneMode.Detail, viewModel.ActivePaneMode);
         Assert.True(viewModel.ShowDetailsPane);
@@ -526,8 +561,8 @@ public sealed class DiscoverSessionsViewModelTests
         viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
         viewModel.OpenProfileDetailsCommand.Execute(null);
         
-        // Act: clear selection
-        viewModel.SelectedProfile = null;
+        // Act: clear selection through the shared profiles VM path used by the real ListView binding
+        profilesViewModel.SelectedProfile = null;
 
         Assert.Equal(DiscoverPaneMode.List, viewModel.ActivePaneMode);
         Assert.True(viewModel.ShowProfilesPane);
@@ -554,6 +589,124 @@ public sealed class DiscoverSessionsViewModelTests
         Assert.True(viewModel.ShowProfilesPane);
         Assert.True(viewModel.ShowDetailsPane);
         Assert.Same(profile, viewModel.SelectedProfile);
+    }
+
+    [Fact]
+    public async Task RefreshSessionsAsync_WhenProfileChangesDuringRefresh_DropsStaleResults()
+    {
+        var syncContext = new CountingSynchronizationContext();
+        var originalContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var profile1 = new ServerConfiguration { Id = "profile-1", Name = "Profile 1" };
+            var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
+            var profilesViewModel = CreateProfilesViewModel(profile1);
+            profilesViewModel.Profiles.Add(profile2);
+
+            var allowProfile1Completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var connectionFacade = new FakeDiscoverSessionsConnectionFacade
+            {
+                CurrentChatService = new FakeChatService
+                {
+                    OnListSessionsAsync = async (p, ct) =>
+                    {
+                        if (profilesViewModel.SelectedProfile?.Id == "profile-1")
+                        {
+                            await allowProfile1Completion.Task;
+                            return new SessionListResponse
+                            {
+                                Sessions = { new AgentSessionInfo { SessionId = "stale-session", Title = "Stale" } }
+                            };
+                        }
+                        return new SessionListResponse
+                        {
+                            Sessions = { new AgentSessionInfo { SessionId = "fresh-session", Title = "Fresh" } }
+                        };
+                    }
+                }
+            };
+
+            using var viewModel = CreateViewModel(
+                profilesViewModel,
+                connectionFacade,
+                new StubImportCoordinator(),
+                new StubNavigationCoordinator());
+
+            // Start refresh for profile 1
+            var refresh1Task = viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+
+            // Change to profile 2 immediately
+            viewModel.SelectedProfile = profile2;
+            await viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+
+            // Allow profile 1 to complete
+            allowProfile1Completion.TrySetResult(null);
+            await refresh1Task;
+
+            // Assert: profile 2's fresh sessions are current, stale ones were dropped
+            var session = Assert.Single(viewModel.AgentSessions);
+            Assert.Equal("fresh-session", session.Id);
+            Assert.Equal(DiscoverSessionsLoadPhase.Loaded, viewModel.LoadPhase);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task OnConnectionFacadePropertyChanged_WhenProfileChanges_DropsStaleConnectionErrors()
+    {
+        var syncContext = new CountingSynchronizationContext();
+        var originalContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var profile1 = new ServerConfiguration { Id = "profile-1", Name = "Profile 1" };
+            var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
+            var profilesViewModel = CreateProfilesViewModel(profile1);
+            profilesViewModel.Profiles.Add(profile2);
+
+            var connectionFacade = new FakeDiscoverSessionsConnectionFacade
+            {
+                CurrentChatService = new FakeChatService
+                {
+                    SessionListResponse = new SessionListResponse()
+                }
+            };
+            using var viewModel = CreateViewModel(
+                profilesViewModel,
+                connectionFacade,
+                new StubImportCoordinator(),
+                new StubNavigationCoordinator());
+
+            // Start refresh for profile 1 with a valid chat service so the test isolates stale facade
+            // notifications instead of failing on missing connection prerequisites.
+            var refresh1Task = viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+            await Task.Yield();
+            Assert.NotEqual(DiscoverSessionsLoadPhase.Error, viewModel.LoadPhase);
+
+            // Switch to profile 2
+            viewModel.SelectedProfile = profile2;
+            
+            // At this point, the connection gating generation has been incremented.
+            // Simulate profile 1 connection error arriving late.
+            // Real property changes from the facade happen on a background thread.
+            connectionFacade.ConnectionErrorMessage = "Profile 1 error";
+
+            // Assert: error did not overwrite loading state of profile 2
+            // The gating logic in OnConnectionFacadePropertyChanged should catch the generation mismatch.
+            Assert.NotEqual(DiscoverSessionsLoadPhase.Error, viewModel.LoadPhase);
+            Assert.Null(viewModel.ErrorMessage);
+
+            // Allow tests to clean up
+            await refresh1Task;
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
     }
 
     private static DiscoverSessionsViewModel CreateViewModel(
@@ -626,6 +779,15 @@ public sealed class DiscoverSessionsViewModelTests
             new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
             @"C:\repo\remote");
 
+    private static void SetSelectedProfileWithoutNotification(
+        AcpProfilesViewModel profilesViewModel,
+        ServerConfiguration? profile)
+    {
+        var field = typeof(AcpProfilesViewModel).GetField("_selectedProfile", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field.SetValue(profilesViewModel, profile);
+    }
+
     private sealed class CountingSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
         private int _postCount;
@@ -694,6 +856,68 @@ public sealed class DiscoverSessionsViewModelTests
             }, null);
 
             return tcs.Task;
+        }
+    }
+
+    private sealed class InterceptingSynchronizationContext : SynchronizationContext, IUiDispatcher
+    {
+        public bool HasThreadAccess => false;
+
+        public Action? BeforeNextEnqueue { get; set; }
+
+        public void Enqueue(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            RunIntercepted(action);
+        }
+
+        public Task EnqueueAsync(Action action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            RunIntercepted(action);
+            return Task.CompletedTask;
+        }
+
+        public Task EnqueueAsync(Func<Task> function)
+        {
+            ArgumentNullException.ThrowIfNull(function);
+            return RunInterceptedAsync(function);
+        }
+
+        private void RunIntercepted(Action action)
+        {
+            var intercept = BeforeNextEnqueue;
+            BeforeNextEnqueue = null;
+            intercept?.Invoke();
+
+            var originalContext = Current;
+            try
+            {
+                SetSynchronizationContext(this);
+                action();
+            }
+            finally
+            {
+                SetSynchronizationContext(originalContext);
+            }
+        }
+
+        private async Task RunInterceptedAsync(Func<Task> function)
+        {
+            var intercept = BeforeNextEnqueue;
+            BeforeNextEnqueue = null;
+            intercept?.Invoke();
+
+            var originalContext = Current;
+            try
+            {
+                SetSynchronizationContext(this);
+                await function().ConfigureAwait(false);
+            }
+            finally
+            {
+                SetSynchronizationContext(originalContext);
+            }
         }
     }
 
@@ -990,8 +1214,16 @@ public sealed class DiscoverSessionsViewModelTests
         public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
+        public Func<SessionListParams?, CancellationToken, Task<SessionListResponse>>? OnListSessionsAsync { get; set; }
+
         public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(SessionListResponse);
+        {
+            if (OnListSessionsAsync != null)
+            {
+                return OnListSessionsAsync(@params, cancellationToken);
+            }
+            return Task.FromResult(SessionListResponse);
+        }
 
         public Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();

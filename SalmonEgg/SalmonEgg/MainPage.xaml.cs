@@ -132,6 +132,7 @@ public sealed partial class MainPage : Page
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
         NavVM.PropertyChanged += OnNavigationViewModelPropertyChanged;
+        NavVM.TreeRebuilt += OnNavigationTreeRebuilt;
         LayoutVM.PropertyChanged += OnLayoutViewModelPropertyChanged;
 
         // 3. Initialize theme and motion state
@@ -177,6 +178,7 @@ public sealed partial class MainPage : Page
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         NavVM.PropertyChanged -= OnNavigationViewModelPropertyChanged;
+        NavVM.TreeRebuilt -= OnNavigationTreeRebuilt;
         LayoutVM.PropertyChanged -= OnLayoutViewModelPropertyChanged;
         _metricsProvider.Detach();
         ContentFrame.NavigationFailed -= OnContentFrameNavigationFailed;
@@ -747,6 +749,22 @@ public sealed partial class MainPage : Page
                 NavVM.IsSettingsSelected);
             UpdateMainNavAutomationSelectionState();
         }
+    }
+
+    private void OnNavigationTreeRebuilt(object? sender, EventArgs e)
+    {
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            _ = DispatcherQueue.TryEnqueue(() => OnNavigationTreeRebuilt(sender, e));
+            return;
+        }
+
+        if (NavVM.IsSettingsSelected)
+        {
+            return;
+        }
+
+        UpdateMainNavAutomationSelectionState();
     }
 
     private void OnChatViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

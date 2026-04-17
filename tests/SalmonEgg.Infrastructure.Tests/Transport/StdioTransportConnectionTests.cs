@@ -10,6 +10,32 @@ namespace SalmonEgg.Infrastructure.Tests.Transport;
 public sealed class StdioTransportConnectionTests
 {
     [Fact]
+    public void ResolveWorkingDirectory_WhenResolvedCommandIsAbsolute_UsesCommandDirectory()
+    {
+        var commandDirectory = Path.Combine(Path.GetTempPath(), "stdio-transport-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(commandDirectory);
+        var commandPath = Path.Combine(commandDirectory, "agent.cmd");
+        File.WriteAllText(commandPath, "@echo off");
+
+        var workingDirectory = StdioTransport.ResolveWorkingDirectory(
+            commandPath,
+            currentDirectory: @"C:\Program Files\WindowsApps\FakePackage");
+
+        Assert.Equal(commandDirectory, workingDirectory, ignoreCase: true);
+    }
+
+    [Fact]
+    public void ResolveWorkingDirectory_WhenCurrentDirectoryIsWindowsApps_FallsBackToUserWritableDirectory()
+    {
+        var workingDirectory = StdioTransport.ResolveWorkingDirectory(
+            "agent-command",
+            currentDirectory: @"C:\Program Files\WindowsApps\FakePackage");
+
+        Assert.DoesNotContain("WindowsApps", workingDirectory, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Directory.Exists(workingDirectory));
+    }
+
+    [Fact]
     public async Task ConnectAsync_WhenProcessExitsImmediately_ShouldSurfaceStderrOutput()
     {
         var (command, args) = CreateImmediateFailureCommand("ssh config permissions are invalid");

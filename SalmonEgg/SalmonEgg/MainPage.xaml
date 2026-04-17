@@ -97,6 +97,7 @@
 
         <DataTemplate x:Key="ProjectNavTemplate" x:DataType="nav:ProjectNavItemViewModel">
             <NavigationViewItem MenuItemsSource="{x:Bind Children, Mode=OneWay}"
+                                IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
                                 SelectsOnInvoked="False"
                                 HorizontalContentAlignment="Stretch"
                                 AutomationProperties.AutomationId="{x:Bind navUi:MainNavigationAutomationIds.ProjectItem(ProjectId)}"
@@ -549,6 +550,7 @@
                              IsPaneToggleButtonVisible="False"
                              IsSettingsVisible="True"
                              AlwaysShowHeader="False"
+                             SelectedItem="{x:Bind NavVM.ProjectedControlSelectedItem, Mode=OneWay}"
                              Padding="{x:Bind LayoutVM.NavViewPadding, Mode=OneWay, Converter={StaticResource PaddingConverter}}"
                              MenuItemsSource="{x:Bind NavVM.Items, Mode=OneWay}"
                              FooterMenuItemsSource="{x:Bind NavVM.FooterItems, Mode=OneWay}"

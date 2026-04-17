@@ -28,6 +28,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly IUiDispatcher _uiDispatcher;
     private CancellationTokenSource? _refreshSessionsCts;
+    private int _refreshGeneration;
     private bool _disposed;
 
     [ObservableProperty]
@@ -45,7 +46,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
     public bool HasError => !string.IsNullOrWhiteSpace(DisplayErrorMessage);
 
-    public string? DisplayErrorMessage => ErrorMessage ?? _connectionFacade.ConnectionErrorMessage;
+    public string? DisplayErrorMessage => ErrorMessage;
 
     public bool IsLoading => LoadPhase is
         DiscoverSessionsLoadPhase.Connecting or
@@ -89,19 +90,12 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         get => _profilesViewModel.SelectedProfile;
         set
         {
-            if (_profilesViewModel.SelectedProfile == value) return;
+            if (_profilesViewModel.SelectedProfile == value)
+            {
+                return;
+            }
+
             _profilesViewModel.SelectedProfile = value;
-            if (value != null && LayoutMode == DiscoverLayoutMode.Narrow)
-            {
-                ActivePaneMode = DiscoverPaneMode.Detail;
-            }
-            else if (value == null)
-            {
-                ActivePaneMode = DiscoverPaneMode.List;
-            }
-            OnPropertyChanged(nameof(ShowProfilesPane));
-            OnPropertyChanged(nameof(ShowDetailsPane));
-            OnPropertyChanged(nameof(ShowCompactBackButton));
         }
     }
 
@@ -133,7 +127,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
 
         _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
-        _connectionFacade.PropertyChanged += OnConnectionFacadePropertyChanged;
     }
 
     public void SetLayoutMode(DiscoverLayoutMode mode)
@@ -147,7 +140,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     [RelayCommand]
     private void OpenProfileDetails()
     {
-        if (LayoutMode == DiscoverLayoutMode.Narrow)
+        if (LayoutMode == DiscoverLayoutMode.Narrow && SelectedProfile != null)
         {
             ActivePaneMode = DiscoverPaneMode.Detail;
             OnPropertyChanged(nameof(ShowProfilesPane));
@@ -177,32 +170,24 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
         _uiDispatcher.Enqueue(() =>
         {
+            var profile = SelectedProfile;
+            if (profile == null)
+            {
+                ActivePaneMode = DiscoverPaneMode.List;
+            }
+            else if (LayoutMode == DiscoverLayoutMode.Narrow)
+            {
+                ActivePaneMode = DiscoverPaneMode.Detail;
+            }
+
             OnPropertyChanged(nameof(SelectedProfile));
             OnPropertyChanged(nameof(HasSelectedProfile));
             OnPropertyChanged(nameof(HasNoSelectedProfile));
+            OnPropertyChanged(nameof(ShowProfilesPane));
+            OnPropertyChanged(nameof(ShowDetailsPane));
+            OnPropertyChanged(nameof(ShowCompactBackButton));
 
             _ = RefreshSessionsAsync();
-        });
-    }
-
-    private void OnConnectionFacadePropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is not nameof(IDiscoverSessionsConnectionFacade.IsConnecting)
-            and not nameof(IDiscoverSessionsConnectionFacade.IsInitializing)
-            and not nameof(IDiscoverSessionsConnectionFacade.IsConnected)
-            and not nameof(IDiscoverSessionsConnectionFacade.ConnectionErrorMessage))
-        {
-            return;
-        }
-
-        _uiDispatcher.Enqueue(() =>
-        {
-            OnPropertyChanged(nameof(HasError));
-            OnPropertyChanged(nameof(DisplayErrorMessage));
-            if (LoadPhase is DiscoverSessionsLoadPhase.Connecting or DiscoverSessionsLoadPhase.Initializing)
-            {
-                SyncConnectionPhase();
-            }
         });
     }
 
@@ -227,7 +212,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             }
             else if (AvailableProfiles.Any())
             {
-                SelectedProfile = AvailableProfiles.First();
+                _profilesViewModel.SelectedProfile = AvailableProfiles.First();
             }
         });
     }
@@ -252,12 +237,13 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _refreshSessionsCts = new CancellationTokenSource();
         var cancellationToken = _refreshSessionsCts.Token;
 
+        var generation = Interlocked.Increment(ref _refreshGeneration);
+        
         await PostToUiAsync(() =>
         {
             AgentSessions.Clear();
             ErrorMessage = null;
             LoadPhase = DiscoverSessionsLoadPhase.Connecting;
-            SyncConnectionPhase();
         }).ConfigureAwait(false);
 
         try
@@ -323,6 +309,11 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
             await PostToUiAsync(() =>
             {
+                if (generation != Volatile.Read(ref _refreshGeneration) || profile.Id != SelectedProfile?.Id)
+                {
+                    return;
+                }
+
                 AgentSessions.Clear();
                 foreach (var item in items)
                 {
@@ -339,9 +330,19 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         }
         catch (Exception ex)
         {
+            if (generation != Volatile.Read(ref _refreshGeneration) || profile.Id != SelectedProfile?.Id)
+            {
+                return;
+            }
+
             _logger.LogError(ex, "Failed to load sessions for profile {ProfileId}", profile.Id);
             await PostToUiAsync(() =>
             {
+                if (generation != Volatile.Read(ref _refreshGeneration) || profile.Id != SelectedProfile?.Id)
+                {
+                    return;
+                }
+
                 ErrorMessage = ResolveLoadErrorMessage(ex);
                 LoadPhase = DiscoverSessionsLoadPhase.Error;
             }).ConfigureAwait(false);
@@ -351,7 +352,8 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     [RelayCommand]
     private async Task LoadSessionAsync(DiscoverSessionItemViewModel? session)
     {
-        if (session == null || SelectedProfile == null)
+        var selectedProfile = SelectedProfile;
+        if (session == null || selectedProfile == null)
         {
             return;
         }
@@ -365,7 +367,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             }).ConfigureAwait(false);
 
             var importResult = await _importCoordinator
-                .ImportAsync(session.Id, session.SessionCwd, SelectedProfile.Id, session.Title)
+                .ImportAsync(session.Id, session.SessionCwd, selectedProfile.Id, session.Title)
                 .ConfigureAwait(false);
             if (!importResult.Succeeded || string.IsNullOrWhiteSpace(importResult.LocalConversationId))
             {
@@ -431,29 +433,8 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
         _disposed = true;
         _profilesViewModel.PropertyChanged -= OnProfilesViewModelPropertyChanged;
-        _connectionFacade.PropertyChanged -= OnConnectionFacadePropertyChanged;
         _refreshSessionsCts?.Cancel();
         _refreshSessionsCts?.Dispose();
-    }
-
-    private void SyncConnectionPhase()
-    {
-        if (!string.IsNullOrWhiteSpace(_connectionFacade.ConnectionErrorMessage))
-        {
-            LoadPhase = DiscoverSessionsLoadPhase.Error;
-            return;
-        }
-
-        if (_connectionFacade.IsInitializing)
-        {
-            LoadPhase = DiscoverSessionsLoadPhase.Initializing;
-            return;
-        }
-
-        if (_connectionFacade.IsConnecting)
-        {
-            LoadPhase = DiscoverSessionsLoadPhase.Connecting;
-        }
     }
 
     private string ResolveLoadErrorMessage(Exception ex)

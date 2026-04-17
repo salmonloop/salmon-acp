@@ -141,6 +141,46 @@ public sealed class BindingCoordinatorTests
             currentState.ResolveBinding("session-1"));
     }
 
+    [Fact]
+    public async Task UpdateBinding_WhenProjectionIsSlowStillSucceedsBeforeTimingOut()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences(syncContext);
+        var workspaceStore = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        using var workspace = CreateWorkspace(workspaceStore, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        var state = State.Value(this, () => ChatState.Empty);
+        var chatStore = new Mock<IChatStore>();
+        chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
+            .Returns<ChatAction>(action =>
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(750);
+                    await state.Update(s => ChatReducer.Reduce(s!, action), default);
+                });
+
+                return ValueTask.CompletedTask;
+            });
+
+        var coordinator = new BindingCoordinator(workspace, chatStore.Object);
+
+        var result = await coordinator.UpdateBindingAsync("session-1", "remote-new", "profile-new");
+
+        Assert.Equal(BindingUpdateStatus.Success, result.Status);
+    }
+
     private static Mock<IChatStore> CreateChatStore(IState<ChatState> state)
     {
         var chatStore = new Mock<IChatStore>();

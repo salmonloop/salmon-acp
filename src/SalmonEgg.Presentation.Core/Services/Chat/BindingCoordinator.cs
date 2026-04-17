@@ -55,7 +55,7 @@ public sealed class BindingCoordinator : IConversationBindingCommands
 
     private async Task<bool> WaitForProjectedBindingAsync(
         ConversationBindingSlice expectedBinding,
-        int timeoutMilliseconds = 500,
+        int timeoutMilliseconds = 2000,
         int pollDelayMilliseconds = 10)
     {
         var expectsClearedBinding = string.IsNullOrWhiteSpace(expectedBinding.RemoteSessionId)
