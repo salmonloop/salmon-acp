@@ -1447,6 +1447,7 @@ public class ChatViewModelTests
         await Task.Delay(50);
 
         await fixture.ViewModel.CancelSessionCommand.ExecuteAsync(null);
+        await Task.Delay(100);
 
         chatService.Verify(
             x => x.CancelSessionAsync(It.Is<SessionCancelParams>(parameters => parameters.SessionId == "remote-fresh")),
@@ -2833,6 +2834,7 @@ public class ChatViewModelTests
         Assert.True(fixture.ViewModel.ShowPermissionDialog);
 
         await fixture.ViewModel.CancelSessionCommand.ExecuteAsync(null);
+        await Task.Delay(100);
         syncContext.RunAll();
 
         chatService.Verify(service => service.RespondToPermissionRequestAsync("permission-2", "cancelled", null), Times.Once);
