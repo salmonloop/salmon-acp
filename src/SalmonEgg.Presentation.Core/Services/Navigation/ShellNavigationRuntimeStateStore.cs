@@ -7,6 +7,9 @@ public sealed partial class ShellNavigationRuntimeStateStore : ObservableObject,
 {
     public long LatestActivationToken { get; set; }
 
+    [ObservableProperty]
+    private SessionActivationSnapshot? _activeSessionActivation;
+
     public long ActiveSessionActivationVersion { get; set; }
 
     public long CommittedSessionActivationVersion { get; set; }

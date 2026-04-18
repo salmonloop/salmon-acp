@@ -132,6 +132,8 @@
                 </StackPanel>
 
                 <ListView
+                    x:Name="ProfilesList"
+                    AutomationProperties.AutomationId="DiscoverSessions.ProfilesList"
                     ItemsSource="{x:Bind ViewModel.ProfilesViewModel.Profiles, Mode=OneWay}"
                     SelectedItem="{x:Bind ViewModel.SelectedProfile, Mode=TwoWay}"
                     Visibility="{x:Bind ViewModel.ProfilesViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter='Invert'}"
@@ -179,6 +181,7 @@
 
         <!-- Right Pane: Sessions Details -->
         <Grid x:Name="DetailsPane"
+              AutomationProperties.AutomationId="DiscoverSessions.DetailsPane"
               Grid.Column="2"
               Background="Transparent"
               CornerRadius="8"
@@ -366,6 +369,8 @@
 
                     <!-- Sessions List (Only visible when no errors) -->
                     <ListView
+                        x:Name="SessionsList"
+                        AutomationProperties.AutomationId="DiscoverSessions.SessionsList"
                         Grid.Row="1"
                         Visibility="{x:Bind ViewModel.IsListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                         ItemsSource="{x:Bind ViewModel.AgentSessions, Mode=OneWay}"
@@ -468,6 +473,7 @@
                                         <!-- Action -->
                                         <Button
                                             x:Name="ActionBtn"
+                                            AutomationProperties.AutomationId="DiscoverSessions.ImportButton"
                                             Grid.Column="2"
                                             x:Uid="DiscoverSessionsImportButton"
                                             Style="{StaticResource AccentButtonStyle}"

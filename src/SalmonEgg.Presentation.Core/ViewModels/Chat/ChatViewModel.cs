@@ -5337,6 +5337,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return false;
         }
 
+        var remoteConnectionReady = await EnsureActiveConversationRemoteConnectionReadyAsync(
+                conversationId!,
+                activationVersion: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!remoteConnectionReady)
+        {
+            return false;
+        }
+
         return await HydrateConversationAsync(
                 conversationId!,
                 binding!,
@@ -5778,8 +5788,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         ArgumentNullException.ThrowIfNull(profile);
 
         var selectedProfile = ResolveLoadedProfileSelection(profile);
+        _selectedProfileIdFromStore = profile.Id;
         _suppressAcpProfileConnect = true;
-        _suppressStoreProfileProjection = selectedProfile is null;
+        _suppressStoreProfileProjection = true;
         try
         {
             SelectedAcpProfile = selectedProfile;
@@ -5791,10 +5802,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _suppressAcpProfileConnect = false;
         }
 
-        if (selectedProfile is null)
-        {
-            _ = _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profile.Id));
-        }
     }
 
     private bool IsCurrentConnectionContext(AcpConnectionContext connectionContext)
@@ -5819,6 +5826,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         if (_uiDispatcher.HasThreadAccess)
         {
             ApplySelectedProfile(profile);
+            _ = _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profile.Id));
             return;
         }
 
@@ -5829,7 +5837,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         ArgumentNullException.ThrowIfNull(profile);
         cancellationToken.ThrowIfCancellationRequested();
-        return PostToUiAsync(() => ApplySelectedProfile(profile));
+        return SelectProfileCoreAsync(profile, cancellationToken);
+    }
+
+    private async Task SelectProfileCoreAsync(ServerConfiguration profile, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await PostToUiAsync(() => ApplySelectedProfile(profile)).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profile.Id)).ConfigureAwait(false);
     }
 
     private void ApplyChatServiceReplacement(IChatService? chatService)
@@ -6369,9 +6385,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return true;
         }
 
-        return string.Equals(requiredProfileId, connectionState.SelectedProfileId, StringComparison.Ordinal)
-            || string.Equals(requiredProfileId, SelectedProfileId, StringComparison.Ordinal)
-            || string.Equals(requiredProfileId, SelectedAcpProfile?.Id, StringComparison.Ordinal);
+        return string.Equals(requiredProfileId, connectionState.CommittedProfileId, StringComparison.Ordinal);
     }
 
     private async Task<bool> WaitForRemoteConnectionReadyAsync(

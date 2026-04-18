@@ -81,7 +81,6 @@ public sealed partial class MainPage : Page
     private readonly WindowMetricsProvider _metricsProvider;
     private readonly IShellLayoutMetricsSink _metricsSink;
     private readonly ILogger<MainPage> _logger;
-    private readonly MainNavigationContentSyncAdapter _mainNavigationContentSyncAdapter;
     private readonly MainNavigationViewAdapter _mainNavigationViewAdapter;
     private readonly MainWindowTitleBarAdapter _titleBarAdapter;
     private readonly SalmonEgg.Presentation.Logic.SearchInteractionLogic _searchLogic = new();
@@ -106,7 +105,6 @@ public sealed partial class MainPage : Page
             StringComparison.Ordinal);
 
         this.InitializeComponent();
-        _mainNavigationContentSyncAdapter = new MainNavigationContentSyncAdapter(navigationCoordinator);
         _mainNavigationViewAdapter = new MainNavigationViewAdapter(NavVM, navigationCoordinator);
         _titleBarAdapter = new MainWindowTitleBarAdapter(
             AppTitleBar,
@@ -640,7 +638,6 @@ public sealed partial class MainPage : Page
         }
 
         _titleBarAdapter.UpdateBackButtonState();
-        _mainNavigationContentSyncAdapter.OnFrameNavigated(e.SourcePageType);
         _ = _metricsSink.ReportContentContext(IsChatPageType(e.SourcePageType));
     }
 

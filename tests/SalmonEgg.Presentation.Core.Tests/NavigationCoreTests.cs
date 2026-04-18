@@ -117,6 +117,17 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void MainPage_DoesNotBackWriteSelectionFromFrameNavigation()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+
+        Assert.DoesNotContain("MainNavigationContentSyncAdapter", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_mainNavigationContentSyncAdapter", code, StringComparison.Ordinal);
+        Assert.DoesNotContain(".OnFrameNavigated(", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("SyncSelectionFromShellContent", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainNavigationViewModel_DoesNotExposeLegacySelectedItemAlias()
     {
         var code = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\Navigation\MainNavigationViewModel.cs");
@@ -137,6 +148,16 @@ public sealed class NavigationCoreTests
         Assert.DoesNotContain("ClearAndDeferRestore", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ClearAndRestoreSelectionProjection", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ReassertExpandedProjects", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainNavigationViewModel_DoesNotDependOnSelectionProjectionApplyGate()
+    {
+        var code = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\Navigation\MainNavigationViewModel.cs");
+
+        Assert.DoesNotContain("SelectionProjectionApplyGate", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("BeginSelectionInteraction", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("EndSelectionInteractionDeferred", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -393,6 +414,12 @@ public sealed class NavigationCoreTests
         Assert.False(
             File.Exists(Path.Combine(root, @"SalmonEgg\SalmonEgg\Presentation\Converters\NavigationPaneDisplayModeConverter.cs")),
             "NavigationPaneDisplayModeConverter.cs must remain removed. PaneDisplayMode should stay native Auto.");
+        Assert.False(
+            File.Exists(Path.Combine(root, @"SalmonEgg\SalmonEgg\Presentation\Navigation\MainNavigationContentSyncAdapter.cs")),
+            "MainNavigationContentSyncAdapter.cs must remain removed. Frame navigation must not back-write shell selection.");
+        Assert.False(
+            File.Exists(Path.Combine(root, @"src\SalmonEgg.Presentation.Core\Services\Navigation\SelectionProjectionApplyGate.cs")),
+            "SelectionProjectionApplyGate.cs must remain removed. Selection projection must stay state-driven.");
     }
 
     [Fact]

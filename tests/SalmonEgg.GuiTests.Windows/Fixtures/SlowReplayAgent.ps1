@@ -1,9 +1,21 @@
+param(
+    [string]$SessionId,
+    [int]$MessageCount,
+    [int]$ListDelayMs,
+    [int]$ReplayStartDelayMs,
+    [int]$ChunkDelayMs = 12
+)
+
 $ErrorActionPreference = 'Stop'
 
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::UTF8
 
-$sessionId = if ([string]::IsNullOrWhiteSpace($env:SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID))
+$sessionId = if (-not [string]::IsNullOrWhiteSpace($SessionId))
+{
+    $SessionId
+}
+elseif ([string]::IsNullOrWhiteSpace($env:SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID))
 {
     'gui-remote-session-01'
 }
@@ -12,8 +24,11 @@ else
     $env:SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID
 }
 
-$messageCount = 60
-if ([int]::TryParse($env:SALMONEGG_GUI_FAKE_REMOTE_REPLAY_MESSAGE_COUNT, [ref]$messageCount) -and $messageCount -gt 0)
+$messageCount = if ($MessageCount -gt 0) { $MessageCount } else { 60 }
+if ($MessageCount -gt 0)
+{
+}
+elseif ([int]::TryParse($env:SALMONEGG_GUI_FAKE_REMOTE_REPLAY_MESSAGE_COUNT, [ref]$messageCount) -and $messageCount -gt 0)
 {
 }
 else
@@ -21,8 +36,9 @@ else
     $messageCount = 60
 }
 
-$replayStartDelayMs = 120
-$chunkDelayMs = 12
+$replayStartDelayMs = if ($PSBoundParameters.ContainsKey('ReplayStartDelayMs')) { $ReplayStartDelayMs } else { 120 }
+$chunkDelayMs = if ($PSBoundParameters.ContainsKey('ChunkDelayMs')) { $ChunkDelayMs } else { 12 }
+$listDelayMs = if ($PSBoundParameters.ContainsKey('ListDelayMs')) { $ListDelayMs } else { 0 }
 
 function Write-JsonLine([hashtable]$payload)
 {
@@ -151,6 +167,9 @@ while (($line = [Console]::In.ReadLine()) -ne $null)
                 }
                 agentCapabilities = @{
                     loadSession = $true
+                    sessionCapabilities = @{
+                        list = @{}
+                    }
                 }
             }
             continue
@@ -191,6 +210,30 @@ while (($line = [Console]::In.ReadLine()) -ne $null)
             }
 
             Send-Response $message.id (New-LoadResult $sessionSuffix)
+
+            continue
+        }
+
+        'session/list'
+        {
+            if ($listDelayMs -gt 0)
+            {
+                Start-Sleep -Milliseconds $listDelayMs
+            }
+
+            $sessionSuffix = Resolve-SessionSuffix $sessionId
+            $sessionLabel = "GUI Remote Session $sessionSuffix"
+
+            Send-Response $message.id @{
+                sessions = @(
+                    @{
+                        sessionId = $sessionId
+                        cwd = (Get-Location).Path
+                        title = $sessionLabel
+                        updatedAt = '2026-03-29T12:00:00Z'
+                    }
+                )
+            }
 
             continue
         }

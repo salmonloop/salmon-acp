@@ -80,7 +80,6 @@ public sealed class MainNavigationViewAdapter
 
             // Never await remote session activation on the NavigationView UI event pipeline.
             _ = _navigationCoordinator.ActivateSessionAsync(sessionId, sessionProjectId);
-            return Task.CompletedTask;
         }
 
         return Task.CompletedTask;

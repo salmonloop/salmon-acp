@@ -953,6 +953,88 @@ public sealed class ChatSkeletonSmokeTests
     }
 
     [SkippableFact]
+    public void DiscoverProfileSwitch_SlowPreviousProfile_DoesNotOverwriteLatestSessionsList()
+    {
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicCrossProfileRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24,
+                localMessageCount: 4);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            var discoverItem = session.FindByAutomationId("MainNav.DiscoverSessions", TimeSpan.FromSeconds(10));
+            session.ActivateElement(discoverItem);
+
+            Assert.True(
+                session.WaitUntilVisible("DiscoverSessions.Title", TimeSpan.FromSeconds(10)),
+                "Discover sessions page did not become visible.");
+
+            var profilesList = session.FindByAutomationId("DiscoverSessions.ProfilesList", TimeSpan.FromSeconds(10));
+            var profileItems = FindVisibleListItems(profilesList);
+            Assert.True(profileItems.Count >= 2, $"Expected at least 2 discover profile items, found {profileItems.Count}.");
+
+            Thread.Sleep(120);
+            session.ClickElement(profileItems[1]);
+
+            var timeline = new List<string>();
+            var sawProfileBSession = false;
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);
+            var detailsPane = session.TryFindByAutomationId("DiscoverSessions.DetailsPane", TimeSpan.FromSeconds(3));
+            var sessionsList = session.TryFindByAutomationId("DiscoverSessions.SessionsList", TimeSpan.FromSeconds(3));
+            if (sessionsList is null)
+            {
+                var detailsPaneVisible = detailsPane is not null;
+                var selectedName = string.Join(", ", session.GetVisibleTexts(profilesList));
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "discover-profile-switch-sessions-list-missing",
+                    $"Discover sessions details did not materialize after clicking the second profile. detailsPane={detailsPaneVisible} visibleProfileTexts=[{selectedName}] focused=[{session.DescribeFocusedElement()}]");
+            }
+
+            while (DateTime.UtcNow < deadline)
+            {
+                var visibleTexts = session.GetVisibleTexts(sessionsList);
+                var hasProfileASession = visibleTexts.Any(text => text.Contains("GUI Remote Session 01", StringComparison.Ordinal));
+                var hasProfileBSession = visibleTexts.Any(text => text.Contains("GUI Remote Session 02", StringComparison.Ordinal));
+                var importButtonVisible = session.TryFindByAutomationId("DiscoverSessions.ImportButton", TimeSpan.FromMilliseconds(100)) is not null;
+                timeline.Add($"{DateTime.UtcNow:HH:mm:ss.fff} profileA={hasProfileASession} profileB={hasProfileBSession} importButton={importButtonVisible} texts=[{string.Join(", ", visibleTexts)}]");
+
+                if (hasProfileBSession)
+                {
+                    sawProfileBSession = true;
+                }
+
+                if (sawProfileBSession && hasProfileASession)
+                {
+                    ThrowWithScreenshot(
+                        session,
+                        appData,
+                        "discover-profile-switch-rolled-back",
+                        $"Discover sessions list rolled back to slow profile A after profile B had already settled.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+                }
+
+                if (sawProfileBSession)
+                {
+                    return;
+                }
+
+                Thread.Sleep(120);
+            }
+
+            ThrowWithScreenshot(
+                session,
+                appData,
+                "discover-profile-switch-profile-b-missing",
+                $"Discover sessions list never settled on the latest profile selection.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+        }
+        finally
+        {
+        }
+    }
+
+    [SkippableFact]
     public void ArchiveRemoteSession_DuringHydration_RemoteSessionUpdateDoesNotResurrectSessionItem()
     {
         var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
@@ -1496,6 +1578,98 @@ public sealed class ChatSkeletonSmokeTests
         }
     }
 
+    [SkippableFact]
+    public void AlternateBetweenTwoRemoteSessions_ClickStorm_FinalIntentWins_AndAppStaysResponsive()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "2600");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicCrossProfileRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24,
+                localMessageCount: 4);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            const string remoteOneId = "MainNav.Session.gui-remote-conversation-01";
+            const string remoteTwoId = "MainNav.Session.gui-remote-conversation-02";
+            const string startId = "MainNav.Start";
+
+            session.FindByAutomationId(remoteOneId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(remoteTwoId, TimeSpan.FromSeconds(15));
+            session.FindByAutomationId(startId, TimeSpan.FromSeconds(15));
+
+            ActivateNavItem(session, appData, remoteOneId, "remote-remote-clickstorm-prime");
+            Assert.True(
+                session.WaitUntilVisible("ChatView.LoadingOverlayStatus", TimeSpan.FromSeconds(10)),
+                "Initial remote selection did not expose ChatView.LoadingOverlayStatus before remote-only click storm.");
+
+            for (var index = 0; index < 36; index++)
+            {
+                var target = index % 2 == 0 ? remoteTwoId : remoteOneId;
+                ActivateNavItem(session, appData, target, $"remote-remote-clickstorm-{index:00}");
+                Thread.Sleep(index % 3 == 0 ? 18 : 30);
+            }
+
+            ActivateNavItem(session, appData, remoteTwoId, "remote-remote-clickstorm-final-1");
+            ActivateNavItem(session, appData, remoteTwoId, "remote-remote-clickstorm-final-2");
+
+            var remoteHeader = WaitForSessionHeader(
+                session,
+                expectedTitle: "GUI Remote Session 02",
+                scenario: "remote-remote-clickstorm-final-header",
+                appData);
+            Assert.Contains("GUI Remote Session 02", remoteHeader.Name, StringComparison.Ordinal);
+
+            var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(45));
+            if (!overlayHidden)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "remote-remote-clickstorm-overlay-stuck",
+                    "Loading overlay stayed visible after final remote-only click storm selection.");
+            }
+
+            var messagesList = FindElementOrThrowWithScreenshot(
+                session,
+                appData,
+                "ChatView.MessagesList",
+                TimeSpan.FromSeconds(10),
+                "remote-remote-clickstorm-messages-list");
+            var latestVisible = session.TryFindVisibleText(
+                "GUI Remote Session 02 replay 024",
+                messagesList,
+                TimeSpan.FromSeconds(8));
+            if (latestVisible is null)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "remote-remote-clickstorm-final-scroll",
+                    $"Final remote transcript did not surface expected latest replay message after remote-only click storm. Visible texts: [{string.Join(", ", session.GetVisibleTexts(messagesList))}]");
+            }
+
+            ActivateNavItem(session, appData, startId, "remote-remote-clickstorm-final-start");
+            Thread.Sleep(700);
+            var startSelected = session.TryGetIsSelected(startId) == true;
+            var startVisible = session.TryFindByAutomationId("StartView.Title", TimeSpan.FromSeconds(4)) is not null;
+            if (!startSelected || !startVisible)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "remote-remote-clickstorm-start-not-interactive",
+                    $"App was not responsive after remote-only click storm. startSelected={startSelected} startVisible={startVisible}");
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
     private static AutomationElement WaitForLoadingOverlay(WindowsGuiAppSession session, string scenario)
     {
         var timeline = new List<string>();
@@ -1653,6 +1827,13 @@ public sealed class ChatSkeletonSmokeTests
 
         throw new Xunit.Sdk.XunitException(
             $"{message}{Environment.NewLine}Screenshot: {screenshotDescriptor}{Environment.NewLine}boot.log:{Environment.NewLine}{appData.ReadBootLogTail()}{Environment.NewLine}conversations:{Environment.NewLine}{appData.ReadConversationsJson()}");
+    }
+
+    private static IReadOnlyList<AutomationElement> FindVisibleListItems(AutomationElement list)
+    {
+        return list
+            .FindAllDescendants(cf => cf.ByControlType(ControlType.ListItem))
+            .ToArray();
     }
 
     private static void ActivateNavItem(

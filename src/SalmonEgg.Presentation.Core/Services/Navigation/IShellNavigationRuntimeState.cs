@@ -7,6 +7,8 @@ public interface IShellNavigationRuntimeState : INotifyPropertyChanged
 {
     long LatestActivationToken { get; set; }
 
+    SessionActivationSnapshot? ActiveSessionActivation { get; set; }
+
     long ActiveSessionActivationVersion { get; set; }
 
     long CommittedSessionActivationVersion { get; set; }

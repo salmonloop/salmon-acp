@@ -15,7 +15,8 @@ public sealed record ChatConnectionState(
     string? Error,
     bool IsAuthenticationRequired,
     string? AuthenticationHintMessage,
-    long Generation)
+    long Generation,
+    string? CommittedProfileId = null)
 {
     public static ChatConnectionState Empty { get; } = new(
         ConnectionPhase.Disconnected,
@@ -23,5 +24,6 @@ public sealed record ChatConnectionState(
         Error: null,
         IsAuthenticationRequired: false,
         AuthenticationHintMessage: null,
-        Generation: 0);
+        Generation: 0,
+        CommittedProfileId: null);
 }

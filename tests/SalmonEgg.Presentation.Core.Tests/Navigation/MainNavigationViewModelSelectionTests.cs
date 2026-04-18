@@ -786,7 +786,7 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
-    public void SessionActivationPreview_ProjectsDesiredSession_WithoutCommittingSemanticSelection()
+    public void SessionActivationPreview_ProjectsActiveSessionActivation_WithoutCommittingSemanticSelection()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -823,15 +823,17 @@ public sealed class MainNavigationViewModelSelectionTests
             Assert.Equal(NavigationSelectionState.StartSelection, navVm.CurrentSelection);
             Assert.IsType<StartNavItemViewModel>(navVm.ProjectedControlSelectedItem);
 
-            runtimeState.DesiredSessionId = "session-1";
-            runtimeState.IsSessionActivationInProgress = true;
+            runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                "session-1",
+                "project-1",
+                Version: 1,
+                SessionActivationPhase.NavigatingToChatShell);
 
             var previewSession = Assert.IsType<SessionNavItemViewModel>(navVm.ProjectedControlSelectedItem);
             Assert.Equal("session-1", previewSession.SessionId);
             Assert.Equal(NavigationSelectionState.StartSelection, navVm.CurrentSelection);
 
-            runtimeState.IsSessionActivationInProgress = false;
-            runtimeState.DesiredSessionId = null;
+            runtimeState.ActiveSessionActivation = null;
 
             Assert.IsType<StartNavItemViewModel>(navVm.ProjectedControlSelectedItem);
         }
@@ -842,7 +844,7 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
-    public void SessionActivationPreview_FallsBackToSemanticSelection_WhenDesiredSessionIsNotInNavigationTree()
+    public void SessionActivationPreview_FallsBackToSemanticSelection_WhenActiveSessionIsNotInNavigationTree()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -876,8 +878,11 @@ public sealed class MainNavigationViewModelSelectionTests
 
             navVm.RebuildTree();
 
-            runtimeState.DesiredSessionId = "missing-session";
-            runtimeState.IsSessionActivationInProgress = false;
+            runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                "missing-session",
+                "project-1",
+                Version: 1,
+                SessionActivationPhase.NavigatingToChatShell);
 
             Assert.Equal(NavigationSelectionState.StartSelection, navVm.CurrentSelection);
             Assert.IsType<StartNavItemViewModel>(navVm.ProjectedControlSelectedItem);
@@ -1074,7 +1079,7 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
-    public void DesiredSessionPreview_DoesNotKeepStartAsLogicalSelection()
+    public void ActiveSessionActivationPreview_DoesNotKeepStartAsLogicalSelection()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -1101,13 +1106,126 @@ public sealed class MainNavigationViewModelSelectionTests
 
             navVm.RebuildTree();
             selectionStore.SetSelection(NavigationSelectionState.StartSelection);
-            runtimeState.DesiredSessionId = "session-1";
-            runtimeState.IsSessionActivationInProgress = true;
+            runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                "session-1",
+                "project-1",
+                Version: 1,
+                SessionActivationPhase.SelectingConversation);
             navVm.RefreshSelectionProjection();
 
             Assert.False(navVm.StartItem.IsLogicallySelected);
             var projectedSession = Assert.IsType<SessionNavItemViewModel>(navVm.ProjectedControlSelectedItem);
             Assert.Equal("session-1", projectedSession.SessionId);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public void FaultedSessionActivation_DoesNotProjectPreviewSelection()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            navState.SetPaneOpen(true);
+
+            var sessionManager = CreateSessionManager(new Session("session-1", @"C:\repo\demo")
+            {
+                DisplayName = "Session 1"
+            });
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                sessionManager.Object,
+                preferences,
+                navState,
+                out var selectionStore,
+                out var runtimeState);
+
+            navVm.RebuildTree();
+            selectionStore.SetSelection(NavigationSelectionState.StartSelection);
+            var projectedBefore = Assert.IsType<StartNavItemViewModel>(navVm.ProjectedControlSelectedItem);
+
+            var projectedSelectionChanged = 0;
+            navVm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainNavigationViewModel.ProjectedControlSelectedItem))
+                {
+                    projectedSelectionChanged++;
+                }
+            };
+
+            runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                "session-1",
+                "project-1",
+                Version: 1,
+                SessionActivationPhase.Faulted,
+                "NavigationFailed");
+
+            Assert.Same(projectedBefore, navVm.ProjectedControlSelectedItem);
+            Assert.Equal(0, projectedSelectionChanged);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public void ActiveSessionActivation_ProjectsImmediatelyWithoutSelectionInteractionGate()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            navState.SetPaneOpen(true);
+
+            var sessionManager = CreateSessionManager(new Session("session-1", @"C:\repo\demo")
+            {
+                DisplayName = "Session 1"
+            });
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                sessionManager.Object,
+                preferences,
+                navState,
+                out var selectionStore,
+                out var runtimeState);
+
+            navVm.RebuildTree();
+            selectionStore.SetSelection(NavigationSelectionState.StartSelection);
+            var projectedBefore = Assert.IsType<StartNavItemViewModel>(navVm.ProjectedControlSelectedItem);
+
+            var projectedSelectionChanged = 0;
+            navVm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainNavigationViewModel.ProjectedControlSelectedItem))
+                {
+                    projectedSelectionChanged++;
+                }
+            };
+
+            runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                "session-1",
+                "project-1",
+                Version: 1,
+                SessionActivationPhase.NavigatingToChatShell);
+
+            var previewSession = Assert.IsType<SessionNavItemViewModel>(navVm.ProjectedControlSelectedItem);
+            Assert.Equal("session-1", previewSession.SessionId);
+            Assert.Equal(1, projectedSelectionChanged);
         }
         finally
         {

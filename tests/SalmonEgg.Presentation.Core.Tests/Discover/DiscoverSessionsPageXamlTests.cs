@@ -64,6 +64,17 @@ public sealed class DiscoverSessionsPageXamlTests
         Assert.DoesNotContain("ViewModel.ProfilesViewModel.SelectedProfile.TransportDisplayName", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DiscoverSessionsPage_ExposesStableAutomationIds_ForGuiSmoke()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+
+        Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.ProfilesList\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.SessionsList\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.DetailsPane\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.ImportButton\"", xaml, StringComparison.Ordinal);
+    }
+
     private static string LoadFile(string relativePath)
     {
         var root = FindRepoRoot();

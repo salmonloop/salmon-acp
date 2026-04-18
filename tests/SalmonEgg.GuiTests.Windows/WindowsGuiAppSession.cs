@@ -319,6 +319,31 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"Element '{elementId}' does not support Invoke or SelectionItem patterns.");
     }
 
+    public void ClickElement(AutomationElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+
+        try
+        {
+            element.Focus();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            var point = element.GetClickablePoint();
+            Mouse.Click(point);
+            return;
+        }
+        catch
+        {
+        }
+
+        ActivateElement(element);
+    }
+
     public void OpenContextMenu(AutomationElement element)
     {
         ArgumentNullException.ThrowIfNull(element);

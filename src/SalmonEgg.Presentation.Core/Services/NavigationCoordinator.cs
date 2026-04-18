@@ -48,7 +48,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             var navigationResult = await NavigateToStartAsync(activationToken).ConfigureAwait(true);
             if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
             {
-                ClearPendingSessionPreviewState();
+                ClearPendingSessionPreviewState(activationToken);
                 _projectSelectionStore.RememberSelectedProject(projectIdForNewSession);
                 _runtimeState.CurrentShellContent = ShellNavigationContent.Start;
                 _selectionSink.SetSelection(NavigationSelectionState.StartSelection);
@@ -71,7 +71,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             var navigationResult = await NavigateToDiscoverSessionsAsync(activationToken).ConfigureAwait(true);
             if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
             {
-                ClearPendingSessionPreviewState();
+                ClearPendingSessionPreviewState(activationToken);
                 _runtimeState.CurrentShellContent = ShellNavigationContent.DiscoverSessions;
                 _selectionSink.SetSelection(NavigationSelectionState.DiscoverSessionsSelection);
             }
@@ -93,7 +93,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 .ConfigureAwait(true);
             if (navigationResult.Succeeded && IsLatestActivationToken(activationToken))
             {
-                ClearPendingSessionPreviewState();
+                ClearPendingSessionPreviewState(activationToken);
                 _runtimeState.CurrentShellContent = ShellNavigationContent.Settings;
                 _selectionSink.SetSelection(NavigationSelectionState.SettingsSelection);
             }
@@ -114,24 +114,17 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         SessionActivationRequest request;
         lock (_sessionActivationSync)
         {
-            var isDuplicatePending = _runtimeState.IsSessionActivationInProgress
-                && string.Equals(_runtimeState.DesiredSessionId, sessionId, StringComparison.Ordinal);
-            var duplicatePendingIsLatestIntent = isDuplicatePending
-                && _runtimeState.ActiveSessionActivationVersion == _runtimeState.LatestActivationToken;
-            var duplicatePendingOnChatShell = duplicatePendingIsLatestIntent
-                && _runtimeState.CurrentShellContent == ShellNavigationContent.Chat;
-            var isDuplicateCommitted = !_runtimeState.IsSessionActivationInProgress
-                && string.Equals(_runtimeState.CommittedSessionId, sessionId, StringComparison.Ordinal);
-            var duplicateCommittedIsLatestIntent = isDuplicateCommitted
-                && _runtimeState.CommittedSessionActivationVersion == _runtimeState.LatestActivationToken;
-            var duplicateCommittedOnChatShell = duplicateCommittedIsLatestIntent
-                && _runtimeState.CurrentShellContent == ShellNavigationContent.Chat;
-            if (duplicatePendingOnChatShell || duplicateCommittedOnChatShell)
+            var activeActivation = _runtimeState.ActiveSessionActivation;
+            var duplicateLatestIntent = activeActivation is not null
+                && activeActivation.Matches(sessionId)
+                && activeActivation.Version == _runtimeState.LatestActivationToken
+                && !IsTerminalPhase(activeActivation.Phase);
+            if (duplicateLatestIntent)
             {
                 _logger.LogInformation(
-                    "Navigation activation ignored duplicate intent. sessionId={SessionId} state={State}",
+                    "Navigation activation ignored duplicate latest-intent. sessionId={SessionId} phase={Phase}",
                     sessionId,
-                    duplicatePendingOnChatShell ? "InProgressOnChat" : "CommittedOnChat");
+                    activeActivation!.Phase);
                 return Task.FromResult(true);
             }
 
@@ -145,6 +138,11 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             _runtimeState.DesiredSessionId = sessionId;
             _runtimeState.ActiveSessionActivationVersion = request.Version;
             _runtimeState.IsSessionActivationInProgress = true;
+            _runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                request.SessionId,
+                request.ProjectId,
+                request.Version,
+                SessionActivationPhase.NavigatingToChatShell);
         }
 
         try
@@ -182,8 +180,11 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 || !IsLatestActivationToken(request.Version)
                 || request.CancellationToken.IsCancellationRequested)
             {
+                MarkSessionActivationFaulted(request, navigationResult.Succeeded ? "SupersededBeforeChatShell" : "ChatShellNavigationFailed");
                 return false;
             }
+
+            PublishSessionActivationPhase(request, SessionActivationPhase.SelectingConversation);
             _runtimeState.CurrentShellContent = ShellNavigationContent.Chat;
 
             await _sessionActivationGate
@@ -192,6 +193,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             activationGateEntered = true;
             if (!IsLatestActivationToken(request.Version) || request.CancellationToken.IsCancellationRequested)
             {
+                MarkSessionActivationFaulted(request, "SupersededBeforeConversationSelection");
                 return false;
             }
 
@@ -200,11 +202,15 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 .ConfigureAwait(true);
             if (!activated || !IsLatestActivationToken(request.Version) || request.CancellationToken.IsCancellationRequested)
             {
+                MarkSessionActivationFaulted(
+                    request,
+                    activated ? "SupersededAfterConversationSelection" : "ConversationSelectionFailed");
                 return false;
             }
 
             _projectSelectionStore.RememberSelectedProject(request.ProjectId);
             _selectionSink.SetSelection(new NavigationSelectionState.Session(request.SessionId));
+            PublishSessionActivationPhase(request, SessionActivationPhase.Selected);
             committed = true;
             _logger.LogInformation(
                 "Navigation activation committed. sessionId={SessionId} version={Version}",
@@ -214,6 +220,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         }
         catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
         {
+            MarkSessionActivationFaulted(request, "Canceled");
             _logger.LogInformation(
                 "Navigation activation canceled. sessionId={SessionId} version={Version}",
                 request.SessionId,
@@ -222,6 +229,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         }
         catch (Exception ex)
         {
+            MarkSessionActivationFaulted(request, ex.GetType().Name);
             _logger.LogError(
                 ex,
                 "Navigation activation failed. sessionId={SessionId} version={Version}",
@@ -245,20 +253,26 @@ public sealed class NavigationCoordinator : INavigationCoordinator
     public void SyncSelectionFromShellContent(ShellNavigationContent content)
     {
         _runtimeState.CurrentShellContent = content;
+        if (_runtimeState.ActiveSessionActivation is { } activeActivation
+            && !IsTerminalPhase(activeActivation.Phase))
+        {
+            return;
+        }
+
         switch (content)
         {
             case ShellNavigationContent.Start:
-                ClearPendingSessionPreviewState();
+                ClearPendingSessionPreviewState(_runtimeState.LatestActivationToken);
                 _selectionSink.SetSelection(NavigationSelectionState.StartSelection);
                 return;
 
             case ShellNavigationContent.DiscoverSessions:
-                ClearPendingSessionPreviewState();
+                ClearPendingSessionPreviewState(_runtimeState.LatestActivationToken);
                 _selectionSink.SetSelection(NavigationSelectionState.DiscoverSessionsSelection);
                 return;
 
             case ShellNavigationContent.Settings:
-                ClearPendingSessionPreviewState();
+                ClearPendingSessionPreviewState(_runtimeState.LatestActivationToken);
                 _selectionSink.SetSelection(NavigationSelectionState.SettingsSelection);
                 return;
 
@@ -299,11 +313,53 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         request.CancellationTokenSource.Dispose();
     }
 
-    private void ClearPendingSessionPreviewState()
+    private void ClearPendingSessionPreviewState(long activationToken)
     {
+        if (!IsLatestActivationToken(activationToken))
+        {
+            return;
+        }
+
         _runtimeState.DesiredSessionId = null;
         _runtimeState.IsSessionActivationInProgress = false;
         _runtimeState.ActiveSessionActivationVersion = 0;
+        _runtimeState.ActiveSessionActivation = null;
+    }
+
+    private void PublishSessionActivationPhase(SessionActivationRequest request, SessionActivationPhase phase, string? reason = null)
+    {
+        lock (_sessionActivationSync)
+        {
+            if (!IsLatestActivationToken(request.Version))
+            {
+                return;
+            }
+
+            _runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                request.SessionId,
+                request.ProjectId,
+                request.Version,
+                phase,
+                reason);
+        }
+    }
+
+    private void MarkSessionActivationFaulted(SessionActivationRequest request, string reason)
+    {
+        lock (_sessionActivationSync)
+        {
+            if (!IsLatestActivationToken(request.Version))
+            {
+                return;
+            }
+
+            _runtimeState.ActiveSessionActivation = new SessionActivationSnapshot(
+                request.SessionId,
+                request.ProjectId,
+                request.Version,
+                SessionActivationPhase.Faulted,
+                reason);
+        }
     }
 
     private bool IsLatestActivationToken(long activationToken)
@@ -313,6 +369,9 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             return _runtimeState.LatestActivationToken == activationToken;
         }
     }
+
+    private static bool IsTerminalPhase(SessionActivationPhase phase)
+        => phase == SessionActivationPhase.None || phase == SessionActivationPhase.Faulted;
 
     private void CancelInFlightSessionActivation()
     {

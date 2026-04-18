@@ -427,7 +427,10 @@ internal sealed class GuiAppDataScope : IDisposable
             Encoding.UTF8);
         File.WriteAllText(
             _serverYamlPath,
-            BuildServerYaml(profileId, "powershell.exe", $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File {QuoteCommandLineArgument(agentScriptPath)}"),
+            BuildServerYaml(
+                profileId,
+                "powershell.exe",
+                $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File {QuoteCommandLineArgument(agentScriptPath)} -SessionId gui-remote-session-01 -MessageCount {replayMessageCount}"),
             Encoding.UTF8);
 
         Environment.SetEnvironmentVariable("SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID", "gui-remote-session-01");
@@ -452,7 +455,7 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_projectRootPath);
 
         var agentScriptPath = ResolveSlowReplayAgentScriptPath();
-        var agentArgs = $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File {QuoteCommandLineArgument(agentScriptPath)}";
+        var agentArgsPrefix = $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File {QuoteCommandLineArgument(agentScriptPath)}";
 
         File.WriteAllText(
             _appYamlPath,
@@ -469,11 +472,11 @@ internal sealed class GuiAppDataScope : IDisposable
             Encoding.UTF8);
         File.WriteAllText(
             _serverYamlPath,
-            BuildServerYaml(profileA, "powershell.exe", agentArgs),
+            BuildServerYaml(profileA, "powershell.exe", $"{agentArgsPrefix} -SessionId gui-remote-session-01 -MessageCount {replayMessageCount} -ListDelayMs 700"),
             Encoding.UTF8);
         File.WriteAllText(
             _secondaryServerYamlPath,
-            BuildServerYaml(profileB, "powershell.exe", agentArgs),
+            BuildServerYaml(profileB, "powershell.exe", $"{agentArgsPrefix} -SessionId gui-remote-session-02 -MessageCount {replayMessageCount} -ListDelayMs 0"),
             Encoding.UTF8);
 
         Environment.SetEnvironmentVariable("SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID", "gui-remote-session-01");
