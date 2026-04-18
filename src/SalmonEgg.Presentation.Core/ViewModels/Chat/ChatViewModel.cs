@@ -8,6 +8,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using System.ComponentModel;
 using System.Globalization;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
@@ -43,6 +44,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 /// </summary>
 public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCatalog, IAcpChatCoordinatorSink, IConversationSessionSwitcher, IConversationActivationPreview
 {
+    private const int MiniWindowCompactDisplayNameMaxLength = 24;
+
     public enum LoadingOverlayStage
     {
         None = 0,
@@ -1750,7 +1753,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             foreach (var conversationId in GetKnownConversationIds())
             {
                 var displayName = ResolveSessionDisplayName(conversationId);
-                MiniWindowSessions.Add(new MiniWindowConversationItemViewModel(conversationId, displayName));
+                MiniWindowSessions.Add(new MiniWindowConversationItemViewModel(
+                    conversationId,
+                    displayName,
+                    CreateMiniWindowCompactDisplayName(displayName)));
             }
 
             SyncMiniWindowSelectedSession();
@@ -2038,6 +2044,53 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         return SessionNamePolicy.CreateDefault(sessionId);
+    }
+
+    private static string CreateMiniWindowCompactDisplayName(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return string.Empty;
+        }
+
+        var normalized = NormalizeMiniWindowDisplayName(displayName);
+        if (normalized.Length <= MiniWindowCompactDisplayNameMaxLength)
+        {
+            return normalized;
+        }
+
+        return normalized[..(MiniWindowCompactDisplayNameMaxLength - 3)] + "...";
+    }
+
+    private static string NormalizeMiniWindowDisplayName(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(trimmed.Length);
+        var previousWasWhitespace = false;
+        foreach (var character in trimmed)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                if (previousWasWhitespace)
+                {
+                    continue;
+                }
+
+                builder.Append(' ');
+                previousWasWhitespace = true;
+                continue;
+            }
+
+            builder.Append(character);
+            previousWasWhitespace = false;
+        }
+
+        return builder.ToString();
     }
 
     private void RefreshProjectAffinityCorrectionState(string? conversationId = null)

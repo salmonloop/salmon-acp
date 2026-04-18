@@ -1,11 +1,13 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+#if WINDOWS
+using Microsoft.UI;
+#endif
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
@@ -25,6 +27,9 @@ public sealed partial class MiniChatView : Page
     private bool _suspendAutoScrollTracking;
     private bool _manualScrollIntentPending;
     private bool _wasOverlayVisible;
+#if WINDOWS
+    private Microsoft.UI.Xaml.Controls.TitleBar? _nativeTitleBarControl;
+#endif
 
     public MiniChatView()
     {
@@ -35,19 +40,38 @@ public sealed partial class MiniChatView : Page
         Unloaded += OnUnloaded;
     }
 
-    public FrameworkElement TitleBarElement => MiniTitleBar;
-
-    public IReadOnlyList<FrameworkElement> TitleBarInteractiveElements
-        => new FrameworkElement[]
-        {
-            MiniTitleBarSessionSelector,
-            MiniTitleBarReturnButton
-        };
-
-    public void SetTitleBarInsets(double leftInset, double rightInset)
+    public FrameworkElement EnsureNativeTitleBarElement()
     {
-        MiniTitleBarLeftInsetColumn.Width = new GridLength(Math.Max(0, leftInset));
-        MiniTitleBarRightInsetColumn.Width = new GridLength(Math.Max(0, rightInset));
+#if WINDOWS
+        if (_nativeTitleBarControl is not null)
+        {
+            return _nativeTitleBarControl;
+        }
+
+        if (!ReferenceEquals(MiniTitleBar.Child, MiniTitleBarFallbackLayout))
+        {
+            return MiniTitleBar;
+        }
+
+        DetachElementFromVisualParent(MiniTitleBarContent);
+        DetachElementFromVisualParent(MiniTitleBarReturnButton);
+
+        MiniTitleBar.Child = null;
+        _nativeTitleBarControl = new Microsoft.UI.Xaml.Controls.TitleBar
+        {
+            Background = new SolidColorBrush(Colors.Transparent),
+            IsBackButtonVisible = false,
+            IsPaneToggleButtonVisible = false,
+            Content = MiniTitleBarContent,
+            RightHeader = MiniTitleBarReturnButton,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        MiniTitleBar.Child = _nativeTitleBarControl;
+        return _nativeTitleBarControl;
+#else
+        return MiniTitleBar;
+#endif
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -508,4 +532,20 @@ public sealed partial class MiniChatView : Page
         RequestScrollToBottom();
         RequestInitialScroll();
     }
+
+#if WINDOWS
+    private static void DetachElementFromVisualParent(FrameworkElement element)
+    {
+        if (element.Parent is Panel panel)
+        {
+            panel.Children.Remove(element);
+            return;
+        }
+
+        if (element.Parent is Border border && ReferenceEquals(border.Child, element))
+        {
+            border.Child = null;
+        }
+    }
+#endif
 }

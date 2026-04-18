@@ -217,7 +217,7 @@ public class UiConventionsTests
     }
 
     [Fact]
-    public void MiniChatWindow_ShouldUseNativeTitleBarTakeoverOnWindows()
+    public void MiniChatWindow_ShouldUseWinUiTitleBarControlOnWindows()
     {
         var repoRoot = FindRepoRoot();
         var windowFile = Path.Combine(
@@ -228,14 +228,25 @@ public class UiConventionsTests
             "Views",
             "MiniWindow",
             "MiniChatWindow.cs");
+        var viewCodeBehindFile = Path.Combine(
+            repoRoot,
+            "SalmonEgg",
+            "SalmonEgg",
+            "Presentation",
+            "Views",
+            "MiniWindow",
+            "MiniChatView.xaml.cs");
 
         Assert.True(File.Exists(windowFile), $"Expected mini window implementation at '{windowFile}'.");
+        Assert.True(File.Exists(viewCodeBehindFile), $"Expected mini window view implementation at '{viewCodeBehindFile}'.");
 
-        var root = ReadCSharpSyntaxTree(windowFile);
-        var assignments = root.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
-        var invocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
-        var identifiers = root.DescendantNodes().OfType<IdentifierNameSyntax>().Select(node => node.Identifier.ValueText).ToArray();
-        var memberAccesses = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Select(node => node.ToString()).ToArray();
+        var windowRoot = ReadCSharpSyntaxTree(windowFile);
+        var viewRoot = ReadCSharpSyntaxTree(viewCodeBehindFile);
+        var assignments = windowRoot.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
+        var invocations = windowRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
+        var objectCreations = viewRoot.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToList();
+        var windowIdentifiers = windowRoot.DescendantNodes().OfType<IdentifierNameSyntax>().Select(node => node.Identifier.ValueText).ToArray();
+        var viewIdentifiers = viewRoot.DescendantNodes().OfType<IdentifierNameSyntax>().Select(node => node.Identifier.ValueText).ToArray();
 
         Assert.Contains(
             assignments,
@@ -244,8 +255,39 @@ public class UiConventionsTests
         Assert.Contains(
             invocations,
             invocation => string.Equals(GetInvocationMethodName(invocation), "SetTitleBar", StringComparison.Ordinal));
-        Assert.Contains("InputNonClientPointerSource", identifiers);
-        Assert.Contains("NonClientRegionKind.Passthrough", memberAccesses);
+        Assert.Contains(
+            objectCreations,
+            creation => string.Equals(creation.Type.ToString(), "Microsoft.UI.Xaml.Controls.TitleBar", StringComparison.Ordinal));
+        Assert.Contains("TitleBar", viewIdentifiers);
+        Assert.DoesNotContain("InputNonClientPointerSource", windowIdentifiers);
+        Assert.DoesNotContain("NonClientRegionKind", windowIdentifiers);
+    }
+
+    [Fact]
+    public void MiniWindowCoordinator_ShouldKeepOnlyCloseCaptionButton()
+    {
+        var repoRoot = FindRepoRoot();
+        var coordinatorFile = Path.Combine(
+            repoRoot,
+            "SalmonEgg",
+            "SalmonEgg",
+            "Presentation",
+            "Services",
+            "MiniWindowCoordinator.cs");
+
+        Assert.True(File.Exists(coordinatorFile), $"Expected mini window coordinator at '{coordinatorFile}'.");
+
+        var root = ReadCSharpSyntaxTree(coordinatorFile);
+        var assignments = root.DescendantNodes().OfType<AssignmentExpressionSyntax>().ToList();
+
+        Assert.Contains(
+            assignments,
+            assignment => string.Equals(assignment.Left.ToString(), "presenter.IsMaximizable", StringComparison.Ordinal)
+                && string.Equals(assignment.Right.ToString(), "false", StringComparison.Ordinal));
+        Assert.Contains(
+            assignments,
+            assignment => string.Equals(assignment.Left.ToString(), "presenter.IsMinimizable", StringComparison.Ordinal)
+                && string.Equals(assignment.Right.ToString(), "false", StringComparison.Ordinal));
     }
 
     [Fact]

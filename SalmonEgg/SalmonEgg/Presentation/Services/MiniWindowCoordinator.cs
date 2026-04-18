@@ -70,7 +70,7 @@ public sealed class MiniWindowCoordinator : IMiniWindowCoordinator
                         presenter.IsAlwaysOnTop = true;
                         presenter.IsResizable = true;
                         presenter.IsMaximizable = false;
-                        presenter.IsMinimizable = true;
+                        presenter.IsMinimizable = false;
                         appWindow.SetPresenter(presenter);
                         appWindow.Show();
                     }

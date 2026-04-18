@@ -424,6 +424,25 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void MiniChatView_KeepsSharedTitleBarMarkupUnoCompatible()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
+
+        Assert.DoesNotContain("<TitleBar", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("LeftHeader=", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RightHeader=", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MiniChatView_UsesCompactSessionLabelWhilePreservingFullNameTooltip()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
+
+        Assert.Contains("Text=\"{x:Bind CompactDisplayName, Mode=OneTime}\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"{x:Bind DisplayName, Mode=OneTime}\"", xaml);
+    }
+
+    [Fact]
     public void AgentProfileEditor_InteractiveTextsExposeLocalizationUids()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AgentProfileEditorPage.xaml");

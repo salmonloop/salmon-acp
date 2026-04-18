@@ -48,48 +48,41 @@
                 BorderThickness="0"
                 Height="48"
                 Padding="0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="MiniTitleBarLeftInsetColumn" Width="0" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition x:Name="MiniTitleBarRightInsetColumn" Width="0" />
-                </Grid.ColumnDefinitions>
+            <Grid x:Name="MiniTitleBarFallbackLayout"
+                  ColumnDefinitions="*,Auto"
+                  ColumnSpacing="12">
+                <Border x:Name="MiniTitleBarContent"
+                        Grid.Column="0"
+                        Padding="12,0">
+                    <ComboBox x:Name="MiniTitleBarSessionSelector"
+                              x:Uid="MiniChatSessionSelector"
+                              MinWidth="0"
+                              ItemsSource="{x:Bind ViewModel.MiniWindowSessions, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedMiniWindowSession, Mode=TwoWay}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              VerticalAlignment="Center">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
+                                <TextBlock Text="{x:Bind CompactDisplayName, Mode=OneTime}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxLines="1"
+                                           ToolTipService.ToolTip="{x:Bind DisplayName, Mode=OneTime}"
+                                           AutomationProperties.Name="{x:Bind DisplayName, Mode=OneTime}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Border>
 
-                <Grid Grid.Column="1">
-                    <Grid x:Name="MiniTitleBarDragRegion" Background="Transparent" />
-                    <Grid x:Name="MiniTitleBarContent"
-                          ColumnDefinitions="*,Auto"
-                          ColumnSpacing="12"
-                          Padding="12,0">
-                        <ComboBox x:Name="MiniTitleBarSessionSelector"
-                                  Grid.Column="0"
-                                  x:Uid="MiniChatSessionSelector"
-                                  MinWidth="0"
-                                  ItemsSource="{x:Bind ViewModel.MiniWindowSessions, Mode=OneWay}"
-                                  SelectedItem="{x:Bind ViewModel.SelectedMiniWindowSession, Mode=TwoWay}"
-                                  BorderThickness="0"
-                                  Background="Transparent"
-                                  VerticalAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
-                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneTime}"
-                                               TextTrimming="CharacterEllipsis"
-                                               MaxLines="1" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-
-                        <Button x:Name="MiniTitleBarReturnButton"
-                                Grid.Column="1"
-                                x:Uid="MiniChatReturnButton"
-                                Style="{StaticResource TitleBarCommandButtonStyle}"
-                                VerticalAlignment="Center"
-                                Command="{x:Bind ViewModel.ReturnToMainWindowCommand}">
-                            <!-- "BackToWindow" glyph (Segoe Fluent Icons / MDL2-compatible on WinUI) -->
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE73F;" />
-                        </Button>
-                    </Grid>
-                </Grid>
+                <Button x:Name="MiniTitleBarReturnButton"
+                        Grid.Column="1"
+                        x:Uid="MiniChatReturnButton"
+                        Style="{StaticResource TitleBarCommandButtonStyle}"
+                        VerticalAlignment="Center"
+                        Command="{x:Bind ViewModel.ReturnToMainWindowCommand}">
+                    <!-- "BackToWindow" glyph (Segoe Fluent Icons / MDL2-compatible on WinUI) -->
+                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE73F;" />
+                </Button>
             </Grid>
         </Border>
 
