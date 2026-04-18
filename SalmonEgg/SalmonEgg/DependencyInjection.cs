@@ -269,7 +269,10 @@ public static class DependencyInjection
         services.AddSingleton<ConversationCatalogFacade>();
         services.AddSingleton<IConversationCatalog>(sp => sp.GetRequiredService<ConversationCatalogFacade>());
         services.AddSingleton<IDiscoverSessionsConnectionFacade>(sp =>
-            new DiscoverSessionsConnectionFacade(sp.GetRequiredService<ChatViewModel>()));
+            new DiscoverSessionsConnectionFacade(
+                sp.GetRequiredService<IAcpChatServiceFactory>(),
+                sp.GetRequiredService<ChatViewModel>().HydrateActiveConversationAsync,
+                sp.GetRequiredService<ILogger<DiscoverSessionsConnectionFacade>>()));
         services.AddSingleton<IDiscoverSessionImportCoordinator>(sp =>
             new DiscoverSessionImportCoordinator(
                 sp.GetRequiredService<ISessionManager>(),

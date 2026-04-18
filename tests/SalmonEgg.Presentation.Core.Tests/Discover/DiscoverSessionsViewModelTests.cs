@@ -539,9 +539,8 @@ public sealed class DiscoverSessionsViewModelTests
             new StubNavigationCoordinator());
 
         viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
-        
-        // Act: change selection through the shared profiles VM path used by the real ListView binding
-        profilesViewModel.SelectedProfile = profile2;
+
+        viewModel.SelectedProfile = profile2;
 
         Assert.Equal(DiscoverPaneMode.Detail, viewModel.ActivePaneMode);
         Assert.True(viewModel.ShowDetailsPane);
@@ -560,12 +559,35 @@ public sealed class DiscoverSessionsViewModelTests
 
         viewModel.SetLayoutMode(DiscoverLayoutMode.Narrow);
         viewModel.OpenProfileDetailsCommand.Execute(null);
-        
-        // Act: clear selection through the shared profiles VM path used by the real ListView binding
-        profilesViewModel.SelectedProfile = null;
+
+        viewModel.SelectedProfile = null;
 
         Assert.Equal(DiscoverPaneMode.List, viewModel.ActivePaneMode);
         Assert.True(viewModel.ShowProfilesPane);
+    }
+
+    [Fact]
+    public void DiscoverSelection_IsLocallyOwned_AndNotOverwrittenBySharedProfileSelection()
+    {
+        var profile1 = CreateProfile();
+        var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
+        var profilesViewModel = CreateProfilesViewModel(profile1);
+        profilesViewModel.Profiles.Add(profile2);
+
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubImportCoordinator(),
+            new StubNavigationCoordinator());
+
+        viewModel.SelectedProfile = profile2;
+
+        Assert.Same(profile2, viewModel.SelectedProfile);
+        Assert.Same(profile1, profilesViewModel.SelectedProfile);
+
+        profilesViewModel.SelectedProfile = profile1;
+
+        Assert.Same(profile2, viewModel.SelectedProfile);
     }
 
     [Fact]
@@ -603,6 +625,7 @@ public sealed class DiscoverSessionsViewModelTests
             var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
             var profilesViewModel = CreateProfilesViewModel(profile1);
             profilesViewModel.Profiles.Add(profile2);
+            DiscoverSessionsViewModel? viewModel = null;
 
             var allowProfile1Completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var connectionFacade = new FakeDiscoverSessionsConnectionFacade
@@ -611,7 +634,7 @@ public sealed class DiscoverSessionsViewModelTests
                 {
                     OnListSessionsAsync = async (p, ct) =>
                     {
-                        if (profilesViewModel.SelectedProfile?.Id == "profile-1")
+                        if (viewModel?.SelectedProfile?.Id == "profile-1")
                         {
                             await allowProfile1Completion.Task;
                             return new SessionListResponse
@@ -627,27 +650,28 @@ public sealed class DiscoverSessionsViewModelTests
                 }
             };
 
-            using var viewModel = CreateViewModel(
+            using var vm = CreateViewModel(
                 profilesViewModel,
                 connectionFacade,
                 new StubImportCoordinator(),
                 new StubNavigationCoordinator());
+            viewModel = vm;
 
             // Start refresh for profile 1
-            var refresh1Task = viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+            var refresh1Task = vm.RefreshSessionsCommand.ExecuteAsync(null);
 
             // Change to profile 2 immediately
-            viewModel.SelectedProfile = profile2;
-            await viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+            vm.SelectedProfile = profile2;
+            await vm.RefreshSessionsCommand.ExecuteAsync(null);
 
             // Allow profile 1 to complete
             allowProfile1Completion.TrySetResult(null);
             await refresh1Task;
 
             // Assert: profile 2's fresh sessions are current, stale ones were dropped
-            var session = Assert.Single(viewModel.AgentSessions);
+            var session = Assert.Single(vm.AgentSessions);
             Assert.Equal("fresh-session", session.Id);
-            Assert.Equal(DiscoverSessionsLoadPhase.Loaded, viewModel.LoadPhase);
+            Assert.Equal(DiscoverSessionsLoadPhase.Loaded, vm.LoadPhase);
         }
         finally
         {

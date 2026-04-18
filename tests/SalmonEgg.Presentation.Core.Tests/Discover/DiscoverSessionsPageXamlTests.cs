@@ -51,6 +51,19 @@ public sealed class DiscoverSessionsPageXamlTests
         Assert.DoesNotContain("ActionBtn.Opacity", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DiscoverSessionsPage_HeaderBindsToLocalSelectedProfileProjection()
+    {
+        // Arrange
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+
+        // Assert
+        Assert.Contains("Text=\"{x:Bind ViewModel.SelectedProfile.Name, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind ViewModel.SelectedProfile.TransportDisplayName, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewModel.ProfilesViewModel.SelectedProfile.Name", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewModel.ProfilesViewModel.SelectedProfile.TransportDisplayName", xaml, StringComparison.Ordinal);
+    }
+
     private static string LoadFile(string relativePath)
     {
         var root = FindRepoRoot();

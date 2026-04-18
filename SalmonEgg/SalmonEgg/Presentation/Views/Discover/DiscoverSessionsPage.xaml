@@ -228,10 +228,10 @@
                         </Button>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
-                            <TextBlock Text="{x:Bind ViewModel.ProfilesViewModel.SelectedProfile.Name, Mode=OneWay}" Style="{ThemeResource TitleTextBlockStyle}" FontWeight="Bold" />
+                            <TextBlock Text="{x:Bind ViewModel.SelectedProfile.Name, Mode=OneWay}" Style="{ThemeResource TitleTextBlockStyle}" FontWeight="Bold" />
                             <StackPanel Orientation="Horizontal" Spacing="12">
                                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="6,2">
-                                    <TextBlock Text="{x:Bind ViewModel.ProfilesViewModel.SelectedProfile.TransportDisplayName, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{x:Bind ViewModel.SelectedProfile.TransportDisplayName, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </Border>
                                 <TextBlock x:Uid="DiscoverSessionsImportableListLabel" Style="{ThemeResource BodyTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                             </StackPanel>

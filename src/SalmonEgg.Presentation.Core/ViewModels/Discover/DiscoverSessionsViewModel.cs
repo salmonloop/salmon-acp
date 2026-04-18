@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -73,6 +72,11 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     [ObservableProperty]
     private DiscoverPaneMode _activePaneMode = DiscoverPaneMode.List;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
+    [NotifyPropertyChangedFor(nameof(HasNoSelectedProfile))]
+    private ServerConfiguration? _selectedProfile;
+
     public bool ShowProfilesPane => LayoutMode == DiscoverLayoutMode.Wide || ActivePaneMode == DiscoverPaneMode.List;
 
     public bool ShowDetailsPane => LayoutMode == DiscoverLayoutMode.Wide || (ActivePaneMode == DiscoverPaneMode.Detail && SelectedProfile != null);
@@ -84,20 +88,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     public bool ShowEmptyState => LoadPhase == DiscoverSessionsLoadPhase.Empty;
 
     public AcpProfilesViewModel ProfilesViewModel => _profilesViewModel;
-
-    public ServerConfiguration? SelectedProfile
-    {
-        get => _profilesViewModel.SelectedProfile;
-        set
-        {
-            if (_profilesViewModel.SelectedProfile == value)
-            {
-                return;
-            }
-
-            _profilesViewModel.SelectedProfile = value;
-        }
-    }
 
     public bool HasSelectedProfile => SelectedProfile != null;
 
@@ -125,8 +115,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _importCoordinator = importCoordinator ?? throw new ArgumentNullException(nameof(importCoordinator));
         _projectAffinityResolver = projectAffinityResolver ?? new ProjectAffinityResolver();
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
-
-        _profilesViewModel.PropertyChanged += OnProfilesViewModelPropertyChanged;
+        _selectedProfile = ResolvePreferredSelectedProfile();
     }
 
     public void SetLayoutMode(DiscoverLayoutMode mode)
@@ -161,17 +150,16 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         }
     }
 
-    private void OnProfilesViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    partial void OnSelectedProfileChanged(ServerConfiguration? value)
     {
-        if (e.PropertyName != nameof(AcpProfilesViewModel.SelectedProfile))
+        if (_disposed)
         {
             return;
         }
 
-        _uiDispatcher.Enqueue(() =>
+        void ApplySelectionChange()
         {
-            var profile = SelectedProfile;
-            if (profile == null)
+            if (value == null)
             {
                 ActivePaneMode = DiscoverPaneMode.List;
             }
@@ -180,15 +168,20 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                 ActivePaneMode = DiscoverPaneMode.Detail;
             }
 
-            OnPropertyChanged(nameof(SelectedProfile));
-            OnPropertyChanged(nameof(HasSelectedProfile));
-            OnPropertyChanged(nameof(HasNoSelectedProfile));
             OnPropertyChanged(nameof(ShowProfilesPane));
             OnPropertyChanged(nameof(ShowDetailsPane));
             OnPropertyChanged(nameof(ShowCompactBackButton));
 
             _ = RefreshSessionsAsync();
-        });
+        }
+
+        if (_uiDispatcher.HasThreadAccess)
+        {
+            ApplySelectionChange();
+            return;
+        }
+
+        _uiDispatcher.Enqueue(ApplySelectionChange);
     }
 
     [RelayCommand]
@@ -199,9 +192,13 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _uiDispatcher.Enqueue(() =>
         {
             OnPropertyChanged(nameof(AvailableProfiles));
-            OnPropertyChanged(nameof(SelectedProfile));
-            OnPropertyChanged(nameof(HasSelectedProfile));
-            OnPropertyChanged(nameof(HasNoSelectedProfile));
+
+            var preferredSelection = ResolvePreferredSelectedProfile();
+            if (!ReferenceEquals(SelectedProfile, preferredSelection))
+            {
+                SelectedProfile = preferredSelection;
+                return;
+            }
 
             if (SelectedProfile != null)
             {
@@ -209,10 +206,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                 {
                     _ = RefreshSessionsAsync();
                 }
-            }
-            else if (AvailableProfiles.Any())
-            {
-                _profilesViewModel.SelectedProfile = AvailableProfiles.First();
             }
         });
     }
@@ -432,9 +425,35 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         }
 
         _disposed = true;
-        _profilesViewModel.PropertyChanged -= OnProfilesViewModelPropertyChanged;
         _refreshSessionsCts?.Cancel();
         _refreshSessionsCts?.Dispose();
+    }
+
+    private ServerConfiguration? ResolvePreferredSelectedProfile()
+    {
+        var currentSelectionId = SelectedProfile?.Id;
+        if (!string.IsNullOrWhiteSpace(currentSelectionId))
+        {
+            var currentSelection = AvailableProfiles.FirstOrDefault(profile =>
+                string.Equals(profile.Id, currentSelectionId, StringComparison.Ordinal));
+            if (currentSelection != null)
+            {
+                return currentSelection;
+            }
+        }
+
+        var sharedSelectionId = _profilesViewModel.SelectedProfile?.Id;
+        if (!string.IsNullOrWhiteSpace(sharedSelectionId))
+        {
+            var sharedSelection = AvailableProfiles.FirstOrDefault(profile =>
+                string.Equals(profile.Id, sharedSelectionId, StringComparison.Ordinal));
+            if (sharedSelection != null)
+            {
+                return sharedSelection;
+            }
+        }
+
+        return AvailableProfiles.FirstOrDefault();
     }
 
     private string ResolveLoadErrorMessage(Exception ex)
