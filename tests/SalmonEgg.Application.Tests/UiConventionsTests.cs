@@ -196,6 +196,33 @@ public class UiConventionsTests
     }
 
     [Fact]
+    public void WindowBackdropService_ShouldBeHookedIntoMainAndMiniWindows()
+    {
+        var repoRoot = FindRepoRoot();
+        var appFile = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "App.xaml.cs");
+        var mainPageFile = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml.cs");
+        var miniWindowFile = Path.Combine(
+            repoRoot,
+            "SalmonEgg",
+            "SalmonEgg",
+            "Presentation",
+            "Views",
+            "MiniWindow",
+            "MiniChatWindow.cs");
+
+        var appText = File.ReadAllText(appFile);
+        var mainPageText = File.ReadAllText(mainPageFile);
+        var miniWindowText = File.ReadAllText(miniWindowFile);
+
+        Assert.Contains("_windowBackdropService = ServiceProvider.GetService<Presentation.Services.WindowBackdropService>();", appText, StringComparison.Ordinal);
+        Assert.Contains("_windowBackdropService?.Attach(MainWindow);", appText, StringComparison.Ordinal);
+        Assert.Contains("_windowBackdropService.Attach(window);", mainPageText, StringComparison.Ordinal);
+        Assert.Contains("_windowBackdropService = App.ServiceProvider.GetService(typeof(Presentation.Services.WindowBackdropService)) as Presentation.Services.WindowBackdropService;", miniWindowText, StringComparison.Ordinal);
+        Assert.Contains("_windowBackdropService?.Attach(this);", miniWindowText, StringComparison.Ordinal);
+        Assert.Contains("_windowBackdropService?.Detach(this);", miniWindowText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MiniWindowCoordinator_ShouldCreateDedicatedMiniChatWindow()
     {
         var repoRoot = FindRepoRoot();

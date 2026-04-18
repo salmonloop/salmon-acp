@@ -10,6 +10,7 @@ namespace SalmonEgg.Presentation.Views.MiniWindow;
 public sealed class MiniChatWindow : Window
 {
     private readonly MiniChatView _view;
+    private readonly Presentation.Services.WindowBackdropService? _windowBackdropService;
 
 #if WINDOWS
     private AppWindowTitleBar? _appWindowTitleBar;
@@ -19,6 +20,8 @@ public sealed class MiniChatWindow : Window
     {
         _view = new MiniChatView();
         Content = _view;
+        _windowBackdropService = App.ServiceProvider.GetService(typeof(Presentation.Services.WindowBackdropService)) as Presentation.Services.WindowBackdropService;
+        _windowBackdropService?.Attach(this);
 
         Closed += OnWindowClosed;
         _view.Loaded += OnViewLoaded;
@@ -27,6 +30,7 @@ public sealed class MiniChatWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
     {
+        _windowBackdropService?.Detach(this);
         _view.Loaded -= OnViewLoaded;
         _view.Unloaded -= OnViewUnloaded;
         Closed -= OnWindowClosed;

@@ -377,6 +377,7 @@ public static class DependencyInjection
 
         // App preferences used by General/Appearance settings and window behaviors.
         services.AddSingleton<AppPreferencesViewModel>();
+        services.AddSingleton<WindowBackdropService>();
 
         // General settings
         services.AddSingleton<GeneralSettingsViewModel>();

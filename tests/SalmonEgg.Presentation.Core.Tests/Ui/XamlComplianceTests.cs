@@ -146,6 +146,16 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void MiniChatView_RootSurfaceKeepsWindowBackdropVisible()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
+
+        Assert.Contains("x:Name=\"RootGrid\"", xaml);
+        Assert.Contains("Background=\"Transparent\"", xaml);
+        Assert.DoesNotContain("Background=\"{ThemeResource ApplicationPageBackgroundThemeBrush}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainPage_SearchStringsAreLocalized()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");

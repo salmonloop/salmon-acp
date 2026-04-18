@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
 #if HAS_UNO && !WINDOWS
 using Uno.UI;
@@ -25,6 +26,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
 
     private readonly SalmonEgg.Domain.Services.IAppSettingsService? _appSettingsService;
     private readonly SalmonEgg.Domain.Services.IAppMaintenanceService? _maintenanceService;
+    private readonly Presentation.Services.WindowBackdropService? _windowBackdropService;
 
     internal static void BootLog(string message)
     {
@@ -118,6 +120,7 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         // Resolve DI dependencies before InitializeComponent() so x:Bind has stable inputs.
         _appSettingsService = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppSettingsService>();
         _maintenanceService = ServiceProvider.GetService<SalmonEgg.Domain.Services.IAppMaintenanceService>();
+        _windowBackdropService = ServiceProvider.GetService<Presentation.Services.WindowBackdropService>();
 
         this.InitializeComponent();
 
@@ -168,29 +171,15 @@ public partial class App : global::Microsoft.UI.Xaml.Application
         MainWindow = new Microsoft.UI.Xaml.Window();
         BootLog("OnLaunched: window created");
 
-#if WINDOWS
-        // Native WinUI 3 backdrop. Mica is Windows 11+; fall back to Desktop Acrylic on Windows 10.
         try
         {
-            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
-            {
-                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop
-                {
-                    Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt
-                };
-                BootLog("OnLaunched: MicaAltBackdrop set");
-            }
-            else if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
-            {
-                MainWindow.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
-                BootLog("OnLaunched: DesktopAcrylicBackdrop set");
-            }
+            _windowBackdropService?.Attach(MainWindow);
+            BootLog("OnLaunched: backdrop service attached");
         }
         catch
         {
-            BootLog("OnLaunched: backdrop set failed");
+            BootLog("OnLaunched: backdrop service attach failed");
         }
-#endif
 
         if (MainWindow.Content is not Frame rootFrame)
         {

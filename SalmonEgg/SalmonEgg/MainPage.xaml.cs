@@ -84,6 +84,7 @@ public sealed partial class MainPage : Page
     private readonly ILogger<MainPage> _logger;
     private readonly MainNavigationViewAdapter _mainNavigationViewAdapter;
     private readonly MainWindowTitleBarAdapter _titleBarAdapter;
+    private readonly WindowBackdropService _windowBackdropService;
     private readonly IGamepadInputService _gamepadInputService;
     private readonly IGamepadNavigationDispatcher _gamepadNavigationDispatcher;
     private readonly SalmonEgg.Presentation.Logic.SearchInteractionLogic _searchLogic = new();
@@ -103,6 +104,7 @@ public sealed partial class MainPage : Page
         _metricsSink = App.ServiceProvider.GetRequiredService<IShellLayoutMetricsSink>();
         var navigationCoordinator = App.ServiceProvider.GetRequiredService<INavigationCoordinator>();
         _logger = App.ServiceProvider.GetRequiredService<ILogger<MainPage>>();
+        _windowBackdropService = App.ServiceProvider.GetRequiredService<WindowBackdropService>();
         _gamepadInputService = App.ServiceProvider.GetRequiredService<IGamepadInputService>();
         _gamepadNavigationDispatcher = App.ServiceProvider.GetRequiredService<IGamepadNavigationDispatcher>();
         IsGuiAutomationMode = string.Equals(
@@ -260,38 +262,15 @@ public sealed partial class MainPage : Page
     private void ApplyBackdrop()
     {
 #if WINDOWS
-        try
+        // Re-attach the main window when backdrop preference changes so the shared
+        // window service remains the SSOT but the main shell still has a recovery path.
+        var window = App.MainWindowInstance;
+        if (window != null)
         {
-            var window = App.MainWindowInstance;
-            if (window == null)
-            {
-                return;
-            }
-
-            var pref = (Preferences.Backdrop ?? "System").Trim();
-            Microsoft.UI.Xaml.Media.SystemBackdrop? backdrop = pref switch
-            {
-                "Mica" => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)
-                    ? new Microsoft.UI.Xaml.Media.MicaBackdrop()
-                    : OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
-                        ? new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop()
-                        : null,
-                "Acrylic" => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
-                    ? new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop()
-                    : null,
-                "Solid" => null,
-                _ => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)
-                    ? new Microsoft.UI.Xaml.Media.MicaBackdrop()
-                    : OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
-                        ? new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop()
-                        : null
-            };
-
-            window.SystemBackdrop = backdrop;
+            _windowBackdropService.Attach(window);
         }
-        catch
-        {
-        }
+
+        return;
 #else
         // Cross-platform fallback "Mica-like" backdrop.
         if (Microsoft.UI.Xaml.Application.Current.Resources.TryGetValue("AppBackdropBrush", out var brush) && brush is Brush b)
