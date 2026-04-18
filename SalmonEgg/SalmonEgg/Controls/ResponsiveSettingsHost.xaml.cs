@@ -7,7 +7,6 @@ namespace SalmonEgg.Controls;
 public sealed partial class ResponsiveSettingsHost : UserControl
 {
     private bool _isUpdatingColumns;
-    private bool _isWide;
 
     public static readonly DependencyProperty ChildProperty =
         DependencyProperty.Register(
@@ -68,61 +67,41 @@ public sealed partial class ResponsiveSettingsHost : UserControl
 
     private void UpdateColumns(double availableWidth)
     {
-        if (_isUpdatingColumns)
+        if (_isUpdatingColumns || availableWidth <= 0)
         {
             return;
         }
 
-        if (availableWidth <= 0)
-        {
-            return;
-        }
-
-        var max = MaxContentWidth;
-        if (max <= 0)
-        {
-            SetNarrow();
-            return;
-        }
-
-        var minGutter = Math.Max(0, MinGutter);
-        var wideThreshold = max + (minGutter * 2);
-
-        if (availableWidth >= wideThreshold && !_isWide)
-        {
-            SetWide(max);
-        }
-        else if (availableWidth < wideThreshold && _isWide)
-        {
-            SetNarrow();
-        }
-    }
-
-    private void SetWide(double max)
-    {
         _isUpdatingColumns = true;
         try
         {
-            _isWide = true;
-            ContentColumn.Width = new GridLength(max, GridUnitType.Pixel);
-            LeftGutter.Width = new GridLength(1, GridUnitType.Star);
-            RightGutter.Width = new GridLength(1, GridUnitType.Star);
-        }
-        finally
-        {
-            _isUpdatingColumns = false;
-        }
-    }
+            var max = MaxContentWidth;
+            var minGutter = Math.Max(0, MinGutter);
 
-    private void SetNarrow()
-    {
-        _isUpdatingColumns = true;
-        try
-        {
-            _isWide = false;
-            ContentColumn.Width = new GridLength(1, GridUnitType.Star);
-            LeftGutter.Width = new GridLength(0);
-            RightGutter.Width = new GridLength(0);
+            if (max <= 0)
+            {
+                ContentColumn.Width = new GridLength(1, GridUnitType.Star);
+                LeftGutter.Width = new GridLength(minGutter, GridUnitType.Pixel);
+                RightGutter.Width = new GridLength(minGutter, GridUnitType.Pixel);
+                return;
+            }
+
+            var wideThreshold = max + (minGutter * 2);
+
+            if (availableWidth >= wideThreshold)
+            {
+                // Wide mode: Content is fixed, gutters take remaining space (1*)
+                ContentColumn.Width = new GridLength(max, GridUnitType.Pixel);
+                LeftGutter.Width = new GridLength(1, GridUnitType.Star);
+                RightGutter.Width = new GridLength(1, GridUnitType.Star);
+            }
+            else
+            {
+                // Narrow mode: Content takes remaining space (1*), gutters are fixed to MinGutter
+                ContentColumn.Width = new GridLength(1, GridUnitType.Star);
+                LeftGutter.Width = new GridLength(minGutter, GridUnitType.Pixel);
+                RightGutter.Width = new GridLength(minGutter, GridUnitType.Pixel);
+            }
         }
         finally
         {
