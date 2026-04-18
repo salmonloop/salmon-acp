@@ -1,3 +1,5 @@
+#!/bin/bash
+cat << 'INNER_EOF' > global.json
 {
   "msbuild-sdks": {
     "Uno.Sdk": "6.5.31"
@@ -8,3 +10,4 @@
     "allowPrerelease": false
   }
 }
+INNER_EOF
