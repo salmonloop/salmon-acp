@@ -299,7 +299,7 @@ namespace SalmonEgg.Application.Services.Chat
                     hadPreviousHistory = true;
                     previousHistory = existing.History.ToList();
                 }
-                
+
                 // Clear history before loading to ensure we don't have duplicate entries 
                 // if the server replays the history during the load process.
                 _sessionManager.UpdateSession(@params.SessionId, s => s.History.Clear());
