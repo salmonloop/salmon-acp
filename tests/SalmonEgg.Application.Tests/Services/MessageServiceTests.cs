@@ -110,10 +110,10 @@ namespace SalmonEgg.Application.Tests.Services
 
             // 模拟响应消息
             var responseTask = _service.SendRequestAsync(method, parameters);
-            
+
             // 等待一小段时间确保消息已发送
             await Task.Delay(100);
-            
+
             // 发送响应
             _incomingMessagesSubject.OnNext(new AcpMessage
             {
