@@ -31,4 +31,20 @@ public sealed class ChatMessageViewModelToolCallTests
         Assert.True(vm.HasToolCallJson);
         Assert.Contains(nameof(ChatMessageViewModel.HasToolCallJson), changedProperties);
     }
+
+    [Fact]
+    public void MetadataOnlyToolCall_ShowsToolCallPillWithoutPayload()
+    {
+        var vm = ChatMessageViewModel.CreateFromToolCall(
+            id: "tool-2",
+            toolCallId: "call-2",
+            rawInput: null,
+            rawOutput: null,
+            kind: Domain.Models.Tool.ToolCallKind.Execute,
+            status: Domain.Models.Tool.ToolCallStatus.InProgress,
+            title: "Running tests");
+
+        Assert.False(vm.HasToolCallJson);
+        Assert.True(vm.ShouldShowToolCallPill);
+    }
 }

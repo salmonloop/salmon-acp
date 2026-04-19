@@ -25,6 +25,17 @@ public sealed class ToolCallPillComplianceTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ChatStyles_ToolCallPillVisibilityDoesNotDependOnPayloadOnly()
+    {
+        var xaml = File.ReadAllText(GetRepoPath(@"SalmonEgg\SalmonEgg\Styles\ChatStyles.xaml"));
+
+        Assert.Contains(
+            "Visibility=\"{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
     private static string GetRepoPath(string relativePath)
         => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", relativePath));
 }

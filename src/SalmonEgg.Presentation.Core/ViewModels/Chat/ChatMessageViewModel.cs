@@ -21,9 +21,11 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private bool _isOutgoing;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private string _contentType = string.Empty;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private string _title = string.Empty;
 
         // 文本内容
@@ -54,18 +56,22 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
 
         // 工具调用
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private string? _toolCallId;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ToolCallKindDisplayName))]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private Domain.Models.Tool.ToolCallKind? _toolCallKind;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ToolCallStatusDisplayName))]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private Domain.Models.Tool.ToolCallStatus? _toolCallStatus;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(HasToolCallJson))]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private string? _toolCallJson;
 
         [ObservableProperty]
@@ -242,6 +248,13 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
        public bool HasModeChange => !string.IsNullOrEmpty(ModeId);
        public bool HasResourceContent => ResourceViewModel?.IsResourceContent == true;
        public bool HasResourceLink => ResourceViewModel?.IsResourceLink == true;
+       public bool ShouldShowToolCallPill =>
+           string.Equals(ContentType, "tool_call", StringComparison.Ordinal)
+           && (HasToolCall
+               || HasToolCallJson
+               || ToolCallKind is not null
+               || ToolCallStatus is not null
+               || HasTitle);
 
 
        public string ToolCallStatusDisplayName => ToolCallStatus switch
