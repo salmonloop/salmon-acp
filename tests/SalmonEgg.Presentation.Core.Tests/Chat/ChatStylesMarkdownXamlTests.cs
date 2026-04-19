@@ -21,6 +21,7 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.Contains("xmlns:controls=\"using:SalmonEgg.Controls\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<controls:MarkdownTextPresenter", xaml, StringComparison.Ordinal);
+        Assert.Contains("MessageViewModel=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{x:Bind ShouldRenderMarkdown", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{x:Bind ShouldRenderPlainText", xaml, StringComparison.Ordinal);
     }

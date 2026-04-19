@@ -42,6 +42,7 @@
                                    Visibility="{x:Bind ShouldRenderPlainText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
                         <controls:MarkdownTextPresenter Text="{x:Bind TextContent, Mode=OneWay}"
+                                                        MessageViewModel="{x:Bind}"
                                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                                         IsTextSelectionEnabled="True"
                                                         Visibility="{x:Bind ShouldRenderMarkdown, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>

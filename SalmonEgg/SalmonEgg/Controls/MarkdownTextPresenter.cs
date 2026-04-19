@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using SalmonEgg.Presentation.ViewModels.Chat;
 using Windows.System;
 
 namespace SalmonEgg.Controls;
@@ -30,6 +31,12 @@ public sealed class MarkdownTextPresenter : Grid
         typeof(Brush),
         typeof(MarkdownTextPresenter),
         new PropertyMetadata(null, OnForegroundChanged));
+
+    public static readonly DependencyProperty MessageViewModelProperty = DependencyProperty.Register(
+        nameof(MessageViewModel),
+        typeof(ChatMessageViewModel),
+        typeof(MarkdownTextPresenter),
+        new PropertyMetadata(null, OnMessageViewModelChanged));
 
     public MarkdownTextPresenter()
     {
@@ -65,11 +72,17 @@ public sealed class MarkdownTextPresenter : Grid
         set => SetValue(ForegroundProperty, value);
     }
 
+    public ChatMessageViewModel? MessageViewModel
+    {
+        get => (ChatMessageViewModel?)GetValue(MessageViewModelProperty);
+        set => SetValue(MessageViewModelProperty, value);
+    }
+
     private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is MarkdownTextPresenter presenter)
         {
-            presenter._markdown.Text = (string?)e.NewValue ?? string.Empty;
+            presenter.ApplyMarkdownText((string?)e.NewValue);
         }
     }
 
@@ -86,6 +99,33 @@ public sealed class MarkdownTextPresenter : Grid
         if (d is MarkdownTextPresenter presenter)
         {
             presenter._markdown.Foreground = e.NewValue as Brush;
+        }
+    }
+
+    private static void OnMessageViewModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is MarkdownTextPresenter presenter)
+        {
+            presenter.ApplyMarkdownText(presenter.Text);
+        }
+    }
+
+    private void ApplyMarkdownText(string? value)
+    {
+        if (MessageViewModel is { ShouldRenderMarkdown: false })
+        {
+            _markdown.Text = string.Empty;
+            return;
+        }
+
+        try
+        {
+            _markdown.Text = value ?? string.Empty;
+        }
+        catch
+        {
+            MessageViewModel?.MarkMarkdownRenderFailed();
+            _markdown.Text = string.Empty;
         }
     }
 
