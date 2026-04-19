@@ -109,6 +109,11 @@
                               FontSize="12" 
                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                               Visibility="{x:Bind IsFailed, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <FontIcon Glyph="&#xE711;"
+                              FontSize="12"
+                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                              Visibility="{x:Bind IsCancelled, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </Grid>
 
                 <!-- Text Area -->

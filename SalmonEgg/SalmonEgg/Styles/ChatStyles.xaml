@@ -50,7 +50,7 @@
 
                     <!-- 渐进式揭示的 ToolCall 胶囊 -->
                     <controls:ToolCallPill 
-                        Visibility="{x:Bind HasToolCallJson, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Visibility="{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                         Margin="0,4,0,0"
                         ToolTitle="{x:Bind Title, Mode=OneWay}"
                         ToolKind="{x:Bind ToolCallKind, Mode=OneWay}"
@@ -58,6 +58,7 @@
                         IsInProgress="{x:Bind IsToolCallInProgress, Mode=OneWay}"
                         IsCompleted="{x:Bind IsToolCallCompleted, Mode=OneWay}"
                         IsFailed="{x:Bind IsToolCallFailed, Mode=OneWay}"
+                        IsCancelled="{x:Bind IsToolCallCancelled, Mode=OneWay}"
                         RawPayload="{x:Bind ToolCallJson, Mode=OneWay}">
                     </controls:ToolCallPill>
 
