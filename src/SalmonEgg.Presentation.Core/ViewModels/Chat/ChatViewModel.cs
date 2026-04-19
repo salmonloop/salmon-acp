@@ -241,6 +241,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private bool ShouldShowLayoutLoading
         => IsLayoutLoading && IsChatShellVisibleForRemoteUi;
 
+    private bool IsSessionSwitchOverlayBlockingVisibleTranscript
+        => (IsSessionSwitchPreviewVisible
+                && !IsOverlayOwnedByCurrentSession(_sessionSwitchPreviewConversationId))
+            || (IsSessionSwitchOverlayVisible
+                && !IsOverlayOwnedByCurrentSession(_sessionSwitchOverlayConversationId));
+
     public bool IsOverlayVisible
         => ShouldShowConnectionLifecycleOverlay
             || ShouldShowHistoryOverlay
@@ -252,7 +258,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     public bool HasVisibleTranscriptContent => MessageHistory.Count > 0;
 
     public bool ShouldShowBlockingLoadingMask
-        => IsOverlayVisible && !HasVisibleTranscriptContent;
+        => IsOverlayVisible
+            && (!HasVisibleTranscriptContent || IsSessionSwitchOverlayBlockingVisibleTranscript);
 
     public bool ShouldShowLoadingOverlayStatusPill
         => IsOverlayVisible
@@ -504,7 +511,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public bool HasConnectionError => !string.IsNullOrWhiteSpace(ConnectionErrorMessage);
 
-    public bool IsInputEnabled => !IsBusy && !IsPromptInFlight && PendingAskUserRequest is null;
+    public bool IsInputEnabled
+        => !IsBusy
+            && !IsPromptInFlight
+            && PendingAskUserRequest is null
+            && !ShouldShowLoadingOverlayPresenter;
 
     public bool HasPendingAskUserRequest => PendingAskUserRequest is not null;
 
@@ -2883,6 +2894,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
         OnPropertyChanged(nameof(ShouldShowLoadingOverlayStatusPill));
         OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
+        OnPropertyChanged(nameof(IsInputEnabled));
+        OnPropertyChanged(nameof(CanSendPromptUi));
     }
 
     private void TrackPendingSessionUpdate(Task task)
@@ -5073,14 +5086,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     }
 
     private bool CanSendPrompt() =>
-        IsSessionActive
+        IsInputEnabled
+        && IsSessionActive
         && _chatService is not null
         && IsInitialized
         && !string.IsNullOrWhiteSpace(CurrentSessionId)
-        && !string.IsNullOrWhiteSpace(CurrentPrompt)
-        && !IsBusy
-        && !IsPromptInFlight
-        && PendingAskUserRequest is null;
+        && !string.IsNullOrWhiteSpace(CurrentPrompt);
 
     [RelayCommand]
     private async Task CancelPromptAsync()
@@ -6961,8 +6972,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             hasVisibleTranscript,
             projection.IsTurnStatusVisible);
 #endif
+        var shouldDismissSessionSwitchOverlay =
+            string.Equals(_sessionSwitchOverlayConversationId, projection.HydratedConversationId, StringComparison.Ordinal);
+        if (shouldDismissSessionSwitchOverlay)
+        {
+            // Keep the loading lifecycle monotonic: once hydration has produced the final
+            // transcript projection, clear the session-switch tail in the same UI pass so
+            // the pill cannot regress from "loading chat history" back to "switching chat".
+            IsSessionSwitching = false;
+        }
+
         SetConversationOverlayOwners(
-            sessionSwitchConversationId: _sessionSwitchOverlayConversationId,
+            sessionSwitchConversationId: shouldDismissSessionSwitchOverlay ? null : _sessionSwitchOverlayConversationId,
             connectionLifecycleConversationId: _connectionLifecycleOverlayConversationId,
             historyConversationId: null);
         ClearKnownTranscriptGrowthRequirement(projection.HydratedConversationId);

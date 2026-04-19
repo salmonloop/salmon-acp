@@ -5277,6 +5277,78 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task Overlay_WhenPreviewingDifferentConversationWithVisibleTranscript_ShowsBlockingMask()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-1",
+                    Timestamp = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "stale transcript"
+                }
+            ]
+        });
+
+        var preview = (IConversationActivationPreview)fixture.ViewModel;
+        preview.PrimeSessionSwitchPreview("conv-2");
+
+        Assert.True(fixture.ViewModel.HasVisibleTranscriptContent);
+        Assert.True(fixture.ViewModel.IsOverlayVisible);
+        Assert.True(fixture.ViewModel.ShouldShowBlockingLoadingMask);
+        Assert.Contains("切换", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Overlay_WhenVisible_DisablesPromptInputUntilActivationSettles()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1" });
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)));
+
+        var chatService = new Mock<IChatService>();
+        chatService.SetupGet(service => service.IsConnected).Returns(true);
+        chatService.SetupGet(service => service.IsInitialized).Returns(true);
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+        fixture.ViewModel.IsSessionActive = true;
+        fixture.ViewModel.IsConnected = true;
+        fixture.ViewModel.CurrentPrompt = "hello";
+
+        Assert.True(fixture.ViewModel.IsInputEnabled);
+
+        var raised = new List<string>();
+        fixture.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.PropertyName))
+            {
+                raised.Add(e.PropertyName!);
+            }
+        };
+
+        var preview = (IConversationActivationPreview)fixture.ViewModel;
+        preview.PrimeSessionSwitchPreview("conv-2");
+
+        Assert.True(fixture.ViewModel.IsOverlayVisible);
+        Assert.False(fixture.ViewModel.CanSendPromptUi);
+        Assert.False(fixture.ViewModel.IsInputEnabled);
+        Assert.Contains(nameof(ChatViewModel.CanSendPromptUi), raised);
+        Assert.Contains(nameof(ChatViewModel.IsInputEnabled), raised);
+    }
+
+    [Fact]
     public async Task Overlay_StatusPill_WhenVisible_AlwaysShowsUserFriendlyActionableText()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -5391,6 +5463,162 @@ public class ChatViewModelTests
 
         allowLoadCompletion.TrySetResult(null);
         await WaitForConditionAsync(() => Task.FromResult(!fixture.ViewModel.IsOverlayVisible), timeoutMilliseconds: 7000);
+    }
+
+    [Fact]
+    public async Task ConversationSessionSwitcherContract_RemoteBoundConversation_DoesNotRegressOverlayStatusBackToPreparingAfterHydrationStarts()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\one");
+        await sessionManager.Object.CreateSessionAsync("conv-2", @"C:\repo\two");
+
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        await syncContext.RunUntilCompletedAsync(fixture.ViewModel.RestoreAsync());
+
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-2",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        var loadReturned = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        ReplayLoadChatService? innerChatService = null;
+        innerChatService = new ReplayLoadChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true),
+            OnLoadSessionAsync = (_, _) =>
+            {
+                loadReturned.TrySetResult(null);
+                return Task.FromResult(SessionLoadResponse.Completed);
+            }
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(innerChatService, eventAdapter);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(adapter));
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+                .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
+        });
+        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        syncContext.RunAll();
+
+        var observedStatuses = new List<string>();
+        void RecordStatus()
+        {
+            if (!string.IsNullOrWhiteSpace(fixture.ViewModel.OverlayStatusText))
+            {
+                observedStatuses.Add(fixture.ViewModel.OverlayStatusText);
+            }
+        }
+
+        fixture.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ChatViewModel.OverlayStatusText))
+            {
+                RecordStatus();
+            }
+        };
+
+        var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
+        var activationTask = switcher.SwitchConversationAsync("conv-2");
+
+        while (!loadReturned.Task.IsCompleted || !activationTask.IsCompleted)
+        {
+            if (!syncContext.RunNext())
+            {
+                await Task.Delay(10);
+            }
+        }
+
+        Assert.True(await activationTask);
+        Assert.True(IsUserFriendlyHydrationOverlayStatus(fixture.ViewModel.OverlayStatusText));
+        RecordStatus();
+
+        innerChatService.RaiseSessionUpdate(new SessionUpdateEventArgs(
+            "remote-2",
+            new AgentMessageUpdate(new TextContentBlock("replayed message"))));
+
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                fixture.ViewModel.MessageHistory.Any(message =>
+                    string.Equals(message.TextContent, "replayed message", StringComparison.Ordinal)));
+        });
+
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(!fixture.ViewModel.IsOverlayVisible);
+        }, timeoutMilliseconds: 7000);
+
+        static bool IsHydrationLifecycleStatus(string status) =>
+            status.Contains("加载", StringComparison.Ordinal)
+            || status.Contains("打开", StringComparison.Ordinal)
+            || status.Contains("获取", StringComparison.Ordinal)
+            || status.Contains("同步", StringComparison.Ordinal)
+            || status.Contains("整理", StringComparison.Ordinal)
+            || status.Contains("完成", StringComparison.Ordinal);
+
+        var hydrationStatusIndex = observedStatuses.FindIndex(IsHydrationLifecycleStatus);
+        Assert.True(hydrationStatusIndex >= 0, $"Observed status sequence never entered hydration: [{string.Join(" | ", observedStatuses)}]");
+
+        var regressedToPreparing = observedStatuses
+            .Skip(hydrationStatusIndex + 1)
+            .Any(status => status.Contains("切换", StringComparison.Ordinal));
+        Assert.False(
+            regressedToPreparing,
+            $"Overlay status regressed to session-switch preparation after hydration started. Sequence=[{string.Join(" | ", observedStatuses)}]");
     }
 
     [Fact]

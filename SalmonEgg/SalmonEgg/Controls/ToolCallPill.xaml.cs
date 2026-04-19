@@ -35,13 +35,13 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         DependencyProperty.Register(nameof(RawPayload), typeof(string), typeof(ToolCallPill), new PropertyMetadata(string.Empty, OnDisplayInputChanged));
 
     public static readonly DependencyProperty IsInProgressProperty =
-        DependencyProperty.Register(nameof(IsInProgress), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false));
+        DependencyProperty.Register(nameof(IsInProgress), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));
 
     public static readonly DependencyProperty IsCompletedProperty =
-        DependencyProperty.Register(nameof(IsCompleted), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false));
+        DependencyProperty.Register(nameof(IsCompleted), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));
 
     public static readonly DependencyProperty IsFailedProperty =
-        DependencyProperty.Register(nameof(IsFailed), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false));
+        DependencyProperty.Register(nameof(IsFailed), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -116,6 +116,23 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         if (d is ToolCallPill pill)
         {
             pill.NotifyDisplayChanged();
+        }
+    }
+
+    private static void OnVisualStateInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ToolCallPill pill)
+        {
+            var propertyName =
+                e.Property == IsInProgressProperty ? nameof(IsInProgress) :
+                e.Property == IsCompletedProperty ? nameof(IsCompleted) :
+                e.Property == IsFailedProperty ? nameof(IsFailed) :
+                null;
+
+            if (!string.IsNullOrWhiteSpace(propertyName))
+            {
+                pill.OnPropertyChanged(propertyName);
+            }
         }
     }
 
