@@ -83,6 +83,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         [ObservableProperty]
         private bool _isToolCallFailed;
 
+        private bool _isToolCallCancelled;
+
 
         // 计划条目
        [ObservableProperty]
@@ -248,6 +250,11 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
        public bool HasModeChange => !string.IsNullOrEmpty(ModeId);
        public bool HasResourceContent => ResourceViewModel?.IsResourceContent == true;
        public bool HasResourceLink => ResourceViewModel?.IsResourceLink == true;
+       public bool IsToolCallCancelled
+       {
+           get => _isToolCallCancelled;
+           set => SetProperty(ref _isToolCallCancelled, value);
+       }
        public bool ShouldShowToolCallPill =>
            string.Equals(ContentType, "tool_call", StringComparison.Ordinal)
            && (HasToolCall
@@ -309,7 +316,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         {
             IsToolCallInProgress = ToolCallStatus is Domain.Models.Tool.ToolCallStatus.InProgress or Domain.Models.Tool.ToolCallStatus.Pending;
             IsToolCallCompleted = ToolCallStatus == Domain.Models.Tool.ToolCallStatus.Completed;
-            IsToolCallFailed = ToolCallStatus is Domain.Models.Tool.ToolCallStatus.Failed or Domain.Models.Tool.ToolCallStatus.Cancelled;
+            IsToolCallFailed = ToolCallStatus == Domain.Models.Tool.ToolCallStatus.Failed;
+            IsToolCallCancelled = ToolCallStatus == Domain.Models.Tool.ToolCallStatus.Cancelled;
         }
 
         partial void OnToolCallStatusChanged(Domain.Models.Tool.ToolCallStatus? value) => UpdateToolCallState();

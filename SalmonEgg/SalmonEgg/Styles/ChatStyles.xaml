@@ -58,6 +58,7 @@
                         IsInProgress="{x:Bind IsToolCallInProgress, Mode=OneWay}"
                         IsCompleted="{x:Bind IsToolCallCompleted, Mode=OneWay}"
                         IsFailed="{x:Bind IsToolCallFailed, Mode=OneWay}"
+                        IsCancelled="{x:Bind IsToolCallCancelled, Mode=OneWay}"
                         RawPayload="{x:Bind ToolCallJson, Mode=OneWay}">
                     </controls:ToolCallPill>
 

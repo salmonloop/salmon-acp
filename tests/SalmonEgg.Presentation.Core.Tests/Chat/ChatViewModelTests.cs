@@ -27,6 +27,7 @@ using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Core.Tests.Threading;
@@ -47,7 +48,8 @@ public class ChatViewModelTests
         Mock<ISessionManager>? sessionManager = null,
         IConversationActivationCoordinator? conversationActivationCoordinator = null,
         Func<IChatConnectionStore, IAcpConnectionCoordinator>? acpConnectionCoordinatorFactory = null,
-        IConversationBindingCommands? bindingCommands = null)
+        IConversationBindingCommands? bindingCommands = null,
+        IVoiceInputService? voiceInputService = null)
     {
         var state = State.Value(new object(), () => ChatState.Empty);
         var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
@@ -162,10 +164,11 @@ public class ChatViewModelTests
                 uiDispatcher,
                 Mock.Of<IConversationPreviewStore>(),
                 vmLogger.Object,
-                acpConnectionCommands,
+                acpConnectionCommands: acpConnectionCommands,
                 conversationActivationCoordinator: conversationActivationCoordinator,
                 bindingCommands: bindingCommands,
-                acpConnectionCoordinator: acpConnectionCoordinatorFactory?.Invoke(connectionStore));
+                acpConnectionCoordinator: acpConnectionCoordinatorFactory?.Invoke(connectionStore),
+                voiceInputService: voiceInputService);
             return new ViewModelFixture(
                 viewModel,
                 state,
@@ -200,6 +203,216 @@ public class ChatViewModelTests
         await fixture.ViewModel.RestoreAsync();
 
         conversationStore.Verify(s => s.LoadAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartVoiceInputCommand_WhenPermissionDenied_DoesNotStartAndExposesError()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = new VoiceInputPermissionResult(VoiceInputPermissionStatus.Denied, "Microphone denied")
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.False(fixture.ViewModel.IsVoiceInputListening);
+        Assert.Equal(0, voiceInput.StartCount);
+        Assert.Contains("Microphone denied", fixture.ViewModel.VoiceInputErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartVoiceInputCommand_WhenVoiceInputIsUnsupported_DoesNotRequestPermissionOrStart()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = false,
+            PermissionResult = VoiceInputPermissionResult.Granted()
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        Assert.False(fixture.ViewModel.CanStartVoiceInput);
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, voiceInput.PermissionRequestCount);
+        Assert.Equal(0, voiceInput.StartCount);
+        Assert.False(fixture.ViewModel.IsVoiceInputListening);
+    }
+
+    [Fact]
+    public async Task VoiceInputVisibility_WhenVoiceInputIsUnsupported_HidesBothButtons()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = false
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+
+        Assert.False(fixture.ViewModel.IsVoiceInputSupported);
+        Assert.False(fixture.ViewModel.ShowVoiceInputStartButton);
+        Assert.False(fixture.ViewModel.ShowVoiceInputStopButton);
+    }
+
+    [Fact]
+    public async Task VoiceInputFinalResult_UpdatesPrompt_AndKeepsListeningUntilStopped()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted()
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+        fixture.ViewModel.CurrentPrompt = "hello";
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.True(fixture.ViewModel.IsVoiceInputListening);
+        Assert.Equal(1, voiceInput.StartCount);
+
+        var requestId = Assert.Single(voiceInput.StartedSessionIds);
+        voiceInput.EmitFinal(new VoiceInputFinalResult(requestId, "world"));
+
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentPrompt, "hello world", StringComparison.Ordinal)));
+
+        Assert.Equal("hello world", fixture.ViewModel.CurrentPrompt);
+        Assert.True(fixture.ViewModel.IsVoiceInputListening);
+    }
+
+    [Fact]
+    public async Task VoiceInputPartialResult_UpdatesPromptWhileListening()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted()
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+        fixture.ViewModel.CurrentPrompt = "hello";
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        var requestId = Assert.Single(voiceInput.StartedSessionIds);
+        voiceInput.EmitPartial(new VoiceInputPartialResult(requestId, "live transcript"));
+
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.CurrentPrompt, "hello live transcript", StringComparison.Ordinal)));
+
+        Assert.True(fixture.ViewModel.IsVoiceInputListening);
+    }
+
+    [Fact]
+    public async Task StopVoiceInputCommand_StopsActiveVoiceSession()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted()
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+        Assert.True(fixture.ViewModel.IsVoiceInputListening);
+
+        await fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, voiceInput.StopCount);
+        Assert.False(fixture.ViewModel.IsVoiceInputListening);
+    }
+
+    [Fact]
+    public async Task StopVoiceInputCommand_DoesNotCancelCallerTokenBeforeServiceStop()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted(),
+            ThrowIfStopCalledAfterCallerCancellation = true
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+        await fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.Null(fixture.ViewModel.VoiceInputErrorMessage);
+        Assert.Equal(1, voiceInput.StopCount);
+    }
+
+    [Fact]
+    public async Task StartVoiceInputCommand_WhenPermissionDenied_RequestsAuthorizationHelp()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = new VoiceInputPermissionResult(
+                VoiceInputPermissionStatus.Denied,
+                "Enable speech access",
+                RequiresAuthorization: true)
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, voiceInput.AuthorizationHelpRequestCount);
+    }
+
+    [Fact]
+    public async Task VoiceInputError_WhenAuthorizationRequired_RequestsAuthorizationHelp()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted()
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        var requestId = Assert.Single(voiceInput.StartedSessionIds);
+        voiceInput.EmitError(new VoiceInputErrorResult(
+            requestId,
+            "Enable speech access",
+            ErrorCode: "0x80045509",
+            RequiresAuthorization: true));
+
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.VoiceInputErrorMessage, "Enable speech access", StringComparison.Ordinal)));
+
+        Assert.Equal(1, voiceInput.AuthorizationHelpRequestCount);
+    }
+
+    [Fact]
+    public async Task Dispose_DoesNotDisposeInjectedVoiceInputService()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true
+        };
+
+        var fixture = CreateViewModel(voiceInputService: voiceInput);
+
+        await fixture.DisposeAsync();
+
+        Assert.Equal(0, voiceInput.DisposeCount);
     }
 
     [Fact]
@@ -3208,6 +3421,98 @@ public class ChatViewModelTests
         Assert.Equal("Renamed by agent", fixture.ViewModel.CurrentSessionDisplayName);
         Assert.Equal("Renamed by agent", catalogItem.DisplayName);
         Assert.Equal(expectedUpdatedAt, catalogItem.LastUpdatedAt);
+    }
+
+    private sealed class FakeVoiceInputService : IVoiceInputService
+    {
+        public bool IsSupported { get; set; }
+
+        public bool IsListening { get; private set; }
+
+        public int PermissionRequestCount { get; private set; }
+
+        public int StartCount { get; private set; }
+
+        public int StopCount { get; private set; }
+
+        public int DisposeCount { get; private set; }
+
+        public int AuthorizationHelpRequestCount { get; private set; }
+
+        public bool ThrowIfStopCalledAfterCallerCancellation { get; set; }
+
+        public List<string> StartedSessionIds { get; } = new();
+
+        public VoiceInputPermissionResult PermissionResult { get; set; } =
+            new(VoiceInputPermissionStatus.Unsupported, "Not configured");
+
+        public event EventHandler<VoiceInputPartialResult>? PartialResultReceived;
+
+        public event EventHandler<VoiceInputFinalResult>? FinalResultReceived;
+
+        public event EventHandler<VoiceInputSessionEndedResult>? SessionEnded;
+
+        public event EventHandler<VoiceInputErrorResult>? ErrorOccurred;
+
+        private CancellationToken _lastStartCancellationToken;
+
+        public Task<VoiceInputPermissionResult> EnsurePermissionAsync(CancellationToken cancellationToken = default)
+        {
+            PermissionRequestCount++;
+            return Task.FromResult(PermissionResult);
+        }
+
+        public Task StartAsync(VoiceInputSessionOptions options, CancellationToken cancellationToken = default)
+        {
+            StartCount++;
+            IsListening = true;
+            _lastStartCancellationToken = cancellationToken;
+            StartedSessionIds.Add(options.RequestId);
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken = default)
+        {
+            if (ThrowIfStopCalledAfterCallerCancellation && _lastStartCancellationToken.IsCancellationRequested)
+            {
+                throw new ObjectDisposedException(nameof(CancellationTokenSource), "The CancellationTokenSource has been disposed.");
+            }
+
+            StopCount++;
+            IsListening = false;
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> TryRequestAuthorizationHelpAsync(CancellationToken cancellationToken = default)
+        {
+            AuthorizationHelpRequestCount++;
+            return Task.FromResult(true);
+        }
+
+        public void EmitPartial(VoiceInputPartialResult result) => PartialResultReceived?.Invoke(this, result);
+
+        public void EmitFinal(VoiceInputFinalResult result)
+        {
+            IsListening = false;
+            FinalResultReceived?.Invoke(this, result);
+        }
+
+        public void EmitError(VoiceInputErrorResult result)
+        {
+            IsListening = false;
+            ErrorOccurred?.Invoke(this, result);
+        }
+
+        public void EmitSessionEnded(VoiceInputSessionEndedResult result)
+        {
+            IsListening = false;
+            SessionEnded?.Invoke(this, result);
+        }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+        }
     }
 
     [Fact]

@@ -134,8 +134,16 @@ public static class DependencyInjection
 #if WINDOWS
         services.AddSingleton<WindowsRawGameControllerMapper>();
         services.AddSingleton<IGamepadInputService, WindowsGamepadInputService>();
+#elif __ANDROID__
+        services.AddSingleton<IGamepadInputService, NoOpGamepadInputService>();
 #else
         services.AddSingleton<IGamepadInputService, NoOpGamepadInputService>();
+#endif
+
+#if WINDOWS
+        services.AddSingleton<IVoiceInputService, NativeVoiceInputService>();
+#else
+        services.AddSingleton<IVoiceInputService>(NoOpVoiceInputService.Instance);
 #endif
         services.AddSingleton<IGamepadNavigationDispatcher, MainShellGamepadNavigationDispatcher>();
 

@@ -23,6 +23,10 @@ public sealed class ToolCallPillComplianceTests
             "DependencyProperty.Register(nameof(IsFailed), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));",
             code,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "DependencyProperty.Register(nameof(IsCancelled), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));",
+            code,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -32,6 +36,17 @@ public sealed class ToolCallPillComplianceTests
 
         Assert.Contains(
             "Visibility=\"{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ToolCallPill_XamlBindsDedicatedCancelledIcon()
+    {
+        var xaml = File.ReadAllText(GetRepoPath(@"SalmonEgg\SalmonEgg\Controls\ToolCallPill.xaml"));
+
+        Assert.Contains(
+            "Visibility=\"{x:Bind IsCancelled, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"",
             xaml,
             StringComparison.Ordinal);
     }

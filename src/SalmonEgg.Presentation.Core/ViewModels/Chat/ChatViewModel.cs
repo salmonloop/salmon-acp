@@ -31,6 +31,7 @@ using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
+using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
@@ -94,6 +95,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private IChatService? _chatService;
     private readonly IUiDispatcher _uiDispatcher;
     private readonly IConversationPreviewStore _previewStore;
+    private readonly IVoiceInputService _voiceInputService;
     private readonly IShellNavigationRuntimeState? _shellNavigationRuntimeState;
     private long _activationVersion;
     private bool _disposed;
@@ -101,6 +103,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private bool _suppressAcpProfileConnect;
     private bool _suppressAutoConnectFromPreferenceChange;
     private CancellationTokenSource? _sendPromptCts;
+    private CancellationTokenSource? _voiceInputCts;
     private CancellationTokenSource? _transientNotificationCts;
     private CancellationTokenSource? _storeStateCts;
     private readonly object _selectedProfileConnectSync = new();
@@ -150,6 +153,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private string? _historyOverlayConversationId;
     private string? _pendingHistoryOverlayDismissConversationId;
     private string? _sessionSwitchPreviewConversationId;
+    private string? _activeVoiceInputRequestId;
+    private string _voiceInputBasePrompt = string.Empty;
 
     /// <summary>
     /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
@@ -190,6 +195,26 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
     private bool _isPromptInFlight;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
+    [NotifyPropertyChangedFor(nameof(CanStartVoiceInput))]
+    [NotifyPropertyChangedFor(nameof(CanStopVoiceInput))]
+    private bool _isVoiceInputListening;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
+    [NotifyPropertyChangedFor(nameof(CanStartVoiceInput))]
+    [NotifyPropertyChangedFor(nameof(CanStopVoiceInput))]
+    private bool _isVoiceInputBusy;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStartVoiceInput))]
+    [NotifyPropertyChangedFor(nameof(CanStopVoiceInput))]
+    private bool _isVoiceInputSupported;
+
+    [ObservableProperty]
+    private string? _voiceInputErrorMessage;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsOverlayVisible))]
@@ -514,6 +539,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     public bool IsInputEnabled
         => !IsBusy
             && !IsPromptInFlight
+            && !IsVoiceInputListening
+            && !IsVoiceInputBusy
             && PendingAskUserRequest is null
             && !ShouldShowLoadingOverlayPresenter;
 
@@ -532,6 +559,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     // UI-BOUND PROPERTIES: Handlers for WinUI/Uno property change notifications.
     // These ensure the View reflects internal state changes that might not trigger automatically.
     public bool CanSendPromptUi => CanSendPrompt();
+
+    public bool CanStartVoiceInput
+        => IsVoiceInputSupported
+            && !IsVoiceInputListening
+            && !IsVoiceInputBusy
+            && IsInputEnabled;
+
+    public bool CanStopVoiceInput
+        => IsVoiceInputSupported
+            && IsVoiceInputListening
+            && !IsVoiceInputBusy;
+
+    public bool ShowVoiceInputStartButton
+        => IsVoiceInputSupported && !IsVoiceInputListening;
+
+    public bool ShowVoiceInputStopButton
+        => IsVoiceInputSupported && IsVoiceInputListening;
 
     public bool HasPlanEntries => PlanEntries.Count > 0;
 
@@ -771,7 +815,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         IConversationBindingCommands? bindingCommands = null,
         IAcpConnectionCoordinator? acpConnectionCoordinator = null,
         IProjectAffinityResolver? projectAffinityResolver = null,
-        IShellNavigationRuntimeState? shellNavigationRuntimeState = null)
+        IShellNavigationRuntimeState? shellNavigationRuntimeState = null,
+        IVoiceInputService? voiceInputService = null)
         : base(logger)
     {
         _chatStore = chatStore ?? throw new ArgumentNullException(nameof(chatStore));
@@ -798,6 +843,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         _projectAffinityResolver = projectAffinityResolver ?? new ProjectAffinityResolver();
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _previewStore = previewStore ?? throw new ArgumentNullException(nameof(previewStore));
+        _voiceInputService = voiceInputService ?? NoOpVoiceInputService.Instance;
         _shellNavigationRuntimeState = shellNavigationRuntimeState;
         ApplyProjectAffinityOverrideCommand = new RelayCommand(ApplyProjectAffinityOverride, () => CanApplyProjectAffinityOverride);
         ClearProjectAffinityOverrideCommand = new RelayCommand(ClearProjectAffinityOverride, () => CanClearProjectAffinityOverride);
@@ -805,6 +851,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ?? new AcpChatCoordinator(
                 new ChatServiceFactoryAdapter(chatServiceFactory),
                 NullLogger<AcpChatCoordinator>.Instance);
+        _voiceInputService.PartialResultReceived += OnVoiceInputPartialResultReceived;
+        _voiceInputService.FinalResultReceived += OnVoiceInputFinalResultReceived;
+        _voiceInputService.SessionEnded += OnVoiceInputSessionEnded;
+        _voiceInputService.ErrorOccurred += OnVoiceInputErrorOccurred;
+        IsVoiceInputSupported = _voiceInputService.IsSupported;
         StartStoreProjection();
 
         _acpProfiles.PropertyChanged += OnAcpProfilesPropertyChanged;
@@ -1013,6 +1064,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsInputEnabled));
         OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
     }
 
     private void OnAcpProfilesPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -2896,6 +2949,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
         OnPropertyChanged(nameof(IsInputEnabled));
         OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
     }
 
     private void TrackPendingSessionUpdate(Task task)
@@ -5094,6 +5149,264 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         && !string.IsNullOrWhiteSpace(CurrentPrompt);
 
     [RelayCommand]
+    private async Task StartVoiceInputAsync()
+    {
+        if (!CanStartVoiceInput)
+        {
+            return;
+        }
+
+        IsVoiceInputBusy = true;
+        VoiceInputErrorMessage = null;
+
+        TryDisposeVoiceInputCts();
+        _voiceInputCts = new CancellationTokenSource();
+
+        try
+        {
+            var permission = await _voiceInputService.EnsurePermissionAsync(_voiceInputCts.Token);
+            if (!permission.IsGranted)
+            {
+                var message = string.IsNullOrWhiteSpace(permission.Message)
+                    ? "Microphone permission was denied."
+                    : permission.Message.Trim();
+                if (permission.RequiresAuthorization)
+                {
+                    try
+                    {
+                        await _voiceInputService.TryRequestAuthorizationHelpAsync(_voiceInputCts.Token);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                VoiceInputErrorMessage = message;
+                ShowTransientNotificationToast(message);
+                return;
+            }
+
+            var requestId = Guid.NewGuid().ToString("N");
+            _activeVoiceInputRequestId = requestId;
+            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+
+            var options = new VoiceInputSessionOptions(
+                requestId,
+                ResolveVoiceInputLanguageTag(),
+                EnablePartialResults: true,
+                PreferOffline: false);
+
+            await _voiceInputService.StartAsync(options, _voiceInputCts.Token);
+            IsVoiceInputListening = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is expected when voice input is quickly superseded.
+        }
+        catch (Exception ex)
+        {
+            VoiceInputErrorMessage = ex.Message;
+            ShowTransientNotificationToast($"Voice input failed: {ex.Message}");
+            _activeVoiceInputRequestId = null;
+            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+        }
+        finally
+        {
+            IsVoiceInputBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task StopVoiceInputAsync()
+    {
+        if (!IsVoiceInputListening || IsVoiceInputBusy)
+        {
+            return;
+        }
+
+        IsVoiceInputBusy = true;
+
+        try
+        {
+            await _voiceInputService.StopAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is expected when stopping a live recognition request.
+        }
+        catch (Exception ex)
+        {
+            VoiceInputErrorMessage = ex.Message;
+            ShowTransientNotificationToast($"Failed to stop voice input: {ex.Message}");
+        }
+        finally
+        {
+            IsVoiceInputListening = false;
+            _activeVoiceInputRequestId = null;
+            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+            TryDisposeVoiceInputCts();
+            IsVoiceInputBusy = false;
+        }
+    }
+
+    private string ResolveVoiceInputLanguageTag()
+        => CultureInfo.CurrentUICulture.Name;
+
+    private void OnVoiceInputPartialResultReceived(object? sender, VoiceInputPartialResult result)
+        => _ = HandleVoiceInputPartialResultAsync(result);
+
+    private async Task HandleVoiceInputPartialResultAsync(VoiceInputPartialResult result)
+    {
+        if (!IsCurrentVoiceInputRequest(result.RequestId))
+        {
+            return;
+        }
+
+        await PostToUiAsync(() =>
+        {
+            if (!IsCurrentVoiceInputRequest(result.RequestId))
+            {
+                return;
+            }
+
+            CurrentPrompt = MergeVoiceInputText(result.Text);
+        }).ConfigureAwait(false);
+    }
+
+    private void OnVoiceInputFinalResultReceived(object? sender, VoiceInputFinalResult result)
+        => _ = HandleVoiceInputFinalResultAsync(result);
+
+    private async Task HandleVoiceInputFinalResultAsync(VoiceInputFinalResult result)
+    {
+        if (!IsCurrentVoiceInputRequest(result.RequestId))
+        {
+            return;
+        }
+
+        await PostToUiAsync(() =>
+        {
+            if (!IsCurrentVoiceInputRequest(result.RequestId))
+            {
+                return;
+            }
+
+            CurrentPrompt = MergeVoiceInputText(result.Text);
+            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+        }).ConfigureAwait(false);
+    }
+
+    private void OnVoiceInputSessionEnded(object? sender, VoiceInputSessionEndedResult result)
+        => _ = HandleVoiceInputSessionEndedAsync(result);
+
+    private async Task HandleVoiceInputSessionEndedAsync(VoiceInputSessionEndedResult result)
+    {
+        if (!IsCurrentVoiceInputRequest(result.RequestId))
+        {
+            return;
+        }
+
+        await PostToUiAsync(() =>
+        {
+            if (!IsCurrentVoiceInputRequest(result.RequestId))
+            {
+                return;
+            }
+
+            IsVoiceInputListening = false;
+            _activeVoiceInputRequestId = null;
+            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+        }).ConfigureAwait(false);
+    }
+
+    private void OnVoiceInputErrorOccurred(object? sender, VoiceInputErrorResult result)
+        => _ = HandleVoiceInputErrorAsync(result);
+
+    private async Task HandleVoiceInputErrorAsync(VoiceInputErrorResult result)
+    {
+        if (!IsCurrentVoiceInputRequest(result.RequestId))
+        {
+            return;
+        }
+
+        await PostToUiAsync(() =>
+        {
+            if (!IsCurrentVoiceInputRequest(result.RequestId))
+            {
+                return;
+            }
+
+            var message = string.IsNullOrWhiteSpace(result.Message)
+                ? "Voice input failed."
+                : result.Message.Trim();
+            if (result.RequiresAuthorization)
+            {
+                try
+                {
+                    _ = _voiceInputService.TryRequestAuthorizationHelpAsync();
+                }
+                catch
+                {
+                }
+            }
+            VoiceInputErrorMessage = message;
+            IsVoiceInputListening = false;
+            _activeVoiceInputRequestId = null;
+            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+            ShowTransientNotificationToast(message);
+        }).ConfigureAwait(false);
+    }
+
+    private bool IsCurrentVoiceInputRequest(string requestId)
+        => !string.IsNullOrWhiteSpace(requestId)
+            && string.Equals(_activeVoiceInputRequestId, requestId, StringComparison.Ordinal);
+
+    private void TryDisposeVoiceInputCts()
+    {
+        if (_voiceInputCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _voiceInputCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            _voiceInputCts.Dispose();
+        }
+        catch
+        {
+        }
+
+        _voiceInputCts = null;
+    }
+
+    private string MergeVoiceInputText(string rawText)
+    {
+        var spokenText = rawText?.Trim() ?? string.Empty;
+        var basePrompt = _voiceInputBasePrompt?.TrimEnd() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(spokenText))
+        {
+            return basePrompt;
+        }
+
+        if (string.IsNullOrWhiteSpace(basePrompt))
+        {
+            return spokenText;
+        }
+
+        return $"{basePrompt} {spokenText}";
+    }
+
+    [RelayCommand]
     private async Task CancelPromptAsync()
     {
         if (!IsPromptInFlight)
@@ -5348,8 +5661,40 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsInputEnabled));
         OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
+        OnPropertyChanged(nameof(ShowVoiceInputStartButton));
+        OnPropertyChanged(nameof(ShowVoiceInputStopButton));
+    }
 
+    partial void OnIsVoiceInputListeningChanged(bool value)
+    {
+        SendPromptCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(IsInputEnabled));
+        OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
+        OnPropertyChanged(nameof(ShowVoiceInputStartButton));
+        OnPropertyChanged(nameof(ShowVoiceInputStopButton));
+    }
 
+    partial void OnIsVoiceInputBusyChanged(bool value)
+    {
+        SendPromptCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(IsInputEnabled));
+        OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
+        OnPropertyChanged(nameof(ShowVoiceInputStartButton));
+        OnPropertyChanged(nameof(ShowVoiceInputStopButton));
+    }
+
+    partial void OnIsVoiceInputSupportedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
+        OnPropertyChanged(nameof(ShowVoiceInputStartButton));
+        OnPropertyChanged(nameof(ShowVoiceInputStopButton));
     }
 
     partial void OnPendingAskUserRequestChanged(AskUserRequestViewModel? value)
@@ -5368,6 +5713,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsInputEnabled));
         OnPropertyChanged(nameof(CanSendPromptUi));
+        OnPropertyChanged(nameof(CanStartVoiceInput));
+        OnPropertyChanged(nameof(CanStopVoiceInput));
         OnPropertyChanged(nameof(HasPendingAskUserRequest));
         OnPropertyChanged(nameof(AskUserPrompt));
         OnPropertyChanged(nameof(AskUserQuestions));
@@ -7291,6 +7638,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
            _preferences.Projects.CollectionChanged -= OnProjectAffinityPreferencesCollectionChanged;
            _preferences.ProjectPathMappings.CollectionChanged -= OnProjectAffinityPreferencesCollectionChanged;
            _conversationWorkspace.PropertyChanged -= OnConversationWorkspacePropertyChanged;
+           _voiceInputService.PartialResultReceived -= OnVoiceInputPartialResultReceived;
+           _voiceInputService.FinalResultReceived -= OnVoiceInputFinalResultReceived;
+           _voiceInputService.SessionEnded -= OnVoiceInputSessionEnded;
+           _voiceInputService.ErrorOccurred -= OnVoiceInputErrorOccurred;
            if (_shellNavigationRuntimeState is not null)
            {
                _shellNavigationRuntimeState.PropertyChanged -= OnShellNavigationRuntimeStatePropertyChanged;
@@ -7303,10 +7654,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
            }
 
            _sendPromptCts?.Cancel();
+           _voiceInputCts?.Cancel();
            _transientNotificationCts?.Cancel();
+           try { _voiceInputService.StopAsync().GetAwaiter().GetResult(); } catch { }
            StopStoreProjection();
 
             try { _sendPromptCts?.Dispose(); } catch { }
+            try { _voiceInputCts?.Dispose(); } catch { }
             try { _transientNotificationCts?.Dispose(); } catch { }
             try { _conversationActivationCts?.Cancel(); } catch { }
             try { _conversationActivationCts?.Dispose(); } catch { }
@@ -7316,6 +7670,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _selectedProfileConnectTask = null;
             _pendingSelectedProfileConnect = null;
             _sendPromptCts = null;
+       _voiceInputCts = null;
        _transientNotificationCts = null;
        _conversationActivationCts = null;
        }

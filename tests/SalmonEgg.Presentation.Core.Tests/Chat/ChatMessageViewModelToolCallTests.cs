@@ -47,4 +47,20 @@ public sealed class ChatMessageViewModelToolCallTests
         Assert.False(vm.HasToolCallJson);
         Assert.True(vm.ShouldShowToolCallPill);
     }
+
+    [Fact]
+    public void CancelledToolCall_UsesDedicatedCancelledStateInsteadOfFailedState()
+    {
+        var vm = ChatMessageViewModel.CreateFromToolCall(
+            id: "tool-3",
+            toolCallId: "call-3",
+            rawInput: null,
+            rawOutput: null,
+            kind: Domain.Models.Tool.ToolCallKind.Execute,
+            status: Domain.Models.Tool.ToolCallStatus.Cancelled,
+            title: "Running tests");
+
+        Assert.True(vm.IsToolCallCancelled);
+        Assert.False(vm.IsToolCallFailed);
+    }
 }

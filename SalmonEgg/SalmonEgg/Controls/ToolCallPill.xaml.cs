@@ -43,6 +43,9 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
     public static readonly DependencyProperty IsFailedProperty =
         DependencyProperty.Register(nameof(IsFailed), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));
 
+    public static readonly DependencyProperty IsCancelledProperty =
+        DependencyProperty.Register(nameof(IsCancelled), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string ToolTitle
@@ -87,6 +90,12 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         set => SetValue(IsFailedProperty, value);
     }
 
+    public bool IsCancelled
+    {
+        get => (bool)GetValue(IsCancelledProperty);
+        set => SetValue(IsCancelledProperty, value);
+    }
+
     public string DisplayToolName => ResolveToolName();
 
     public string DisplaySummary => ResolveSummary();
@@ -127,6 +136,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
                 e.Property == IsInProgressProperty ? nameof(IsInProgress) :
                 e.Property == IsCompletedProperty ? nameof(IsCompleted) :
                 e.Property == IsFailedProperty ? nameof(IsFailed) :
+                e.Property == IsCancelledProperty ? nameof(IsCancelled) :
                 null;
 
             if (!string.IsNullOrWhiteSpace(propertyName))
