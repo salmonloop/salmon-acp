@@ -47,7 +47,7 @@ namespace SalmonEgg.Domain.Models.Content
         /// <param name="mimeType">MIME 类型</param>
         public static ResourceContentBlock CreateText(string uri, string text, string mimeType = "text/plain")
         {
-            return new ResourceContentBlock(new EmbeddedResource(uri, text, mimeType));
+            return new ResourceContentBlock(EmbeddedResource.CreateText(uri, text, mimeType));
         }
 
         /// <summary>
@@ -58,7 +58,7 @@ namespace SalmonEgg.Domain.Models.Content
         /// <param name="mimeType">MIME 类型</param>
         public static ResourceContentBlock CreateBinary(string uri, string blob, string mimeType)
         {
-            return new ResourceContentBlock(new EmbeddedResource(uri, blob, mimeType));
+            return new ResourceContentBlock(EmbeddedResource.CreateBinary(uri, blob, mimeType));
         }
     }
 }

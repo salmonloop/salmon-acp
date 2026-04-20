@@ -22,6 +22,12 @@ namespace SalmonEgg.Domain.Models.Content
         public string Data { get; set; } = string.Empty;
 
         /// <summary>
+        /// Optional URI reference for the image source.
+        /// </summary>
+        [JsonPropertyName("uri")]
+        public string? Uri { get; set; }
+
+        /// <summary>
         /// 图片的 MIME 类型（例如 "image/png", "image/jpeg"）。
         /// </summary>
         [JsonPropertyName("mimeType")]
@@ -39,10 +45,12 @@ namespace SalmonEgg.Domain.Models.Content
         /// </summary>
         /// <param name="data">Base64 编码的图片数据</param>
         /// <param name="mimeType">图片的 MIME 类型</param>
-        public ImageContentBlock(string data, string mimeType = "image/png")
+        /// <param name="uri">Optional URI reference for the image source</param>
+        public ImageContentBlock(string data, string mimeType = "image/png", string? uri = null)
         {
             Data = data;
             MimeType = mimeType;
+            Uri = uri;
         }
     }
 }

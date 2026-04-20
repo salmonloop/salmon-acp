@@ -131,6 +131,44 @@ public class MessageParserTests
     }
 
     [Fact]
+    public void Options_ShouldDeserialize_SessionPrompt_WithImageUriAndAnnotations()
+    {
+        var json = """
+        {
+          "sessionId": "sess_content",
+          "prompt": [
+            {
+              "type": "image",
+              "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
+              "mimeType": "image/png",
+              "uri": "file:///tmp/example.png",
+              "annotations": {
+                "audience": ["assistant"],
+                "priority": 0.75,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+          ]
+        }
+        """;
+
+        var parser = new MessageParser();
+        var promptParams = JsonSerializer.Deserialize<SessionPromptParams>(json, parser.Options);
+
+        Assert.NotNull(promptParams);
+        Assert.Single(promptParams!.Prompt);
+
+        var image = Assert.IsType<ImageContentBlock>(promptParams.Prompt[0]);
+        var roundTripped = JsonSerializer.Serialize(image, parser.Options);
+        using var doc = JsonDocument.Parse(roundTripped);
+
+        Assert.Equal("file:///tmp/example.png", doc.RootElement.GetProperty("uri").GetString());
+        Assert.True(doc.RootElement.TryGetProperty("annotations", out var annotations));
+        Assert.Equal(0.75m, annotations.GetProperty("priority").GetDecimal());
+        Assert.Equal("assistant", annotations.GetProperty("audience")[0].GetString());
+    }
+
+    [Fact]
     public void Options_ShouldDeserialize_SessionUpdate_WhenMetaPrecedesDiscriminator()
     {
         var json = """

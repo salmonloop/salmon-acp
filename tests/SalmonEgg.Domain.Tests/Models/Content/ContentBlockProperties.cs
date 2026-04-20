@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
-using FsCheck.NUnit;
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Content;
 
@@ -33,86 +32,268 @@ namespace SalmonEgg.Domain.Tests.Models.Content
         /// <summary>
         /// 属性 6：文本内容块往返一致性
         /// </summary>
-        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
-        public void TextContentBlock_RoundTrip_PreservesEquivalence(string text)
+        [Test]
+        public void TextContentBlock_RoundTrip_PreservesEquivalence()
         {
             // Arrange
-            var block = new TextContentBlock(text);
-            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
+            const string text = "Detailed debug information";
+            var json = $$"""
+            {
+              "type": "text",
+              "text": {{JsonSerializer.Serialize(text, _jsonOptions)}},
+              "annotations": {
+                "audience": ["user"],
+                "priority": 0.8,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+            """;
 
             // Act
-            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
             var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as TextContentBlock;
+            var roundTripped = JsonSerializer.Serialize<ContentBlock>(deserialized!, _jsonOptions);
+            using var doc = JsonDocument.Parse(roundTripped);
 
             // Assert
             Assert.That(deserialized, Is.Not.Null);
             Assert.That(deserialized!.Type, Is.EqualTo("text"));
-            Assert.That(deserialized.Text, Is.EqualTo(block.Text));
+            Assert.That(deserialized.Text, Is.EqualTo(text));
+            Assert.That(doc.RootElement.TryGetProperty("annotations", out var annotations), Is.True);
+            Assert.That(annotations.GetProperty("audience")[0].GetString(), Is.EqualTo("user"));
+            Assert.That(annotations.GetProperty("priority").GetDecimal(), Is.EqualTo(0.8m));
+            Assert.That(annotations.GetProperty("lastModified").GetString(), Is.EqualTo("2026-04-20T00:00:00Z"));
         }
 
         /// <summary>
         /// 属性 6：图片内容块往返一致性
         /// </summary>
-        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
-        public void ImageContentBlock_RoundTrip_PreservesEquivalence(string data, string mimeType)
+        [Test]
+        public void ImageContentBlock_RoundTrip_PreservesOptionalUriAndAnnotations()
         {
             // Arrange
-            var block = new ImageContentBlock(data, mimeType);
-            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
+            const string data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
+            const string mimeType = "image/png";
+            const string uri = "file:///tmp/example.png";
+            var json = $$"""
+            {
+              "type": "image",
+              "data": {{JsonSerializer.Serialize(data, _jsonOptions)}},
+              "mimeType": {{JsonSerializer.Serialize(mimeType, _jsonOptions)}},
+              "uri": {{JsonSerializer.Serialize(uri, _jsonOptions)}},
+              "annotations": {
+                "audience": ["assistant"],
+                "priority": 0.4,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+            """;
 
             // Act
-            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
             var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as ImageContentBlock;
+            var roundTripped = JsonSerializer.Serialize<ContentBlock>(deserialized!, _jsonOptions);
+            using var doc = JsonDocument.Parse(roundTripped);
 
             // Assert
             Assert.That(deserialized, Is.Not.Null);
             Assert.That(deserialized!.Type, Is.EqualTo("image"));
-            Assert.That(deserialized.Data, Is.EqualTo(block.Data));
-            Assert.That(deserialized.MimeType, Is.EqualTo(block.MimeType));
+            Assert.That(deserialized.Data, Is.EqualTo(data));
+            Assert.That(deserialized.MimeType, Is.EqualTo(mimeType));
+            Assert.That(doc.RootElement.GetProperty("uri").GetString(), Is.EqualTo(uri));
+            Assert.That(doc.RootElement.TryGetProperty("annotations", out var annotations), Is.True);
+            Assert.That(annotations.GetProperty("audience")[0].GetString(), Is.EqualTo("assistant"));
+            Assert.That(annotations.GetProperty("priority").GetDecimal(), Is.EqualTo(0.4m));
         }
 
         /// <summary>
         /// 属性 6：音频内容块往返一致性
         /// </summary>
-        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
-        public void AudioContentBlock_RoundTrip_PreservesEquivalence(string data, string mimeType)
+        [Test]
+        public void AudioContentBlock_RoundTrip_PreservesEquivalence()
         {
             // Arrange
-            var block = new AudioContentBlock(data, mimeType);
-            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
+            const string data = "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAAB";
+            const string mimeType = "audio/wav";
+            var json = $$"""
+            {
+              "type": "audio",
+              "data": {{JsonSerializer.Serialize(data, _jsonOptions)}},
+              "mimeType": {{JsonSerializer.Serialize(mimeType, _jsonOptions)}},
+              "annotations": {
+                "audience": ["user", "assistant"],
+                "priority": 0.6,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+            """;
 
             // Act
-            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
             var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as AudioContentBlock;
+            var roundTripped = JsonSerializer.Serialize<ContentBlock>(deserialized!, _jsonOptions);
+            using var doc = JsonDocument.Parse(roundTripped);
 
             // Assert
             Assert.That(deserialized, Is.Not.Null);
             Assert.That(deserialized!.Type, Is.EqualTo("audio"));
-            Assert.That(deserialized.Data, Is.EqualTo(block.Data));
-            Assert.That(deserialized.MimeType, Is.EqualTo(block.MimeType));
+            Assert.That(deserialized.Data, Is.EqualTo(data));
+            Assert.That(deserialized.MimeType, Is.EqualTo(mimeType));
+            Assert.That(doc.RootElement.TryGetProperty("annotations", out var annotations), Is.True);
+            Assert.That(annotations.GetProperty("audience").GetArrayLength(), Is.EqualTo(2));
         }
 
         /// <summary>
         /// 属性 6：资源内容块往返一致性
         /// </summary>
-        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
-        public void ResourceContentBlock_RoundTrip_PreservesEquivalence(string uri, string text, string mimeType)
+        [Test]
+        public void ResourceContentBlock_RoundTrip_PreservesTextAndBlobForms()
         {
             // Arrange
-            var resource = new EmbeddedResource(uri, text, mimeType);
-            var block = new ResourceContentBlock(resource);
-            ContentBlock baseRef = block;  // 使用基类引用以触发 JsonPolymorphic 类型标识符写入
+            const string uri = "file:///home/user/script.py";
+            const string text = "def hello():\n    print('Hello, world!')";
+            const string blob = "AAECAwQ=";
+            const string mimeType = "text/x-python";
+            var textJson = $$"""
+            {
+              "type": "resource",
+              "resource": {
+                "uri": {{JsonSerializer.Serialize(uri, _jsonOptions)}},
+                "mimeType": {{JsonSerializer.Serialize(mimeType, _jsonOptions)}},
+                "text": {{JsonSerializer.Serialize(text, _jsonOptions)}}
+              },
+              "annotations": {
+                "audience": ["assistant"],
+                "priority": 0.5,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+            """;
+            var blobJson = $$"""
+            {
+              "type": "resource",
+              "resource": {
+                "uri": {{JsonSerializer.Serialize(uri, _jsonOptions)}},
+                "mimeType": {{JsonSerializer.Serialize(mimeType, _jsonOptions)}},
+                "blob": {{JsonSerializer.Serialize(blob, _jsonOptions)}}
+              },
+              "annotations": {
+                "audience": ["user"],
+                "priority": 0.9,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+            """;
 
             // Act
-            var json = JsonSerializer.Serialize(baseRef, _jsonOptions);
-            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as ResourceContentBlock;
+            var textBlock = JsonSerializer.Deserialize<ContentBlock>(textJson, _jsonOptions) as ResourceContentBlock;
+            var blobBlock = JsonSerializer.Deserialize<ContentBlock>(blobJson, _jsonOptions) as ResourceContentBlock;
+            var textRoundTripped = JsonSerializer.Serialize<ContentBlock>(textBlock!, _jsonOptions);
+            var blobRoundTripped = JsonSerializer.Serialize<ContentBlock>(blobBlock!, _jsonOptions);
+            using var textDoc = JsonDocument.Parse(textRoundTripped);
+            using var blobDoc = JsonDocument.Parse(blobRoundTripped);
+
+            // Assert
+            Assert.That(textBlock, Is.Not.Null);
+            Assert.That(textBlock!.Type, Is.EqualTo("resource"));
+            Assert.That(textBlock.Resource.Uri, Is.EqualTo(uri));
+            Assert.That(textBlock.Resource.Text, Is.EqualTo(text));
+            Assert.That(textBlock.Resource.Blob, Is.Null);
+            Assert.That(textDoc.RootElement.GetProperty("annotations").GetProperty("priority").GetDecimal(), Is.EqualTo(0.5m));
+
+            Assert.That(blobBlock, Is.Not.Null);
+            Assert.That(blobBlock!.Type, Is.EqualTo("resource"));
+            Assert.That(blobBlock.Resource.Uri, Is.EqualTo(uri));
+            Assert.That(blobBlock.Resource.Blob, Is.EqualTo(blob));
+            Assert.That(blobBlock.Resource.Text, Is.Null);
+            Assert.That(blobDoc.RootElement.GetProperty("annotations").GetProperty("priority").GetDecimal(), Is.EqualTo(0.9m));
+        }
+
+        /// <summary>
+        /// 属性 6：资源内容块二进制工厂必须写入 blob 字段。
+        /// </summary>
+        [Test]
+        public void ResourceContentBlock_CreateBinary_UsesBlobField()
+        {
+            // Arrange
+            var block = ResourceContentBlock.CreateBinary(
+                uri: "file:///home/user/archive.bin",
+                blob: "AAECAwQ=",
+                mimeType: "application/octet-stream");
+
+            // Act
+            var json = JsonSerializer.Serialize<ContentBlock>(block, _jsonOptions);
+            using var doc = JsonDocument.Parse(json);
+            var resource = doc.RootElement.GetProperty("resource");
+
+            // Assert
+            Assert.That(resource.TryGetProperty("blob", out var blob), Is.True);
+            Assert.That(blob.GetString(), Is.EqualTo("AAECAwQ="));
+            Assert.That(resource.TryGetProperty("text", out var text), Is.True);
+            Assert.That(text.ValueKind, Is.EqualTo(JsonValueKind.Null));
+        }
+
+        /// <summary>
+        /// 属性 6：资源链接内容块往返一致性。
+        /// </summary>
+        [Test]
+        public void ResourceLinkContentBlock_RoundTrip_PreservesAnnotations()
+        {
+            // Arrange
+            var json = """
+            {
+              "type": "resource_link",
+              "uri": "file:///home/user/document.pdf",
+              "name": "document.pdf",
+              "mimeType": "application/pdf",
+              "title": "Reference",
+              "description": "Project document",
+              "size": 1024000,
+              "annotations": {
+                "audience": ["user"],
+                "priority": 0.2,
+                "lastModified": "2026-04-20T00:00:00Z"
+              }
+            }
+            """;
+
+            // Act
+            var deserialized = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions) as ResourceLinkContentBlock;
+            var roundTripped = JsonSerializer.Serialize<ContentBlock>(deserialized!, _jsonOptions);
+            using var doc = JsonDocument.Parse(roundTripped);
 
             // Assert
             Assert.That(deserialized, Is.Not.Null);
-            Assert.That(deserialized!.Type, Is.EqualTo("resource"));
-            Assert.That(deserialized.Resource.Uri, Is.EqualTo(block.Resource.Uri));
-            Assert.That(deserialized.Resource.Text, Is.EqualTo(block.Resource.Text));
-            Assert.That(deserialized.Resource.MimeType, Is.EqualTo(block.Resource.MimeType));
+            Assert.That(deserialized!.Uri, Is.EqualTo("file:///home/user/document.pdf"));
+            Assert.That(deserialized.Name, Is.EqualTo("document.pdf"));
+            Assert.That(doc.RootElement.TryGetProperty("annotations", out var annotations), Is.True);
+            Assert.That(annotations.GetProperty("priority").GetDecimal(), Is.EqualTo(0.2m));
+        }
+
+        /// <summary>
+        /// 属性 8：未知内容类型应在启用回退时保留负载。
+        /// </summary>
+        [Test]
+        public void ContentBlock_UnknownType_RoundTrip_PreservesExtensionPayload()
+        {
+            // Arrange
+            var json = """
+            {
+              "type": "experimental_content",
+              "payload": {
+                "kind": "custom",
+                "value": 42
+              }
+            }
+            """;
+
+            // Act
+            var block = JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions);
+            var roundTripped = JsonSerializer.Serialize(block, _jsonOptions);
+            using var doc = JsonDocument.Parse(roundTripped);
+
+            // Assert
+            Assert.That(block, Is.Not.Null);
+            Assert.That(block, Is.InstanceOf<ContentBlock>());
+            Assert.That(doc.RootElement.GetProperty("payload").GetProperty("kind").GetString(), Is.EqualTo("custom"));
+            Assert.That(doc.RootElement.GetProperty("payload").GetProperty("value").GetInt32(), Is.EqualTo(42));
         }
 
         /// <summary>
