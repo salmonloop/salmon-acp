@@ -513,6 +513,19 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void MiniWindowSessionSelection_ExposesStableAutomationIds()
+    {
+        var mainPageXaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
+        var miniChatXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
+        var miniWindowItemVm = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Chat\MiniWindowConversationItemViewModel.cs");
+
+        Assert.Contains("AutomationProperties.AutomationId=\"TitleBar.OpenMiniWindow\"", mainPageXaml);
+        Assert.Contains("AutomationProperties.AutomationId=\"MiniChat.SessionSelector\"", miniChatXaml);
+        Assert.Contains("AutomationProperties.AutomationId=\"{x:Bind AutomationId, Mode=OneTime}\"", miniChatXaml);
+        Assert.Contains("public string AutomationId => $\"MiniChat.SessionItem.{ConversationId}\";", miniWindowItemVm);
+    }
+
+    [Fact]
     public void AgentProfileEditor_InteractiveTextsExposeLocalizationUids()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AgentProfileEditorPage.xaml");

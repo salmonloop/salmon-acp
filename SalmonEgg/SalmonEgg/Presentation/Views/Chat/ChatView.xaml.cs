@@ -51,7 +51,7 @@ namespace SalmonEgg.Presentation.Views.Chat
             _isViewLoaded = true;
             unchecked { _scrollScheduleGeneration++; }
             _userScrolledUp = false;
-            _wasOverlayVisible = ViewModel.IsOverlayVisible;
+            _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
             _initialScrollGate.MarkPending();
             EnsureMessageTracking();
             AttachScrollViewer();
@@ -339,7 +339,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                 || e.PropertyName == nameof(ChatViewModel.IsSessionActive))
             {
                 ResetAutoScrollStateForConversationChange();
-                _wasOverlayVisible = ViewModel.IsOverlayVisible;
+                _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
                 _initialScrollGate.MarkPending();
                 BeginLayoutLoadingIfPendingMessages();
                 RequestInitialScroll();
@@ -358,7 +358,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return;
             }
 
-            if (e.PropertyName == nameof(ChatViewModel.IsOverlayVisible))
+            if (e.PropertyName == nameof(ChatViewModel.IsActivationOverlayVisible))
             {
                 HandleOverlayVisibilityChanged();
                 UpdateTranscriptViewportAutomationState();
@@ -601,7 +601,7 @@ namespace SalmonEgg.Presentation.Views.Chat
 
         private void HandleOverlayVisibilityChanged()
         {
-            var isOverlayVisible = ViewModel.IsOverlayVisible;
+            var isOverlayVisible = ViewModel.IsActivationOverlayVisible;
             var overlayJustDismissed = _wasOverlayVisible && !isOverlayVisible;
             _wasOverlayVisible = isOverlayVisible;
 
@@ -625,7 +625,7 @@ namespace SalmonEgg.Presentation.Views.Chat
         {
             if (!_isViewLoaded
                 || !ViewModel.IsSessionActive
-                || ViewModel.IsOverlayVisible
+                || ViewModel.IsActivationOverlayVisible
                 || ViewModel.MessageHistory.Count <= 0)
             {
                 return;
@@ -635,7 +635,7 @@ namespace SalmonEgg.Presentation.Views.Chat
             {
                 if (!_isViewLoaded
                     || !ViewModel.IsSessionActive
-                    || ViewModel.IsOverlayVisible
+                    || ViewModel.IsActivationOverlayVisible
                     || ViewModel.MessageHistory.Count <= 0)
                 {
                     return;
@@ -674,7 +674,7 @@ namespace SalmonEgg.Presentation.Views.Chat
                 return "inactive";
             }
 
-            if (ViewModel.IsOverlayVisible)
+            if (ViewModel.IsActivationOverlayVisible)
             {
                 return "loading";
             }

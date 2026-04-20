@@ -15,7 +15,8 @@ namespace SalmonEgg.Presentation.Views.MiniWindow;
 
 public sealed partial class MiniChatView : Page
 {
-    public ChatViewModel ViewModel { get; }
+    public ChatShellViewModel ShellViewModel { get; }
+    public ChatViewModel ViewModel => ShellViewModel.Chat;
     private bool _isLoaded;
     private bool _isMessagesListLoaded;
     private bool _isTrackingViewModel;
@@ -33,7 +34,7 @@ public sealed partial class MiniChatView : Page
 
     public MiniChatView()
     {
-        ViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
+        ShellViewModel = App.ServiceProvider.GetRequiredService<ChatShellViewModel>();
         InitializeComponent();
 
         Loaded += OnLoaded;
@@ -79,7 +80,7 @@ public sealed partial class MiniChatView : Page
         _isLoaded = true;
         _userScrolledUp = false;
         _manualScrollIntentPending = false;
-        _wasOverlayVisible = ViewModel.IsOverlayVisible;
+        _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
         _initialScrollGate.MarkPending();
         EnsureViewModelTracking();
         RequestInitialScroll();
@@ -235,13 +236,13 @@ public sealed partial class MiniChatView : Page
             || e.PropertyName == nameof(ChatViewModel.IsSessionActive))
         {
             ResetAutoScrollStateForConversationChange();
-            _wasOverlayVisible = ViewModel.IsOverlayVisible;
+            _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
             _initialScrollGate.MarkPending();
             RequestInitialScroll();
             return;
         }
 
-        if (e.PropertyName == nameof(ChatViewModel.IsOverlayVisible))
+        if (e.PropertyName == nameof(ChatViewModel.IsActivationOverlayVisible))
         {
             HandleOverlayVisibilityChanged();
         }
@@ -515,7 +516,7 @@ public sealed partial class MiniChatView : Page
 
     private void HandleOverlayVisibilityChanged()
     {
-        var isOverlayVisible = ViewModel.IsOverlayVisible;
+        var isOverlayVisible = ViewModel.IsActivationOverlayVisible;
         var overlayJustDismissed = _wasOverlayVisible && !isOverlayVisible;
         _wasOverlayVisible = isOverlayVisible;
 

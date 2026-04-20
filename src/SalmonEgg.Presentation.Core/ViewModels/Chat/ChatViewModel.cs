@@ -68,6 +68,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         FinalizingProjection = 6
     }
 
+    private readonly record struct ActivationOverlayVisualState(
+        bool IsActivationOverlayVisible,
+        bool ShowsBlockingMask,
+        bool ShowsStatusPill,
+        bool ShowsPresenter,
+        LoadingOverlayStage Stage,
+        string StatusText);
+
     private static readonly TimeSpan RemoteReplayStartTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RemoteReplaySettleQuietPeriod = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan RemoteReplayKnownTranscriptGrowthGracePeriod = TimeSpan.FromSeconds(5);
@@ -114,7 +122,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private IDisposable? _connectionStateSubscription;
     private string? _currentRemoteSessionId;
     private IReadOnlyList<AuthMethodDefinition>? _advertisedAuthMethods;
-    private bool _suppressMiniWindowSessionSync;
     private bool _suppressStoreProfileProjection;
     private bool _suppressStorePromptProjection;
     private bool _suppressProfileSyncFromStore;
@@ -153,6 +160,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private string? _historyOverlayConversationId;
     private string? _pendingHistoryOverlayDismissConversationId;
     private string? _sessionSwitchPreviewConversationId;
+    private string? _visibleTranscriptConversationId;
     private string? _activeVoiceInputRequestId;
     private string _voiceInputBasePrompt = string.Empty;
 
@@ -183,9 +191,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     [ObservableProperty]
     private ObservableCollection<MiniWindowConversationItemViewModel> _miniWindowSessions = new();
-
-    [ObservableProperty]
-    private MiniWindowConversationItemViewModel? _selectedMiniWindowSession;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
@@ -272,32 +277,73 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             || (IsSessionSwitchOverlayVisible
                 && !IsOverlayOwnedByCurrentSession(_sessionSwitchOverlayConversationId));
 
+    private bool IsVisibleTranscriptStaleForCurrentSession
+        => HasVisibleTranscriptContent
+            && !string.IsNullOrWhiteSpace(_visibleTranscriptConversationId)
+            && !string.Equals(_visibleTranscriptConversationId, CurrentSessionId, StringComparison.Ordinal);
+
+    public bool IsActivationOverlayVisible
+        => ResolveActivationOverlayVisualState().IsActivationOverlayVisible;
+
     public bool IsOverlayVisible
-        => ShouldShowConnectionLifecycleOverlay
-            || ShouldShowHistoryOverlay
-            || ShouldShowProjectedHydrationOverlay
-            || IsSessionSwitchOverlayVisible
-            || IsSessionSwitchPreviewVisible
+        => IsActivationOverlayVisible
             || ShouldShowLayoutLoading;
 
     public bool HasVisibleTranscriptContent => MessageHistory.Count > 0;
 
     public bool ShouldShowBlockingLoadingMask
-        => IsOverlayVisible
-            && (!HasVisibleTranscriptContent || IsSessionSwitchOverlayBlockingVisibleTranscript);
+        => ResolveActivationOverlayVisualState().ShowsBlockingMask;
 
     public bool ShouldShowLoadingOverlayStatusPill
-        => IsOverlayVisible
-            && !string.IsNullOrWhiteSpace(OverlayStatusText);
+        => ResolveActivationOverlayVisualState().ShowsStatusPill;
 
     public bool ShouldShowLoadingOverlayPresenter
-        => ShouldShowBlockingLoadingMask || ShouldShowLoadingOverlayStatusPill;
+        => ResolveActivationOverlayVisualState().ShowsPresenter;
 
     public LoadingOverlayStage OverlayLoadingStage =>
-        ResolveOverlayLoadingStage();
+        ResolveActivationOverlayVisualState().Stage;
 
-    public string OverlayStatusText =>
-        OverlayLoadingStage switch
+    public string OverlayStatusText => ResolveActivationOverlayVisualState().StatusText;
+
+    private ActivationOverlayVisualState ResolveActivationOverlayVisualState()
+    {
+        var connectionLifecycleOverlayVisible = ShouldShowConnectionLifecycleOverlay;
+        var historyOverlayVisible = ShouldShowHistoryOverlay;
+        var projectedHydrationOverlayVisible = ShouldShowProjectedHydrationOverlay;
+        var sessionSwitchOverlayVisible = IsSessionSwitchOverlayVisible;
+        var sessionSwitchPreviewVisible = IsSessionSwitchPreviewVisible;
+        var activationOverlayVisible =
+            connectionLifecycleOverlayVisible
+            || historyOverlayVisible
+            || projectedHydrationOverlayVisible
+            || sessionSwitchOverlayVisible
+            || sessionSwitchPreviewVisible;
+
+        var stage = ResolveOverlayLoadingStage(
+            connectionLifecycleOverlayVisible,
+            historyOverlayVisible,
+            projectedHydrationOverlayVisible,
+            sessionSwitchOverlayVisible,
+            sessionSwitchPreviewVisible);
+        var statusText = ResolveOverlayStatusText(stage);
+        var showsBlockingMask =
+            activationOverlayVisible
+            && (!HasVisibleTranscriptContent
+                || IsSessionSwitchOverlayBlockingVisibleTranscript
+                || IsVisibleTranscriptStaleForCurrentSession);
+        var showsStatusPill = activationOverlayVisible && !string.IsNullOrWhiteSpace(statusText);
+
+        return new ActivationOverlayVisualState(
+            activationOverlayVisible,
+            showsBlockingMask,
+            showsStatusPill,
+            showsBlockingMask || showsStatusPill,
+            stage,
+            statusText);
+    }
+
+    private string ResolveOverlayStatusText(LoadingOverlayStage stage)
+        => stage switch
         {
             LoadingOverlayStage.Connecting => "正在连接助手...",
             LoadingOverlayStage.InitializingProtocol => "正在准备聊天环境...",
@@ -306,25 +352,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             _ => string.Empty
         };
 
-    private LoadingOverlayStage ResolveOverlayLoadingStage()
+    private LoadingOverlayStage ResolveOverlayLoadingStage(
+        bool connectionLifecycleOverlayVisible,
+        bool historyOverlayVisible,
+        bool projectedHydrationOverlayVisible,
+        bool sessionSwitchOverlayVisible,
+        bool sessionSwitchPreviewVisible)
     {
         // ACP lifecycle precedence: transport connect -> protocol initialize -> session replay hydration.
-        if (IsConnecting && ShouldShowConnectionLifecycleOverlay)
+        if (IsConnecting && connectionLifecycleOverlayVisible)
         {
             return LoadingOverlayStage.Connecting;
         }
 
-        if (IsInitializing && ShouldShowConnectionLifecycleOverlay)
+        if (IsInitializing && connectionLifecycleOverlayVisible)
         {
             return LoadingOverlayStage.InitializingProtocol;
         }
 
-        if (ShouldShowHistoryOverlay || ShouldShowProjectedHydrationOverlay)
+        if (historyOverlayVisible || projectedHydrationOverlayVisible)
         {
             return LoadingOverlayStage.HydratingHistory;
         }
 
-        if (IsSessionSwitchOverlayVisible || IsSessionSwitchPreviewVisible)
+        if (sessionSwitchOverlayVisible || sessionSwitchPreviewVisible)
         {
             return LoadingOverlayStage.PreparingSession;
         }
@@ -1110,11 +1161,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 CurrentSessionId = projection.HydratedConversationId;
                 if (preparedTranscript is { Count: > 0 })
                 {
-                    ReplaceMessageHistory(preparedTranscript);
+                    ReplaceMessageHistory(projection.HydratedConversationId, preparedTranscript);
                 }
                 else
                 {
-                    ReplaceMessageHistory(projection.Transcript);
+                    ReplaceMessageHistory(projection.HydratedConversationId, projection.Transcript);
                 }
                 ReplacePlanEntries(projection.PlanEntries);
             }
@@ -1133,7 +1184,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             // MessageHistory already reflects the projected state.
             if (!sessionChanged)
             {
-                SyncMessageHistory(projection.Transcript);
+                SyncMessageHistory(projection.HydratedConversationId, projection.Transcript);
             }
 
             // Update hydration state BEFORE session active so the UI thread's IsOverlayVisible
@@ -1619,7 +1670,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             EditingSessionName = string.Empty;
         }
 
-        SyncMiniWindowSelectedSession();
         SyncBottomPanelState(value);
         SyncPendingAskUserRequestState(value);
         RefreshProjectAffinityCorrectionState(value);
@@ -1639,27 +1689,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         {
             state.Selected = value;
         }
-    }
-
-    partial void OnSelectedMiniWindowSessionChanged(MiniWindowConversationItemViewModel? value)
-    {
-        if (_suppressMiniWindowSessionSync || value == null)
-        {
-            return;
-        }
-
-        StartChatSurfaceConversationSwitch(value.ConversationId);
-    }
-
-    private void StartChatSurfaceConversationSwitch(string? conversationId)
-    {
-        if (string.IsNullOrWhiteSpace(conversationId)
-            || string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        _ = ((IConversationSessionSwitcher)this).SwitchConversationAsync(conversationId);
     }
 
     private async Task SelectAndHydrateConversationAsync(string? conversationId)
@@ -1859,8 +1888,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                     displayName,
                     CreateMiniWindowCompactDisplayName(displayName)));
             }
-
-            SyncMiniWindowSelectedSession();
         }
         catch
         {
@@ -1868,36 +1895,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    private void SyncMiniWindowSelectedSession()
-    {
-        if (_suppressMiniWindowSessionSync)
-        {
-            return;
-        }
-
-        try
-        {
-            _suppressMiniWindowSessionSync = true;
-
-            if (string.IsNullOrWhiteSpace(CurrentSessionId))
-            {
-                SelectedMiniWindowSession = null;
-                return;
-            }
-
-            var match = MiniWindowSessions.FirstOrDefault(s => string.Equals(s.ConversationId, CurrentSessionId, StringComparison.Ordinal));
-            if (!ReferenceEquals(SelectedMiniWindowSession, match))
-            {
-                SelectedMiniWindowSession = match;
-            }
-        }
-        finally
-        {
-            _suppressMiniWindowSessionSync = false;
-        }
-    }
-
-    private void SyncMessageHistory(IImmutableList<ConversationMessageSnapshot> transcript)
+    private void SyncMessageHistory(string? conversationId, IImmutableList<ConversationMessageSnapshot> transcript)
     {
         var previousCount = MessageHistory.Count;
         var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
@@ -1927,7 +1925,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             MessageHistory.RemoveAt(MessageHistory.Count - 1);
         }
 
-        if (previousCount != MessageHistory.Count)
+        var transcriptOwnerChanged = UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
+        if (previousCount != MessageHistory.Count || transcriptOwnerChanged)
         {
             OnPropertyChanged(nameof(HasVisibleTranscriptContent));
             OnPropertyChanged(nameof(OverlayStatusText));
@@ -2941,6 +2940,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private void RaiseOverlayStateChanged()
     {
+        OnPropertyChanged(nameof(IsActivationOverlayVisible));
         OnPropertyChanged(nameof(IsOverlayVisible));
         OnPropertyChanged(nameof(OverlayLoadingStage));
         OnPropertyChanged(nameof(OverlayStatusText));
@@ -4040,71 +4040,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public async Task<bool> SwitchConversationAsync(string conversationId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(conversationId)) return false;
-
-        // _activationVersion is now incremented inside ActivateConversationCoreAsync.
-        // Capture the version *before* calling it so the preview path can check staleness.
-        var version = Interlocked.Read(ref _activationVersion);
-        bool previewApplied = false;
-
-        // Fast-path preview: load cached messages to show instantly
-        // while the real ACP hydration replays the authoritative transcript.
-        var preview = await _previewStore.LoadAsync(conversationId, cancellationToken).ConfigureAwait(false);
-        if (preview != null && version == Interlocked.Read(ref _activationVersion))
+        if (string.IsNullOrWhiteSpace(conversationId))
         {
-            await PostToUiAsync(() =>
-            {
-                if (version == Interlocked.Read(ref _activationVersion))
-                {
-                    var items = preview.Entries.Select(e => new ChatMessageViewModel
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        IsOutgoing = string.Equals(e.Sender, "user", StringComparison.OrdinalIgnoreCase),
-                        TextContent = e.Text,
-                        Timestamp = e.Timestamp.LocalDateTime
-                    }).ToList();
-
-                    ReplaceMessageHistory(items);
-                    IsHydrating = true;
-                    previewApplied = true;
-                }
-            }).ConfigureAwait(false);
+            return false;
         }
 
-        try
-        {
-            var result = await ActivateConversationCoreAsync(conversationId, awaitRemoteHydration: true, cancellationToken).ConfigureAwait(false);
-
-            if (!result && previewApplied)
-            {
-                // Activation returned false (not an exception), but we showed a preview.
-                // Force a store projection to immediately clear the stale preview state.
-                await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
-            }
-
-            return result;
-        }
-        catch
-        {
-            // If we showed a preview but activation failed, roll back to prevent
-            // the UI from being stuck in IsHydrating=true with stale preview data.
-            if (previewApplied)
-            {
-                await PostToUiAsync(() =>
-                {
-                    if (Interlocked.Read(ref _activationVersion) != version + 1)
-                    {
-                        // Another activation has started since our failure - dont touch UI.
-                        return;
-                    }
-
-                    IsHydrating = false;
-                    ReplaceMessageHistory(Array.Empty<ChatMessageViewModel>());
-                }).ConfigureAwait(false);
-            }
-
-            throw;
-        }
+        return await ActivateConversationCoreAsync(
+                conversationId,
+                awaitRemoteHydration: true,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     Task<bool> IConversationSessionSwitcher.SwitchConversationAsync(string conversationId, CancellationToken cancellationToken)
@@ -6234,24 +6179,40 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    private void ReplaceMessageHistory(IImmutableList<ConversationMessageSnapshot> transcript)
+    private void ReplaceMessageHistory(string? conversationId, IImmutableList<ConversationMessageSnapshot> transcript)
     {
         var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         MessageHistory = new ObservableCollection<ChatMessageViewModel>(messages.Select(FromSnapshot));
+        UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
         OnPropertyChanged(nameof(HasVisibleTranscriptContent));
         OnPropertyChanged(nameof(OverlayStatusText));
         OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
         OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
     }
 
-    private void ReplaceMessageHistory(IReadOnlyList<ChatMessageViewModel> transcript)
+    private void ReplaceMessageHistory(string? conversationId, IReadOnlyList<ChatMessageViewModel> transcript)
     {
         var messages = transcript ?? Array.Empty<ChatMessageViewModel>();
         MessageHistory = new ObservableCollection<ChatMessageViewModel>(messages);
+        UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
         OnPropertyChanged(nameof(HasVisibleTranscriptContent));
         OnPropertyChanged(nameof(OverlayStatusText));
         OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
         OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
+    }
+
+    private bool UpdateVisibleTranscriptConversationId(string? conversationId, bool hasVisibleTranscript)
+    {
+        var nextConversationId = hasVisibleTranscript
+            ? conversationId
+            : string.IsNullOrWhiteSpace(conversationId) ? null : conversationId;
+        if (string.Equals(_visibleTranscriptConversationId, nextConversationId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _visibleTranscriptConversationId = nextConversationId;
+        return true;
     }
 
     private void ReplacePlanEntries(IReadOnlyList<ConversationPlanEntrySnapshot> planEntries)

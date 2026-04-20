@@ -132,6 +132,125 @@ public sealed partial class RealUserConfigSmokeTests
     }
 
     [SkippableFact]
+    public void SelectRemoteBoundSession_FromWarmCachedConversationMiniWindow_DoesNotExposeTargetHeaderBeforeOverlay()
+    {
+        GuiTestGate.RequireEnabled();
+
+        var remoteCandidates = RealUserConfigProbe.LoadReplayBackedCandidates();
+        var localCandidates = RealUserConfigProbe.LoadPureLocalCandidates();
+        Skip.If(remoteCandidates.Count < 2 && localCandidates.Count == 0, "Need either one pure local candidate plus one remote candidate, or at least two remote candidates, to validate warm-cache mini-window switching.");
+
+        using var slowLoad = new EnvironmentVariableScope("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "2000");
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        EnsureMainWindowWideForTitleBarCommands(session);
+
+        var warmLocalCandidate = localCandidates
+            .Where(item => item.LocalMessageCount > 0)
+            .FirstOrDefault(item => session.TryFindByAutomationId(SessionAutomationId(item.ConversationId), TimeSpan.FromSeconds(1)) is not null);
+
+        var visibleRemoteCandidates = remoteCandidates
+            .Where(item => session.TryFindByAutomationId(SessionAutomationId(item.ConversationId), TimeSpan.FromSeconds(1)) is not null)
+            .ToArray();
+        Skip.If(visibleRemoteCandidates.Length == 0, $"No visible replay-backed remote conversation is available. Candidates: {string.Join(", ", remoteCandidates.Select(c => c.ConversationId))}");
+
+        var warmConversationId = warmLocalCandidate?.ConversationId
+            ?? visibleRemoteCandidates.FirstOrDefault()?.ConversationId;
+        Skip.If(string.IsNullOrWhiteSpace(warmConversationId), "Could not determine a warm-cache source conversation.");
+
+        var remoteCandidate = visibleRemoteCandidates
+            .FirstOrDefault(item => !string.Equals(item.ConversationId, warmConversationId, StringComparison.Ordinal));
+        Skip.If(remoteCandidate is null, $"No second visible replay-backed remote conversation distinct from warm source {warmConversationId} is available.");
+
+        var warmItem = session.FindByAutomationId(SessionAutomationId(warmConversationId), TimeSpan.FromSeconds(10));
+        var remoteItem = session.FindByAutomationId(SessionAutomationId(remoteCandidate.ConversationId), TimeSpan.FromSeconds(10));
+        var remoteVisibleName = FirstUsableVisibleLabel(
+            remoteCandidate.DisplayName,
+            remoteItem.Name,
+            remoteCandidate.ConversationId);
+        session.ActivateElement(warmItem);
+
+        var warmHeaderVisible = session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(10));
+        Assert.True(warmHeaderVisible, $"Warm-cache source conversation header did not appear for {warmConversationId}.");
+
+        var warmMessages = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(5));
+        Skip.If(warmMessages is null, $"Messages list did not become available for warm-cache source conversation {warmConversationId}.");
+
+        var warmVisibleTexts = session.GetVisibleTexts(warmMessages)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToArray();
+        Skip.If(warmVisibleTexts.Length == 0, $"No visible transcript text was available for warm-cache source conversation {warmConversationId}.");
+        var sampledWarmText = warmVisibleTexts[0];
+
+        OpenMiniWindow(session);
+        SelectMiniWindowConversation(session, remoteCandidate.ConversationId, remoteVisibleName);
+
+        var timeline = new List<string>();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
+        var sawOverlay = false;
+        var prematureRemoteHeader = false;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var blockingMaskVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayMask", TimeSpan.FromMilliseconds(100)) is not null;
+            var overlayStatusVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null;
+            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100));
+            var headerName = header?.Name ?? "<missing>";
+            var remoteHeaderVisible = header is not null && headerName.Contains(remoteVisibleName, StringComparison.Ordinal);
+            var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(100));
+            var staleWarmTextVisible = messagesList is not null
+                && session.TryFindVisibleText(sampledWarmText, messagesList, TimeSpan.FromMilliseconds(100)) is not null;
+
+            timeline.Add(
+                $"{DateTime.UtcNow:HH:mm:ss.fff} mask={blockingMaskVisible} status={overlayStatusVisible} header={headerName} staleWarmTextVisible={staleWarmTextVisible}");
+
+            if (blockingMaskVisible || overlayStatusVisible)
+            {
+                sawOverlay = true;
+                break;
+            }
+
+            if (remoteHeaderVisible)
+            {
+                prematureRemoteHeader = true;
+                break;
+            }
+
+            if (staleWarmTextVisible)
+            {
+                throw new Xunit.Sdk.XunitException(
+                    $"Warm-cache transcript text became visible before loading overlay during mini-window activation. warmSample='{sampledWarmText}'{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+            }
+
+            Thread.Sleep(150);
+        }
+
+        Assert.False(
+            prematureRemoteHeader,
+            $"Remote header became visible before loading overlay during mini-window activation.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+        Assert.True(
+            sawOverlay,
+            $"Mini-window real-config activation never surfaced loading overlay before timeout.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+
+        var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(120));
+        Assert.True(overlayHidden, $"Remote conversation {remoteCandidate.ConversationId} remained stuck behind the loading overlay after mini-window activation.");
+
+        var remoteHeaderVisibleAfterHydration = session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(10));
+        Assert.True(remoteHeaderVisibleAfterHydration, $"Remote conversation header did not become visible after mini-window activation for {remoteCandidate.ConversationId}.");
+        var finalHeader = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(2));
+        Assert.True(
+            finalHeader is not null && finalHeader.Name.Contains(remoteVisibleName, StringComparison.Ordinal),
+            $"Final chat header did not settle to remote conversation '{remoteVisibleName}'. Actual='{finalHeader?.Name ?? "<missing>"}'");
+
+        var hydratedMessages = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(5));
+        Assert.NotNull(hydratedMessages);
+        var staleWarmTextVisibleAfterHydration = session.TryFindVisibleText(sampledWarmText, hydratedMessages, TimeSpan.FromSeconds(1)) is not null;
+        Assert.False(
+            staleWarmTextVisibleAfterHydration,
+            $"Warm-cache transcript text remained visible after mini-window remote hydration. warmSample='{sampledWarmText}' warmConversation={warmConversationId} remoteConversation={remoteCandidate.ConversationId}");
+    }
+
+    [SkippableFact]
     public void SelectLargestRemoteBoundSession_FirstOpen_ShowsLoadingPillBeforeOverlayClears()
     {
         GuiTestGate.RequireEnabled();
@@ -1033,6 +1152,131 @@ public sealed partial class RealUserConfigSmokeTests
     private static string SessionAutomationId(string conversationId)
         => $"MainNav.Session.{conversationId}";
 
+    private static void EnsureMainWindowWideForTitleBarCommands(WindowsGuiAppSession session)
+    {
+        try
+        {
+            if (session.MainWindow.Patterns.Window.IsSupported)
+            {
+                session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+            }
+        }
+        catch
+        {
+        }
+
+        ResizeMainWindow(width: 1400, height: 900);
+    }
+
+    private static void OpenMiniWindow(WindowsGuiAppSession session)
+    {
+        var button = FindElementAnywhereWithFallback(
+            session,
+            primaryAutomationId: "TitleBar.OpenMiniWindow",
+            fallbackAutomationId: "TitleBarMiniWindowButton",
+            timeout: TimeSpan.FromSeconds(8));
+
+        if (button.Patterns.Invoke.IsSupported)
+        {
+            button.Patterns.Invoke.Pattern.Invoke();
+            return;
+        }
+
+        session.ActivateElement(button);
+    }
+
+    private static void SelectMiniWindowConversation(
+        WindowsGuiAppSession session,
+        string conversationId,
+        string expectedVisibleName)
+    {
+        var selector = FindElementAnywhereWithFallback(
+            session,
+            primaryAutomationId: "MiniChat.SessionSelector",
+            fallbackAutomationId: "MiniTitleBarSessionSelector",
+            timeout: TimeSpan.FromSeconds(10));
+        session.ClickElement(selector);
+
+        AutomationElement target;
+        try
+        {
+            target = session.FindByAutomationIdAnywhere($"MiniChat.SessionItem.{conversationId}", TimeSpan.FromSeconds(3));
+        }
+        catch (TimeoutException)
+        {
+            if (!LooksLikeUsableVisibleLabel(expectedVisibleName))
+            {
+                throw new TimeoutException(
+                    $"Mini-window session item automation id for conversation '{conversationId}' was not found, and fallback label '{expectedVisibleName}' is not usable.");
+            }
+
+            target = session.FindVisibleTextAnywhere(expectedVisibleName, TimeSpan.FromSeconds(5))
+                ?? throw new TimeoutException($"Mini-window session item '{expectedVisibleName}' was not found.");
+        }
+
+        session.ActivateElement(FindSelectableAncestor(target));
+    }
+
+    private static AutomationElement FindElementAnywhereWithFallback(
+        WindowsGuiAppSession session,
+        string primaryAutomationId,
+        string fallbackAutomationId,
+        TimeSpan timeout)
+    {
+        try
+        {
+            return session.FindByAutomationIdAnywhere(
+                primaryAutomationId,
+                TimeSpan.FromMilliseconds(Math.Min(3000, (int)timeout.TotalMilliseconds)));
+        }
+        catch (TimeoutException)
+        {
+            return session.FindByAutomationIdAnywhere(fallbackAutomationId, timeout);
+        }
+    }
+
+    private static AutomationElement FindSelectableAncestor(AutomationElement element)
+    {
+        var current = element;
+        while (current is not null)
+        {
+            if (current.Patterns.SelectionItem.IsSupported || current.Patterns.Invoke.IsSupported)
+            {
+                return current;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new Xunit.Sdk.XunitException("Could not find a selectable ancestor for the mini-window session item.");
+    }
+
+    private static string FirstUsableVisibleLabel(params string?[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (LooksLikeUsableVisibleLabel(candidate))
+            {
+                return candidate!.Trim();
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static bool LooksLikeUsableVisibleLabel(string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        var trimmed = candidate.Trim();
+        return !string.Equals(trimmed, "NavigationViewItem", StringComparison.Ordinal)
+            && !string.Equals(trimmed, "ComboBoxItem", StringComparison.Ordinal)
+            && !string.Equals(trimmed, "ListViewItem", StringComparison.Ordinal);
+    }
+
     private static bool IsElementVisible(WindowsGuiAppSession session, string automationId)
     {
         var element = session.TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(200));
@@ -1231,6 +1475,7 @@ public sealed partial class RealUserConfigSmokeTests
 
     private sealed record RealReplayCandidate(
         string ConversationId,
+        string DisplayName,
         string BoundProfileId,
         string RemoteSessionId,
         int LocalMessageCount,
@@ -1283,6 +1528,7 @@ public sealed partial class RealUserConfigSmokeTests
             foreach (var conversationElement in conversationsElement.EnumerateArray())
             {
                 var boundProfileId = ReadString(conversationElement, "boundProfileId");
+                var displayName = ReadString(conversationElement, "displayName");
                 var remoteSessionId = ReadString(conversationElement, "remoteSessionId");
                 if (!string.Equals(boundProfileId, selectedProfileId, StringComparison.Ordinal)
                     || string.IsNullOrWhiteSpace(remoteSessionId)
@@ -1310,6 +1556,7 @@ public sealed partial class RealUserConfigSmokeTests
 
                 candidates.Add(new RealReplayCandidate(
                     conversationId,
+                    FirstUsableVisibleLabel(displayName, conversationId),
                     boundProfileId!,
                     remoteSessionId,
                     messageCount,

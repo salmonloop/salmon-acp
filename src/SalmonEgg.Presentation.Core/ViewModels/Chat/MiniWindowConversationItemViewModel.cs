@@ -16,4 +16,6 @@ public sealed class MiniWindowConversationItemViewModel
     public string DisplayName { get; }
 
     public string CompactDisplayName { get; }
+
+    public string AutomationId => $"MiniChat.SessionItem.{ConversationId}";
 }

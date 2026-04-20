@@ -317,6 +317,7 @@
                         <Button x:Name="TitleBarMiniWindowButton"
                                 x:Uid="TitleBarMiniWindowButton"
                                 Style="{StaticResource TitleBarCommandButtonStyle}"
+                                AutomationProperties.AutomationId="TitleBar.OpenMiniWindow"
                                 Visibility="{x:Bind Preferences.IsMiniWindowSupported, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                 Content="Icon"
                                 ContentTemplate="{StaticResource TitleBarOpenMiniWindowIconTemplate}"

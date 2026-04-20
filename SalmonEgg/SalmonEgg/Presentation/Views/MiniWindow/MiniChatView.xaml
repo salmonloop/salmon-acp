@@ -57,8 +57,9 @@
                     <ComboBox x:Name="MiniTitleBarSessionSelector"
                               x:Uid="MiniChatSessionSelector"
                               MinWidth="0"
-                              ItemsSource="{x:Bind ViewModel.MiniWindowSessions, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedMiniWindowSession, Mode=TwoWay}"
+                              AutomationProperties.AutomationId="MiniChat.SessionSelector"
+                              ItemsSource="{x:Bind ShellViewModel.MiniWindowSessions, Mode=OneWay}"
+                              SelectedItem="{x:Bind ShellViewModel.SelectedMiniWindowSession, Mode=TwoWay}"
                               BorderThickness="0"
                               Background="Transparent"
                               ToolTipService.ToolTip="{x:Bind ViewModel.CurrentSessionDisplayName, Mode=OneWay}"
@@ -67,6 +68,7 @@
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
                                 <TextBlock Text="{x:Bind CompactDisplayName, Mode=OneTime}"
+                                           AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
                                            TextTrimming="CharacterEllipsis"
                                            MaxLines="1"
                                            ToolTipService.ToolTip="{x:Bind DisplayName, Mode=OneTime}"

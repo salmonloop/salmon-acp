@@ -260,6 +260,89 @@ public sealed class ChatSkeletonSmokeTests
     }
 
     [SkippableFact]
+    public void SelectRemoteSessionFromMiniWindow_WhenMainChatIsWarmCached_ShowsOverlayBeforeRemoteShellAndDoesNotLeakStaleTranscript()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "1800");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicSlowRemoteReplayData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24,
+                includeLocalConversation: true,
+                localMessageCount: 4);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+            EnsureMainWindowWideForTitleBarCommands(session);
+
+            var localItem = session.FindByAutomationId("MainNav.Session.gui-local-conversation-01", TimeSpan.FromSeconds(15));
+            session.ActivateElement(localItem);
+
+            var localHeader = WaitForSessionHeader(
+                session,
+                "GUI Local Session 01",
+                "mini-window-warm-cache-local-header",
+                appData);
+            Assert.Contains("GUI Local Session 01", localHeader.Name, StringComparison.Ordinal);
+
+            var localMessages = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+            var localMessageVisible = session.TryFindVisibleText(
+                "GUI Local Session 01 message 004",
+                localMessages,
+                TimeSpan.FromSeconds(4));
+            Assert.NotNull(localMessageVisible);
+
+            OpenMiniWindow(session);
+
+            SelectMiniWindowConversation(
+                session,
+                "MiniChat.SessionItem.gui-remote-conversation-01",
+                "GUI Remote Session 01");
+
+            WaitForLoadingOverlayBeforeRemoteHeaderOnWarmSwitch(
+                session,
+                appData,
+                expectedRemoteHeaderText: "GUI Remote Session 01",
+                staleVisibleText: "GUI Local Session 01 message 004",
+                scenario: "mini-window-warm-cache-remote-overlay-before-shell");
+
+            var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30));
+            Assert.True(overlayHidden, "Warm-cache mini-window remote activation stayed stuck behind the loading overlay.");
+
+            var remoteHeader = WaitForSessionHeader(
+                session,
+                "GUI Remote Session 01",
+                "mini-window-warm-cache-remote-header",
+                appData);
+            Assert.Contains("GUI Remote Session 01", remoteHeader.Name, StringComparison.Ordinal);
+
+            var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+            var latestReplayMessage = session.TryFindVisibleText(
+                "GUI Remote Session 01 replay 024",
+                messagesList,
+                TimeSpan.FromSeconds(8));
+            if (latestReplayMessage is null)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    "mini-window-warm-cache-remote-replay",
+                    $"Latest remote replay message was not visible after mini-window selection. Visible texts: [{string.Join(", ", session.GetVisibleTexts(messagesList))}]");
+            }
+
+            var staleLocalTextStillVisible = session.TryFindVisibleText(
+                "GUI Local Session 01 message 004",
+                messagesList,
+                TimeSpan.FromSeconds(1)) is not null;
+            Assert.False(staleLocalTextStillVisible, "Local warm-cache transcript content remained visible after remote hydration completed.");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
+    [SkippableFact]
     public void SelectRemoteSession_RepeatedClicksWithLocalDetour_DoesNotHangAndHydratesLatestSelection()
     {
         var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
@@ -1799,6 +1882,222 @@ public sealed class ChatSkeletonSmokeTests
             appData,
             scenario,
             $"Loading overlay did not become visible before timeout.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+    }
+
+    private static void WaitForLoadingOverlayBeforeRemoteHeaderOnWarmSwitch(
+        WindowsGuiAppSession session,
+        GuiAppDataScope appData,
+        string expectedRemoteHeaderText,
+        string staleVisibleText,
+        string scenario)
+    {
+        var timeline = new List<string>();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var overlayVisible = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(50)) is not null;
+            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(50));
+            var headerName = header?.Name ?? "<missing>";
+            var remoteHeaderVisible = header is not null && headerName.Contains(expectedRemoteHeaderText, StringComparison.Ordinal);
+            var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(50));
+            var staleTextVisible = messagesList is not null
+                && session.TryFindVisibleText(staleVisibleText, messagesList, TimeSpan.FromMilliseconds(50)) is not null;
+
+            timeline.Add(
+                $"{DateTime.UtcNow:HH:mm:ss.fff} overlay={overlayVisible} header={headerName} staleTextVisible={staleTextVisible}");
+
+            if (overlayVisible)
+            {
+                return;
+            }
+
+            if (remoteHeaderVisible)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    scenario,
+                    $"Remote header became visible before the loading overlay on warm-cache mini-window switch. Timeline:{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+            }
+
+            if (staleTextVisible)
+            {
+                ThrowWithScreenshot(
+                    session,
+                    appData,
+                    scenario,
+                    $"Stale warm-cache transcript text remained visible before the loading overlay on warm-cache mini-window switch. staleVisibleText='{staleVisibleText}'{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+            }
+
+            Thread.Sleep(40);
+        }
+
+        ThrowWithScreenshot(
+            session,
+            appData,
+            scenario,
+            $"Loading overlay did not become visible during warm-cache mini-window switch.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+    }
+
+    private static void SelectMiniWindowConversation(
+        WindowsGuiAppSession session,
+        string targetItemAutomationId,
+        string expectedVisibleName)
+    {
+        var selector = FindElementAnywhereWithFallback(
+            session,
+            primaryAutomationId: "MiniChat.SessionSelector",
+            fallbackAutomationId: "MiniTitleBarSessionSelector",
+            timeout: TimeSpan.FromSeconds(10));
+        session.ClickElement(selector);
+
+        AutomationElement targetText;
+        try
+        {
+            targetText = session.FindByAutomationIdAnywhere(targetItemAutomationId, TimeSpan.FromSeconds(3));
+        }
+        catch (TimeoutException)
+        {
+            targetText = session.FindVisibleTextAnywhere(expectedVisibleName, TimeSpan.FromSeconds(5))
+                ?? throw new TimeoutException($"Mini-window session item '{expectedVisibleName}' was not found.");
+        }
+
+        var selectableTarget = FindSelectableAncestor(targetText);
+        session.ActivateElement(selectableTarget);
+    }
+
+    private static void OpenMiniWindow(WindowsGuiAppSession session)
+    {
+        var button = FindElementAnywhereWithFallback(
+            session,
+            primaryAutomationId: "TitleBar.OpenMiniWindow",
+            fallbackAutomationId: "TitleBarMiniWindowButton",
+            timeout: TimeSpan.FromSeconds(8));
+
+        if (button.Patterns.Invoke.IsSupported)
+        {
+            button.Patterns.Invoke.Pattern.Invoke();
+            return;
+        }
+
+        session.ActivateElement(button);
+    }
+
+    private static AutomationElement FindElementAnywhereWithFallback(
+        WindowsGuiAppSession session,
+        string primaryAutomationId,
+        string fallbackAutomationId,
+        TimeSpan timeout)
+    {
+        try
+        {
+            return session.FindByAutomationIdAnywhere(primaryAutomationId, TimeSpan.FromMilliseconds(Math.Min(3000, (int)timeout.TotalMilliseconds)));
+        }
+        catch (TimeoutException)
+        {
+            return session.FindByAutomationIdAnywhere(fallbackAutomationId, timeout);
+        }
+    }
+
+    private static void EnsureMainWindowWideForTitleBarCommands(WindowsGuiAppSession session)
+    {
+        try
+        {
+            if (session.MainWindow.Patterns.Window.IsSupported)
+            {
+                session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+            }
+        }
+        catch
+        {
+        }
+
+        ResizeMainWindow(width: 1400, height: 900);
+    }
+
+    private static void ResizeMainWindow(int width, int height)
+    {
+        var process = Process.GetProcessesByName("SalmonEgg")
+            .OrderByDescending(candidate => candidate.StartTime)
+            .First();
+
+        if (NativeMethods.MoveWindow(process.MainWindowHandle, 80, 80, width, height, true))
+        {
+            return;
+        }
+
+        if (NativeMethods.SetWindowPos(process.MainWindowHandle, IntPtr.Zero, 80, 80, width, height, 0))
+        {
+            return;
+        }
+
+        if (NativeMethods.TryGetWindowSize(process.MainWindowHandle, out var currentWidth, out var currentHeight)
+            && Math.Abs(currentWidth - width) <= 2
+            && Math.Abs(currentHeight - height) <= 2)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException("Failed to resize the SalmonEgg window.");
+    }
+
+    private static class NativeMethods
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Rect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, bool bRepaint);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SetWindowPos(
+            IntPtr hWnd,
+            IntPtr hWndInsertAfter,
+            int x,
+            int y,
+            int cx,
+            int cy,
+            uint uFlags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out Rect lpRect);
+
+        public static bool TryGetWindowSize(IntPtr hWnd, out int width, out int height)
+        {
+            if (GetWindowRect(hWnd, out var rect))
+            {
+                width = rect.Right - rect.Left;
+                height = rect.Bottom - rect.Top;
+                return true;
+            }
+
+            width = 0;
+            height = 0;
+            return false;
+        }
+    }
+
+    private static AutomationElement FindSelectableAncestor(AutomationElement element)
+    {
+        var current = element;
+        while (current is not null)
+        {
+            if (current.Patterns.SelectionItem.IsSupported || current.Patterns.Invoke.IsSupported)
+            {
+                return current;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new Xunit.Sdk.XunitException("Could not find a selectable ancestor for the mini-window session item.");
     }
 
     private static string? TryGetAutomationId(AutomationElement element)
