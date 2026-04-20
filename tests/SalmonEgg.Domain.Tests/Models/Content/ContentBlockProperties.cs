@@ -29,6 +29,149 @@ namespace SalmonEgg.Domain.Tests.Models.Content
            _jsonOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
        }
 
+        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
+        public void TextContentBlock_PropertyRoundTrip_PreservesFidelity(
+            string text,
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            var block = new TextContentBlock(text)
+            {
+                Annotations = CreateAnnotations(audience1, audience2, prioritySeed, lastModified)
+            };
+
+            var roundTripped = RoundTrip(block) as TextContentBlock;
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped!.Text, Is.EqualTo(block.Text));
+            AssertAnnotations(roundTripped.Annotations, block.Annotations);
+        }
+
+        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
+        public void ImageContentBlock_PropertyRoundTrip_PreservesFidelity(
+            string data,
+            string mimeType,
+            string uri,
+            bool includeUri,
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            var block = new ImageContentBlock(data, mimeType, includeUri ? uri : null)
+            {
+                Annotations = CreateAnnotations(audience1, audience2, prioritySeed, lastModified)
+            };
+
+            var roundTripped = RoundTrip(block) as ImageContentBlock;
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped!.Data, Is.EqualTo(block.Data));
+            Assert.That(roundTripped.MimeType, Is.EqualTo(block.MimeType));
+            Assert.That(roundTripped.Uri, Is.EqualTo(block.Uri));
+            AssertAnnotations(roundTripped.Annotations, block.Annotations);
+        }
+
+        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
+        public void AudioContentBlock_PropertyRoundTrip_PreservesFidelity(
+            string data,
+            string mimeType,
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            var block = new AudioContentBlock(data, mimeType)
+            {
+                Annotations = CreateAnnotations(audience1, audience2, prioritySeed, lastModified)
+            };
+
+            var roundTripped = RoundTrip(block) as AudioContentBlock;
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped!.Data, Is.EqualTo(block.Data));
+            Assert.That(roundTripped.MimeType, Is.EqualTo(block.MimeType));
+            AssertAnnotations(roundTripped.Annotations, block.Annotations);
+        }
+
+        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
+        public void ResourceContentBlock_TextPropertyRoundTrip_PreservesFidelity(
+            string uri,
+            string text,
+            string mimeType,
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            var block = ResourceContentBlock.CreateText(uri, text, mimeType);
+            block.Annotations = CreateAnnotations(audience1, audience2, prioritySeed, lastModified);
+
+            var roundTripped = RoundTrip(block) as ResourceContentBlock;
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped!.Resource.Uri, Is.EqualTo(block.Resource.Uri));
+            Assert.That(roundTripped.Resource.MimeType, Is.EqualTo(block.Resource.MimeType));
+            Assert.That(roundTripped.Resource.Text, Is.EqualTo(block.Resource.Text));
+            Assert.That(roundTripped.Resource.Blob, Is.EqualTo(block.Resource.Blob));
+            AssertAnnotations(roundTripped.Annotations, block.Annotations);
+        }
+
+        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
+        public void ResourceContentBlock_BlobPropertyRoundTrip_PreservesFidelity(
+            string uri,
+            string blob,
+            string mimeType,
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            var block = ResourceContentBlock.CreateBinary(uri, blob, mimeType);
+            block.Annotations = CreateAnnotations(audience1, audience2, prioritySeed, lastModified);
+
+            var roundTripped = RoundTrip(block) as ResourceContentBlock;
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped!.Resource.Uri, Is.EqualTo(block.Resource.Uri));
+            Assert.That(roundTripped.Resource.MimeType, Is.EqualTo(block.Resource.MimeType));
+            Assert.That(roundTripped.Resource.Text, Is.EqualTo(block.Resource.Text));
+            Assert.That(roundTripped.Resource.Blob, Is.EqualTo(block.Resource.Blob));
+            AssertAnnotations(roundTripped.Annotations, block.Annotations);
+        }
+
+        [FsCheck.NUnit.Property(QuietOnSuccess = true)]
+        public void ResourceLinkContentBlock_PropertyRoundTrip_PreservesFidelity(
+            string uri,
+            string name,
+            string mimeType,
+            string title,
+            string description,
+            long size,
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            var block = new ResourceLinkContentBlock(uri, name, mimeType, title, description, size)
+            {
+                Annotations = CreateAnnotations(audience1, audience2, prioritySeed, lastModified)
+            };
+
+            var roundTripped = RoundTrip(block) as ResourceLinkContentBlock;
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped!.Uri, Is.EqualTo(block.Uri));
+            Assert.That(roundTripped.Name, Is.EqualTo(block.Name));
+            Assert.That(roundTripped.MimeType, Is.EqualTo(block.MimeType));
+            Assert.That(roundTripped.Title, Is.EqualTo(block.Title));
+            Assert.That(roundTripped.Description, Is.EqualTo(block.Description));
+            Assert.That(roundTripped.Size, Is.EqualTo(block.Size));
+            AssertAnnotations(roundTripped.Annotations, block.Annotations);
+        }
+
         /// <summary>
         /// 属性 6：文本内容块往返一致性
         /// </summary>
@@ -292,6 +435,7 @@ namespace SalmonEgg.Domain.Tests.Models.Content
             // Assert
             Assert.That(block, Is.Not.Null);
             Assert.That(block, Is.InstanceOf<ContentBlock>());
+            Assert.That(doc.RootElement.GetProperty("type").GetString(), Is.EqualTo("experimental_content"));
             Assert.That(doc.RootElement.GetProperty("payload").GetProperty("kind").GetString(), Is.EqualTo("custom"));
             Assert.That(doc.RootElement.GetProperty("payload").GetProperty("value").GetInt32(), Is.EqualTo(42));
         }
@@ -346,6 +490,35 @@ namespace SalmonEgg.Domain.Tests.Models.Content
             {
                 Assert.That(element.TryGetProperty("type", out _), Is.True, "每个 ContentBlock 必须包含 type 字段");
             }
+        }
+
+        private ContentBlock RoundTrip(ContentBlock block)
+        {
+            var json = JsonSerializer.Serialize<ContentBlock>(block, _jsonOptions);
+            return JsonSerializer.Deserialize<ContentBlock>(json, _jsonOptions)!;
+        }
+
+        private static Annotations CreateAnnotations(
+            string audience1,
+            string audience2,
+            byte prioritySeed,
+            string lastModified)
+        {
+            return new Annotations
+            {
+                Audience = new List<string> { audience1, audience2 },
+                Priority = prioritySeed % 101 / 100m,
+                LastModified = lastModified
+            };
+        }
+
+        private static void AssertAnnotations(Annotations? actual, Annotations? expected)
+        {
+            Assert.That(actual, Is.Not.Null);
+            Assert.That(expected, Is.Not.Null);
+            Assert.That(actual!.Audience, Is.EqualTo(expected!.Audience));
+            Assert.That(actual.Priority, Is.EqualTo(expected.Priority));
+            Assert.That(actual.LastModified, Is.EqualTo(expected.LastModified));
         }
     }
 }

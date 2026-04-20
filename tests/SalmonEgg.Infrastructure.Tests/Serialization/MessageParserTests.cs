@@ -159,13 +159,16 @@ public class MessageParserTests
         Assert.Single(promptParams!.Prompt);
 
         var image = Assert.IsType<ImageContentBlock>(promptParams.Prompt[0]);
-        var roundTripped = JsonSerializer.Serialize(image, parser.Options);
+        var roundTripped = JsonSerializer.Serialize(promptParams, parser.Options);
         using var doc = JsonDocument.Parse(roundTripped);
+        var promptImage = doc.RootElement.GetProperty("prompt")[0];
 
-        Assert.Equal("file:///tmp/example.png", doc.RootElement.GetProperty("uri").GetString());
-        Assert.True(doc.RootElement.TryGetProperty("annotations", out var annotations));
+        Assert.Equal("image", promptImage.GetProperty("type").GetString());
+        Assert.Equal("file:///tmp/example.png", promptImage.GetProperty("uri").GetString());
+        Assert.True(promptImage.TryGetProperty("annotations", out var annotations));
         Assert.Equal(0.75m, annotations.GetProperty("priority").GetDecimal());
         Assert.Equal("assistant", annotations.GetProperty("audience")[0].GetString());
+        Assert.Equal("file:///tmp/example.png", image.Uri);
     }
 
     [Fact]
