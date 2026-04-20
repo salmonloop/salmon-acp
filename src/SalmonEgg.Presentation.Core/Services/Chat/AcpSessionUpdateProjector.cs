@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.Plan;
@@ -139,7 +140,10 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
             Description: update.Description,
             Cwd: update.Cwd,
             UpdatedAt: update.UpdatedAt,
-            Meta: update.Meta is null ? null : new Dictionary<string, object?>(update.Meta, StringComparer.Ordinal));
+            Meta: update.Meta is null
+                ? null
+                : new ReadOnlyDictionary<string, object?>(
+                    new Dictionary<string, object?>(update.Meta, StringComparer.Ordinal)));
 
     private static AcpUsageSnapshot MapUsage(UsageUpdate update)
         => new(

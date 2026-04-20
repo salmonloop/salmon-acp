@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using SalmonEgg.Domain.Models.Plan;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
@@ -374,6 +375,55 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
+    public void Project_SessionInfoUpdate_MetaSnapshot_IsDetachedAndReadOnly()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var meta = new Dictionary<string, object?>
+        {
+            ["profileId"] = "profile-1"
+        };
+        var args = new SessionUpdateEventArgs(
+            "remote-1",
+            new SessionInfoUpdate
+            {
+                Meta = meta
+            });
+
+        // Act
+        var delta = projector.Project(args);
+        meta["profileId"] = "profile-2";
+
+        // Assert
+        Assert.Equal("profile-1", delta.SessionInfo!.Meta!["profileId"]);
+        var mutableMeta = Assert.IsAssignableFrom<IDictionary<string, object?>>(delta.SessionInfo.Meta);
+        Assert.Throws<NotSupportedException>(() => mutableMeta["profileId"] = "profile-3");
+        Assert.IsType<ReadOnlyDictionary<string, object?>>(delta.SessionInfo.Meta);
+    }
+
+    [Fact]
+    public void Project_SessionInfoUpdate_WhenMetaIsNull_MapsNullMetaSnapshot()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var args = new SessionUpdateEventArgs(
+            "remote-1",
+            new SessionInfoUpdate
+            {
+                Title = "Remote session",
+                Meta = null
+            });
+
+        // Act
+        var delta = projector.Project(args);
+
+        // Assert
+        Assert.NotNull(delta.SessionInfo);
+        Assert.Equal("Remote session", delta.SessionInfo.Title);
+        Assert.Null(delta.SessionInfo.Meta);
+    }
+
+    [Fact]
     public void Project_UsageUpdate_MapsTypedUsageSnapshot()
     {
         // Arrange
@@ -401,5 +451,65 @@ public class AcpSessionUpdateProjectorTests
         Assert.NotNull(delta.Usage.Cost);
         Assert.Equal(1.25m, delta.Usage.Cost.Amount);
         Assert.Equal("USD", delta.Usage.Cost.Currency);
+    }
+
+    [Fact]
+    public void Project_UsageUpdate_WhenCostIsNull_MapsUsageWithoutCostSnapshot()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var args = new SessionUpdateEventArgs(
+            "remote-1",
+            new UsageUpdate
+            {
+                Used = 64,
+                Size = 128,
+                Cost = null
+            });
+
+        // Act
+        var delta = projector.Project(args);
+
+        // Assert
+        Assert.NotNull(delta.Usage);
+        Assert.Equal(64, delta.Usage.Used);
+        Assert.Equal(128, delta.Usage.Size);
+        Assert.Null(delta.Usage.Cost);
+    }
+
+    [Fact]
+    public void Project_AvailableCommandsUpdate_SnapshotIsDetachedFromCallerOwnedInput()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var availableCommand = new AvailableCommand
+        {
+            Name = "plan",
+            Description = "Show the current plan",
+            Input = new AvailableCommandInput
+            {
+                Hint = "scope"
+            }
+        };
+        var update = new AvailableCommandsUpdate
+        {
+            AvailableCommands = new List<AvailableCommand>
+            {
+                availableCommand
+            }
+        };
+
+        // Act
+        var delta = projector.Project(new SessionUpdateEventArgs("remote-1", update));
+        availableCommand.Name = "apply";
+        availableCommand.Description = "Apply the plan";
+        availableCommand.Input!.Hint = "target";
+        update.AvailableCommands.Clear();
+
+        // Assert
+        var command = Assert.Single(delta.AvailableCommands!);
+        Assert.Equal("plan", command.Name);
+        Assert.Equal("Show the current plan", command.Description);
+        Assert.Equal("scope", command.InputHint);
     }
 }
