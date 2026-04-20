@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -496,6 +498,25 @@ internal sealed class WindowsGuiAppSession : IDisposable
         Thread.Sleep(80);
     }
 
+    public void CaptureMainWindowToFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        try
+        {
+            MainWindow.CaptureToFile(path);
+            return;
+        }
+        catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException)
+        {
+            if (!TryCaptureWindowWithScreenCopy(path))
+            {
+                throw;
+            }
+        }
+    }
+
     private static void PressKey(VirtualKeyShort key)
     {
         Keyboard.Press(key);
@@ -513,6 +534,28 @@ internal sealed class WindowsGuiAppSession : IDisposable
             " ",
             value
                 .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    private bool TryCaptureWindowWithScreenCopy(string path)
+    {
+        using var process = Process.GetProcessById(_application.ProcessId);
+        var hwnd = process.MainWindowHandle;
+        if (hwnd == IntPtr.Zero || !NativeMethods.TryGetWindowRect(hwnd, out var rect))
+        {
+            return false;
+        }
+
+        var width = Math.Max(1, rect.Right - rect.Left);
+        var height = Math.Max(1, rect.Bottom - rect.Top);
+
+        using var bitmap = new Bitmap(width, height);
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height));
+        }
+
+        bitmap.Save(path, ImageFormat.Png);
+        return File.Exists(path);
     }
 
     public bool IsFocusWithinAutomationId(string automationId, int maxDepth = 16)
@@ -769,6 +812,32 @@ internal sealed class WindowsGuiAppSession : IDisposable
         catch
         {
             return "Unknown";
+        }
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
+
+        public static bool TryGetWindowRect(IntPtr hWnd, out Rect rect)
+        {
+            if (GetWindowRect(hWnd, out rect))
+            {
+                return true;
+            }
+
+            rect = default;
+            return false;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
         }
     }
 

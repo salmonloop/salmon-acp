@@ -337,6 +337,13 @@ public sealed class NavigationCoreTests
 
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.LoadingOverlay\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<ContentControl x:Name=\"ShellLoadingOverlayPresenter\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsHitTestVisible=\"{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind ShellOverlayVM.ShowsPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind ShellOverlayVM.StatusText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatVM.ShouldShowBlockingLoadingMask", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatVM.ShouldShowLoadingOverlayPresenter", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatVM.ShouldShowLoadingOverlayStatusPill", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatVM.OverlayStatusText", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<Grid AutomationProperties.AutomationId=\"ChatView.LoadingOverlay\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.LoadingOverlayStatus\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("AutomationProperties.LiveSetting=\"Assertive\"", xaml, StringComparison.Ordinal);

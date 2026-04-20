@@ -34,6 +34,7 @@ using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using SalmonEgg.Presentation.ViewModels.Navigation;
 using SalmonEgg.Presentation.Core.Tests.Threading;
 using SerilogLogger = Serilog.ILogger;
 using Uno.Extensions.Reactive;
@@ -5816,6 +5817,75 @@ public class ChatViewModelTests
         Assert.True(fixture.ViewModel.IsActivationOverlayVisible);
         Assert.True(fixture.ViewModel.ShouldShowBlockingLoadingMask);
         Assert.Contains("切换", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShellOverlayProjection_WhenPreviewIsPrimedBeforeChatShellNavigation_BecomesVisibleEvenWhileShellContentIsStart()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var runtimeState = new ShellNavigationRuntimeStateStore
+        {
+            CurrentShellContent = ShellNavigationContent.Start
+        };
+        await using var fixture = CreateViewModel(syncContext, shellNavigationRuntimeState: runtimeState);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        var shellOverlay = new ShellSessionActivationOverlayViewModel(fixture.ViewModel, runtimeState);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-1",
+                    Timestamp = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "stale transcript"
+                }
+            ]
+        });
+
+        var preview = (IConversationActivationPreview)fixture.ViewModel;
+        preview.PrimeSessionSwitchPreview("conv-2");
+
+        Assert.Equal(ShellNavigationContent.Start, runtimeState.CurrentShellContent);
+        Assert.True(shellOverlay.IsOverlayVisible);
+        Assert.True(shellOverlay.ShowsBlockingMask);
+        Assert.True(shellOverlay.ShowsPresenter);
+        Assert.Contains("切换", shellOverlay.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShellOverlayProjection_WhenSourceOverlayChanges_RaisesProjectionNotifications()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var runtimeState = new ShellNavigationRuntimeStateStore
+        {
+            CurrentShellContent = ShellNavigationContent.Start
+        };
+        await using var fixture = CreateViewModel(syncContext, shellNavigationRuntimeState: runtimeState);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        var shellOverlay = new ShellSessionActivationOverlayViewModel(fixture.ViewModel, runtimeState);
+        var raised = new List<string>();
+        shellOverlay.PropertyChanged += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.PropertyName))
+            {
+                raised.Add(e.PropertyName!);
+            }
+        };
+
+        var preview = (IConversationActivationPreview)fixture.ViewModel;
+        preview.PrimeSessionSwitchPreview("conv-2");
+
+        Assert.Contains(nameof(ShellSessionActivationOverlayViewModel.IsOverlayVisible), raised);
+        Assert.Contains(nameof(ShellSessionActivationOverlayViewModel.ShowsBlockingMask), raised);
+        Assert.Contains(nameof(ShellSessionActivationOverlayViewModel.ShowsPresenter), raised);
+        Assert.Contains(nameof(ShellSessionActivationOverlayViewModel.StatusText), raised);
     }
 
     [Fact]

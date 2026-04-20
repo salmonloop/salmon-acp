@@ -766,7 +766,7 @@ public sealed partial class RealUserConfigSmokeTests
             var messagesVisible = session.MainWindow.FindFirstDescendant(cf => cf.ByAutomationId("ChatView.MessagesList")) is not null;
             var headerName = header?.Name ?? "<missing>";
             var screenshotPath = Path.Combine(captureRoot, $"frame-{index:00}-{stopwatch.ElapsedMilliseconds:0000}ms.png");
-            session.MainWindow.CaptureToFile(screenshotPath);
+            session.CaptureMainWindowToFile(screenshotPath);
 
             timeline.Add(
                 $"{stopwatch.ElapsedMilliseconds,5}ms overlay={overlayVisible} activeRoot={activeRootVisible} header={headerName} messages={messagesVisible} shot={screenshotPath}");
@@ -777,8 +777,10 @@ public sealed partial class RealUserConfigSmokeTests
         var timelinePath = Path.Combine(captureRoot, "timeline.txt");
         File.WriteAllLines(timelinePath, timeline);
         Console.WriteLine($"First-frame audit capture root: {captureRoot}");
+        var capturedFrames = Directory.GetFiles(captureRoot, "frame-*.png", SearchOption.TopDirectoryOnly);
 
         Assert.True(File.Exists(timelinePath), $"Expected timeline capture to exist at {timelinePath}.");
+        Assert.NotEmpty(capturedFrames);
     }
 
     [SkippableFact]
@@ -1654,7 +1656,7 @@ public sealed partial class RealUserConfigSmokeTests
     {
         try
         {
-            session.MainWindow.CaptureToFile(path);
+            session.CaptureMainWindowToFile(path);
             return path;
         }
         catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException)

@@ -193,7 +193,7 @@ public sealed class ChatSkeletonSmokeTests
                 string screenshotDescriptor;
                 try
                 {
-                    session.MainWindow.CaptureToFile(screenshotPath);
+                    session.CaptureMainWindowToFile(screenshotPath);
                     screenshotDescriptor = screenshotPath;
                 }
                 catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException)
@@ -1863,7 +1863,7 @@ public sealed class ChatSkeletonSmokeTests
         var screenshotPath = Path.Combine(
             captureRoot,
             $"chat-skeleton-{scenario}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
-        session.MainWindow.CaptureToFile(screenshotPath);
+        session.CaptureMainWindowToFile(screenshotPath);
 
         throw new Xunit.Sdk.XunitException(
             $"Loading overlay was not found for scenario '{scenario}'. Screenshot: {screenshotPath}{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
@@ -2190,7 +2190,7 @@ public sealed class ChatSkeletonSmokeTests
         string screenshotDescriptor;
         try
         {
-            session.MainWindow.CaptureToFile(screenshotPath);
+            session.CaptureMainWindowToFile(screenshotPath);
             screenshotDescriptor = screenshotPath;
         }
         catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException)

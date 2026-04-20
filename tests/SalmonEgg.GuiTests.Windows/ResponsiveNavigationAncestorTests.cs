@@ -228,7 +228,7 @@ public sealed class ResponsiveNavigationAncestorTests
 
         try
         {
-            session.MainWindow.CaptureToFile(screenshotPath);
+            session.CaptureMainWindowToFile(screenshotPath);
             return screenshotPath;
         }
         catch (Exception ex)

@@ -133,7 +133,7 @@ public sealed class NavigationSmokeTests
         var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
         Directory.CreateDirectory(captureRoot);
         var screenshotPath = Path.Combine(captureRoot, "nav-compact-main.png");
-        session.MainWindow.CaptureToFile(screenshotPath);
+        session.CaptureMainWindowToFile(screenshotPath);
 
         var startRect = startItem.BoundingRectangle;
         var addRect = addProject.BoundingRectangle;
@@ -227,7 +227,7 @@ public sealed class NavigationSmokeTests
         Thread.Sleep(1500);
         var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
         Directory.CreateDirectory(captureRoot);
-        session.MainWindow.CaptureToFile(Path.Combine(captureRoot, "nav-collapsed-active-session.png"));
+        session.CaptureMainWindowToFile(Path.Combine(captureRoot, "nav-collapsed-active-session.png"));
 
         var addProject = session.FindByAutomationId("MainNav.AddProject");
         var affordanceElements = addProject.FindAllDescendants()

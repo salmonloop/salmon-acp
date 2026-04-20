@@ -78,6 +78,7 @@ public sealed partial class MainPage : Page
     public bool IsGuiAutomationMode { get; }
     private readonly ChatViewModel _chatViewModel;
     public ChatViewModel ChatVM => _chatViewModel;
+    public ShellSessionActivationOverlayViewModel ShellOverlayVM { get; }
     public ShellLayoutViewModel LayoutVM { get; }
     private readonly WindowMetricsProvider _metricsProvider;
     private readonly IShellLayoutMetricsSink _metricsSink;
@@ -97,6 +98,7 @@ public sealed partial class MainPage : Page
         Preferences = App.ServiceProvider.GetRequiredService<AppPreferencesViewModel>();
         NavVM = App.ServiceProvider.GetRequiredService<MainNavigationViewModel>();
         _chatViewModel = App.ServiceProvider.GetRequiredService<ChatViewModel>();
+        ShellOverlayVM = App.ServiceProvider.GetRequiredService<ShellSessionActivationOverlayViewModel>();
         SearchVM = App.ServiceProvider.GetRequiredService<GlobalSearchViewModel>();
 
         LayoutVM = App.ServiceProvider.GetRequiredService<ShellLayoutViewModel>();

@@ -584,12 +584,12 @@
                                         HorizontalContentAlignment="Stretch"
                                         VerticalContentAlignment="Stretch"
                                         IsTabStop="False"
-                                        IsHitTestVisible="{x:Bind ChatVM.ShouldShowBlockingLoadingMask, Mode=OneWay}"
-                                        Visibility="{x:Bind ChatVM.ShouldShowLoadingOverlayPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        IsHitTestVisible="{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay}"
+                                        Visibility="{x:Bind ShellOverlayVM.ShowsPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Grid>
                                 <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
                                         AutomationProperties.AutomationId="ChatView.LoadingOverlayMask"
-                                        Visibility="{x:Bind ChatVM.ShouldShowBlockingLoadingMask, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        Visibility="{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                     <controls:ChatSkeleton VerticalAlignment="Stretch"
                                                            HorizontalAlignment="Stretch" />
                                 </Border>
@@ -603,11 +603,11 @@
                                             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                                             BorderThickness="1"
                                             CornerRadius="20"
-                                            Visibility="{x:Bind ChatVM.ShouldShowLoadingOverlayStatusPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            Visibility="{x:Bind ShellOverlayVM.ShowsStatusPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <ProgressRing IsActive="True" Width="16" Height="16" />
                                             <TextBlock AutomationProperties.AutomationId="ChatView.LoadingOverlayStatus"
-                                                       Text="{x:Bind ChatVM.OverlayStatusText, Mode=OneWay}"
+                                                       Text="{x:Bind ShellOverlayVM.StatusText, Mode=OneWay}"
                                                        FontSize="12"
                                                        FontWeight="Medium"
                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />

@@ -288,6 +288,7 @@ public static class DependencyInjection
         services.AddSingleton<IConversationSessionSwitcher>(sp => sp.GetRequiredService<ChatViewModel>());
 
         services.AddSingleton<ChatShellViewModel>();
+        services.AddSingleton<ShellSessionActivationOverlayViewModel>();
         services.AddSingleton<ConversationCatalogFacade>();
         services.AddSingleton<IConversationCatalog>(sp => sp.GetRequiredService<ConversationCatalogFacade>());
         services.AddSingleton<IDiscoverSessionsConnectionFacade>(sp =>
