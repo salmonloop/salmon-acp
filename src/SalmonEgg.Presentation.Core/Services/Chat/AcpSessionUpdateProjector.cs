@@ -31,8 +31,14 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
                 PlanTitle: string.IsNullOrWhiteSpace(planUpdate.Title) ? null : planUpdate.Title.Trim()),
             CurrentModeUpdate modeUpdate => new AcpSessionUpdateDelta(
                 SelectedModeId: string.IsNullOrWhiteSpace(modeUpdate.NormalizedModeId) ? null : modeUpdate.NormalizedModeId),
+            AvailableCommandsUpdate availableCommandsUpdate => new AcpSessionUpdateDelta(
+                AvailableCommands: MapAvailableCommands(availableCommandsUpdate.AvailableCommands)),
             ConfigUpdateUpdate configUpdate => BuildConfigDelta(configUpdate.ConfigOptions),
             ConfigOptionUpdate optionUpdate => BuildConfigDelta(optionUpdate.ConfigOptions),
+            SessionInfoUpdate sessionInfoUpdate => new AcpSessionUpdateDelta(
+                SessionInfo: MapSessionInfo(sessionInfoUpdate)),
+            UsageUpdate usageUpdate => new AcpSessionUpdateDelta(
+                Usage: MapUsage(usageUpdate)),
             _ => AcpSessionUpdateDelta.Empty
         };
     }
@@ -117,6 +123,32 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
             Priority = entry.Priority
         }).ToArray() ?? Array.Empty<ConversationPlanEntrySnapshot>();
 
+    private static IReadOnlyList<AcpAvailableCommandSnapshot> MapAvailableCommands(
+        IReadOnlyList<AvailableCommand>? commands)
+        => commands?
+            .Where(static command => command is not null)
+            .Select(static command => new AcpAvailableCommandSnapshot(
+                command.Name ?? string.Empty,
+                command.Description ?? string.Empty,
+                command.Input?.Hint))
+            .ToArray() ?? Array.Empty<AcpAvailableCommandSnapshot>();
+
+    private static AcpSessionInfoSnapshot MapSessionInfo(SessionInfoUpdate update)
+        => new(
+            Title: update.Title,
+            Description: update.Description,
+            Cwd: update.Cwd,
+            UpdatedAt: update.UpdatedAt,
+            Meta: update.Meta is null ? null : new Dictionary<string, object?>(update.Meta, StringComparer.Ordinal));
+
+    private static AcpUsageSnapshot MapUsage(UsageUpdate update)
+        => new(
+            Used: update.Used,
+            Size: update.Size,
+            Cost: update.Cost is null
+                ? null
+                : new AcpUsageCostSnapshot(update.Cost.Amount, update.Cost.Currency));
+
     private static AcpConfigOptionSnapshot MapConfigOption(ConfigOption option)
     {
         var projectedOptions = option.Options?
@@ -144,12 +176,17 @@ public sealed record AcpSessionUpdateDelta(
     bool? ShowConfigOptionsPanel = null,
     IReadOnlyList<ConversationPlanEntrySnapshot>? PlanEntries = null,
     bool? ShowPlanPanel = null,
-    string? PlanTitle = null)
+    string? PlanTitle = null,
+    IReadOnlyList<AcpAvailableCommandSnapshot>? AvailableCommands = null,
+    AcpSessionInfoSnapshot? SessionInfo = null,
+    AcpUsageSnapshot? Usage = null)
 {
     public static AcpSessionUpdateDelta Empty { get; } = new();
 }
 
 public sealed record AcpModeOption(string ModeId, string ModeName, string Description);
+
+public sealed record AcpAvailableCommandSnapshot(string Name, string Description, string? InputHint);
 
 public sealed record AcpConfigOptionChoice(string Value, string Name, string? Description);
 
@@ -161,3 +198,19 @@ public sealed partial record AcpConfigOptionSnapshot(
     string? ValueType,
     string? SelectedValue,
     IReadOnlyList<AcpConfigOptionChoice> Options);
+
+public sealed record AcpSessionInfoSnapshot(
+    string? Title,
+    string? Description,
+    string? Cwd,
+    string? UpdatedAt,
+    IReadOnlyDictionary<string, object?>? Meta);
+
+public sealed record AcpUsageSnapshot(
+    int? Used,
+    int? Size,
+    AcpUsageCostSnapshot? Cost);
+
+public sealed record AcpUsageCostSnapshot(
+    decimal? Amount,
+    string? Currency);

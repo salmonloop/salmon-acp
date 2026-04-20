@@ -307,4 +307,99 @@ public class AcpSessionUpdateProjectorTests
         Assert.Equal("My plan", delta.PlanTitle);
         Assert.Single(delta.PlanEntries!);
     }
+
+    [Fact]
+    public void Project_AvailableCommandsUpdate_MapsSessionScopedCommandSnapshot()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var args = new SessionUpdateEventArgs(
+            "remote-1",
+            new AvailableCommandsUpdate
+            {
+                AvailableCommands = new List<AvailableCommand>
+                {
+                    new()
+                    {
+                        Name = "plan",
+                        Description = "Show the current plan",
+                        Input = new AvailableCommandInput
+                        {
+                            Hint = "scope"
+                        }
+                    }
+                }
+            });
+
+        // Act
+        var delta = projector.Project(args);
+
+        // Assert
+        var command = Assert.Single(delta.AvailableCommands!);
+        Assert.Equal("plan", command.Name);
+        Assert.Equal("Show the current plan", command.Description);
+        Assert.Equal("scope", command.InputHint);
+    }
+
+    [Fact]
+    public void Project_SessionInfoUpdate_MapsSessionMetadataSnapshot()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var updatedAt = "2026-04-20T03:04:05Z";
+        var args = new SessionUpdateEventArgs(
+            "remote-1",
+            new SessionInfoUpdate
+            {
+                Title = "Remote session",
+                Description = "ACP metadata",
+                Cwd = @"C:\repo\remote",
+                UpdatedAt = updatedAt,
+                Meta = new Dictionary<string, object?>
+                {
+                    ["profileId"] = "profile-1"
+                }
+            });
+
+        // Act
+        var delta = projector.Project(args);
+
+        // Assert
+        Assert.NotNull(delta.SessionInfo);
+        Assert.Equal("Remote session", delta.SessionInfo.Title);
+        Assert.Equal("ACP metadata", delta.SessionInfo.Description);
+        Assert.Equal(@"C:\repo\remote", delta.SessionInfo.Cwd);
+        Assert.Equal(updatedAt, delta.SessionInfo.UpdatedAt);
+        Assert.Equal("profile-1", delta.SessionInfo.Meta!["profileId"]);
+    }
+
+    [Fact]
+    public void Project_UsageUpdate_MapsTypedUsageSnapshot()
+    {
+        // Arrange
+        var projector = new AcpSessionUpdateProjector();
+        var args = new SessionUpdateEventArgs(
+            "remote-1",
+            new UsageUpdate
+            {
+                Used = 64,
+                Size = 128,
+                Cost = new UsageCost
+                {
+                    Amount = 1.25m,
+                    Currency = "USD"
+                }
+            });
+
+        // Act
+        var delta = projector.Project(args);
+
+        // Assert
+        Assert.NotNull(delta.Usage);
+        Assert.Equal(64, delta.Usage.Used);
+        Assert.Equal(128, delta.Usage.Size);
+        Assert.NotNull(delta.Usage.Cost);
+        Assert.Equal(1.25m, delta.Usage.Cost.Amount);
+        Assert.Equal("USD", delta.Usage.Cost.Currency);
+    }
 }
