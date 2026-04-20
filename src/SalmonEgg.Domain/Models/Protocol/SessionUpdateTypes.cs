@@ -417,6 +417,12 @@ namespace SalmonEgg.Domain.Models.Protocol
     public class SessionInfoUpdate : SessionUpdate
     {
         /// <summary>
+        /// 协议扩展字段（_meta）。
+        /// </summary>
+        [JsonPropertyName("_meta")]
+        public Dictionary<string, object?>? Meta { get; set; }
+
+        /// <summary>
         /// 会话标题（可选）。
         /// </summary>
         [JsonPropertyName("title")]

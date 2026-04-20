@@ -43,4 +43,7 @@ public class AgentSessionInfo
 
     [JsonPropertyName("updatedAt")]
     public string? UpdatedAt { get; set; }
+
+    [JsonPropertyName("_meta")]
+    public Dictionary<string, object?>? Meta { get; set; }
 }

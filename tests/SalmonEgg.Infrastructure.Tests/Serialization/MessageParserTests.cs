@@ -160,5 +160,41 @@ public class MessageParserTests
         Assert.Equal("Run command", update.Title);
         Assert.Equal(Domain.Models.Tool.ToolCallStatus.Completed, update.Status);
     }
+
+    [Fact]
+    public void Options_ShouldDeserialize_SessionListResponse_WithSessionMeta()
+    {
+        var json = """
+        {
+          "sessions": [
+            {
+              "sessionId": "sess_list_1",
+              "cwd": "/home/user/project",
+              "title": "Existing session",
+              "updatedAt": "2026-03-22T19:00:00Z",
+              "_meta": {
+                "source": "unit-test",
+                "rank": 3
+              }
+            }
+          ]
+        }
+        """;
+
+        var parser = new MessageParser();
+        var response = JsonSerializer.Deserialize<SessionListResponse>(json, parser.Options);
+
+        Assert.NotNull(response);
+        Assert.Single(response!.Sessions);
+
+        var session = response.Sessions[0];
+        var metaProperty = session.GetType().GetProperty("Meta");
+        Assert.NotNull(metaProperty);
+
+        var meta = metaProperty!.GetValue(session) as Dictionary<string, object?>;
+        Assert.NotNull(meta);
+        Assert.Equal("unit-test", ((JsonElement)meta!["source"]!).GetString());
+        Assert.Equal(3, ((JsonElement)meta["rank"]!).GetInt32());
+    }
 }
 

@@ -88,7 +88,7 @@ public sealed class SessionUpdatePolymorphismTests
     }
 
     [Test]
-    public void Deserialize_SessionInfoUpdate_Works()
+    public void Deserialize_SessionInfoUpdate_WithMeta_Works()
     {
         var json = """
         {
@@ -96,7 +96,13 @@ public sealed class SessionUpdatePolymorphismTests
           "update": {
             "sessionUpdate": "session_info_update",
             "title": "New Title",
-            "updatedAt": "2026-03-22T19:00:00Z"
+            "updatedAt": "2026-03-22T19:00:00Z",
+            "_meta": {
+              "source": "unit-test",
+              "flags": {
+                "pinned": true
+              }
+            }
           }
         }
         """;
@@ -109,6 +115,49 @@ public sealed class SessionUpdatePolymorphismTests
         var update = (SessionInfoUpdate)parsed.Update!;
         Assert.That(update.Title, Is.EqualTo("New Title"));
         Assert.That(update.UpdatedAt, Is.EqualTo("2026-03-22T19:00:00Z"));
+
+        var metaProperty = update.GetType().GetProperty("Meta");
+        Assert.That(metaProperty, Is.Not.Null, "SessionInfoUpdate should expose ACP _meta");
+
+        var meta = metaProperty!.GetValue(update) as Dictionary<string, object?>;
+        Assert.That(meta, Is.Not.Null);
+        Assert.That(meta!.ContainsKey("source"), Is.True);
+        Assert.That(meta["source"], Is.TypeOf<JsonElement>());
+        Assert.That(((JsonElement)meta["source"]!).GetString(), Is.EqualTo("unit-test"));
+        Assert.That(meta.ContainsKey("flags"), Is.True);
+    }
+
+    [Test]
+    public void Deserialize_SessionInfoUpdate_AllowsPartialPayloads()
+    {
+        var json = """
+        {
+          "sessionId": "s-info",
+          "update": {
+            "sessionUpdate": "session_info_update",
+            "_meta": {
+              "source": "unit-test"
+            }
+          }
+        }
+        """;
+
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new MessageParser().Options);
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
+
+        var update = (SessionInfoUpdate)parsed.Update!;
+        Assert.That(update.Title, Is.Null);
+        Assert.That(update.UpdatedAt, Is.Null);
+
+        var metaProperty = update.GetType().GetProperty("Meta");
+        Assert.That(metaProperty, Is.Not.Null, "SessionInfoUpdate should expose ACP _meta");
+
+        var meta = metaProperty!.GetValue(update) as Dictionary<string, object?>;
+        Assert.That(meta, Is.Not.Null);
+        Assert.That(meta!.ContainsKey("source"), Is.True);
+        Assert.That(((JsonElement)meta["source"]!).GetString(), Is.EqualTo("unit-test"));
     }
 
     [Test]
