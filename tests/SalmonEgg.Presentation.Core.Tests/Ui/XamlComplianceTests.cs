@@ -95,24 +95,29 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void MainPage_SearchActionsUseCommands()
+    public void MainPage_SearchUsesNativeAutoSuggestEvents()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
+        var code = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
 
-        Assert.Contains("Command=\"{x:Bind ActivateCommand", xaml);
-        Assert.Contains("Command=\"{x:Bind UseCommand", xaml);
-        Assert.DoesNotContain("OnSearchResultItemClick", xaml);
-        Assert.DoesNotContain("OnSearchHistoryItemClick", xaml);
+        Assert.Contains("TextChanged=\"OnSearchTextChanged\"", xaml);
+        Assert.Contains("SuggestionChosen=\"OnSearchSuggestionChosen\"", xaml);
+        Assert.Contains("QuerySubmitted=\"OnSearchQuerySubmitted\"", xaml);
+        Assert.DoesNotContain("Command=\"{x:Bind ActivateCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemClick=\"OnSearchSuggestionItemClick\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnSearchResultItemClick", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnSearchHistoryItemClick", code, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void MainPage_SearchFocusIsViewModelDriven()
+    public void MainPage_SearchDoesNotPatchFocusOrPopupState()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
 
         Assert.DoesNotContain("GotFocus=\"OnSearchBoxGotFocus\"", xaml);
         Assert.DoesNotContain("LostFocus=\"OnSearchBoxLostFocus\"", xaml);
-        Assert.Contains("FocusMonitor.IsFocused", xaml);
+        Assert.DoesNotContain("FocusMonitor.IsFocused", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsSuggestionListOpen=", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -191,11 +196,7 @@ public sealed class XamlComplianceTests
 
         Assert.DoesNotContain("PlaceholderText=\"搜索\"", xaml);
         Assert.DoesNotContain("AutomationProperties.Name=\"搜索\"", xaml);
-        Assert.DoesNotContain("Text=\"最近搜索\"", xaml);
-        Assert.DoesNotContain("Text=\"无搜索结果\"", xaml);
         Assert.Contains("x:Uid=\"TopSearchBox\"", xaml);
-        Assert.Contains("x:Uid=\"SearchPanelRecentTitle\"", xaml);
-        Assert.Contains("x:Uid=\"SearchPanelEmptyText\"", xaml);
     }
 
     [Fact]
@@ -578,17 +579,50 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void MainPage_SearchFlyout_DoesNotStealFocusFromSearchBoxOnOpenOrClose()
+    public void MainPage_SearchUsesNativeAutoSuggestBoxWithoutFocusPatches()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
         var code = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
 
-        Assert.Contains("x:Name=\"SearchPanelBorder\"", xaml);
-        Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", xaml);
-        Assert.Contains("IsTabStop=\"False\"", xaml);
-        Assert.DoesNotContain("private void TryFocusSearchPanelPrimaryAction()", code);
-        Assert.DoesNotContain("DispatcherQueue.TryEnqueue(TryFocusSearchPanelPrimaryAction)", code);
-        Assert.DoesNotContain("DispatcherQueue.TryEnqueue(() => TopSearchBox.Focus(FocusState.Programmatic))", code);
+        Assert.Contains("<AutoSuggestBox x:Name=\"TopSearchBox\"", xaml);
+        Assert.Contains("TextChanged=\"OnSearchTextChanged\"", xaml);
+        Assert.Contains("SuggestionChosen=\"OnSearchSuggestionChosen\"", xaml);
+        Assert.Contains("QuerySubmitted=\"OnSearchQuerySubmitted\"", xaml);
+        Assert.Contains("ItemsSource=\"{x:Bind SearchVM.SuggestionEntries, Mode=OneWay}\"", xaml);
+        Assert.Contains("<AutoSuggestBox.ItemTemplate>", xaml);
+        Assert.DoesNotContain("FlyoutBase.AttachedFlyout", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SearchSuggestionsPresenter", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("FocusMonitor.IsFocused", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsSuggestionListOpen=", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherQueue.TryEnqueue(TryFocusSearchPanelPrimaryAction)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("DispatcherQueue.TryEnqueue(() => TopSearchBox.Focus(FocusState.Programmatic))", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_SearchBox_RemainsCenteredInTitleBar()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
+        var code = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+
+        Assert.Contains("<AutoSuggestBox x:Name=\"TopSearchBox\"", xaml);
+        Assert.Contains("Grid.Column=\"1\"", xaml);
+        Assert.DoesNotContain("x:Name=\"TitleBarCenterSpacer\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Border Grid.Row=\"0\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TopSearchBox,", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("TitleBarCenterSpacer,", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_SearchSuggestions_StayWithinNativeAutoSuggestBox()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
+
+        Assert.Contains("ItemsSource=\"{x:Bind SearchVM.SuggestionEntries, Mode=OneWay}\"", xaml);
+        Assert.Contains("<AutoSuggestBox.ItemTemplate>", xaml);
+        Assert.DoesNotContain("x:Name=\"SearchSuggestionsPresenter\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"SearchSuggestionsList\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Command=\"{x:Bind ActivateCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsSuggestionListOpen=", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Windows.Input;
 
 namespace SalmonEgg.Presentation.Models.Search;
 
@@ -28,15 +27,11 @@ public sealed class SearchResultItem
     public string? IconGlyph { get; init; }
 
     public string? Tag { get; init; }
-
-    public ICommand? ActivateCommand { get; init; }
 }
 
 public sealed class SearchHistoryItem
 {
     public required string Query { get; init; }
-
-    public ICommand? UseCommand { get; init; }
 }
 
 public sealed class SearchResultGroup
@@ -48,6 +43,57 @@ public sealed class SearchResultGroup
     public int Priority { get; init; }
 
     public List<SearchResultItem> Items { get; } = new();
+}
+
+public enum SearchSuggestionEntryKind
+{
+    Result,
+    History,
+    Status
+}
+
+public sealed class SearchSuggestionEntry
+{
+    public required string AutomationId { get; init; }
+
+    public required string Title { get; init; }
+
+    public string? Subtitle { get; init; }
+
+    public string? SectionTitle { get; init; }
+
+    public string? IconGlyph { get; init; }
+
+    public SearchSuggestionEntryKind Kind { get; init; }
+
+    public SearchResultItem? ResultItem { get; init; }
+
+    public string? HistoryQuery { get; init; }
+
+    public bool IsActionable => Kind != SearchSuggestionEntryKind.Status;
+
+    public string SecondaryText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Subtitle) && !string.IsNullOrWhiteSpace(SectionTitle))
+            {
+                return $"{SectionTitle} · {Subtitle}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                return Subtitle!;
+            }
+
+            if (!string.IsNullOrWhiteSpace(SectionTitle))
+            {
+                return SectionTitle!;
+            }
+
+            return string.Empty;
+        }
+    }
 }
 
 public enum GlobalSearchViewState

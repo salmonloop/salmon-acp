@@ -38,7 +38,6 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
     private readonly List<SearchHistoryItem> _searchHistory = new();
     private readonly AsyncQueryCoordinator _searchCoordinator = new();
     private int _activeSearchRequestId;
-    private bool _suppressAutoOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasQuery))]
@@ -57,17 +56,7 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     [NotifyPropertyChangedFor(nameof(IsError))]
     [NotifyPropertyChangedFor(nameof(HasAnyContent))]
-    [NotifyPropertyChangedFor(nameof(ShouldShowSearchPanelPresenter))]
     private GlobalSearchViewState _viewState = GlobalSearchViewState.Idle;
-
-    [ObservableProperty]
-    private bool _isSearchPanelOpen;
-
-    [ObservableProperty]
-    private SearchResultItem? _selectedItem;
-
-    [ObservableProperty]
-    private bool _isSearchBoxFocused;
 
     public bool HasQuery => !string.IsNullOrWhiteSpace(Query);
     public bool IsSearching => ViewState == GlobalSearchViewState.Loading;
@@ -76,7 +65,8 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
     public bool IsEmpty => ViewState == GlobalSearchViewState.Empty;
     public bool IsError => ViewState == GlobalSearchViewState.Error;
     public bool HasAnyContent => HasResults || ShowSuggestions || IsSearching || IsEmpty || IsError;
-    public bool ShouldShowSearchPanelPresenter => IsSearchBoxFocused && (HasQuery || ShowSuggestions || IsSearching || HasResults || IsEmpty || IsError);
+
+    public IReadOnlyList<SearchSuggestionEntry> SuggestionEntries => BuildSuggestionEntries();
 
     public IReadOnlyList<SearchHistoryItem> RecentSearches => _searchHistory.AsReadOnly();
 
@@ -102,22 +92,17 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
     partial void OnQueryChanged(string value)
     {
         CancelPendingSearch();
-        if (!_suppressAutoOpen || !string.IsNullOrWhiteSpace(value))
-        {
-            _suppressAutoOpen = false;
-        }
-
         if (string.IsNullOrWhiteSpace(value))
         {
             ResultGroups.Clear();
             ViewState = GlobalSearchViewState.Idle;
-            UpdateSearchPanelState();
+            RaiseSuggestionEntriesChanged();
             return;
         }
 
         ResultGroups.Clear();
         ViewState = GlobalSearchViewState.Loading;
-        UpdateSearchPanelState();
+        RaiseSuggestionEntriesChanged();
         var ticket = _searchCoordinator.Begin();
         _ = Interlocked.Increment(ref _activeSearchRequestId);
         _ = SearchAsync(value, ticket);
@@ -150,7 +135,6 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
             ViewState = ResultGroups.Count > 0
                 ? GlobalSearchViewState.Results
                 : GlobalSearchViewState.Empty;
-            UpdateSearchPanelState();
         }
         catch (OperationCanceledException) when (ticket.Token.IsCancellationRequested)
         {
@@ -164,7 +148,6 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
                 && requestId == Volatile.Read(ref _activeSearchRequestId))
             {
                 ViewState = GlobalSearchViewState.Error;
-                UpdateSearchPanelState();
             }
         }
     }
@@ -205,8 +188,7 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
                     Subtitle = item.Subtitle,
                     Kind = item.Kind,
                     IconGlyph = item.IconGlyph,
-                    Tag = item.Tag,
-                    ActivateCommand = SelectResultCommand
+                    Tag = item.Tag
                 });
             }
 
@@ -253,8 +235,7 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
                 break;
         }
 
-        // 关闭搜索面板
-        CloseSearchPanel();
+        ClearSearchState();
     }
 
     private void ExecuteCommand(SearchResultItem item)
@@ -315,37 +296,11 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
     }
 
     [RelayCommand]
-    private void OpenSearchPanel()
-    {
-        IsSearchPanelOpen = true;
-    }
-
-    [RelayCommand]
-    private void CloseSearchPanel()
-    {
-        _suppressAutoOpen = true;
-        IsSearchPanelOpen = false;
-        Query = string.Empty;
-        ResultGroups.Clear();
-        ViewState = GlobalSearchViewState.Idle;
-    }
-
-    [RelayCommand]
-    private void UseHistoryItem(string? query)
-    {
-        if (!string.IsNullOrWhiteSpace(query))
-        {
-            Query = query;
-        }
-    }
-
-    [RelayCommand]
     private void ClearHistory()
     {
         _searchHistory.Clear();
         OnPropertyChanged(nameof(RecentSearches));
         OnPropertyChanged(nameof(ShowSuggestions));
-        UpdateSearchPanelState();
     }
 
     private void AddToHistory(string query)
@@ -365,8 +320,7 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
         // 添加到开头
         _searchHistory.Insert(0, new SearchHistoryItem
         {
-            Query = query,
-            UseCommand = UseHistoryItemCommand
+            Query = query
         });
 
         // 限制历史记录数量
@@ -377,38 +331,12 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
 
         OnPropertyChanged(nameof(RecentSearches));
         OnPropertyChanged(nameof(ShowSuggestions));
-        UpdateSearchPanelState();
+        RaiseSuggestionEntriesChanged();
     }
 
-    partial void OnIsSearchBoxFocusedChanged(bool value)
+    partial void OnViewStateChanged(GlobalSearchViewState value)
     {
-        if (value)
-        {
-            _suppressAutoOpen = false;
-        }
-
-        UpdateSearchPanelState();
-    }
-
-    private void UpdateSearchPanelState()
-    {
-        if (!IsSearchBoxFocused || !ShouldShowSearchPanelPresenter)
-        {
-            IsSearchPanelOpen = false;
-            return;
-        }
-
-        if (_suppressAutoOpen)
-        {
-            return;
-        }
-
-        IsSearchPanelOpen = true;
-    }
-
-    public void FocusSearch()
-    {
-        IsSearchPanelOpen = true;
+        RaiseSuggestionEntriesChanged();
     }
 
     private void CancelPendingSearch()
@@ -422,7 +350,7 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(IsError));
         OnPropertyChanged(nameof(HasAnyContent));
-        OnPropertyChanged(nameof(ShouldShowSearchPanelPresenter));
+        RaiseSuggestionEntriesChanged();
     }
 
     partial void OnResultGroupsChanged(ObservableCollection<SearchResultGroup>? oldValue, ObservableCollection<SearchResultGroup> newValue)
@@ -439,5 +367,153 @@ public sealed partial class GlobalSearchViewModel : ObservableObject, IDisposabl
     {
         ResultGroups.CollectionChanged -= OnResultGroupsCollectionChanged;
         _searchCoordinator.Dispose();
+    }
+
+    public Task ActivateSuggestionAsync(SearchSuggestionEntry? entry)
+    {
+        if (entry == null || !entry.IsActionable)
+        {
+            return Task.CompletedTask;
+        }
+
+        return entry.Kind switch
+        {
+            SearchSuggestionEntryKind.Result when entry.ResultItem is not null => SelectResultAsync(entry.ResultItem),
+            SearchSuggestionEntryKind.History when !string.IsNullOrWhiteSpace(entry.HistoryQuery) => ActivateHistorySuggestion(entry.HistoryQuery!),
+            _ => Task.CompletedTask
+        };
+    }
+
+    public Task SubmitQueryAsync(string? queryText)
+    {
+        var submittedText = queryText?.Trim();
+        if (string.IsNullOrWhiteSpace(submittedText))
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!string.Equals(Query, submittedText, StringComparison.Ordinal))
+        {
+            Query = submittedText;
+        }
+
+        var entry = SuggestionEntries.FirstOrDefault(candidate => candidate.IsActionable);
+        return ActivateSuggestionAsync(entry);
+    }
+
+    private Task ActivateHistorySuggestion(string query)
+    {
+        Query = query;
+        return Task.CompletedTask;
+    }
+
+    private void ClearSearchState()
+    {
+        Query = string.Empty;
+        ResultGroups.Clear();
+        ViewState = GlobalSearchViewState.Idle;
+    }
+
+    private void RaiseSuggestionEntriesChanged()
+    {
+        OnPropertyChanged(nameof(SuggestionEntries));
+    }
+
+    private IReadOnlyList<SearchSuggestionEntry> BuildSuggestionEntries()
+    {
+        if (IsSearching)
+        {
+            return
+            [
+                new SearchSuggestionEntry
+                {
+                    AutomationId = "SearchSuggestion.Status.Loading",
+                    Title = "搜索中...",
+                    Subtitle = "正在更新结果",
+                    IconGlyph = "\uE895",
+                    Kind = SearchSuggestionEntryKind.Status
+                }
+            ];
+        }
+
+        if (HasResults)
+        {
+            return ResultGroups
+                .SelectMany(
+                    group => group.Items.Select(
+                        item => new SearchSuggestionEntry
+                        {
+                            AutomationId = $"SearchSuggestion.Result.{item.Id}",
+                            Title = item.Title,
+                            Subtitle = item.Subtitle,
+                            SectionTitle = group.Title,
+                            IconGlyph = item.IconGlyph,
+                            Kind = SearchSuggestionEntryKind.Result,
+                            ResultItem = item
+                        }))
+                .ToArray();
+        }
+
+        if (ShowSuggestions)
+        {
+            return _searchHistory
+                .Take(MaxSuggestions)
+                .Select(
+                    item => new SearchSuggestionEntry
+                    {
+                        AutomationId = $"SearchSuggestion.History.{SanitizeAutomationSegment(item.Query)}",
+                        Title = item.Query,
+                        Subtitle = "最近搜索",
+                        IconGlyph = "\uE81C",
+                        Kind = SearchSuggestionEntryKind.History,
+                        HistoryQuery = item.Query
+                    })
+                .ToArray();
+        }
+
+        if (IsEmpty)
+        {
+            return
+            [
+                new SearchSuggestionEntry
+                {
+                    AutomationId = "SearchSuggestion.Status.Empty",
+                    Title = "未找到结果",
+                    Subtitle = "尝试更换关键词",
+                    IconGlyph = "\uE783",
+                    Kind = SearchSuggestionEntryKind.Status
+                }
+            ];
+        }
+
+        if (IsError)
+        {
+            return
+            [
+                new SearchSuggestionEntry
+                {
+                    AutomationId = "SearchSuggestion.Status.Error",
+                    Title = "搜索失败",
+                    Subtitle = "稍后重试",
+                    IconGlyph = "\uEA39",
+                    Kind = SearchSuggestionEntryKind.Status
+                }
+            ];
+        }
+
+        return Array.Empty<SearchSuggestionEntry>();
+    }
+
+    private static string SanitizeAutomationSegment(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Empty";
+        }
+
+        var chars = value
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')
+            .ToArray();
+        return new string(chars);
     }
 }

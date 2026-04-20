@@ -325,170 +325,52 @@
                         </Button>
                     </StackPanel>
 
-                    <TextBox x:Name="TopSearchBox"
-                             x:Uid="TopSearchBox"
-                             Grid.Column="1"
-                             Height="32"
-                             Visibility="{x:Bind LayoutVM.SearchBoxVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                             MinWidth="{x:Bind LayoutVM.SearchBoxMinWidth, Mode=OneWay}"
-                             MaxWidth="{x:Bind LayoutVM.SearchBoxMaxWidth, Mode=OneWay}"
-                             Text="{x:Bind SearchVM.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             behaviors:FocusMonitor.IsFocused="{x:Bind SearchVM.IsSearchBoxFocused, Mode=TwoWay}"
-                             behaviors:FlyoutMonitor.IsOpen="{x:Bind SearchVM.IsSearchPanelOpen, Mode=TwoWay}"
-                             CornerRadius="8"
-                             HorizontalAlignment="Center"
-                             VerticalAlignment="Center">
-                        <FlyoutBase.AttachedFlyout>
-                            <Flyout Placement="BottomEdgeAlignedLeft"
-                                    ShowMode="Transient"
-                                    Opened="OnSearchPanelPopupOpened"
-                                    Closed="OnSearchPanelPopupClosed">
-                                <Flyout.FlyoutPresenterStyle>
-                                    <Style TargetType="FlyoutPresenter">
-                                        <Setter Property="Padding" Value="0" />
-                                        <Setter Property="CornerRadius" Value="8" />
-                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                        <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
-                                        <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                                        <Setter Property="BorderThickness" Value="1" />
-                                        <Setter Property="Visibility" Value="{x:Bind SearchVM.ShouldShowSearchPanelPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                    </Style>
-                                </Flyout.FlyoutPresenterStyle>
-                                <Grid x:Name="SearchPanelBorder"
-                                      XYFocusKeyboardNavigation="Enabled"
-                                      MinWidth="{x:Bind TopSearchBox.ActualWidth}"
-                                      MaxWidth="{x:Bind TopSearchBox.ActualWidth}"
-                                      HorizontalAlignment="Stretch">
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center"
-                                                Margin="12,12,12,0"
-                                                Spacing="8"
-                                                Visibility="{x:Bind SearchVM.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <ProgressRing Width="16" Height="16" IsActive="True" />
-                                        <TextBlock Text="搜索中..."
-                                                   VerticalAlignment="Center"
-                                                   Opacity="0.8" />
+                    <AutoSuggestBox x:Name="TopSearchBox"
+                                    x:Uid="TopSearchBox"
+                                    Grid.Column="1"
+                                    Height="32"
+                                    QueryIcon="Find"
+                                    Visibility="{x:Bind LayoutVM.SearchBoxVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    MinWidth="{x:Bind LayoutVM.SearchBoxMinWidth, Mode=OneWay}"
+                                    MaxWidth="{x:Bind LayoutVM.SearchBoxMaxWidth, Mode=OneWay}"
+                                    Text="{x:Bind SearchVM.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    ItemsSource="{x:Bind SearchVM.SuggestionEntries, Mode=OneWay}"
+                                    SuggestionChosen="OnSearchSuggestionChosen"
+                                    TextChanged="OnSearchTextChanged"
+                                    QuerySubmitted="OnSearchQuerySubmitted"
+                                    CornerRadius="8"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                        <AutoSuggestBox.ItemTemplate>
+                            <DataTemplate x:DataType="searchModels:SearchSuggestionEntry">
+                                <Grid Padding="12,8"
+                                      AutomationProperties.AutomationId="{x:Bind AutomationId}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Grid.Column="0"
+                                              Glyph="{x:Bind IconGlyph}"
+                                              Margin="0,0,12,0"
+                                              FontSize="16"
+                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                              Visibility="{x:Bind IconGlyph, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <StackPanel Grid.Column="1"
+                                                HorizontalAlignment="Stretch"
+                                                Spacing="2">
+                                        <TextBlock Text="{x:Bind Title}"
+                                                   FontSize="14"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind SecondaryText}"
+                                                   FontSize="12"
+                                                   Opacity="0.7"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Visibility="{x:Bind SecondaryText, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                  MaxHeight="400"
-                                                  HorizontalAlignment="Stretch"
-                                                  IsTabStop="False">
-                                        <StackPanel HorizontalAlignment="Stretch">
-                                            <muxc:ItemsRepeater ItemsSource="{x:Bind SearchVM.ResultGroups, Mode=OneWay}" HorizontalAlignment="Stretch">
-                                                <muxc:ItemsRepeater.Layout>
-                                                    <muxc:StackLayout Spacing="8" />
-                                                </muxc:ItemsRepeater.Layout>
-                                                <muxc:ItemsRepeater.ItemTemplate>
-                                                    <DataTemplate x:DataType="searchModels:SearchResultGroup">
-                                                        <StackPanel HorizontalAlignment="Stretch">
-                                                            <TextBlock Text="{x:Bind Title}"
-                                                                       FontSize="12"
-                                                                       FontWeight="SemiBold"
-                                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                                       Margin="16,12,16,4" />
-                                                            <muxc:ItemsRepeater ItemsSource="{x:Bind Items}" HorizontalAlignment="Stretch">
-                                                                <muxc:ItemsRepeater.Layout>
-                                                                    <muxc:StackLayout Spacing="2" />
-                                                                </muxc:ItemsRepeater.Layout>
-                                                                <muxc:ItemsRepeater.ItemTemplate>
-                                                                    <DataTemplate x:DataType="searchModels:SearchResultItem">
-                                                                        <Button HorizontalAlignment="Stretch"
-                                                                                HorizontalContentAlignment="Stretch"
-                                                                                Padding="12,8"
-                                                                                Margin="4,2"
-                                                                                Command="{x:Bind ActivateCommand}"
-                                                                                CommandParameter="{x:Bind}"
-                                                                                AutomationProperties.Name="{x:Bind Title}">
-                                                                            <Button.Style>
-                                                                                <Style TargetType="Button">
-                                                                                    <Setter Property="Background" Value="Transparent" />
-                                                                                    <Setter Property="BorderThickness" Value="0" />
-                                                                                    <Setter Property="CornerRadius" Value="4" />
-                                                                                </Style>
-                                                                            </Button.Style>
-                                                                            <Grid HorizontalAlignment="Stretch">
-                                                                                <Grid.ColumnDefinitions>
-                                                                                    <ColumnDefinition Width="Auto" />
-                                                                                    <ColumnDefinition Width="*" />
-                                                                                </Grid.ColumnDefinitions>
-                                                                                <FontIcon Grid.Column="0"
-                                                                                          Glyph="{x:Bind IconGlyph}"
-                                                                                          Margin="0,0,12,0"
-                                                                                          FontSize="16"
-                                                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                                                <StackPanel Grid.Column="1" HorizontalAlignment="Stretch">
-                                                                                    <TextBlock Text="{x:Bind Title}"
-                                                                                               FontSize="14" 
-                                                                                               TextTrimming="CharacterEllipsis"/>
-                                                                                    <TextBlock Text="{x:Bind Subtitle}"
-                                                                                               FontSize="12"
-                                                                                               Opacity="0.7"
-                                                                                               TextTrimming="CharacterEllipsis"
-                                                                                               Visibility="{x:Bind Subtitle, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                                                                </StackPanel>
-                                                                            </Grid>
-                                                                        </Button>
-                                                                    </DataTemplate>
-                                                                </muxc:ItemsRepeater.ItemTemplate>
-                                                            </muxc:ItemsRepeater>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </muxc:ItemsRepeater.ItemTemplate>
-                                            </muxc:ItemsRepeater>
-
-                                            <StackPanel Visibility="{x:Bind SearchVM.ShowSuggestions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                        Margin="0,0,0,8"
-                                                        HorizontalAlignment="Stretch">
-                                                <TextBlock x:Uid="SearchPanelRecentTitle"
-                                                           FontSize="12"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                           Margin="16,12,16,4" />
-                                                <muxc:ItemsRepeater ItemsSource="{x:Bind SearchVM.RecentSearches, Mode=OneWay}" HorizontalAlignment="Stretch">
-                                                    <muxc:ItemsRepeater.Layout>
-                                                        <muxc:StackLayout Spacing="2" />
-                                                    </muxc:ItemsRepeater.Layout>
-                                                    <muxc:ItemsRepeater.ItemTemplate>
-                                                        <DataTemplate x:DataType="searchModels:SearchHistoryItem">
-                                                            <Button Content="{x:Bind Query}"
-                                                                    Padding="12,8"
-                                                                    Margin="4,2"
-                                                                    HorizontalAlignment="Stretch"
-                                                                    HorizontalContentAlignment="Left"
-                                                                    Command="{x:Bind UseCommand}"
-                                                                    CommandParameter="{x:Bind Query}">
-                                                                <Button.Style>
-                                                                    <Style TargetType="Button">
-                                                                        <Setter Property="Background" Value="Transparent" />
-                                                                        <Setter Property="BorderThickness" Value="0" />
-                                                                        <Setter Property="CornerRadius" Value="4" />
-                                                                    </Style>
-                                                                </Button.Style>
-                                                            </Button>
-                                                        </DataTemplate>
-                                                    </muxc:ItemsRepeater.ItemTemplate>
-                                                </muxc:ItemsRepeater>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </ScrollViewer>
-
-                                    <TextBlock x:Uid="SearchPanelEmptyText"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Margin="0,40"
-                                               Opacity="0.6"
-                                               Visibility="{x:Bind SearchVM.IsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                    <TextBlock Text="搜索失败，请重试。"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Margin="0,40"
-                                               Opacity="0.8"
-                                               Visibility="{x:Bind SearchVM.IsError, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                 </Grid>
-                            </Flyout>
-                        </FlyoutBase.AttachedFlyout>
-                    </TextBox>
+                            </DataTemplate>
+                        </AutoSuggestBox.ItemTemplate>
+                    </AutoSuggestBox>
 
                     <StackPanel x:Name="TitleBarRightButtons"
                                 Grid.Column="2"
@@ -570,7 +452,7 @@
                              DisplayModeChanged="OnMainNavPanePresentationChanged"
                              PaneOpened="OnMainNavPanePresentationChanged"
                              PaneClosed="OnMainNavPanePresentationChanged">
-                <NavigationView.Content>
+            <NavigationView.Content>
                     <Grid>
                         <Frame x:Name="ContentFrame"
                                Background="Transparent"
@@ -617,7 +499,7 @@
                             </Grid>
                         </ContentControl>
                     </Grid>
-                </NavigationView.Content>
+            </NavigationView.Content>
             </NavigationView>
 
             <Button x:Name="AutomationArchiveSelectedButton"
@@ -631,7 +513,7 @@
                     AutomationProperties.AutomationId="MainNav.Session.AutomationArchiveSelected"
                     Click="OnAutomationArchiveSelectedClick" />
 
-            <TextBlock x:Name="MainNavAutomationSelectionStateText"
+                <TextBlock x:Name="MainNavAutomationSelectionStateText"
                        Grid.Column="0"
                        HorizontalAlignment="Left"
                        VerticalAlignment="Top"
@@ -641,7 +523,7 @@
                        Visibility="{x:Bind IsGuiAutomationMode, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"
                        AutomationProperties.AutomationId="MainNav.Automation.SelectionState" />
 
-            <controls:ResizeGrip x:Name="LeftNavResizer"
+                <controls:ResizeGrip x:Name="LeftNavResizer"
                                  Grid.Column="0"
                                  HorizontalAlignment="Left"
                                  VerticalAlignment="Stretch"
@@ -658,7 +540,7 @@
                 </controls:ResizeGrip.RenderTransform>
             </controls:ResizeGrip>
 
-            <Grid x:Name="RightPanelColumn"
+                <Grid x:Name="RightPanelColumn"
                   Grid.Column="1"
                   Visibility="{x:Bind LayoutVM.RightPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                   Background="{ThemeResource LayerFillColorDefaultBrush}"
@@ -727,7 +609,7 @@
                                      PointerMoved="OnRightPanelResizerPointerMoved"
                                      PointerReleased="OnRightPanelResizerPointerReleased"
                                      PointerCaptureLost="OnRightPanelResizerPointerCaptureLost" />
-            </Grid>
+                </Grid>
         </Grid>
     </Grid>
 </Page>

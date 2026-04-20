@@ -20,6 +20,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Presentation.Models;
+using SalmonEgg.Presentation.Models.Search;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Navigation;
 using SalmonEgg.Presentation.ViewModels;
@@ -88,7 +89,6 @@ public sealed partial class MainPage : Page
     private readonly WindowBackdropService _windowBackdropService;
     private readonly IGamepadInputService _gamepadInputService;
     private readonly IGamepadNavigationDispatcher _gamepadNavigationDispatcher;
-    private readonly SalmonEgg.Presentation.Logic.SearchInteractionLogic _searchLogic = new();
     private bool _isGamepadInputAttached;
 
     public MainPage()
@@ -681,26 +681,34 @@ public sealed partial class MainPage : Page
         await _metricsSink.ReportNavToggle("TitleBarButton");
     }
 
-    private void OnSearchPanelPopupOpened(object sender, object e)
+    private async void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
-        // Flyout positioning is handled automatically by the system
+        if (args.ChosenSuggestion is SearchSuggestionEntry entry)
+        {
+            await SearchVM.ActivateSuggestionAsync(entry).ConfigureAwait(true);
+            return;
+        }
+
+        await SearchVM.SubmitQueryAsync(args.QueryText).ConfigureAwait(true);
     }
 
-    private void OnSearchPanelPopupClosed(object sender, object e)
+    private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        if (SearchVM != null)
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput
+            && !string.Equals(SearchVM.Query, sender.Text, StringComparison.Ordinal))
         {
-            SearchVM.IsSearchPanelOpen = false;
+            SearchVM.Query = sender.Text;
         }
     }
 
-    private void ClearSearchFocus()
+    private void OnSearchSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
     {
-        if (TopSearchBox != null)
+        if (args.SelectedItem is not SearchSuggestionEntry entry)
         {
-            // Move focus to background or Frame to dismiss search keyboard if needed
-            ContentFrame?.Focus(FocusState.Programmatic);
+            return;
         }
+
+        sender.Text = entry.HistoryQuery ?? entry.Title;
     }
 
     // ToggleNavPane removed as it now simply dispatches via the Click handler.

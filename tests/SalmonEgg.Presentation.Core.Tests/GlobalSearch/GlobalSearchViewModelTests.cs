@@ -89,12 +89,133 @@ public sealed class GlobalSearchViewModelTests
             pipeline,
             Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-        viewModel.IsSearchBoxFocused = true;
         viewModel.Query = "abc";
 
         Assert.Equal(GlobalSearchViewState.Loading, viewModel.ViewState);
-        Assert.True(viewModel.IsSearchPanelOpen);
         Assert.True(viewModel.IsSearching);
+        Assert.Contains(viewModel.SuggestionEntries, entry => entry.Kind == SearchSuggestionEntryKind.Status);
+    }
+
+    [Fact]
+    public async Task SubmitQueryAsync_WhenNoChosenSuggestion_ActivatesFirstActionableSuggestion()
+    {
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var navigationCoordinator = new Mock<INavigationCoordinator>();
+        navigationCoordinator.Setup(coordinator => coordinator.ActivateSettingsAsync(It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            navigationCoordinator.Object,
+            presenter,
+            new ProjectAffinityResolver(),
+            new DefaultGlobalSearchPipeline(),
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+        viewModel.Query = "acp";
+        await Task.Delay(350);
+
+        await viewModel.SubmitQueryAsync("acp");
+
+        navigationCoordinator.Verify(
+            coordinator => coordinator.ActivateSettingsAsync("AgentAcp"),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SubmitQueryAsync_WhenNoActionableSuggestion_IsNoOp()
+    {
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var navigationCoordinator = new Mock<INavigationCoordinator>();
+        navigationCoordinator.Setup(coordinator => coordinator.ActivateSettingsAsync(It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            navigationCoordinator.Object,
+            presenter,
+            new ProjectAffinityResolver(),
+            new DefaultGlobalSearchPipeline(),
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+        viewModel.Query = string.Empty;
+
+        await viewModel.SubmitQueryAsync(string.Empty);
+
+        navigationCoordinator.Verify(
+            coordinator => coordinator.ActivateSettingsAsync(It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ActivateSuggestionAsync_WhenResultSuggestionChosen_UsesNativeSuggestionActivationPath()
+    {
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var navigationCoordinator = new Mock<INavigationCoordinator>();
+        navigationCoordinator.Setup(coordinator => coordinator.ActivateSettingsAsync(It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            navigationCoordinator.Object,
+            presenter,
+            new ProjectAffinityResolver(),
+            new DefaultGlobalSearchPipeline(),
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+        viewModel.Query = "acp";
+        await Task.Delay(350);
+
+        var suggestion = Assert.Single(viewModel.SuggestionEntries, entry => entry.Kind == SearchSuggestionEntryKind.Result);
+
+        await viewModel.ActivateSuggestionAsync(suggestion);
+
+        navigationCoordinator.Verify(
+            coordinator => coordinator.ActivateSettingsAsync("AgentAcp"),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ActivateSuggestionAsync_WhenHistorySuggestionChosen_RestoresHistoryQuery()
+    {
+        var preferences = CreatePreferencesWithProject();
+        var presenter = new ConversationCatalogPresenter();
+        var navigationCoordinator = new Mock<INavigationCoordinator>();
+        navigationCoordinator.Setup(coordinator => coordinator.ActivateSettingsAsync(It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        using var navigationViewModel = CreateNavigationViewModel(preferences, presenter);
+        using var viewModel = new GlobalSearchViewModel(
+            navigationViewModel,
+            preferences,
+            navigationCoordinator.Object,
+            presenter,
+            new ProjectAffinityResolver(),
+            new DefaultGlobalSearchPipeline(),
+            Mock.Of<ILogger<GlobalSearchViewModel>>());
+
+        viewModel.Query = "acp";
+        await Task.Delay(350);
+        await viewModel.SelectResultCommand.ExecuteAsync(new SearchResultItem
+        {
+            Id = "AgentAcp",
+            Title = "ACP 配置",
+            Kind = SearchResultKind.Setting
+        });
+
+        viewModel.Query = string.Empty;
+
+        var suggestion = Assert.Single(viewModel.SuggestionEntries, entry => entry.Kind == SearchSuggestionEntryKind.History);
+
+        await viewModel.ActivateSuggestionAsync(suggestion);
+
+        Assert.Equal("acp", viewModel.Query);
     }
 
     [Fact]
@@ -137,7 +258,6 @@ public sealed class GlobalSearchViewModelTests
             pipeline,
             Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-        viewModel.IsSearchBoxFocused = true;
         viewModel.Query = "alpha";
         await Task.Delay(40);
         viewModel.Query = "beta";
@@ -214,7 +334,6 @@ public sealed class GlobalSearchViewModelTests
             pipeline,
             Mock.Of<ILogger<GlobalSearchViewModel>>());
 
-        viewModel.IsSearchBoxFocused = true;
         viewModel.Query = "boom";
         await Task.Delay(400);
         Assert.Equal(GlobalSearchViewState.Error, viewModel.ViewState);
