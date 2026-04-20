@@ -140,6 +140,38 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
+    public async Task ApplyTransportConfigurationAsync_WhenAgentTitleExists_UsesTitleForDisplayedIdentity()
+    {
+        var transport = new FakeTransportConfiguration
+        {
+            SelectedTransportType = TransportType.WebSocket,
+            RemoteUrl = "wss://agent.test"
+        };
+        var chatService = CreateChatService();
+        var sink = new FakeSink();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        chatService
+            .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
+            .ReturnsAsync(new InitializeResponse(
+                1,
+                new AgentInfo("@zed-industries/claude-agent-acp", "0.20.2", "Claude Agent"),
+                new AgentCapabilities()));
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.WebSocket, null, null, "wss://agent.test"))
+            .Returns(chatService.Object);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+
+        await sut.ApplyTransportConfigurationAsync(transport, sink, preserveConversation: false);
+
+        Assert.Equal("Claude Agent", sink.AgentName);
+        Assert.Equal("0.20.2", sink.AgentVersion);
+    }
+
+    [Fact]
     public async Task ConnectToProfileAsync_WhenReusingSameActiveProfile_DoesNotDisconnectCurrentService()
     {
         var transport = new FakeTransportConfiguration();

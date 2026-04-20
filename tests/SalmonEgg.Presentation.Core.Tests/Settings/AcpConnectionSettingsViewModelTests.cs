@@ -153,6 +153,48 @@ public sealed class AcpConnectionSettingsViewModelTests
     }
 
     [Fact]
+    public async Task SelectedProfileDiagnostics_UsesAgentTitleWhenAvailable()
+    {
+        var preferences = await CreatePreferencesAsync();
+        var profiles = CreateProfiles(preferences);
+        var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile Alpha" };
+        profiles.Profiles.Add(profile);
+        profiles.SelectedProfile = profile;
+        var chat = new TestSettingsChatConnection();
+        var registry = new TestSessionRegistry();
+        var dispatcher = new QueueingUiDispatcher();
+        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
+        var itemLogger = new Mock<ILogger<AgentProfileItemViewModel>>();
+
+        profiles.SelectedProfileItem = new AgentProfileItemViewModel(
+            profile,
+            registry,
+            registry,
+            chat,
+            itemLogger.Object,
+            dispatcher);
+
+        using var viewModel = new AcpConnectionSettingsViewModel(
+            chat,
+            profiles,
+            registry,
+            registry,
+            preferences,
+            logger.Object,
+            dispatcher);
+
+        registry.ConnectedSession = CreateSessionSnapshot("profile-1", "@zed-industries/claude-agent-acp", "0.20.2", "Claude Agent");
+        registry.IsConnected = true;
+        registry.RaiseProfileConnectionChanged("profile-1", true);
+
+        dispatcher.RunAll();
+
+        Assert.Equal("Connected", viewModel.SelectedProfileStatus);
+        Assert.Equal("Claude Agent", viewModel.SelectedProfileAgentName);
+        Assert.Equal("0.20.2", viewModel.SelectedProfileAgentVersion);
+    }
+
+    [Fact]
     public async Task SelectedTransport_ChangeUpdatesTransportConfig()
     {
         // Arrange
@@ -671,7 +713,7 @@ public sealed class AcpConnectionSettingsViewModelTests
             => ProfileConnectionChanged?.Invoke(profileId, isConnected);
     }
 
-    private static AcpConnectionSession CreateSessionSnapshot(string profileId, string agentName, string agentVersion)
+    private static AcpConnectionSession CreateSessionSnapshot(string profileId, string agentName, string agentVersion, string? agentTitle = null)
     {
         var service = new Mock<IChatService>();
         service.SetupGet(x => x.IsConnected).Returns(true);
@@ -689,7 +731,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         return new AcpConnectionSession(
             profileId,
             adapter,
-            new InitializeResponse(1, new AgentInfo(agentName, agentVersion), new AgentCapabilities()),
+            new InitializeResponse(1, new AgentInfo(agentName, agentVersion, agentTitle), new AgentCapabilities()),
             new AcpConnectionReuseKey(TransportType.Stdio, "ssh", "oci-arm", string.Empty));
     }
 }

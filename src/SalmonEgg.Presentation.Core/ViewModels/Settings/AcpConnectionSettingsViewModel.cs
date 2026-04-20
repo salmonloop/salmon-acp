@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
+using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Chat;
@@ -642,7 +643,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
             SelectedProfileEndpoint = profile?.EndpointDescription;
             if (_registry.TryGetByProfile(profileId, out var session))
             {
-                SelectedProfileAgentName = session.InitializeResponse?.AgentInfo?.Name;
+                SelectedProfileAgentName = ResolveDisplayAgentName(session.InitializeResponse?.AgentInfo);
                 SelectedProfileAgentVersion = session.InitializeResponse?.AgentInfo?.Version;
                 SelectedProfileStatus = "Connected";
             }
@@ -661,6 +662,13 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
             SelectedProfileEndpoint = CurrentEndpointDisplay;
         }
     }
+
+    private static string? ResolveDisplayAgentName(AgentInfo? agentInfo)
+        => agentInfo is null
+            ? null
+            : string.IsNullOrWhiteSpace(agentInfo.Title)
+                ? agentInfo.Name
+                : agentInfo.Title;
 }
 
 public sealed class TransportOptionViewModel

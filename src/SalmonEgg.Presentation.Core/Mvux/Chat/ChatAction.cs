@@ -50,7 +50,7 @@ public sealed record SetDraftTextAction(string Text) : ChatAction;
 /// </summary>
 public sealed record ClearChatAction : ChatAction;
 
-public sealed record SetAgentIdentityAction(string? AgentName, string? AgentVersion) : ChatAction;
+public sealed record SetAgentIdentityAction(string? ProfileId, string? AgentName, string? AgentVersion) : ChatAction;
 
 /// <summary>
 /// Dispatched to update the hydration (history loading) status.

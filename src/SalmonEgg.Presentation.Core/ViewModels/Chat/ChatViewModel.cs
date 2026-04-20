@@ -4365,8 +4365,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         if (_chatService?.AgentInfo != null)
         {
-            _ = _chatStore.Dispatch(new SetAgentIdentityAction(_chatService.AgentInfo.Name, _chatService.AgentInfo.Version));
+            _ = _chatStore.Dispatch(new SetAgentIdentityAction(
+                SelectedProfileId,
+                ResolveDisplayedAgentName(_chatService.AgentInfo),
+                _chatService.AgentInfo.Version));
         }
+    }
+
+    private static string? ResolveDisplayedAgentName(AgentInfo? agentInfo)
+    {
+        if (agentInfo is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(agentInfo.Title)
+            ? agentInfo.Name
+            : agentInfo.Title;
     }
 
     private void CacheAuthMethods(InitializeResponse initResponse)
@@ -6544,7 +6559,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public void UpdateAgentIdentity(string? agentName, string? agentVersion)
     {
-        _ = _chatStore.Dispatch(new SetAgentIdentityAction(agentName, agentVersion));
+        _ = _chatStore.Dispatch(new SetAgentIdentityAction(SelectedProfileId, agentName, agentVersion));
     }
 
     public async Task ResetHydratedConversationForResyncAsync(CancellationToken cancellationToken = default)

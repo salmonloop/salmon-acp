@@ -1583,11 +1583,40 @@ public class ChatViewModelTests
 
         Assert.Equal("Configured Agent", fixture.ViewModel.CurrentAgentDisplayText);
 
-        await fixture.UpdateStateAsync(state => state with { AgentName = "Protocol Agent" });
+        await fixture.UpdateStateAsync(state => state with
+        {
+            AgentProfileId = "profile-a",
+            AgentName = "Protocol Agent"
+        });
         await WaitForConditionAsync(() =>
             Task.FromResult(string.Equals(fixture.ViewModel.CurrentAgentDisplayText, "Protocol Agent", StringComparison.Ordinal)));
 
         Assert.Equal("Protocol Agent", fixture.ViewModel.CurrentAgentDisplayText);
+    }
+
+    [Fact]
+    public async Task CurrentAgentDisplayText_WhenActiveSessionChanges_DoesNotLeakPreviousSessionAgentIdentity()
+    {
+        await using var fixture = CreateViewModel();
+
+        var profile1 = new ServerConfiguration { Id = "profile-1", Name = "Profile 1", Transport = TransportType.Stdio };
+        var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2", Transport = TransportType.Stdio };
+        fixture.Profiles.Profiles.Add(profile1);
+        fixture.Profiles.Profiles.Add(profile2);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-2",
+            AgentName = "stale-agent",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-2"))
+        });
+        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-2"));
+
+        await WaitForConditionAsync(() =>
+            Task.FromResult(string.Equals(fixture.ViewModel.SelectedAcpProfile?.Id, "profile-2", StringComparison.Ordinal)));
+
+        Assert.Equal("Profile 2", fixture.ViewModel.CurrentAgentDisplayText);
     }
 
     [Fact]

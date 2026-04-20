@@ -24,6 +24,15 @@ public sealed class ChatStateProjector : IChatStateProjector
     {
         ArgumentNullException.ThrowIfNull(storeState);
         var selectedProfileId = connectionState.SelectedProfileId;
+        var effectiveDisplayProfileId = !string.IsNullOrWhiteSpace(connectionState.CommittedProfileId)
+            ? connectionState.CommittedProfileId
+            : selectedProfileId;
+        var displayAgentName = string.Equals(storeState.AgentProfileId, effectiveDisplayProfileId, StringComparison.Ordinal)
+            ? storeState.AgentName
+            : null;
+        var displayAgentVersion = string.Equals(storeState.AgentProfileId, effectiveDisplayProfileId, StringComparison.Ordinal)
+            ? storeState.AgentVersion
+            : null;
         var isConnecting = connectionState.Phase == ConnectionPhase.Connecting;
         var isConnected = connectionState.Phase == ConnectionPhase.Connected;
         var isInitializing = connectionState.Phase == ConnectionPhase.Initializing;
@@ -70,8 +79,8 @@ public sealed class ChatStateProjector : IChatStateProjector
             IsAuthenticationRequired: isAuthenticationRequired,
             AuthenticationHintMessage: authenticationHintMessage,
             ConnectionGeneration: connectionState.Generation,
-            AgentName: storeState.AgentName,
-            AgentVersion: storeState.AgentVersion,
+            AgentName: displayAgentName,
+            AgentVersion: displayAgentVersion,
             CurrentPrompt: storeState.DraftText ?? string.Empty,
             Transcript: transcript,
             ShowPlanPanel: contentSlice?.ShowPlanPanel ?? storeState.ShowPlanPanel,

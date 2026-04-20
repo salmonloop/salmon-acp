@@ -167,7 +167,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             await sink.ReplaceChatServiceAsync(cachedSession.Service, applyToken).ConfigureAwait(false);
             _activeChatServiceAdapter = cachedSession.Service;
             sink.UpdateAgentIdentity(
-                cachedSession.InitializeResponse.AgentInfo?.Name,
+                ResolveDisplayAgentName(cachedSession.InitializeResponse.AgentInfo),
                 cachedSession.InitializeResponse.AgentInfo?.Version);
             await _connectionCoordinator.SetConnectedAsync(selectedProfileId, applyToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
@@ -234,7 +234,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
                 }
             }
 
-            sink.UpdateAgentIdentity(initializeResponse.AgentInfo?.Name, initializeResponse.AgentInfo?.Version);
+            sink.UpdateAgentIdentity(ResolveDisplayAgentName(initializeResponse.AgentInfo), initializeResponse.AgentInfo?.Version);
             if (!string.IsNullOrWhiteSpace(selectedProfileId))
             {
                 _connectionPoolManager.RecordSession(
@@ -610,6 +610,18 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             sink.IsInitializing,
             sink.IsConnected,
             sink.ConnectionErrorMessage);
+
+    private static string? ResolveDisplayAgentName(AgentInfo? agentInfo)
+    {
+        if (agentInfo is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(agentInfo.Title)
+            ? agentInfo.Name
+            : agentInfo.Title;
+    }
 
     private static async Task DisposeServiceAsync(IChatService? service)
     {

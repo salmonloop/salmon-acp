@@ -166,6 +166,7 @@ public static class ChatReducer
             }),
             SetAgentIdentityAction identity => Mutate(current, current with
             {
+                AgentProfileId = identity.ProfileId,
                 AgentName = identity.AgentName,
                 AgentVersion = identity.AgentVersion
             }),

@@ -98,6 +98,50 @@ public sealed class ChatStateProjectorTests
     }
 
     [Fact]
+    public void Apply_AgentDisplayPrefersCommittedProfileOwnershipOverSelectedIntent()
+    {
+        var projector = new ChatStateProjector();
+        var storeState = ChatState.Empty with
+        {
+            AgentProfileId = "profile-committed",
+            AgentName = "Committed Agent",
+            AgentVersion = "1.0.0"
+        };
+        var connectionState = ChatConnectionState.Empty with
+        {
+            SelectedProfileId = "profile-next",
+            CommittedProfileId = "profile-committed"
+        };
+
+        var projection = projector.Apply(storeState, connectionState, "conv-1", null);
+
+        Assert.Equal("Committed Agent", projection.AgentName);
+        Assert.Equal("1.0.0", projection.AgentVersion);
+    }
+
+    [Fact]
+    public void Apply_AgentDisplayFallsBackToSelectedProfileBeforeCommitExists()
+    {
+        var projector = new ChatStateProjector();
+        var storeState = ChatState.Empty with
+        {
+            AgentProfileId = "profile-selected",
+            AgentName = "Selected Agent",
+            AgentVersion = "1.0.0"
+        };
+        var connectionState = ChatConnectionState.Empty with
+        {
+            SelectedProfileId = "profile-selected",
+            CommittedProfileId = null
+        };
+
+        var projection = projector.Apply(storeState, connectionState, "conv-1", null);
+
+        Assert.Equal("Selected Agent", projection.AgentName);
+        Assert.Equal("1.0.0", projection.AgentVersion);
+    }
+
+    [Fact]
     public void Apply_ProjectsHydratedConversationSlicesInsteadOfOnlyTopLevelCache()
     {
         var projector = new ChatStateProjector();
