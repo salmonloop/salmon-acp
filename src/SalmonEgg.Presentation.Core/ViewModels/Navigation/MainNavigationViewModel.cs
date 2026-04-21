@@ -9,12 +9,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Uno.Extensions.Reactive;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
@@ -36,7 +38,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly INavigationPaneState _navigationState;
     private readonly IShellLayoutMetricsSink _metricsSink;
     private readonly INavigationSelectionProjector _selectionProjector;
-    private readonly IConversationCatalogReadModel _conversationCatalogPresenter;
+    private readonly IConversationCatalogDisplayReadModel _conversationCatalogPresenter;
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly IShellSelectionReadModel _shellSelection;
     private readonly IShellNavigationRuntimeState _shellRuntimeState;
@@ -48,7 +50,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly Dictionary<string, SessionNavItemViewModel> _sessionIndex = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectIndex = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectVms = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ConversationCatalogItem> _conversationCatalogIndex = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ConversationCatalogDisplayItem> _conversationCatalogIndex = new(StringComparer.Ordinal);
     private string? _pendingProjectIdForNewSession;
     private int _rebuildPending;
     private int _rebuildScheduled;
@@ -103,6 +105,40 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         IShellSelectionReadModel shellSelection,
         IShellNavigationRuntimeState shellRuntimeState,
         IConversationCatalogReadModel conversationCatalogPresenter,
+        IProjectAffinityResolver projectAffinityResolver,
+        IUiDispatcher uiDispatcher)
+        : this(
+            conversationCatalog,
+            projectPreferences,
+            ui,
+            navigationCoordinator,
+            logger,
+            navigationState,
+            metricsSink,
+            selectionProjector,
+            shellSelection,
+            shellRuntimeState,
+            new ConversationCatalogDisplayPresenter(
+                conversationCatalogPresenter,
+                NoOpConversationAttentionStore.Instance,
+                uiDispatcher),
+            projectAffinityResolver,
+            uiDispatcher)
+    {
+    }
+
+    public MainNavigationViewModel(
+        IConversationCatalog conversationCatalog,
+        INavigationProjectPreferences projectPreferences,
+        IUiInteractionService ui,
+        INavigationCoordinator navigationCoordinator,
+        ILogger<MainNavigationViewModel> logger,
+        INavigationPaneState navigationState,
+        IShellLayoutMetricsSink metricsSink,
+        INavigationSelectionProjector selectionProjector,
+        IShellSelectionReadModel shellSelection,
+        IShellNavigationRuntimeState shellRuntimeState,
+        IConversationCatalogDisplayReadModel conversationCatalogPresenter,
         IProjectAffinityResolver projectAffinityResolver,
         IUiDispatcher uiDispatcher)
     {
@@ -197,8 +233,9 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private void OnConversationCatalogPresenterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(IConversationCatalogReadModel.IsConversationListLoading)
-            || e.PropertyName == nameof(IConversationCatalogReadModel.ConversationListVersion))
+        if (e.PropertyName == nameof(IConversationCatalogDisplayReadModel.IsConversationListLoading)
+            || e.PropertyName == nameof(IConversationCatalogDisplayReadModel.ConversationListVersion)
+            || e.PropertyName == nameof(IConversationCatalogDisplayReadModel.Snapshot))
         {
             RebuildTree();
         }
@@ -477,7 +514,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                     Items.Add(projectVm);
                 }
 
-                SyncSessions(projectVm, sessionsByProject.TryGetValue(projectId, out var s) ? s : new List<ConversationCatalogItem>(), newSessionIndex);
+                SyncSessions(projectVm, sessionsByProject.TryGetValue(projectId, out var s) ? s : new List<ConversationCatalogDisplayItem>(), newSessionIndex);
                 itemIndex++;
             }
 
@@ -524,7 +561,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }
     }
 
-    private void SyncSessions(ProjectNavItemViewModel projectVm, List<ConversationCatalogItem> sessions, Dictionary<string, SessionNavItemViewModel> targetSessionIndex)
+    private void SyncSessions(ProjectNavItemViewModel projectVm, List<ConversationCatalogDisplayItem> sessions, Dictionary<string, SessionNavItemViewModel> targetSessionIndex)
     {
         var top = sessions.Take(20).ToList();
         var remainingCount = Math.Max(0, sessions.Count - top.Count);
@@ -545,19 +582,21 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                     sessionVm = existingSvm;
                     sessionVm.Title = title;
                     sessionVm.RelativeTimeText = relative;
+                    sessionVm.HasUnreadAttention = session.HasUnreadAttention;
                 }
             }
 
             if (sessionVm == null)
             {
                 // Look for it elsewhere in children to avoid full re-creation if it moved
-                sessionVm = projectVm.Children.OfType<SessionNavItemViewModel>().FirstOrDefault(v => string.Equals(v.SessionId, session.ConversationId, StringComparison.Ordinal));
+                    sessionVm = projectVm.Children.OfType<SessionNavItemViewModel>().FirstOrDefault(v => string.Equals(v.SessionId, session.ConversationId, StringComparison.Ordinal));
                 if (sessionVm != null)
                 {
                     // Note: We don't dispose here because we are re-inserting it at a new position
                     projectVm.Children.Remove(sessionVm);
                     sessionVm.Title = title;
                     sessionVm.RelativeTimeText = relative;
+                    sessionVm.HasUnreadAttention = session.HasUnreadAttention;
                 }
                 else
                 {
@@ -570,6 +609,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                             chatSessionCatalog: _chatSessionCatalogActions,
                             navigationState: _navigationState,
                             uiDispatcher: _uiDispatcher);
+                    sessionVm.HasUnreadAttention = session.HasUnreadAttention;
                 }
                 projectVm.Children.Insert(childIndex, sessionVm);
             }
@@ -643,7 +683,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         return projects;
     }
 
-    private Dictionary<string, List<ConversationCatalogItem>> GetSessionsByProject(List<(ProjectDefinition Project, bool IsSystem)> projects)
+    private Dictionary<string, List<ConversationCatalogDisplayItem>> GetSessionsByProject(List<(ProjectDefinition Project, bool IsSystem)> projects)
     {
         var sessions = GetConversationCatalogSnapshot();
 
@@ -819,7 +859,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 IsExpanded = true
             };
 
-            var list = byProject.TryGetValue(project.ProjectId!, out var value) ? value : new List<ConversationCatalogItem>();
+            var list = byProject.TryGetValue(project.ProjectId!, out var value) ? value : new List<ConversationCatalogDisplayItem>();
             var top = list.Take(20).ToList();
             var remaining = Math.Max(0, list.Count - top.Count);
 
@@ -839,6 +879,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                     chatSessionCatalog: _chatSessionCatalogActions,
                     navigationState: _navigationState,
                     uiDispatcher: _uiDispatcher);
+                vm.HasUnreadAttention = session.HasUnreadAttention;
 
                 projectVm.Children.Add(vm);
             }
@@ -893,7 +934,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             var title = string.IsNullOrWhiteSpace(s.DisplayName) ? SessionNamePolicy.CreateDefault(s.ConversationId) : s.DisplayName.Trim();
             var relative = NavTimeFormatter.ToRelativeText(s.LastUpdatedAt == default ? s.CreatedAt : s.LastUpdatedAt);
-            return new SessionNavItemViewModel(
+            var vm = new SessionNavItemViewModel(
                 sessionId: s.ConversationId,
                 projectId: projectId,
                 title: title,
@@ -902,12 +943,14 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 chatSessionCatalog: _chatSessionCatalogActions,
                 navigationState: _navigationState,
                 uiDispatcher: _uiDispatcher);
+            vm.HasUnreadAttention = s.HasUnreadAttention;
+            return vm;
         }).ToList();
     }
 
     private bool IsConversationListLoading => _conversationCatalogPresenter.IsConversationListLoading;
 
-    private IReadOnlyList<ConversationCatalogItem> GetConversationCatalogSnapshot()
+    private IReadOnlyList<ConversationCatalogDisplayItem> GetConversationCatalogSnapshot()
     {
         _conversationCatalogIndex.Clear();
         foreach (var item in _conversationCatalogPresenter.Snapshot)
@@ -918,16 +961,16 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         return _conversationCatalogPresenter.Snapshot;
     }
 
-    private static DateTime GetNavigationSortTimestamp(ConversationCatalogItem item)
+    private static DateTime GetNavigationSortTimestamp(ConversationCatalogDisplayItem item)
         // Keep navigation order aligned with the timestamp we actually render in the UI.
         // LastAccessedAt is still meaningful for restore/recency flows, but should not reorder
         // the left nav when the conversation content itself has not changed.
         => item.LastUpdatedAt == default ? item.CreatedAt : item.LastUpdatedAt;
 
-    private string ResolveEffectiveProjectId(ConversationCatalogItem item)
+    private string ResolveEffectiveProjectId(ConversationCatalogDisplayItem item)
         => ResolveProjectAffinity(item).EffectiveProjectId;
 
-    private ProjectAffinityResolution ResolveProjectAffinity(ConversationCatalogItem item)
+    private ProjectAffinityResolution ResolveProjectAffinity(ConversationCatalogDisplayItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
 
@@ -943,4 +986,16 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private IEnumerable<string> GetKnownConversationIds()
         => _conversationCatalogPresenter.Snapshot.Select(static item => item.ConversationId);
+
+    private sealed class NoOpConversationAttentionStore : IConversationAttentionStore
+    {
+        private static readonly IState<ConversationAttentionState> EmptyState =
+            Uno.Extensions.Reactive.State.Value(new object(), static () => ConversationAttentionState.Empty);
+
+        public static NoOpConversationAttentionStore Instance { get; } = new();
+
+        public IState<ConversationAttentionState> State => EmptyState;
+
+        public ValueTask Dispatch(ConversationAttentionAction action) => ValueTask.CompletedTask;
+    }
 }

@@ -28,13 +28,20 @@
                   SelectionMode="None">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="nav:SessionNavItemViewModel">
-                    <Grid ColumnDefinitions="*,Auto"
+                    <Grid ColumnDefinitions="*,Auto,Auto"
                           Padding="12,8"
                           AutomationProperties.AutomationId="{x:Bind navUi:MainNavigationAutomationIds.SessionsDialogItem(SessionId)}">
                         <TextBlock Text="{x:Bind Title, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis"
                                    MaxLines="1"/>
-                        <TextBlock Grid.Column="1"
+                        <Ellipse Grid.Column="1"
+                                 Width="8"
+                                 Height="8"
+                                 Fill="{ThemeResource AccentBrush}"
+                                 Margin="8,0,0,0"
+                                 VerticalAlignment="Center"
+                                 Visibility="{x:Bind HasUnreadAttention, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <TextBlock Grid.Column="2"
                                    Text="{x:Bind RelativeTimeText, Mode=OneWay}"
                                    Opacity="0.6"
                                    FontSize="12"

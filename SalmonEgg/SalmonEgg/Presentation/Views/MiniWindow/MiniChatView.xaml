@@ -67,12 +67,22 @@
                               VerticalAlignment="Center">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:MiniWindowConversationItemViewModel">
-                                <TextBlock Text="{x:Bind CompactDisplayName, Mode=OneTime}"
-                                           AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxLines="1"
-                                           ToolTipService.ToolTip="{x:Bind DisplayName, Mode=OneTime}"
-                                           AutomationProperties.Name="{x:Bind DisplayName, Mode=OneTime}" />
+                                <Grid ColumnDefinitions="*,Auto"
+                                      ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{x:Bind CompactDisplayName, Mode=OneTime}"
+                                               AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxLines="1"
+                                               ToolTipService.ToolTip="{x:Bind DisplayName, Mode=OneTime}"
+                                               AutomationProperties.Name="{x:Bind DisplayName, Mode=OneTime}" />
+                                    <Ellipse Grid.Column="1"
+                                             Width="8"
+                                             Height="8"
+                                             Fill="{ThemeResource AccentBrush}"
+                                             VerticalAlignment="Center"
+                                             Visibility="{x:Bind HasUnreadAttention, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </Grid>
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>

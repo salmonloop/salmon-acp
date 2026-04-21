@@ -1153,10 +1153,11 @@ public sealed class ChatSkeletonSmokeTests
                 remoteConversationCount: 2);
             using var session = WindowsGuiAppSession.LaunchFresh();
 
-            var remoteItemA = session.FindByAutomationId("MainNav.Session.gui-remote-conversation-01", TimeSpan.FromSeconds(15));
-            var remoteItemB = session.FindByAutomationId("MainNav.Session.gui-remote-conversation-02", TimeSpan.FromSeconds(15));
-
-            session.ActivateElement(remoteItemA);
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "remote-a-b-a-hot-return-open-a");
             var initialOverlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30));
             Assert.True(initialOverlayHidden, "Initial remote session A hydration did not complete before switching to session B.");
 
@@ -1167,7 +1168,11 @@ public sealed class ChatSkeletonSmokeTests
                 appData);
             Assert.Contains("GUI Remote Session 01", initialHeader.Name, StringComparison.Ordinal);
 
-            session.ActivateElement(remoteItemB);
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-02",
+                "remote-a-b-a-hot-return-open-b");
             var secondOverlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30));
             Assert.True(secondOverlayHidden, "Remote session B hydration did not complete before returning to session A.");
 
@@ -1178,8 +1183,11 @@ public sealed class ChatSkeletonSmokeTests
                 appData);
             Assert.Contains("GUI Remote Session 02", secondHeader.Name, StringComparison.Ordinal);
 
-            remoteItemA = session.FindByAutomationId("MainNav.Session.gui-remote-conversation-01", TimeSpan.FromSeconds(10));
-            session.ActivateElement(remoteItemA);
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "remote-a-b-a-hot-return-back-a");
 
             var hotHeaderVisible = session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4));
             Assert.True(hotHeaderVisible, "Returning to remote session A did not restore the chat header quickly.");
@@ -1218,6 +1226,79 @@ public sealed class ChatSkeletonSmokeTests
             Assert.Equal(
                 1,
                 sessionALoadCount);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
+    [SkippableFact]
+    public void BackgroundRemoteSession_LiveAgentUpdate_ShowsUnreadAndClearsWhenActivated()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "1500");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicBackgroundAttentionData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "background-attention-open-a");
+            Assert.True(
+                session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30)),
+                "Initial remote session A hydration did not complete.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-02",
+                "background-attention-open-b");
+            Assert.True(
+                session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30)),
+                "Remote session B hydration did not complete.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "background-attention-back-a");
+            Assert.True(
+                session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4)),
+                "Returning to remote session A did not restore the chat header quickly.");
+
+            appData.TriggerBackgroundRemoteAgentUpdate("gui-remote-session-02", "background unread");
+
+            Assert.True(
+                WaitForAutomationNameContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-02",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Background remote update did not project the unread state for session B.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-02",
+                "background-attention-open-b-after-unread");
+
+            Assert.True(
+                session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4)),
+                "Activating remote session B after the background update did not restore the chat header quickly.");
+            Assert.True(
+                WaitForAutomationNameNotContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-02",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Unread state for remote session B did not clear after the session became foreground.");
         }
         finally
         {
@@ -2453,6 +2534,50 @@ public sealed class ChatSkeletonSmokeTests
             scenario,
             $"Timed out waiting for loading pill status match. Timeline:{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
         throw new Xunit.Sdk.XunitException("Unreachable");
+    }
+
+    private static bool WaitForAutomationNameContains(
+        WindowsGuiAppSession session,
+        string automationId,
+        string expectedFragment,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var name = session.TryGetElementName(automationId, TimeSpan.FromMilliseconds(120));
+            if (!string.IsNullOrWhiteSpace(name)
+                && name.Contains(expectedFragment, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return false;
+    }
+
+    private static bool WaitForAutomationNameNotContains(
+        WindowsGuiAppSession session,
+        string automationId,
+        string fragment,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var name = session.TryGetElementName(automationId, TimeSpan.FromMilliseconds(120));
+            if (string.IsNullOrWhiteSpace(name)
+                || !name.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return false;
     }
 
     private static bool IsUserFriendlyLoadingStatus(string status)

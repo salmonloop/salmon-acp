@@ -4325,6 +4325,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
         }
 
+        foreach (var conversationId in _conversationWorkspace.GetKnownConversationIds())
+        {
+            var workspaceBinding = _conversationWorkspace.GetRemoteBinding(conversationId);
+            if (string.Equals(workspaceBinding?.RemoteSessionId, remoteSessionId, StringComparison.Ordinal))
+            {
+                return conversationId;
+            }
+        }
+
         return string.Equals(_currentRemoteSessionId, remoteSessionId, StringComparison.Ordinal)
             ? CurrentSessionId
             : null;
@@ -6233,14 +6242,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
             cancellationToken.ThrowIfCancellationRequested();
             await ResetConversationProjectionForResyncAsync(conversationId, cancellationToken).ConfigureAwait(false);
-            var preloadedSessionInfo = await LoadRemoteSessionInfoSnapshotFromSsotAsync(conversationId, binding, chatService, cancellationToken).ConfigureAwait(false);
-            if (preloadedSessionInfo is not null)
-            {
-                await ApplySessionInfoSnapshotProjectionAsync(
-                    conversationId,
-                    preloadedSessionInfo,
-                    cancellationToken).ConfigureAwait(false);
-            }
             await SetHydrationOverlayPhaseAsync(
                     conversationId,
                     activationVersion,
@@ -6317,6 +6318,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                     reason: "SessionLoadCompleted",
                     cancellationToken)
                 .ConfigureAwait(false);
+            _ = ApplyRemoteSessionInfoSnapshotWhenReadyAsync(
+                conversationId,
+                binding,
+                LoadRemoteSessionInfoSnapshotFromSsotAsync(
+                    conversationId,
+                    binding,
+                    chatService,
+                    cancellationToken),
+                cancellationToken);
             Logger.LogInformation(
                 "Conversation hydration completed. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ElapsedMs={ElapsedMs}",
                 conversationId,
@@ -7425,6 +7435,56 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             sessionInfo.Cwd,
             sessionInfo.UpdatedAt,
             sessionInfo.Meta));
+    }
+
+    private async Task ApplyRemoteSessionInfoSnapshotWhenReadyAsync(
+        string conversationId,
+        ConversationBindingSlice expectedBinding,
+        Task<ConversationSessionInfoSnapshot?> sessionInfoTask,
+        CancellationToken cancellationToken)
+    {
+        ConversationSessionInfoSnapshot? sessionInfo;
+        try
+        {
+            sessionInfo = await sessionInfoTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(
+                ex,
+                "Failed to apply asynchronous remote session metadata refresh. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId}",
+                conversationId,
+                expectedBinding.RemoteSessionId);
+            return;
+        }
+
+        if (sessionInfo is null)
+        {
+            return;
+        }
+
+        var currentBinding = await ResolveConversationBindingAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        if (currentBinding is null
+            || !string.Equals(currentBinding.RemoteSessionId, expectedBinding.RemoteSessionId, StringComparison.Ordinal)
+            || !string.Equals(currentBinding.ProfileId, expectedBinding.ProfileId, StringComparison.Ordinal))
+        {
+            Logger.LogDebug(
+                "Discarding asynchronous remote session metadata refresh because binding changed. ConversationId={ConversationId} ExpectedRemoteSessionId={ExpectedRemoteSessionId} CurrentRemoteSessionId={CurrentRemoteSessionId}",
+                conversationId,
+                expectedBinding.RemoteSessionId,
+                currentBinding?.RemoteSessionId);
+            return;
+        }
+
+        await ApplySessionInfoSnapshotProjectionAsync(
+                conversationId,
+                sessionInfo,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task ApplySessionInfoSnapshotProjectionAsync(

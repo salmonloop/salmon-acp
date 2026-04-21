@@ -436,7 +436,7 @@ public sealed class MainNavigationViewModelSelectionTests
             var shellNavigation = new Mock<IShellNavigationService>();
             var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
             var metricsSink = new Mock<IShellLayoutMetricsSink>();
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             presenter.Refresh(
             [
@@ -526,7 +526,7 @@ public sealed class MainNavigationViewModelSelectionTests
             var preferences = CreatePreferencesWithProject();
             var chatCatalog = CreateChatSessionCatalog("session-new", "session-old");
 
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             var oldUpdated = new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc);
             var newUpdated = new DateTime(2026, 3, 1, 0, 3, 0, DateTimeKind.Utc);
@@ -622,7 +622,7 @@ public sealed class MainNavigationViewModelSelectionTests
             });
 
             var chatCatalog = CreateChatSessionCatalog("session-remote");
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             presenter.Refresh(
             [
@@ -685,7 +685,7 @@ public sealed class MainNavigationViewModelSelectionTests
                 .Callback<string, IReadOnlyList<SessionNavItemViewModel>, Action<string>>((_, sessions, _) => capturedSessions = sessions)
                 .Returns(Task.CompletedTask);
 
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             presenter.Refresh(
             [
@@ -746,7 +746,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             var preferences = CreatePreferencesWithProject();
             var chatCatalog = CreateChatSessionCatalog("session-1");
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             presenter.Refresh(CreateSnapshot(chatCatalog.GetKnownConversationIds()));
 
@@ -797,7 +797,7 @@ public sealed class MainNavigationViewModelSelectionTests
             navState.SetPaneOpen(true);
             var preferences = CreatePreferencesWithProject();
             var chatCatalog = CreateChatSessionCatalog("session-1");
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             presenter.Refresh(CreateSnapshot(chatCatalog.GetKnownConversationIds()));
             var selectionStore = new ShellSelectionStateStore();
@@ -855,7 +855,7 @@ public sealed class MainNavigationViewModelSelectionTests
             navState.SetPaneOpen(true);
             var preferences = CreatePreferencesWithProject();
             var chatCatalog = CreateChatSessionCatalog("session-1");
-            var presenter = new ConversationCatalogPresenter();
+            var presenter = new MutableConversationCatalogDisplayReadModel();
             presenter.SetLoading(false);
             presenter.Refresh(CreateSnapshot(chatCatalog.GetKnownConversationIds()));
             var selectionStore = new ShellSelectionStateStore();
@@ -1318,6 +1318,125 @@ public sealed class MainNavigationViewModelSelectionTests
         }
     }
 
+    [Fact]
+    public void Rebuild_WhenDisplaySnapshotContainsUnread_ProjectsUnreadToSessionRow()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            navState.SetPaneOpen(true);
+            var sessionManager = CreateSessionManager(new Session("session-1", @"C:\repo\demo")
+            {
+                DisplayName = "Session 1"
+            });
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+            var presenter = new MutableConversationCatalogDisplayReadModel();
+            presenter.SetLoading(false);
+            presenter.Refresh(
+            [
+                new ConversationCatalogDisplayItem(
+                    "session-1",
+                    "Session 1",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 4, 21, 10, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc),
+                    HasUnreadAttention: true)
+            ]);
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                sessionManager.Object,
+                preferences,
+                navState,
+                out _,
+                out _,
+                presenter);
+
+            navVm.RebuildTree();
+
+            var session = navVm.Items
+                .OfType<ProjectNavItemViewModel>()
+                .SelectMany(project => project.Children.OfType<SessionNavItemViewModel>())
+                .Single(item => item.SessionId == "session-1");
+
+            Assert.True(session.HasUnreadAttention);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public void Rebuild_WhenDisplaySnapshotClearsUnread_ClearsSessionRowUnread()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            navState.SetPaneOpen(true);
+            var sessionManager = CreateSessionManager(new Session("session-1", @"C:\repo\demo")
+            {
+                DisplayName = "Session 1"
+            });
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog("session-1");
+            var presenter = new MutableConversationCatalogDisplayReadModel();
+            presenter.SetLoading(false);
+            presenter.Refresh(
+            [
+                new ConversationCatalogDisplayItem(
+                    "session-1",
+                    "Session 1",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 4, 21, 10, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc),
+                    HasUnreadAttention: true)
+            ]);
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                sessionManager.Object,
+                preferences,
+                navState,
+                out _,
+                out _,
+                presenter);
+
+            navVm.RebuildTree();
+            presenter.Refresh(
+            [
+                new ConversationCatalogDisplayItem(
+                    "session-1",
+                    "Session 1",
+                    @"C:\repo\demo",
+                    new DateTime(2026, 4, 21, 10, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc),
+                    HasUnreadAttention: false)
+            ]);
+
+            var session = navVm.Items
+                .OfType<ProjectNavItemViewModel>()
+                .SelectMany(project => project.Children.OfType<SessionNavItemViewModel>())
+                .Single(item => item.SessionId == "session-1");
+
+            Assert.False(session.HasUnreadAttention);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
     private static MainNavigationViewModel CreateNavigationViewModel(
         IConversationCatalog chatCatalog,
         ISessionManager sessionManager,
@@ -1340,13 +1459,14 @@ public sealed class MainNavigationViewModelSelectionTests
         AppPreferencesViewModel preferences,
         FakeNavigationPaneState navState,
         out ShellSelectionStateStore selectionStore,
-        out ShellNavigationRuntimeStateStore runtimeState)
+        out ShellNavigationRuntimeStateStore runtimeState,
+        IConversationCatalogDisplayReadModel? presenterOverride = null)
     {
         var ui = new Mock<IUiInteractionService>();
         var navigationCoordinator = new StubNavigationCoordinator();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
         var metricsSink = new Mock<IShellLayoutMetricsSink>();
-        var presenter = CreatePresenter(chatCatalog);
+        var presenter = presenterOverride ?? CreatePresenter(chatCatalog);
         selectionStore = new ShellSelectionStateStore();
         runtimeState = new ShellNavigationRuntimeStateStore();
         var uiDispatcher = SynchronizationContext.Current as IUiDispatcher ?? new ImmediateUiDispatcher();
@@ -1367,9 +1487,9 @@ public sealed class MainNavigationViewModelSelectionTests
             uiDispatcher);
     }
 
-    private static ConversationCatalogPresenter CreatePresenter(IConversationCatalog chatCatalog)
+    private static MutableConversationCatalogDisplayReadModel CreatePresenter(IConversationCatalog chatCatalog)
     {
-        var presenter = new ConversationCatalogPresenter();
+        var presenter = new MutableConversationCatalogDisplayReadModel();
         presenter.SetLoading(false);
         presenter.Refresh(CreateSnapshot(chatCatalog.GetKnownConversationIds()));
         return presenter;
@@ -1387,6 +1507,51 @@ public sealed class MainNavigationViewModelSelectionTests
         }
 
         return sessionManager;
+    }
+
+    private sealed class MutableConversationCatalogDisplayReadModel : IConversationCatalogDisplayReadModel
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public bool IsConversationListLoading { get; private set; }
+
+        public int ConversationListVersion { get; private set; }
+
+        public IReadOnlyList<ConversationCatalogDisplayItem> Snapshot { get; private set; } = Array.Empty<ConversationCatalogDisplayItem>();
+
+        public void SetLoading(bool isConversationListLoading)
+        {
+            if (IsConversationListLoading == isConversationListLoading)
+            {
+                return;
+            }
+
+            IsConversationListLoading = isConversationListLoading;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsConversationListLoading)));
+        }
+
+        public void Refresh(IEnumerable<ConversationCatalogItem> snapshot)
+        {
+            Refresh(snapshot.Select(item => new ConversationCatalogDisplayItem(
+                item.ConversationId,
+                item.DisplayName,
+                item.Cwd,
+                item.CreatedAt,
+                item.LastUpdatedAt,
+                item.LastAccessedAt,
+                HasUnreadAttention: false,
+                item.RemoteSessionId,
+                item.BoundProfileId,
+                item.ProjectAffinityOverrideProjectId)));
+        }
+
+        public void Refresh(IEnumerable<ConversationCatalogDisplayItem> snapshot)
+        {
+            Snapshot = snapshot.ToArray();
+            ConversationListVersion++;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Snapshot)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ConversationListVersion)));
+        }
     }
 
     private sealed class FakeNavigationPaneState : INavigationPaneState

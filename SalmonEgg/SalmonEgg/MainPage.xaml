@@ -127,6 +127,7 @@
         <DataTemplate x:Key="SessionNavTemplate" x:DataType="nav:SessionNavItemViewModel">
             <NavigationViewItem SelectsOnInvoked="True"
                                 AutomationProperties.AutomationId="{x:Bind navUi:MainNavigationAutomationIds.SessionItem(SessionId)}"
+                                AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}"
                                 Tag="{x:Bind navModels:NavItemTag.Session(SessionId)}"
                                 ContentTransitions="{x:Bind models:UiMotion.Current.NavItemTransitions, Mode=OneWay}">
                 <NavigationViewItem.Icon>
@@ -134,7 +135,7 @@
                 </NavigationViewItem.Icon>
 
                 <NavigationViewItem.Content>
-                    <Grid ColumnDefinitions="Auto,*,Auto"
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto"
                           ColumnSpacing="8">
                         <ProgressRing Width="14"
                                       Height="14"
@@ -146,7 +147,15 @@
                                    TextTrimming="CharacterEllipsis"
                                    MaxLines="1"/>
 
-                        <TextBlock Grid.Column="2"
+                        <Ellipse Grid.Column="2"
+                                 Width="8"
+                                 Height="8"
+                                 Fill="{ThemeResource AccentBrush}"
+                                 AutomationProperties.AutomationId="{x:Bind navUi:MainNavigationAutomationIds.SessionUnread(SessionId)}"
+                                 VerticalAlignment="Center"
+                                 Visibility="{x:Bind HasUnreadAttention, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                        <TextBlock Grid.Column="3"
                                    Text="{x:Bind RelativeTimeText, Mode=OneWay}"
                                    Style="{ThemeResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"

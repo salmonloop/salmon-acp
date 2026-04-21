@@ -39,6 +39,62 @@ else
 $replayStartDelayMs = if ($PSBoundParameters.ContainsKey('ReplayStartDelayMs')) { $ReplayStartDelayMs } else { 120 }
 $chunkDelayMs = if ($PSBoundParameters.ContainsKey('ChunkDelayMs')) { $ChunkDelayMs } else { 12 }
 $listDelayMs = if ($PSBoundParameters.ContainsKey('ListDelayMs')) { $ListDelayMs } else { 0 }
+$controlFilePath = $env:SALMONEGG_GUI_CONTROL_FILE
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Threading;
+
+public sealed class SalmonEggGuiLinePump : IDisposable
+{
+    private readonly BlockingCollection<string> _lines = new BlockingCollection<string>();
+    private readonly Thread _readerThread;
+
+    public SalmonEggGuiLinePump(TextReader reader)
+    {
+        if (reader == null)
+        {
+            throw new ArgumentNullException("reader");
+        }
+
+        _readerThread = new Thread(() =>
+        {
+            try
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    _lines.Add(line);
+                }
+            }
+            finally
+            {
+                _lines.CompleteAdding();
+            }
+        });
+
+        _readerThread.IsBackground = true;
+        _readerThread.Start();
+    }
+
+    public bool TryTake(out string line, int millisecondsTimeout)
+    {
+        return _lines.TryTake(out line, millisecondsTimeout);
+    }
+
+    public bool IsCompleted
+    {
+        get { return _lines.IsCompleted; }
+    }
+
+    public void Dispose()
+    {
+        _lines.CompleteAdding();
+    }
+}
+"@
 
 function Write-JsonLine([hashtable]$payload)
 {
@@ -144,18 +200,75 @@ function New-LoadResult([string]$sessionSuffix)
     }
 }
 
-while (($line = [Console]::In.ReadLine()) -ne $null)
+function Try-EmitControlledBackgroundUpdate
 {
-    if ([string]::IsNullOrWhiteSpace($line))
+    if ([string]::IsNullOrWhiteSpace($controlFilePath) -or -not (Test-Path $controlFilePath))
     {
-        continue
+        return
     }
 
-    $message = $line | ConvertFrom-Json
-    $method = [string]$message.method
-
-    switch ($method)
+    $raw = Get-Content -Path $controlFilePath -Raw -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrWhiteSpace($raw))
     {
+        return
+    }
+
+    try
+    {
+        $command = $raw | ConvertFrom-Json
+    }
+    catch
+    {
+        return
+    }
+
+    if ($command.kind -ne 'background-agent-message' -or [string]::IsNullOrWhiteSpace([string]$command.sessionId))
+    {
+        return
+    }
+
+    Send-SessionUpdate ([string]$command.sessionId) @{
+        sessionUpdate = 'agent_message_chunk'
+        content = (New-TextContent ([string]$command.text))
+    }
+
+    Remove-Item -Path $controlFilePath -Force -ErrorAction SilentlyContinue
+}
+
+if (-not [Console]::IsInputRedirected)
+{
+    throw "SlowReplayAgent.ps1 requires redirected stdin."
+}
+
+$linePump = [SalmonEggGuiLinePump]::new([Console]::In)
+
+try
+{
+    while ($true)
+    {
+        Try-EmitControlledBackgroundUpdate
+
+        $line = $null
+        if (-not $linePump.TryTake([ref]$line, 25))
+        {
+            if ($linePump.IsCompleted)
+            {
+                break
+            }
+
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($line))
+        {
+            continue
+        }
+
+        $message = $line | ConvertFrom-Json
+        $method = [string]$message.method
+
+        switch ($method)
+        {
         'initialize'
         {
             Send-Response $message.id @{
@@ -246,4 +359,9 @@ while (($line = [Console]::In.ReadLine()) -ne $null)
             }
         }
     }
+}
+}
+finally
+{
+    $linePump.Dispose()
 }

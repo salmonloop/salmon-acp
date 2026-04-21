@@ -26,6 +26,7 @@ internal sealed class GuiAppDataScope : IDisposable
     private readonly string? _previousGuiAppDataRootOverride;
     private readonly string? _previousFakeReplaySessionId;
     private readonly string? _previousFakeReplayMessageCount;
+    private readonly string? _previousGuiControlFile;
     private bool _disposed;
 
     private GuiAppDataScope(
@@ -45,7 +46,8 @@ internal sealed class GuiAppDataScope : IDisposable
         string projectRootPath,
         string? previousGuiAppDataRootOverride,
         string? previousFakeReplaySessionId = null,
-        string? previousFakeReplayMessageCount = null)
+        string? previousFakeReplayMessageCount = null,
+        string? previousGuiControlFile = null)
     {
         _appDataRoot = appDataRoot;
         _configDirectory = Path.GetDirectoryName(appYamlPath)!;
@@ -67,6 +69,7 @@ internal sealed class GuiAppDataScope : IDisposable
         _previousGuiAppDataRootOverride = previousGuiAppDataRootOverride;
         _previousFakeReplaySessionId = previousFakeReplaySessionId;
         _previousFakeReplayMessageCount = previousFakeReplayMessageCount;
+        _previousGuiControlFile = previousGuiControlFile;
     }
 
     public static GuiAppDataScope CreateDeterministicLeftNavData(
@@ -254,6 +257,62 @@ internal sealed class GuiAppDataScope : IDisposable
         return scope;
     }
 
+    public static GuiAppDataScope CreateDeterministicBackgroundAttentionData(
+        int cachedMessageCount = 1,
+        int replayMessageCount = 24)
+    {
+        const string controlFileEnvVar = "SALMONEGG_GUI_CONTROL_FILE";
+        var previousControlFile = Environment.GetEnvironmentVariable(controlFileEnvVar);
+        GuiTestGate.RequireEnabled();
+        WindowsGuiAppSession.StopAllRunningInstances();
+
+        const string profileId = "gui-slow-remote-profile";
+        const string fakeReplaySessionIdEnvVar = "SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID";
+        const string fakeReplayMessageCountEnvVar = "SALMONEGG_GUI_FAKE_REMOTE_REPLAY_MESSAGE_COUNT";
+        var appDataRoot = ResolveAppDataRoot();
+        var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        var previousFakeReplaySessionId = Environment.GetEnvironmentVariable(fakeReplaySessionIdEnvVar);
+        var previousFakeReplayMessageCount = Environment.GetEnvironmentVariable(fakeReplayMessageCountEnvVar);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
+
+        var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
+        var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
+        var serverYamlPath = Path.Combine(appDataRoot, "config", "servers", profileId + ".yaml");
+        var projectRootPath = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", "remote-project-1");
+
+        var scope = new GuiAppDataScope(
+            appDataRoot,
+            appYamlPath,
+            conversationsPath,
+            serverYamlPath,
+            secondaryServerYamlPath: null,
+            File.Exists(appYamlPath) ? File.ReadAllBytes(appYamlPath) : null,
+            File.Exists(appYamlPath),
+            File.Exists(conversationsPath) ? File.ReadAllBytes(conversationsPath) : null,
+            File.Exists(conversationsPath),
+            File.Exists(serverYamlPath) ? File.ReadAllBytes(serverYamlPath) : null,
+            File.Exists(serverYamlPath),
+            originalSecondaryServerYaml: null,
+            secondaryServerYamlExisted: false,
+            projectRootPath,
+            previousGuiAppDataRootOverride,
+            previousFakeReplaySessionId,
+            previousFakeReplayMessageCount,
+            previousControlFile);
+
+        scope.SeedSlowRemoteReplay(
+            profileId,
+            cachedMessageCount,
+            replayMessageCount,
+            includeLocalConversation: false,
+            localMessageCount: 3,
+            remoteConversationCount: 2);
+
+        var controlFilePath = Path.Combine(appDataRoot, "control", "agent-control.json");
+        Environment.SetEnvironmentVariable(controlFileEnvVar, controlFilePath);
+        return scope;
+    }
+
     public static GuiAppDataScope CreateDeterministicCrossProfileRemoteReplayData(
         int cachedMessageCount = 1,
         int replayMessageCount = 40,
@@ -347,6 +406,7 @@ internal sealed class GuiAppDataScope : IDisposable
         Environment.SetEnvironmentVariable(AppDataRootEnvVar, _previousGuiAppDataRootOverride);
         Environment.SetEnvironmentVariable("SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID", _previousFakeReplaySessionId);
         Environment.SetEnvironmentVariable("SALMONEGG_GUI_FAKE_REMOTE_REPLAY_MESSAGE_COUNT", _previousFakeReplayMessageCount);
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_CONTROL_FILE", _previousGuiControlFile);
 
         try
         {
@@ -408,6 +468,26 @@ internal sealed class GuiAppDataScope : IDisposable
         File.WriteAllText(
             _conversationsPath,
             BuildConversationsJson(_projectRootPath, sessionCount, withContent, messageCountPerSession),
+            Encoding.UTF8);
+    }
+
+    public void TriggerBackgroundRemoteAgentUpdate(string remoteSessionId, string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remoteSessionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        var controlPath = Environment.GetEnvironmentVariable("SALMONEGG_GUI_CONTROL_FILE")
+            ?? throw new InvalidOperationException("SALMONEGG_GUI_CONTROL_FILE was not set.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(controlPath)!);
+        File.WriteAllText(
+            controlPath,
+            JsonSerializer.Serialize(new
+            {
+                kind = "background-agent-message",
+                sessionId = remoteSessionId,
+                text
+            }),
             Encoding.UTF8);
     }
 

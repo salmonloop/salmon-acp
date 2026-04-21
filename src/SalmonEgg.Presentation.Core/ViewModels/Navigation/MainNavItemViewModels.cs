@@ -85,6 +85,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
 
     private string _title = string.Empty;
     private string _relativeTimeText = string.Empty;
+    private bool _hasUnreadAttention;
 
     public string Title
     {
@@ -97,6 +98,23 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         get => _relativeTimeText;
         set => SetProperty(ref _relativeTimeText, value);
     }
+
+    public bool HasUnreadAttention
+    {
+        get => _hasUnreadAttention;
+        set
+        {
+            if (SetProperty(ref _hasUnreadAttention, value))
+            {
+                OnPropertyChanged(nameof(AutomationName));
+            }
+        }
+    }
+
+    public string AutomationName
+        => HasUnreadAttention
+            ? $"{Title}, unread"
+            : Title;
 
     public bool IsPlaceholder { get; }
 

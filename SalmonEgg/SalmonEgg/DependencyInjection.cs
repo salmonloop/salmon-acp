@@ -360,7 +360,7 @@ public static class DependencyInjection
                 sp.GetRequiredService<INavigationSelectionProjector>(),
                 sp.GetRequiredService<IShellSelectionReadModel>(),
                 sp.GetRequiredService<IShellNavigationRuntimeState>(),
-                sp.GetRequiredService<IConversationCatalogReadModel>(),
+                sp.GetRequiredService<IConversationCatalogDisplayReadModel>(),
                 sp.GetRequiredService<IProjectAffinityResolver>(),
                 sp.GetRequiredService<IUiDispatcher>()));
         services.AddSingleton<INavigationCoordinator>(sp =>

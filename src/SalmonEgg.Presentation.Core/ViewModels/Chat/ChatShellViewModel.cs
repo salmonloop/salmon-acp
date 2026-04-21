@@ -1,8 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using System.Globalization;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Presentation.Core.Services;
@@ -15,18 +16,20 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 
 public sealed partial class ChatShellViewModel : ObservableObject
 {
+    private const int MiniWindowCompactDisplayNameMaxLength = 24;
     private readonly INavigationCoordinator _navigationCoordinator;
-    private readonly IConversationCatalogReadModel _conversationCatalog;
+    private readonly IConversationCatalogDisplayReadModel _conversationCatalog;
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly AppPreferencesViewModel _preferences;
     private readonly ILogger<ChatShellViewModel> _logger;
     private bool _suppressMiniWindowSelectionSync;
+    private readonly ObservableCollection<MiniWindowConversationItemViewModel> _miniWindowSessions = [];
 
     public ChatShellViewModel(
         ChatViewModel chat,
         ShellLayoutViewModel shellLayout,
         INavigationCoordinator navigationCoordinator,
-        IConversationCatalogReadModel conversationCatalog,
+        IConversationCatalogDisplayReadModel conversationCatalog,
         IProjectAffinityResolver projectAffinityResolver,
         AppPreferencesViewModel preferences,
         ILogger<ChatShellViewModel> logger)
@@ -40,7 +43,8 @@ public sealed partial class ChatShellViewModel : ObservableObject
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         Chat.PropertyChanged += OnChatPropertyChanged;
-        Chat.MiniWindowSessions.CollectionChanged += OnMiniWindowSessionsCollectionChanged;
+        _conversationCatalog.PropertyChanged += OnConversationCatalogPropertyChanged;
+        RefreshMiniWindowSessions();
         SyncSelectedMiniWindowSession();
     }
 
@@ -48,7 +52,7 @@ public sealed partial class ChatShellViewModel : ObservableObject
 
     public ShellLayoutViewModel ShellLayout { get; }
 
-    public ObservableCollection<MiniWindowConversationItemViewModel> MiniWindowSessions => Chat.MiniWindowSessions;
+    public ObservableCollection<MiniWindowConversationItemViewModel> MiniWindowSessions => _miniWindowSessions;
 
     [ObservableProperty]
     private MiniWindowConversationItemViewModel? _selectedMiniWindowSession;
@@ -83,27 +87,35 @@ public sealed partial class ChatShellViewModel : ObservableObject
     private void OnChatPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (string.Equals(e.PropertyName, nameof(ChatViewModel.CurrentSessionId), StringComparison.Ordinal)
-            || string.Equals(e.PropertyName, nameof(ChatViewModel.MiniWindowSessions), StringComparison.Ordinal))
+            || string.Equals(e.PropertyName, nameof(ChatViewModel.CurrentSessionDisplayName), StringComparison.Ordinal))
         {
             SyncSelectedMiniWindowSession();
         }
+    }
 
-        if (string.Equals(e.PropertyName, nameof(ChatViewModel.MiniWindowSessions), StringComparison.Ordinal))
+    private void OnConversationCatalogPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null
+            || string.Equals(e.PropertyName, nameof(IConversationCatalogDisplayReadModel.Snapshot), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(IConversationCatalogDisplayReadModel.ConversationListVersion), StringComparison.Ordinal))
         {
-            RewireMiniWindowSessionsCollection();
+            RefreshMiniWindowSessions();
         }
     }
 
-    private void RewireMiniWindowSessionsCollection()
+    private void RefreshMiniWindowSessions()
     {
-        Chat.MiniWindowSessions.CollectionChanged -= OnMiniWindowSessionsCollectionChanged;
-        Chat.MiniWindowSessions.CollectionChanged += OnMiniWindowSessionsCollectionChanged;
-        OnPropertyChanged(nameof(MiniWindowSessions));
-        SyncSelectedMiniWindowSession();
-    }
+        _miniWindowSessions.Clear();
+        foreach (var item in _conversationCatalog.Snapshot)
+        {
+            _miniWindowSessions.Add(new MiniWindowConversationItemViewModel(
+                item.ConversationId,
+                item.DisplayName,
+                CreateMiniWindowCompactDisplayName(item.DisplayName),
+                item.HasUnreadAttention));
+        }
 
-    private void OnMiniWindowSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
+        OnPropertyChanged(nameof(MiniWindowSessions));
         SyncSelectedMiniWindowSession();
     }
 
@@ -136,7 +148,7 @@ public sealed partial class ChatShellViewModel : ObservableObject
         }
     }
 
-    private ConversationCatalogItem? FindConversation(string conversationId)
+    private ConversationCatalogDisplayItem? FindConversation(string conversationId)
     {
         if (string.IsNullOrWhiteSpace(conversationId))
         {
@@ -147,7 +159,7 @@ public sealed partial class ChatShellViewModel : ObservableObject
             .FirstOrDefault(item => string.Equals(item.ConversationId, conversationId, StringComparison.Ordinal));
     }
 
-    private string? GetActivationProjectId(ConversationCatalogItem? conversation)
+    private string? GetActivationProjectId(ConversationCatalogDisplayItem? conversation)
     {
         if (conversation is null)
         {
@@ -162,5 +174,53 @@ public sealed partial class ChatShellViewModel : ObservableObject
             Projects: _preferences.Projects,
             PathMappings: _preferences.ProjectPathMappings,
             UnclassifiedProjectId: NavigationProjectIds.Unclassified)).EffectiveProjectId;
+    }
+
+    private static string CreateMiniWindowCompactDisplayName(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return string.Empty;
+        }
+
+        var normalized = NormalizeMiniWindowDisplayName(displayName);
+        var normalizedInfo = new StringInfo(normalized);
+        if (normalizedInfo.LengthInTextElements <= MiniWindowCompactDisplayNameMaxLength)
+        {
+            return normalized;
+        }
+
+        return normalizedInfo.SubstringByTextElements(0, MiniWindowCompactDisplayNameMaxLength - 3) + "...";
+    }
+
+    private static string NormalizeMiniWindowDisplayName(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(trimmed.Length);
+        var previousWasWhitespace = false;
+        foreach (var character in trimmed)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                if (previousWasWhitespace)
+                {
+                    continue;
+                }
+
+                builder.Append(' ');
+                previousWasWhitespace = true;
+                continue;
+            }
+
+            builder.Append(character);
+            previousWasWhitespace = false;
+        }
+
+        return builder.ToString();
     }
 }

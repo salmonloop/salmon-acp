@@ -16,6 +16,8 @@ public static class MainNavigationAutomationIds
 
     public static string SessionItem(string sessionId) => WithSuffix("MainNav.Session", sessionId);
 
+    public static string SessionUnread(string sessionId) => WithSuffix("MainNav.Session.Unread", sessionId);
+
     public static string MoreItem(string projectId) => WithSuffix("MainNav.More", projectId);
 
     public static string SessionsDialogItem(string sessionId) => WithSuffix("SessionsDialog.Session", sessionId);
