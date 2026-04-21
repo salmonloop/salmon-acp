@@ -139,6 +139,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private CancellationTokenSource? _ambientConnectionRequestCts;
     private long _conversationActivationVersion;
     private long _connectionGeneration;
+    private string? _connectionInstanceId;
     private readonly Dictionary<string, BottomPanelState> _bottomPanelStateByConversation = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AskUserRequestViewModel> _pendingAskUserRequestsByConversation = new(StringComparer.Ordinal);
     private readonly ObservableCollection<AskUserQuestionViewModel> _emptyAskUserQuestions = new();
@@ -1248,6 +1249,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
             RaiseOverlayStateChanged();
             Interlocked.Exchange(ref _connectionGeneration, projection.ConnectionGeneration);
+            if (!string.Equals(_connectionInstanceId, projection.ConnectionInstanceId, StringComparison.Ordinal))
+            {
+                _connectionInstanceId = projection.ConnectionInstanceId;
+                OnPropertyChanged(nameof(ConnectionInstanceId));
+            }
             CurrentConnectionStatus = projection.ConnectionStatus;
             ConnectionErrorMessage = projection.ConnectionError;
             IsAuthenticationRequired = projection.IsAuthenticationRequired;
@@ -4975,15 +4981,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private async Task InitializeAndConnectAsync()
     {
         if (IsInitializing || IsConnecting)
+        {
             return;
+        }
 
-       // If ChatService is not yet created, apply transport config first.
-       if (_chatService == null)
-       {
-           Logger.LogInformation("ChatService not yet created; calling ApplyTransportConfigAsync");
-           await ApplyTransportConfigCommand.ExecuteAsync(null);
-           return;
-       }
+        // If ChatService is not yet created, apply transport config first.
+        if (_chatService == null)
+        {
+            Logger.LogInformation("ChatService not yet created; calling ApplyTransportConfigAsync");
+            await ApplyTransportConfigCommand.ExecuteAsync(null);
+            return;
+        }
 
         try
         {
@@ -4997,10 +5005,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
             if (_chatService == null)
             {
-               throw new InvalidOperationException("Chat service is not initialized");
-           }
+                throw new InvalidOperationException("Chat service is not initialized");
+            }
 
             var initResponse = await _chatService.InitializeAsync(initParams);
+            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            if (string.IsNullOrWhiteSpace(connectionState.ConnectionInstanceId))
+            {
+                await _acpConnectionCoordinator
+                    .SetConnectionInstanceIdAsync(Guid.NewGuid().ToString("N"))
+                    .ConfigureAwait(false);
+            }
+
             await _acpConnectionCoordinator
                 .SetConnectedAsync(selectedProfileId)
                 .ConfigureAwait(false);
@@ -5010,12 +5026,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
         catch (Exception ex)
         {
-            await _acpConnectionCoordinator.SetDisconnectedAsync(ex.Message).ConfigureAwait(false);
+            await PublishDisconnectedConnectionStateAsync(ex.Message).ConfigureAwait(false);
             Logger.LogError(ex, "Initialization failed");
             SetError($"Initialization failed: {ex.Message}");
         }
     }
-
     private async Task<string?> ResolveSelectedProfileIdAsync()
     {
         if (!string.IsNullOrWhiteSpace(SelectedAcpProfile?.Id))
@@ -5027,8 +5042,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         return connectionState.SelectedProfileId;
     }
 
-     [RelayCommand]
-     private async Task CreateNewSessionAsync()
+    private async Task PublishDisconnectedConnectionStateAsync(string? errorMessage)
+    {
+        await _acpConnectionCoordinator.SetConnectionInstanceIdAsync(null).ConfigureAwait(false);
+        await _acpConnectionCoordinator.SetDisconnectedAsync(errorMessage).ConfigureAwait(false);
+    }
+
+    [RelayCommand]
+    private async Task CreateNewSessionAsync()
      {
         if (IsConnecting)
             return;
@@ -5820,6 +5841,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     public long ConnectionGeneration => Interlocked.Read(ref _connectionGeneration);
 
+    public string? ConnectionInstanceId => _connectionInstanceId;
+
     public IUiDispatcher Dispatcher => _uiDispatcher;
 
     public IConversationBindingCommands ConversationBindingCommands => _bindingCommands;
@@ -6608,7 +6631,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
-        _ = _acpConnectionCoordinator.SetDisconnectedAsync(errorMessage);
+        _ = PublishDisconnectedConnectionStateAsync(errorMessage);
     }
 
     public void UpdateInitializationState(bool isInitializing)
@@ -7540,6 +7563,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         public bool IsInitialized => _owner.IsInitialized;
         public string? CurrentRemoteSessionId => _owner.CurrentRemoteSessionId;
         public string? SelectedProfileId => _owner.SelectedProfileId;
+        public string? ConnectionInstanceId => _owner.ConnectionInstanceId;
         public long ConnectionGeneration => _owner.ConnectionGeneration;
         public IUiDispatcher Dispatcher => _owner.Dispatcher;
         public IConversationBindingCommands ConversationBindingCommands => _bindingCommands;
@@ -7711,6 +7735,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         public Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetConnectionInstanceIdAsync(string? connectionInstanceId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetAuthenticationRequiredAsync(string? hintMessage, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ClearAuthenticationRequiredAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -7940,3 +7965,4 @@ public partial class FileSystemRequestViewModel : ObservableObject
         await OnRespond(success, success ? ResponseContent : null, success ? null : "Operation failed");
     }
 }
+

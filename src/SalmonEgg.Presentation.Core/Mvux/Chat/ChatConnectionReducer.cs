@@ -28,8 +28,13 @@ public static class ChatConnectionReducer
                 SelectedProfileId = setProfile.ProfileId,
                 CommittedProfileId =
                     string.Equals(current.CommittedProfileId, setProfile.ProfileId, StringComparison.Ordinal)
-                        ? current.CommittedProfileId
-                        : null,
+                    ? current.CommittedProfileId
+                    : null,
+                Generation = nextGeneration
+            },
+            SetConnectionInstanceIdAction setConnectionInstanceId => current with
+            {
+                ConnectionInstanceId = setConnectionInstanceId.ConnectionInstanceId,
                 Generation = nextGeneration
             },
             SetConnectionAuthenticationStateAction setAuth => current with
@@ -40,6 +45,7 @@ public static class ChatConnectionReducer
             },
             ResetConnectionStateAction => ChatConnectionState.Empty with
             {
+                ConnectionInstanceId = current.ConnectionInstanceId,
                 Generation = nextGeneration
             },
             _ => current with { Generation = nextGeneration }

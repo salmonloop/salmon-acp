@@ -12,6 +12,7 @@ public interface IAcpConnectionCoordinator
     Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default);
     Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default);
     Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default);
+    Task SetConnectionInstanceIdAsync(string? connectionInstanceId, CancellationToken cancellationToken = default);
 
     Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default);
 
@@ -62,6 +63,14 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
         await UpdateProfileAsync(profileId).ConfigureAwait(false);
         await _store.Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Connected, Error: null))
             .ConfigureAwait(false);
+    }
+
+    public async Task SetConnectionInstanceIdAsync(
+        string? connectionInstanceId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _store.Dispatch(new SetConnectionInstanceIdAction(connectionInstanceId)).ConfigureAwait(false);
     }
 
     public async Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default)

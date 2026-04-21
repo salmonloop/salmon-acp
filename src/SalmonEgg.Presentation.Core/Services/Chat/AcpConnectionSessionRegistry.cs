@@ -10,7 +10,8 @@ public sealed record AcpConnectionSession(
     string ProfileId,
     AcpChatServiceAdapter Service,
     InitializeResponse InitializeResponse,
-    AcpConnectionReuseKey ConnectionReuseKey)
+    AcpConnectionReuseKey ConnectionReuseKey,
+    string? ConnectionInstanceId = null)
 {
     public DateTime LastUsedUtc { get; init; } = DateTime.UtcNow;
 }

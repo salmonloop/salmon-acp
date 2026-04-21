@@ -47,6 +47,17 @@ public sealed class ChatStateProjectorTests
     }
 
     [Fact]
+    public void Apply_ProjectsConnectionInstanceId()
+    {
+        var projector = new ChatStateProjector();
+        var connectionState = ChatConnectionState.Empty with { ConnectionInstanceId = "conn-1" };
+
+        var projection = projector.Apply(ChatState.Empty, connectionState, "conv-1", binding: null);
+
+        Assert.Equal("conn-1", projection.ConnectionInstanceId);
+    }
+
+    [Fact]
     public void Apply_ProjectsTailStatusFromActiveTurn()
     {
         var projector = new ChatStateProjector();

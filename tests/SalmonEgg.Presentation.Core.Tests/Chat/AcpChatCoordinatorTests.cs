@@ -179,16 +179,38 @@ public sealed class AcpChatCoordinatorTests
         var profileService = CreateChatService();
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        var connectionInstanceIds = new List<string?>();
+        var registry = new InMemoryAcpConnectionSessionRegistry();
+        var cleaner = new AcpConnectionSessionCleaner(
+            registry,
+            new ConservativeAcpConnectionEvictionPolicy(new AcpConnectionEvictionOptions()),
+            new AcpConnectionEvictionOptions(),
+            Mock.Of<ILogger<AcpConnectionSessionCleaner>>());
+        var poolManager = new AcpConnectionPoolManager(
+            registry,
+            cleaner,
+            Mock.Of<ILogger<AcpConnectionPoolManager>>());
+        var connectionCoordinator = new Mock<IAcpConnectionCoordinator>();
 
         profileService
             .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
             .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-p1", "1.0.0"), new AgentCapabilities()));
+        connectionCoordinator
+            .Setup(x => x.SetConnectionInstanceIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, CancellationToken>((id, _) => connectionInstanceIds.Add(id))
+            .Returns(Task.CompletedTask);
 
         factory
             .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-1.exe", "--serve-1", null))
             .Returns(profileService.Object);
 
-        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            connectionCoordinator: connectionCoordinator.Object,
+            sessionRegistry: registry,
+            sessionCleaner: cleaner,
+            connectionPoolManager: poolManager);
         var profile = new ServerConfiguration
         {
             Id = "profile-1",
@@ -205,6 +227,11 @@ public sealed class AcpChatCoordinatorTests
         profileService.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
         profileService.Verify(x => x.DisconnectAsync(), Times.Never);
         factory.Verify(x => x.CreateChatService(TransportType.Stdio, "agent-1.exe", "--serve-1", null), Times.Once);
+        Assert.Equal(2, connectionInstanceIds.Count);
+        Assert.False(string.IsNullOrWhiteSpace(connectionInstanceIds[0]));
+        Assert.Equal(connectionInstanceIds[0], connectionInstanceIds[1]);
+        Assert.True(registry.TryGetByProfile("profile-1", out var cachedSession));
+        Assert.Equal(connectionInstanceIds[1], cachedSession!.ConnectionInstanceId);
     }
 
     [Fact]
@@ -262,6 +289,18 @@ public sealed class AcpChatCoordinatorTests
         var secondService = CreateChatService();
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        var connectionInstanceIds = new List<string?>();
+        var registry = new InMemoryAcpConnectionSessionRegistry();
+        var cleaner = new AcpConnectionSessionCleaner(
+            registry,
+            new ConservativeAcpConnectionEvictionPolicy(new AcpConnectionEvictionOptions()),
+            new AcpConnectionEvictionOptions(),
+            Mock.Of<ILogger<AcpConnectionSessionCleaner>>());
+        var poolManager = new AcpConnectionPoolManager(
+            registry,
+            cleaner,
+            Mock.Of<ILogger<AcpConnectionPoolManager>>());
+        var connectionCoordinator = new Mock<IAcpConnectionCoordinator>();
 
         firstService
             .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
@@ -269,6 +308,10 @@ public sealed class AcpChatCoordinatorTests
         secondService
             .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
             .ReturnsAsync(new InitializeResponse(1, new AgentInfo("agent-new", "1.0.0"), new AgentCapabilities()));
+        connectionCoordinator
+            .Setup(x => x.SetConnectionInstanceIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, CancellationToken>((id, _) => connectionInstanceIds.Add(id))
+            .Returns(Task.CompletedTask);
 
         factory
             .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-old.exe", "--serve-old", null))
@@ -277,7 +320,13 @@ public sealed class AcpChatCoordinatorTests
             .Setup(x => x.CreateChatService(TransportType.Stdio, "agent-new.exe", "--serve-new", null))
             .Returns(secondService.Object);
 
-        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            connectionCoordinator: connectionCoordinator.Object,
+            sessionRegistry: registry,
+            sessionCleaner: cleaner,
+            connectionPoolManager: poolManager);
 
         var oldProfile = new ServerConfiguration
         {
@@ -304,6 +353,10 @@ public sealed class AcpChatCoordinatorTests
         firstService.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
         secondService.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
         firstService.Verify(x => x.DisconnectAsync(), Times.Once);
+        Assert.Equal(2, connectionInstanceIds.Count);
+        Assert.NotEqual(connectionInstanceIds[0], connectionInstanceIds[1]);
+        Assert.True(registry.TryGetByProfile("profile-1", out var cachedSession));
+        Assert.Equal(connectionInstanceIds[1], cachedSession!.ConnectionInstanceId);
     }
 
     [Fact]
@@ -520,11 +573,26 @@ public sealed class AcpChatCoordinatorTests
             IsConnected = true,
             IsInitialized = true,
             CurrentSessionId = "local-session-1",
-            SelectedProfileId = "profile-1"
+            SelectedProfileId = "profile-1",
+            ConnectionInstanceId = "conn-prev"
         };
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
         var connectionCoordinator = new Mock<IAcpConnectionCoordinator>();
+        var sequence = new MockSequence();
+
+        connectionCoordinator.InSequence(sequence)
+            .Setup(x => x.SetConnectingAsync("profile-1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectionCoordinator.InSequence(sequence)
+            .Setup(x => x.SetInitializingAsync("profile-1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectionCoordinator.InSequence(sequence)
+            .Setup(x => x.SetConnectionInstanceIdAsync("conn-prev", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectionCoordinator.InSequence(sequence)
+            .Setup(x => x.SetConnectedAsync("profile-1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         candidateService
             .Setup(x => x.InitializeAsync(It.IsAny<InitializeParams>()))
@@ -564,13 +632,7 @@ public sealed class AcpChatCoordinatorTests
         Assert.False(previousDisposed);
         Assert.True(candidateDisposed);
         connectionCoordinator.Verify(
-            x => x.SetConnectingAsync("profile-1", It.IsAny<CancellationToken>()),
-            Times.Once);
-        connectionCoordinator.Verify(
-            x => x.SetInitializingAsync("profile-1", It.IsAny<CancellationToken>()),
-            Times.Once);
-        connectionCoordinator.Verify(
-            x => x.SetConnectedAsync("profile-1", It.IsAny<CancellationToken>()),
+            x => x.SetConnectionInstanceIdAsync("conn-prev", It.IsAny<CancellationToken>()),
             Times.Once);
         connectionCoordinator.Verify(
             x => x.SetDisconnectedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()),
@@ -1223,6 +1285,13 @@ public sealed class AcpChatCoordinatorTests
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
         var connectionCoordinator = new Mock<IAcpConnectionCoordinator>();
+        var sequence = new MockSequence();
+        connectionCoordinator.InSequence(sequence)
+            .Setup(x => x.SetConnectionInstanceIdAsync(null, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectionCoordinator.InSequence(sequence)
+            .Setup(x => x.ResetAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         var sut = new AcpChatCoordinator(
             factory.Object,
             logger.Object,
@@ -1234,9 +1303,6 @@ public sealed class AcpChatCoordinatorTests
         Assert.Null(sink.CurrentChatService);
         Assert.Null(sink.CurrentRemoteSessionId);
         Assert.Equal(1, sink.BindingCommands.ClearCalls);
-        connectionCoordinator.Verify(
-            x => x.ResetAsync(It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Fact]
@@ -1462,6 +1528,7 @@ public sealed class AcpChatCoordinatorTests
         public string? CurrentSessionId { get; set; }
         public string? CurrentRemoteSessionId { get; set; }
         public string? SelectedProfileId { get; set; }
+        public string? ConnectionInstanceId { get; set; }
         public IUiDispatcher Dispatcher { get; set; } = new ImmediateUiDispatcher();
         public long ConnectionGeneration { get; set; }
         public string ActiveSessionCwd { get; set; } = string.Empty;

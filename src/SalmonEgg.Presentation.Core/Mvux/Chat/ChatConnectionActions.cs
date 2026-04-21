@@ -8,6 +8,8 @@ public sealed record SetConnectionPhaseAction(
 
 public sealed record SetSelectedProfileAction(string? ProfileId) : ChatConnectionAction;
 
+public sealed record SetConnectionInstanceIdAction(string? ConnectionInstanceId) : ChatConnectionAction;
+
 public sealed record SetConnectionAuthenticationStateAction(
     bool IsRequired,
     string? HintMessage) : ChatConnectionAction;

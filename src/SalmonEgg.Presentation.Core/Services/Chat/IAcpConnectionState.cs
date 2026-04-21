@@ -34,6 +34,8 @@ public interface IAcpConnectionState : INotifyPropertyChanged
 
     string? CurrentSessionId { get; }
 
+    string? ConnectionInstanceId { get; }
+
     bool IsHydrating { get; }
 }
 

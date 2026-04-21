@@ -956,6 +956,7 @@ public class ChatViewModelTests
         var finalConnectionState = await fixture.GetConnectionStateAsync();
         Assert.Equal(ConnectionPhase.Connected, finalConnectionState.Phase);
         Assert.Equal("profile-1", finalConnectionState.SelectedProfileId);
+        Assert.False(string.IsNullOrWhiteSpace(finalConnectionState.ConnectionInstanceId));
         await WaitForConditionAsync(() =>
         {
             syncContext.RunAll();
@@ -963,6 +964,7 @@ public class ChatViewModelTests
                 !fixture.ViewModel.IsInitializing
                 && fixture.ViewModel.IsConnected
                 && !fixture.ViewModel.HasConnectionError
+                && !string.IsNullOrWhiteSpace(fixture.ViewModel.ConnectionInstanceId)
                 && string.Equals(fixture.ViewModel.CurrentConnectionStatus, "Connected", StringComparison.Ordinal));
         });
     }
@@ -2529,6 +2531,37 @@ public class ChatViewModelTests
         syncContext.RunAll();
 
         Assert.Equal("from store", viewModel.CurrentPrompt);
+    }
+
+    [Fact]
+    public async Task ConnectionInstanceId_ProjectsFromStoreAndRaisesPropertyChangedOnce()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        var notifications = 0;
+        fixture.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ChatViewModel.ConnectionInstanceId))
+            {
+                notifications++;
+            }
+        };
+
+        Assert.Null(fixture.ViewModel.ConnectionInstanceId);
+
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        syncContext.RunAll();
+
+        Assert.Equal("conn-1", fixture.ViewModel.ConnectionInstanceId);
+        Assert.Equal(1, notifications);
+
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        syncContext.RunAll();
+
+        Assert.Equal("conn-1", fixture.ViewModel.ConnectionInstanceId);
+        Assert.Equal(1, notifications);
     }
 
     [Fact]

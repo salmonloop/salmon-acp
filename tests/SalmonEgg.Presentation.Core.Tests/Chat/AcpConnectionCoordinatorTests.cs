@@ -13,9 +13,11 @@ using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Tests.Threading;
+using Uno.Extensions.Reactive;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -278,6 +280,84 @@ public sealed class AcpConnectionCoordinatorTests
         Assert.Contains(chatService.MarkHydratedCalls, call => call.LowTrust && call.Reason == "LoadSessionFailed");
     }
 
+    [Fact]
+    public async Task SetConnectionInstanceIdAsync_PublishesExplicitIdentityWithoutChangingPhase()
+    {
+        await using var connectionState = State.Value(
+            new object(),
+            () => ChatConnectionState.Empty with
+            {
+                Phase = ConnectionPhase.Connected,
+                SelectedProfileId = "profile-1",
+                ConnectionInstanceId = "conn-old",
+                Generation = 9
+            });
+
+        var coordinator = new AcpConnectionCoordinator(
+            new ChatConnectionStore(connectionState),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>());
+
+        await coordinator.SetConnectionInstanceIdAsync("conn-new");
+
+        var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
+        Assert.Equal(ConnectionPhase.Connected, updated.Phase);
+        Assert.Equal("profile-1", updated.SelectedProfileId);
+        Assert.Equal("conn-new", updated.ConnectionInstanceId);
+        Assert.Equal(10, updated.Generation);
+    }
+
+    [Fact]
+    public async Task SetDisconnectedAsync_DoesNotClearConnectionInstanceIdByItself()
+    {
+        await using var connectionState = State.Value(
+            new object(),
+            () => ChatConnectionState.Empty with
+            {
+                Phase = ConnectionPhase.Connected,
+                SelectedProfileId = "profile-1",
+                ConnectionInstanceId = "conn-1",
+                Generation = 3
+            });
+
+        var coordinator = new AcpConnectionCoordinator(
+            new ChatConnectionStore(connectionState),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>());
+
+        await coordinator.SetDisconnectedAsync("network down");
+
+        var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
+        Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
+        Assert.Equal("network down", updated.Error);
+        Assert.Equal("conn-1", updated.ConnectionInstanceId);
+        Assert.Equal(4, updated.Generation);
+    }
+
+    [Fact]
+    public async Task ResetAsync_PreservesConnectionInstanceIdByItself()
+    {
+        await using var connectionState = State.Value(
+            new object(),
+            () => ChatConnectionState.Empty with
+            {
+                Phase = ConnectionPhase.Connected,
+                SelectedProfileId = "profile-1",
+                ConnectionInstanceId = "conn-1",
+                Generation = 5
+            });
+
+        var coordinator = new AcpConnectionCoordinator(
+            new ChatConnectionStore(connectionState),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>());
+
+        await coordinator.ResetAsync();
+
+        var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
+        Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
+        Assert.Equal("conn-1", updated.ConnectionInstanceId);
+        Assert.Null(updated.SelectedProfileId);
+        Assert.Equal(6, updated.Generation);
+    }
+
     private sealed class FakeSink : IAcpChatCoordinatorSink
     {
         public event PropertyChangedEventHandler? PropertyChanged
@@ -313,6 +393,8 @@ public sealed class AcpConnectionCoordinatorTests
         public string? CurrentRemoteSessionId { get; set; }
 
         public string? SelectedProfileId { get; set; }
+
+        public string? ConnectionInstanceId { get; set; }
 
         public IConversationBindingCommands ConversationBindingCommands { get; } = new NoopBindingCommands();
 

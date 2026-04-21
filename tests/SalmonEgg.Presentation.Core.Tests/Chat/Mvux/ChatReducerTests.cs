@@ -95,6 +95,113 @@ public class ChatReducerTests
     }
 
     [Fact]
+    public void GivenConnectionState_WhenPhaseChangesToConnected_ThenConnectionInstanceIdIsPreservedAndGenerationIncrements()
+    {
+        var initialState = ChatConnectionState.Empty with
+        {
+            Phase = ConnectionPhase.Connecting,
+            SelectedProfileId = "profile-1",
+            ConnectionInstanceId = "conn-1",
+            Generation = 7
+        };
+
+        var next = ChatConnectionReducer.Reduce(initialState, new SetConnectionPhaseAction(ConnectionPhase.Connected));
+
+        Assert.Equal(ConnectionPhase.Connected, next.Phase);
+        Assert.Equal("profile-1", next.SelectedProfileId);
+        Assert.Equal("conn-1", next.ConnectionInstanceId);
+        Assert.Equal(8, next.Generation);
+    }
+
+    [Fact]
+    public void GivenConnectionState_WhenSelectedProfileChanges_ThenConnectionInstanceIdIsPreservedAndGenerationIncrements()
+    {
+        var initialState = ChatConnectionState.Empty with
+        {
+            Phase = ConnectionPhase.Connected,
+            SelectedProfileId = "profile-1",
+            ConnectionInstanceId = "conn-1",
+            Generation = 4
+        };
+
+        var next = ChatConnectionReducer.Reduce(initialState, new SetSelectedProfileAction("profile-2"));
+
+        Assert.Equal("profile-2", next.SelectedProfileId);
+        Assert.Equal("conn-1", next.ConnectionInstanceId);
+        Assert.Equal(ConnectionPhase.Connected, next.Phase);
+        Assert.Equal(5, next.Generation);
+    }
+
+    [Fact]
+    public void GivenConnectionState_WhenConnectionInstanceIdChanges_ThenOnlyIdentityAndGenerationUpdate()
+    {
+        var initialState = ChatConnectionState.Empty with
+        {
+            Phase = ConnectionPhase.Connected,
+            SelectedProfileId = "profile-1",
+            Error = "previous-error",
+            IsAuthenticationRequired = true,
+            AuthenticationHintMessage = "hint",
+            ConnectionInstanceId = "conn-old",
+            CommittedProfileId = "profile-1",
+            Generation = 12
+        };
+
+        var next = ChatConnectionReducer.Reduce(initialState, new SetConnectionInstanceIdAction("conn-new"));
+
+        Assert.Equal("conn-new", next.ConnectionInstanceId);
+        Assert.Equal(ConnectionPhase.Connected, next.Phase);
+        Assert.Equal("profile-1", next.SelectedProfileId);
+        Assert.Equal("previous-error", next.Error);
+        Assert.True(next.IsAuthenticationRequired);
+        Assert.Equal("hint", next.AuthenticationHintMessage);
+        Assert.Equal("profile-1", next.CommittedProfileId);
+        Assert.Equal(13, next.Generation);
+    }
+
+    [Fact]
+    public void GivenConnectionState_WhenDisconnected_ThenConnectionInstanceIdIsPreservedAndGenerationIncrements()
+    {
+        var connectedState = ChatConnectionState.Empty with
+        {
+            Phase = ConnectionPhase.Connected,
+            SelectedProfileId = "profile-1",
+            ConnectionInstanceId = "conn-1",
+            Generation = 20
+        };
+
+        var disconnected = ChatConnectionReducer.Reduce(
+            connectedState,
+            new SetConnectionPhaseAction(ConnectionPhase.Disconnected, Error: "network error"));
+
+        Assert.Equal(ConnectionPhase.Disconnected, disconnected.Phase);
+        Assert.Equal("conn-1", disconnected.ConnectionInstanceId);
+        Assert.Null(disconnected.CommittedProfileId);
+        Assert.Equal("network error", disconnected.Error);
+        Assert.Equal(21, disconnected.Generation);
+    }
+
+    [Fact]
+    public void GivenConnectionState_WhenReset_ThenConnectionInstanceIdIsPreservedAndGenerationIncrements()
+    {
+        var connectedState = ChatConnectionState.Empty with
+        {
+            Phase = ConnectionPhase.Connected,
+            SelectedProfileId = "profile-1",
+            ConnectionInstanceId = "conn-1",
+            Generation = 20
+        };
+
+        var reset = ChatConnectionReducer.Reduce(connectedState, new ResetConnectionStateAction());
+
+        Assert.Equal("conn-1", reset.ConnectionInstanceId);
+        Assert.Equal(ConnectionPhase.Disconnected, reset.Phase);
+        Assert.Null(reset.SelectedProfileId);
+        Assert.Null(reset.CommittedProfileId);
+        Assert.Equal(21, reset.Generation);
+    }
+
+    [Fact]
     public void GivenState_WhenSetConversationRuntimeState_ThenRuntimeStateIsStored()
     {
         var initialState = ChatState.Empty;

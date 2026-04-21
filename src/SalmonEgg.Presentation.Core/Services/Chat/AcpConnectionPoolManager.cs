@@ -23,7 +23,8 @@ public interface IAcpConnectionPoolManager
         string profileId,
         AcpChatServiceAdapter service,
         InitializeResponse initializeResponse,
-        AcpConnectionReuseKey reuseKey);
+        AcpConnectionReuseKey reuseKey,
+        string? connectionInstanceId);
 
     bool RemoveByService(IChatService service, out string profileId);
 
@@ -118,7 +119,8 @@ public sealed class AcpConnectionPoolManager : IAcpConnectionPoolManager
         string profileId,
         AcpChatServiceAdapter service,
         InitializeResponse initializeResponse,
-        AcpConnectionReuseKey reuseKey)
+        AcpConnectionReuseKey reuseKey,
+        string? connectionInstanceId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
         ArgumentNullException.ThrowIfNull(service);
@@ -128,7 +130,8 @@ public sealed class AcpConnectionPoolManager : IAcpConnectionPoolManager
             profileId,
             service,
             initializeResponse,
-            reuseKey)
+            reuseKey,
+            connectionInstanceId)
         {
             LastUsedUtc = DateTime.UtcNow
         });

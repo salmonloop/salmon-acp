@@ -130,6 +130,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         var (isValid, errorMessage) = transportConfiguration.Validate();
         if (!isValid)
         {
+            await _connectionCoordinator.SetConnectionInstanceIdAsync(null, cancellationToken).ConfigureAwait(false);
             await _connectionCoordinator.SetDisconnectedAsync(errorMessage, cancellationToken).ConfigureAwait(false);
             throw new InvalidOperationException(errorMessage ?? "Invalid ACP transport configuration.");
         }
@@ -169,6 +170,9 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             sink.UpdateAgentIdentity(
                 ResolveDisplayAgentName(cachedSession.InitializeResponse.AgentInfo),
                 cachedSession.InitializeResponse.AgentInfo?.Version);
+            await _connectionCoordinator.SetConnectionInstanceIdAsync(
+                cachedSession.ConnectionInstanceId,
+                applyToken).ConfigureAwait(false);
             await _connectionCoordinator.SetConnectedAsync(selectedProfileId, applyToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
 
@@ -196,6 +200,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         IChatService? candidateService = null;
         AcpChatServiceAdapter? wrappedService = null;
         var committed = false;
+        var connectionInstanceId = CreateConnectionInstanceId();
         try
         {
             candidateService = _chatServiceFactory.CreateChatService(
@@ -235,13 +240,15 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             }
 
             sink.UpdateAgentIdentity(ResolveDisplayAgentName(initializeResponse.AgentInfo), initializeResponse.AgentInfo?.Version);
+            await _connectionCoordinator.SetConnectionInstanceIdAsync(connectionInstanceId, applyToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(selectedProfileId))
             {
                 _connectionPoolManager.RecordSession(
                     selectedProfileId!,
                     wrappedService,
                     initializeResponse,
-                    currentConnectionReuseKey);
+                    currentConnectionReuseKey,
+                    connectionInstanceId);
             }
             await _connectionCoordinator.SetConnectedAsync(sink.SelectedProfileId, applyToken).ConfigureAwait(false);
             await _connectionCoordinator.ClearAuthenticationRequiredAsync(applyToken).ConfigureAwait(false);
@@ -304,6 +311,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
                 }
                 else
                 {
+                    await _connectionCoordinator.SetConnectionInstanceIdAsync(null, cancellationToken).ConfigureAwait(false);
                     await _connectionCoordinator.SetDisconnectedAsync(ex.Message, cancellationToken).ConfigureAwait(false);
                     _logger.LogError(ex, "Failed to initialize ACP candidate before commit");
                 }
@@ -326,6 +334,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             await sink.ReplaceChatServiceAsync(null, cancellationToken).ConfigureAwait(false);
             _activeChatServiceAdapter = null;
             sink.UpdateAgentIdentity(null, null);
+            await _connectionCoordinator.SetConnectionInstanceIdAsync(null, cancellationToken).ConfigureAwait(false);
             await _connectionCoordinator.SetDisconnectedAsync(ex.Message, cancellationToken).ConfigureAwait(false);
             _logger.LogError(ex, "Failed to apply ACP transport configuration");
             throw;
@@ -416,6 +425,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         _activeChatServiceAdapter = null;
         await ClearBindingForCurrentConversationAsync(sink).ConfigureAwait(false);
         sink.UpdateAgentIdentity(null, null);
+        await _connectionCoordinator.SetConnectionInstanceIdAsync(null, cancellationToken).ConfigureAwait(false);
         await _connectionCoordinator.ResetAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -569,6 +579,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
     {
         try
         {
+            await _connectionCoordinator.SetConnectionInstanceIdAsync(snapshot.ConnectionInstanceId, CancellationToken.None)
+                .ConfigureAwait(false);
             if (snapshot.IsConnected)
             {
                 await _connectionCoordinator.SetConnectedAsync(snapshot.SelectedProfileId, CancellationToken.None)
@@ -606,6 +618,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
     private static AcpConnectionStateSnapshot CaptureConnectionState(IAcpChatCoordinatorSink sink)
         => new(
             sink.SelectedProfileId,
+            sink.ConnectionInstanceId,
             sink.IsConnecting,
             sink.IsInitializing,
             sink.IsConnected,
@@ -667,6 +680,9 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
     private static AcpConnectionReuseKey BuildConnectionReuseKey(IAcpTransportConfiguration transportConfiguration)
         => AcpConnectionReuseKey.FromTransportConfiguration(transportConfiguration);
+
+    private static string CreateConnectionInstanceId()
+        => Guid.NewGuid().ToString("N");
 
     private sealed class ApplyScope : IDisposable
     {
@@ -732,6 +748,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
     private readonly record struct AcpConnectionStateSnapshot(
         string? SelectedProfileId,
+        string? ConnectionInstanceId,
         bool IsConnecting,
         bool IsInitializing,
         bool IsConnected,
@@ -755,6 +772,9 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             => Task.CompletedTask;
 
         public Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task SetConnectionInstanceIdAsync(string? connectionInstanceId, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
         public Task SetDisconnectedAsync(string? errorMessage = null, CancellationToken cancellationToken = default)

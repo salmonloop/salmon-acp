@@ -16,6 +16,7 @@ public sealed record ChatConnectionState(
     bool IsAuthenticationRequired,
     string? AuthenticationHintMessage,
     long Generation,
+    string? ConnectionInstanceId = null,
     string? CommittedProfileId = null)
 {
     public static ChatConnectionState Empty { get; } = new(
@@ -25,5 +26,6 @@ public sealed record ChatConnectionState(
         IsAuthenticationRequired: false,
         AuthenticationHintMessage: null,
         Generation: 0,
+        ConnectionInstanceId: null,
         CommittedProfileId: null);
 }
