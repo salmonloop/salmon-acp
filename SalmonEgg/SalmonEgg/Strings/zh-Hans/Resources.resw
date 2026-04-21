@@ -700,6 +700,9 @@
   <data name="ChatViewLoadingOverlay.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
     <value>会话加载中</value>
   </data>
+  <data name="ChatMessageCopyMenu.Content" xml:space="preserve">
+    <value>复制消息</value>
+  </data>
   <data name="DataStorage_ClearCacheDialog.Title" xml:space="preserve">
     <value>清理缓存</value>
   </data>

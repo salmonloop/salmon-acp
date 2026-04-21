@@ -24,6 +24,14 @@
                     Background="{ThemeResource ControlFillColorSecondaryBrush}"
                     BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                     BorderThickness="1">
+                <Border.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="ChatMessageCopyMenu"
+                                        Click="OnCopyMessageClick"
+                                        CommandParameter="{x:Bind TextContent, Mode=OneWay}"
+                                        IsEnabled="{x:Bind HasTextContent, Mode=OneWay}" />
+                    </MenuFlyout>
+                </Border.ContextFlyout>
                 <StackPanel>
                     <!-- 消息标题 (如有) -->
                     <TextBlock Text="{x:Bind Title, Mode=OneWay}"
@@ -39,6 +47,7 @@
                         <TextBlock Text="{x:Bind TextContent, Mode=OneWay}"
                                    TextWrapping="Wrap"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   IsTextSelectionEnabled="True"
                                    Visibility="{x:Bind ShouldRenderPlainText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
                         <controls:MarkdownTextPresenter Text="{x:Bind TextContent, Mode=OneWay}"
@@ -78,6 +87,14 @@
                     Padding="16,10"
                     Background="{ThemeResource AccentFillColorDefaultBrush}"
                     BorderThickness="0">
+                <Border.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="ChatMessageCopyMenu"
+                                        Click="OnCopyMessageClick"
+                                        CommandParameter="{x:Bind TextContent, Mode=OneWay}"
+                                        IsEnabled="{x:Bind HasTextContent, Mode=OneWay}" />
+                    </MenuFlyout>
+                </Border.ContextFlyout>
                 <StackPanel>
                     <!-- 消息标题 (如有) -->
                     <TextBlock Text="{x:Bind Title, Mode=OneWay}"
@@ -91,6 +108,7 @@
                     <TextBlock Text="{x:Bind TextContent, Mode=OneWay}"
                                TextWrapping="Wrap"
                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                               IsTextSelectionEnabled="True"
                                Visibility="{x:Bind HasTextContent, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
                     <!-- 时间戳 -->

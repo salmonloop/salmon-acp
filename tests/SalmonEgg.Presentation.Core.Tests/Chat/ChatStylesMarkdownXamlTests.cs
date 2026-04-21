@@ -36,6 +36,17 @@ public sealed class ChatStylesMarkdownXamlTests
         Assert.DoesNotContain("Visibility=\"{Binding ShouldRenderPlainText", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void MessageTemplate_EnablesPlainTextSelectionAndCopyContextMenu()
+    {
+        var xaml = LoadChatStylesXaml();
+
+        Assert.Contains("IsTextSelectionEnabled=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Border.ContextFlyout>", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Uid=\"ChatMessageCopyMenu\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnCopyMessageClick\"", xaml, StringComparison.Ordinal);
+    }
+
     private static string LoadChatStylesXaml()
     {
         var root = FindRepoRoot();
