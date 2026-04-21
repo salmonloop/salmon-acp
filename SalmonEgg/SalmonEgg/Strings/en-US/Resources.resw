@@ -119,6 +119,18 @@
   <data name="ToolCallPillSummaryCommandLabel" xml:space="preserve">
     <value>Command</value>
   </data>
+  <data name="ToolCallPillSummaryImageLabel" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="ToolCallPillSummaryImageContent" xml:space="preserve">
+    <value>Image content</value>
+  </data>
+  <data name="ToolCallPillSummaryAudioLabel" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="ToolCallPillSummaryAudioContent" xml:space="preserve">
+    <value>Audio content</value>
+  </data>
   <data name="Appearance_ThemeLight.Content" xml:space="preserve">
     <value>Light</value>
   </data>

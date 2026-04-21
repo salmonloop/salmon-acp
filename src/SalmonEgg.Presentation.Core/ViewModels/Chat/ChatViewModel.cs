@@ -2057,41 +2057,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             && viewModel.ToolCallKind == snapshot.ToolCallKind
             && viewModel.ToolCallStatus == snapshot.ToolCallStatus
             && string.Equals(viewModel.ToolCallJson, snapshot.ToolCallJson, StringComparison.Ordinal)
-            && ToolCallContentEquals(viewModel.ToolCallContent, snapshot.ToolCallContent)
+            && ToolCallContentSnapshots.SequenceEquals(viewModel.ToolCallContent, snapshot.ToolCallContent)
             && string.Equals(viewModel.ModeId, snapshot.ModeId, StringComparison.Ordinal)
             && PlanEntryMatches(viewModel.PlanEntry, snapshot.PlanEntry);
-    }
-
-    private static bool ToolCallContentEquals(
-        IReadOnlyList<Domain.Models.Tool.ToolCallContent>? viewModel,
-        IReadOnlyList<Domain.Models.Tool.ToolCallContent>? snapshot)
-    {
-        if (ReferenceEquals(viewModel, snapshot))
-        {
-            return true;
-        }
-
-        if (viewModel is null || snapshot is null)
-        {
-            return viewModel is null && snapshot is null;
-        }
-
-        if (viewModel.Count != snapshot.Count)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < viewModel.Count; i++)
-        {
-            var left = JsonSerializer.Serialize(viewModel[i]);
-            var right = JsonSerializer.Serialize(snapshot[i]);
-            if (!string.Equals(left, right, StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static bool PlanEntryMatches(PlanEntryViewModel? viewModel, ConversationPlanEntrySnapshot? snapshot)
@@ -4545,8 +4513,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ToolCallId = toolCall.ToolCallId,
             ToolCallKind = toolCall.Kind,
             ToolCallStatus = toolCall.Status,
-            ToolCallJson = TryGetRawJson(toolCall.RawInput),
-            ToolCallContent = CloneToolCallContentList(toolCall.Content)
+            ToolCallJson = ResolveToolCallPayload(toolCall.RawInput, toolCall.Content),
+            ToolCallContent = ToolCallContentSnapshots.CloneList(toolCall.Content)
         };
     }
 
@@ -4593,9 +4561,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 ToolCallId = existing.ToolCallId,
                 ToolCallKind = toolCallStatusUpdate.Kind ?? existing.ToolCallKind,
                 ToolCallStatus = toolCallStatusUpdate.Status ?? existing.ToolCallStatus,
-                ToolCallJson = TryGetRawJson(toolCallStatusUpdate.RawInput) ?? existing.ToolCallJson,
+                ToolCallJson = ResolveToolCallPayload(toolCallStatusUpdate.RawInput, toolCallStatusUpdate.Content) ?? existing.ToolCallJson,
                 ToolCallContent = toolCallStatusUpdate.Content is not null
-                    ? CloneToolCallContentList(toolCallStatusUpdate.Content)
+                    ? ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content)
                     : existing.ToolCallContent,
                 PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
                 ModeId = existing.ModeId
@@ -4617,8 +4585,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ToolCallId = toolCallStatusUpdate.ToolCallId,
             ToolCallKind = toolCallStatusUpdate.Kind,
             ToolCallStatus = toolCallStatusUpdate.Status,
-            ToolCallJson = TryGetRawJson(toolCallStatusUpdate.RawInput),
-            ToolCallContent = CloneToolCallContentList(toolCallStatusUpdate.Content)
+            ToolCallJson = ResolveToolCallPayload(toolCallStatusUpdate.RawInput, toolCallStatusUpdate.Content),
+            ToolCallContent = ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content)
         };
     }
 
@@ -4627,27 +4595,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private static List<Domain.Models.Tool.ToolCallContent>? CloneToolCallContentList(
         IReadOnlyList<Domain.Models.Tool.ToolCallContent>? content)
-    {
-        if (content is null)
-        {
-            return null;
-        }
+        => ToolCallContentSnapshots.CloneList(content);
 
-        var cloned = new List<Domain.Models.Tool.ToolCallContent>(content.Count);
-        foreach (var item in content)
-        {
-            cloned.Add(CloneToolCallContent(item));
-        }
-
-        return cloned;
-    }
-
-    private static Domain.Models.Tool.ToolCallContent CloneToolCallContent(Domain.Models.Tool.ToolCallContent content)
-    {
-        var json = JsonSerializer.Serialize(content);
-        return JsonSerializer.Deserialize<Domain.Models.Tool.ToolCallContent>(json)
-            ?? throw new InvalidOperationException("Failed to clone tool call content.");
-    }
+    private static string? ResolveToolCallPayload(
+        System.Text.Json.JsonElement? rawPayload,
+        IReadOnlyList<Domain.Models.Tool.ToolCallContent>? content)
+        => TryGetRawJson(rawPayload)
+            ?? ToolCallContentSnapshots.SerializePayload(content);
 
     private static string ResolveToolCallOutput(
         System.Text.Json.JsonElement? rawOutput,

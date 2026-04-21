@@ -2087,6 +2087,8 @@ public class ChatViewModelTests
         var image = Assert.IsType<ImageContentBlock>(content.Content);
         Assert.Equal("image-data", image.Data);
         Assert.Equal("image/png", image.MimeType);
+        Assert.Contains("\"type\":\"content\"", snapshot.ToolCallJson, StringComparison.Ordinal);
+        Assert.Contains("\"mimeType\":\"image/png\"", snapshot.ToolCallJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2138,6 +2140,8 @@ public class ChatViewModelTests
         var content = Assert.IsType<ContentToolCallContent>(toolCallContent);
         var resourceLink = Assert.IsType<ResourceLinkContentBlock>(content.Content);
         Assert.Equal("https://example.com/doc", resourceLink.Uri);
+        Assert.Contains("\"type\":\"content\"", snapshot.ToolCallJson, StringComparison.Ordinal);
+        Assert.Contains("https://example.com/doc", snapshot.ToolCallJson, StringComparison.Ordinal);
     }
 
     [Fact]

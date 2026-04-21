@@ -485,7 +485,7 @@ public static class ChatReducer
             ToolCallKind = source.ToolCallKind,
             ToolCallStatus = source.ToolCallStatus,
             ToolCallJson = source.ToolCallJson,
-            ToolCallContent = CloneToolCallContentList(source.ToolCallContent),
+            ToolCallContent = ToolCallContentSnapshots.CloneList(source.ToolCallContent),
             PlanEntry = source.PlanEntry is null
                 ? null
                 : new ConversationPlanEntrySnapshot
@@ -498,21 +498,4 @@ public static class ChatReducer
             };
     }
 
-    private static List<ToolCallContent>? CloneToolCallContentList(IReadOnlyList<ToolCallContent>? content)
-    {
-        if (content is null)
-        {
-            return null;
-        }
-
-        var cloned = new List<ToolCallContent>(content.Count);
-        foreach (var item in content)
-        {
-            var json = JsonSerializer.Serialize(item);
-            cloned.Add(JsonSerializer.Deserialize<ToolCallContent>(json)
-                ?? throw new InvalidOperationException("Failed to clone tool call content."));
-        }
-
-        return cloned;
-    }
 }

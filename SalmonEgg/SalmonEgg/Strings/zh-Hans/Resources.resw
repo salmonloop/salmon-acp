@@ -916,4 +916,16 @@
   <data name="ToolCallPillSummaryCommandLabel" xml:space="preserve">
     <value>命令</value>
   </data>
+  <data name="ToolCallPillSummaryImageLabel" xml:space="preserve">
+    <value>图片</value>
+  </data>
+  <data name="ToolCallPillSummaryImageContent" xml:space="preserve">
+    <value>图片内容</value>
+  </data>
+  <data name="ToolCallPillSummaryAudioLabel" xml:space="preserve">
+    <value>音频</value>
+  </data>
+  <data name="ToolCallPillSummaryAudioContent" xml:space="preserve">
+    <value>音频内容</value>
+  </data>
 </root>

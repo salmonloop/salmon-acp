@@ -187,6 +187,17 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         {
             using var document = JsonDocument.Parse(RawPayload);
             var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                var contentSummary = SummarizeStructuredContentArray(root);
+                if (!string.IsNullOrWhiteSpace(contentSummary))
+                {
+                    return contentSummary;
+                }
+
+                return SummarizePlainText(RawPayload);
+            }
+
             if (root.ValueKind != JsonValueKind.Object)
             {
                 return SummarizePlainText(RawPayload);
@@ -223,6 +234,81 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         }
 
         return SummarizePlainText(RawPayload);
+    }
+
+    private string SummarizeStructuredContentArray(JsonElement root)
+    {
+        var parts = new List<string>();
+        foreach (var item in root.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var type = TryGetString(item, "type");
+            switch (type)
+            {
+                case "content":
+                    if (item.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Object)
+                    {
+                        var contentType = TryGetString(content, "type");
+                        switch (contentType)
+                        {
+                            case "text":
+                                var text = TryGetString(content, "text");
+                                if (!string.IsNullOrWhiteSpace(text))
+                                {
+                                    parts.Add(Truncate(text));
+                                }
+                                break;
+                            case "resource_link":
+                                var uri = TryGetString(content, "uri");
+                                if (!string.IsNullOrWhiteSpace(uri))
+                                {
+                                    parts.Add($"{ResolveResourceString("ToolCallPillSummaryPathLabel", "Path")}: {uri}");
+                                }
+                                break;
+                            case "resource":
+                                var resourceUri = TryGetString(content, "uri");
+                                if (!string.IsNullOrWhiteSpace(resourceUri))
+                                {
+                                    parts.Add($"{ResolveResourceString("ToolCallPillSummaryPathLabel", "Path")}: {resourceUri}");
+                                }
+                                break;
+                            case "image":
+                                var mimeType = TryGetString(content, "mimeType", "mime_type");
+                                parts.Add(string.IsNullOrWhiteSpace(mimeType)
+                                    ? ResolveResourceString("ToolCallPillSummaryImageContent", "Image content")
+                                    : $"{ResolveResourceString("ToolCallPillSummaryImageLabel", "Image")}: {mimeType}");
+                                break;
+                            case "audio":
+                                var audioMimeType = TryGetString(content, "mimeType", "mime_type");
+                                parts.Add(string.IsNullOrWhiteSpace(audioMimeType)
+                                    ? ResolveResourceString("ToolCallPillSummaryAudioContent", "Audio content")
+                                    : $"{ResolveResourceString("ToolCallPillSummaryAudioLabel", "Audio")}: {audioMimeType}");
+                                break;
+                        }
+                    }
+                    break;
+                case "diff":
+                    var path = TryGetString(item, "path");
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        parts.Add($"{ResolveResourceString("ToolCallPillSummaryPathLabel", "Path")}: {path}");
+                    }
+                    break;
+                case "terminal":
+                    var terminalId = TryGetString(item, "terminalId", "terminal_id");
+                    if (!string.IsNullOrWhiteSpace(terminalId))
+                    {
+                        parts.Add($"{ResolveResourceString("ToolCallPillSummaryCommandLabel", "Command")}: {terminalId}");
+                    }
+                    break;
+            }
+        }
+
+        return parts.Count == 0 ? string.Empty : Truncate(string.Join(", ", parts));
     }
 
     private static string? TryGetString(JsonElement root, params string[] propertyNames)

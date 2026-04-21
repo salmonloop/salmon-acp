@@ -183,6 +183,16 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             .Select(ClonePlanEntrySnapshot)
             .OfType<ConversationPlanEntrySnapshot>()
             .ToArray();
+        var hasProjectedPrimarySessionState = false;
+        if (sessionStateSlice is ConversationSessionStateSlice primarySessionState)
+        {
+            hasProjectedPrimarySessionState = HasProjectedPrimarySessionState(
+                primarySessionState.AvailableModes,
+                primarySessionState.SelectedModeId,
+                primarySessionState.ConfigOptions,
+                primarySessionState.ShowConfigOptionsPanel);
+        }
+
         ConversationModeOptionSnapshot[] availableModes = (sessionStateSlice?.AvailableModes ?? (isHydratedConversation ? state.AvailableModes : null) ?? ImmutableList<ConversationModeOptionSnapshot>.Empty)
             .Select(CloneModeOptionSnapshot)
             .ToArray();
@@ -196,7 +206,9 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
         bool showConfigOptionsPanel = sessionStateSlice?.ShowConfigOptionsPanel ?? (isHydratedConversation && state.ShowConfigOptionsPanel);
         ConversationSessionInfoSnapshot? sessionInfo = ConversationSessionInfoSnapshots.Clone(sessionStateSlice?.SessionInfo ?? (isHydratedConversation ? state.SessionInfo : null));
         ConversationUsageSnapshot? usage = CloneUsageSnapshot(sessionStateSlice?.Usage ?? (isHydratedConversation ? state.Usage : null));
-        if (sessionStateSlice is null && !isHydratedConversation && existingSnapshot is not null)
+        if (!isHydratedConversation
+            && existingSnapshot is not null
+            && (sessionStateSlice is null || !hasProjectedPrimarySessionState))
         {
             availableModes = (existingSnapshot.AvailableModes ?? Array.Empty<ConversationModeOptionSnapshot>())
                 .Select(CloneModeOptionSnapshot)
@@ -204,13 +216,16 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             configOptions = (existingSnapshot.ConfigOptions ?? Array.Empty<ConversationConfigOptionSnapshot>())
                 .Select(CloneConfigOptionSnapshot)
                 .ToArray();
-            availableCommands = (existingSnapshot.AvailableCommands ?? Array.Empty<ConversationAvailableCommandSnapshot>())
-                .Select(CloneAvailableCommandSnapshot)
-                .ToArray();
             selectedModeId = existingSnapshot.SelectedModeId;
             showConfigOptionsPanel = existingSnapshot.ShowConfigOptionsPanel;
-            sessionInfo = ConversationSessionInfoSnapshots.Clone(existingSnapshot.SessionInfo);
-            usage = CloneUsageSnapshot(existingSnapshot.Usage);
+            if (sessionStateSlice is null)
+            {
+                availableCommands = (existingSnapshot.AvailableCommands ?? Array.Empty<ConversationAvailableCommandSnapshot>())
+                    .Select(CloneAvailableCommandSnapshot)
+                    .ToArray();
+                sessionInfo = ConversationSessionInfoSnapshots.Clone(existingSnapshot.SessionInfo);
+                usage = CloneUsageSnapshot(existingSnapshot.Usage);
+            }
         }
         var showPlanPanel = hasProjectedContent
             ? contentSlice?.ShowPlanPanel ?? (isHydratedConversation && state.ShowPlanPanel)
@@ -542,32 +557,9 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             && left.ToolCallKind == right.ToolCallKind
             && left.ToolCallStatus == right.ToolCallStatus
             && string.Equals(left.ToolCallJson, right.ToolCallJson, StringComparison.Ordinal)
-            && ToolCallContentEquals(left.ToolCallContent, right.ToolCallContent)
+            && ToolCallContentSnapshots.SequenceEquals(left.ToolCallContent, right.ToolCallContent)
             && string.Equals(left.ModeId, right.ModeId, StringComparison.Ordinal)
             && PlanEntryEquals(left.PlanEntry, right.PlanEntry);
-    }
-
-    private static bool ToolCallContentEquals(IReadOnlyList<ToolCallContent>? left, IReadOnlyList<ToolCallContent>? right)
-    {
-        if (left is null || right is null)
-        {
-            return left is null && right is null;
-        }
-
-        if (left.Count != right.Count)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < left.Count; i++)
-        {
-            if (!string.Equals(JsonSerializer.Serialize(left[i]), JsonSerializer.Serialize(right[i]), StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static bool PlanEntryEquals(ConversationPlanEntrySnapshot? left, ConversationPlanEntrySnapshot? right)
@@ -718,28 +710,20 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             ToolCallKind = snapshot.ToolCallKind,
             ToolCallStatus = snapshot.ToolCallStatus,
             ToolCallJson = snapshot.ToolCallJson,
-            ToolCallContent = CloneToolCallContentList(snapshot.ToolCallContent),
+            ToolCallContent = ToolCallContentSnapshots.CloneList(snapshot.ToolCallContent),
             PlanEntry = ClonePlanEntrySnapshot(snapshot.PlanEntry),
             ModeId = snapshot.ModeId
         };
 
-    private static List<ToolCallContent>? CloneToolCallContentList(IReadOnlyList<ToolCallContent>? content)
-    {
-        if (content is null)
-        {
-            return null;
-        }
-
-        var cloned = new List<ToolCallContent>(content.Count);
-        foreach (var item in content)
-        {
-            var json = JsonSerializer.Serialize(item);
-            cloned.Add(JsonSerializer.Deserialize<ToolCallContent>(json)
-                ?? throw new InvalidOperationException("Failed to clone tool call content."));
-        }
-
-        return cloned;
-    }
+    private static bool HasProjectedPrimarySessionState(
+        IReadOnlyList<ConversationModeOptionSnapshot> availableModes,
+        string? selectedModeId,
+        IReadOnlyList<ConversationConfigOptionSnapshot> configOptions,
+        bool showConfigOptionsPanel)
+        => availableModes.Count > 0
+            || configOptions.Count > 0
+            || showConfigOptionsPanel
+            || !string.IsNullOrWhiteSpace(selectedModeId);
 
     private static ConversationPlanEntrySnapshot? ClonePlanEntrySnapshot(ConversationPlanEntrySnapshot? snapshot)
     {
