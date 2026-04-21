@@ -17,7 +17,7 @@ public enum ConversationRuntimePhase
 public readonly record struct ConversationRuntimeSlice(
     string ConversationId,
     ConversationRuntimePhase Phase,
-    long ConnectionGeneration,
+    string? ConnectionInstanceId,
     string? RemoteSessionId,
     string? ProfileId,
     string? Reason,

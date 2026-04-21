@@ -208,7 +208,7 @@ public class ChatReducerTests
         var runtimeState = new ConversationRuntimeSlice(
             "conv-1",
             ConversationRuntimePhase.RemoteHydrating,
-            ConnectionGeneration: 3,
+            ConnectionInstanceId: "conn-3",
             RemoteSessionId: "remote-1",
             ProfileId: "profile-1",
             Reason: "SessionLoadStarted",
@@ -227,7 +227,7 @@ public class ChatReducerTests
         var runtimeState = new ConversationRuntimeSlice(
             "",
             ConversationRuntimePhase.Warm,
-            ConnectionGeneration: 1,
+            ConnectionInstanceId: "conn-1",
             RemoteSessionId: "remote-1",
             ProfileId: "profile-1",
             Reason: null,
@@ -244,7 +244,7 @@ public class ChatReducerTests
         var runtimeState = new ConversationRuntimeSlice(
             "conv-1",
             ConversationRuntimePhase.Warm,
-            ConnectionGeneration: 1,
+            ConnectionInstanceId: "conn-1",
             RemoteSessionId: "remote-1",
             ProfileId: "profile-1",
             Reason: "seed",
@@ -266,7 +266,7 @@ public class ChatReducerTests
             new SetConversationRuntimeStateAction(new ConversationRuntimeSlice(
                 "conv-1",
                 ConversationRuntimePhase.Warm,
-                ConnectionGeneration: 1,
+                ConnectionInstanceId: "conn-1",
                 RemoteSessionId: "remote-1",
                 ProfileId: "profile-1",
                 Reason: "seed",
@@ -276,7 +276,7 @@ public class ChatReducerTests
             new SetConversationRuntimeStateAction(new ConversationRuntimeSlice(
                 "conv-2",
                 ConversationRuntimePhase.Stale,
-                ConnectionGeneration: 1,
+                ConnectionInstanceId: "conn-1",
                 RemoteSessionId: "remote-2",
                 ProfileId: "profile-1",
                 Reason: "seed",

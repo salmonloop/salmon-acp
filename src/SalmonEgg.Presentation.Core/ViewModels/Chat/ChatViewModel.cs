@@ -3422,6 +3422,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return true;
         }
 
+        var warmRuntimeSnapshot = (await _chatStore.State ?? ChatState.Empty).ResolveRuntimeState(sessionId);
+        var warmReuseBinding = await ResolveConversationBindingAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var canReuseWarmRemoteConversation = ConversationWarmReusePolicy.CanReuseRemoteWarmConversation(
+            warmRuntimeSnapshot,
+            warmReuseBinding,
+            ConnectionInstanceId);
+
         await SetConversationRuntimeStateAsync(
                 sessionId,
                 ConversationRuntimePhase.Selecting,
@@ -3497,6 +3504,23 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 return false;
             }
 
+            if (canReuseWarmRemoteConversation)
+            {
+                Logger.LogInformation(
+                    "Skipping remote hydration because the selected conversation is already warm. ConversationId={ConversationId}",
+                    sessionId);
+                await SetConversationRuntimeStateAsync(
+                        sessionId,
+                        ConversationRuntimePhase.Warm,
+                        warmReuseBinding,
+                        reason: "WarmReuse",
+                        activationLease.CancellationToken)
+                    .ConfigureAwait(false);
+                activationLease.CancellationToken.ThrowIfCancellationRequested();
+                NotifyConversationListChanged();
+                return true;
+            }
+
             await SetConversationRuntimeStateAsync(
                     sessionId,
                     ConversationRuntimePhase.Selected,
@@ -3543,14 +3567,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                     "Conversation activation handed off to background remote phase. ConversationId={ConversationId} ElapsedMs={ElapsedMs}",
                     sessionId,
                     activationStopwatch.ElapsedMilliseconds);
-                _ = ContinueConversationActivationAsync(sessionId, activationLease);
+                _ = ContinueConversationActivationAsync(sessionId, activationLease, warmRuntimeSnapshot);
                 return true;
             }
 
             var remoteActivationSucceeded = await CompleteConversationRemoteActivationAsync(
-                    sessionId,
-                    activationLease.Version,
-                    activationLease.CancellationToken)
+                sessionId,
+                activationLease.Version,
+                activationLease.CancellationToken,
+                warmRuntimeSnapshot)
                 .ConfigureAwait(false);
             if (!remoteActivationSucceeded)
             {
@@ -3589,15 +3614,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
-    private async Task ContinueConversationActivationAsync(string sessionId, ConversationActivationLease activationLease)
+    private async Task ContinueConversationActivationAsync(
+        string sessionId,
+        ConversationActivationLease activationLease,
+        ConversationRuntimeSlice? warmRuntimeSnapshot)
     {
         await Task.Yield();
         try
         {
             var remoteActivationSucceeded = await CompleteConversationRemoteActivationAsync(
-                    sessionId,
-                    activationLease.Version,
-                    activationLease.CancellationToken)
+                sessionId,
+                activationLease.Version,
+                activationLease.CancellationToken,
+                warmRuntimeSnapshot)
                 .ConfigureAwait(false);
             if (remoteActivationSucceeded)
             {
@@ -3624,9 +3653,24 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private async Task<bool> CompleteConversationRemoteActivationAsync(
         string sessionId,
         long activationVersion,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ConversationRuntimeSlice? warmRuntimeSnapshot = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        var state = await _chatStore.State ?? ChatState.Empty;
+        var binding = await ResolveConversationBindingAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        if (ConversationWarmReusePolicy.CanReuseRemoteWarmConversation(
+            warmRuntimeSnapshot ?? state.ResolveRuntimeState(sessionId),
+            binding,
+            ConnectionInstanceId))
+        {
+            Logger.LogInformation(
+                "Skipping remote hydration because the selected conversation is already warm. ConversationId={ConversationId}",
+                sessionId);
+            return true;
+        }
+
         var remotePhaseStopwatch = Stopwatch.StartNew();
         await _remoteConversationActivationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -6412,12 +6456,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return true;
         }
 
-        var runtimeState = state.ResolveRuntimeState(sessionId);
-        return runtimeState is { } hydratedRuntime
-            && hydratedRuntime.Phase == ConversationRuntimePhase.Warm
-            && hydratedRuntime.ConnectionGeneration == ConnectionGeneration
-            && string.Equals(hydratedRuntime.RemoteSessionId, binding.RemoteSessionId, StringComparison.Ordinal)
-            && string.Equals(hydratedRuntime.ProfileId, binding.ProfileId, StringComparison.Ordinal);
+        return ConversationWarmReusePolicy.CanReuseRemoteWarmConversation(
+            state.ResolveRuntimeState(sessionId),
+            binding,
+            ConnectionInstanceId);
     }
 
     private async Task CancelPendingPermissionRequestAsync(string? expectedRemoteSessionId = null)
@@ -6959,19 +7001,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         var state = await _chatStore.State ?? ChatState.Empty;
-        var runtimeState = state.ResolveRuntimeState(conversationId);
-
-        if (runtimeState is { } hydratedRuntime
-            && hydratedRuntime.Phase == ConversationRuntimePhase.Warm
-            && hydratedRuntime.ConnectionGeneration == ConnectionGeneration
-            && string.Equals(hydratedRuntime.RemoteSessionId, binding.RemoteSessionId, StringComparison.Ordinal)
-            && string.Equals(hydratedRuntime.ProfileId, binding.ProfileId, StringComparison.Ordinal))
+        if (ConversationWarmReusePolicy.CanReuseRemoteWarmConversation(
+            state.ResolveRuntimeState(conversationId),
+            binding,
+            ConnectionInstanceId))
         {
             Logger.LogInformation(
-                "Skipping remote hydration for conversation because runtime state is warm. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ConnectionGeneration={ConnectionGeneration}",
+                "Skipping remote hydration for conversation because runtime state is warm. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ConnectionInstanceId={ConnectionInstanceId}",
                 conversationId,
                 binding.RemoteSessionId,
-                ConnectionGeneration);
+                ConnectionInstanceId);
             return true;
         }
 
@@ -7211,30 +7250,39 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
+        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var existingRuntime = currentState.ResolveRuntimeState(conversationId);
         var remoteSessionId = binding?.RemoteSessionId;
         var profileId = binding?.ProfileId;
         if (string.IsNullOrWhiteSpace(remoteSessionId) || string.IsNullOrWhiteSpace(profileId))
         {
-            var currentState = await _chatStore.State ?? ChatState.Empty;
-            var existingRuntime = currentState.ResolveRuntimeState(conversationId);
             remoteSessionId ??= existingRuntime?.RemoteSessionId ?? currentState.ResolveBinding(conversationId)?.RemoteSessionId;
             profileId ??= existingRuntime?.ProfileId ?? currentState.ResolveBinding(conversationId)?.ProfileId;
+        }
+
+        if (phase == ConversationRuntimePhase.Selected
+            && ConversationWarmReusePolicy.CanReuseRemoteWarmConversation(
+                existingRuntime,
+                binding ?? currentState.ResolveBinding(conversationId),
+                ConnectionInstanceId))
+        {
+            phase = ConversationRuntimePhase.Warm;
         }
 
         var runtimeState = new ConversationRuntimeSlice(
             ConversationId: conversationId,
             Phase: phase,
-            ConnectionGeneration: ConnectionGeneration,
+            ConnectionInstanceId: ConnectionInstanceId,
             RemoteSessionId: remoteSessionId,
             ProfileId: profileId,
             Reason: reason,
             UpdatedAtUtc: DateTime.UtcNow);
         await _chatStore.Dispatch(new SetConversationRuntimeStateAction(runtimeState)).ConfigureAwait(false);
         Logger.LogInformation(
-            "Conversation runtime stage transitioned. ConversationId={ConversationId} Stage={Stage} ConnectionGeneration={ConnectionGeneration} RemoteSessionId={RemoteSessionId} ProfileId={ProfileId} Reason={Reason}",
+            "Conversation runtime stage transitioned. ConversationId={ConversationId} Stage={Stage} ConnectionInstanceId={ConnectionInstanceId} RemoteSessionId={RemoteSessionId} ProfileId={ProfileId} Reason={Reason}",
             conversationId,
             phase,
-            ConnectionGeneration,
+            ConnectionInstanceId,
             remoteSessionId,
             profileId,
             reason);
