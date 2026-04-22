@@ -1307,6 +1307,128 @@ public sealed class ChatSkeletonSmokeTests
     }
 
     [SkippableFact]
+    public void BackgroundRemoteSessions_TwoWayProjection_ShowsUnreadForBackgroundSessionOnly()
+    {
+        var previousSlowLoadDelay = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS");
+        Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", "1500");
+
+        try
+        {
+            using var appData = GuiAppDataScope.CreateDeterministicBackgroundAttentionData(
+                cachedMessageCount: 1,
+                replayMessageCount: 24);
+            using var session = WindowsGuiAppSession.LaunchFresh();
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "background-two-way-open-a");
+            Assert.True(
+                session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30)),
+                "Initial remote session A hydration did not complete.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-02",
+                "background-two-way-open-b");
+            Assert.True(
+                session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30)),
+                "Initial remote session B hydration did not complete.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "background-two-way-back-a");
+            Assert.True(
+                session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4)),
+                "Returning to remote session A did not restore the chat header quickly.");
+            Assert.True(
+                session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30)),
+                "Remote session A did not reach hydrated state before background update assertions.");
+
+            appData.TriggerBackgroundRemoteAgentUpdate("gui-remote-session-02", "background for B");
+
+            Assert.True(
+                WaitForAutomationNameContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-02",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Background update did not mark remote session B unread.");
+
+            appData.TriggerBackgroundRemoteAgentUpdate("gui-remote-session-01", "foreground should stay read");
+            Assert.True(
+                WaitForAutomationNameNotContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-01",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Foreground remote session A should not be marked unread by its own update.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-02",
+                "background-two-way-open-b-after-first-round");
+            Assert.True(
+                session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4)),
+                "Activating remote session B after background updates did not restore the chat header quickly.");
+            Assert.True(
+                session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30)),
+                "Remote session B did not reach hydrated state before unread-clear assertions.");
+            Assert.True(
+                WaitForAutomationNameNotContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-02",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Unread state for remote session B did not clear after session B became foreground.");
+
+            appData.TriggerBackgroundRemoteAgentUpdate("gui-remote-session-01", "background for A");
+
+            Assert.True(
+                WaitForAutomationNameContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-01",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Background update did not mark remote session A unread.");
+
+            appData.TriggerBackgroundRemoteAgentUpdate("gui-remote-session-02", "foreground B should stay read");
+            Assert.True(
+                WaitForAutomationNameNotContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-02",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Foreground remote session B should not be marked unread by its own update.");
+
+            ActivateNavItem(
+                session,
+                appData,
+                "MainNav.Session.gui-remote-conversation-01",
+                "background-two-way-open-a-after-second-round");
+            Assert.True(
+                session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4)),
+                "Activating remote session A after the second background updates did not restore the chat header quickly.");
+            Assert.True(
+                WaitForAutomationNameNotContains(
+                    session,
+                    "MainNav.Session.gui-remote-conversation-01",
+                    "unread",
+                    TimeSpan.FromSeconds(10)),
+                "Unread state for remote session A did not clear after session A became foreground.");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SALMONEGG_GUI_SLOW_SESSION_LOAD_MS", previousSlowLoadDelay);
+        }
+    }
+
+    [SkippableFact]
     public void DiscoverProfileSwitch_SlowPreviousProfile_DoesNotOverwriteLatestSessionsList()
     {
         try

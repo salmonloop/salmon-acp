@@ -200,7 +200,7 @@ function New-LoadResult([string]$sessionSuffix)
     }
 }
 
-function Try-EmitControlledBackgroundUpdate
+function Send-ControlledBackgroundUpdate
 {
     if ([string]::IsNullOrWhiteSpace($controlFilePath) -or -not (Test-Path $controlFilePath))
     {
@@ -222,17 +222,21 @@ function Try-EmitControlledBackgroundUpdate
         return
     }
 
-    if ($command.kind -ne 'background-agent-message' -or [string]::IsNullOrWhiteSpace([string]$command.sessionId))
+    $emitted = $false
+
+    if ($command.kind -eq 'background-agent-message' -and -not [string]::IsNullOrWhiteSpace([string]$command.sessionId))
     {
-        return
-    }
+        Send-SessionUpdate ([string]$command.sessionId) @{
+            sessionUpdate = 'agent_message_chunk'
+            content = (New-TextContent ([string]$command.text))
+        }
 
-    Send-SessionUpdate ([string]$command.sessionId) @{
-        sessionUpdate = 'agent_message_chunk'
-        content = (New-TextContent ([string]$command.text))
+        $emitted = $true
     }
-
-    Remove-Item -Path $controlFilePath -Force -ErrorAction SilentlyContinue
+    if ($emitted)
+    {
+        Remove-Item -Path $controlFilePath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 if (-not [Console]::IsInputRedirected)
@@ -246,7 +250,7 @@ try
 {
     while ($true)
     {
-        Try-EmitControlledBackgroundUpdate
+        Send-ControlledBackgroundUpdate
 
         $line = $null
         if (-not $linePump.TryTake([ref]$line, 25))
