@@ -56,10 +56,12 @@ public sealed partial class RealUserConfigSmokeTests
     }
 
     [SkippableFact]
-    public void SelectRemoteBoundSession_WithSlowSessionLoad_AutoScrollsToLatestMessageAfterHydration()
+    public void ProbeReplayBackedRemoteSession_WithSlowSessionLoad_AutoScrollsToLatestMessageAfterHydration()
     {
         GuiTestGate.RequireEnabled();
 
+        // Deterministic gate coverage lives in ChatSkeletonSmokeTests.SelectRemoteSessionWithSlowReplay_AutoScrollsToLatestMessageAfterHydration.
+        // This real-user probe remains useful for manual local auditing when replay-backed data exists.
         var candidate = RealUserConfigProbe.LoadReplayBackedCandidates()
             .Where(item => item.LocalMessageCount >= 10)
             .OrderBy(item => Math.Abs(item.LocalMessageCount - 40))
@@ -129,6 +131,73 @@ public sealed partial class RealUserConfigSmokeTests
 
         var returnedOverlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(8));
         Assert.True(returnedOverlayHidden, $"Conversation remained stuck behind the loading overlay after discover round-trip for {candidate.ConversationId}.");
+    }
+
+    [SkippableFact]
+    public void SelectRemoteBoundSession_AfterAcpSettingsRoundTrip_ReturnsWithoutCrash()
+    {
+        GuiTestGate.RequireEnabled();
+
+        var candidate = RealUserConfigProbe.LoadReplayBackedCandidates()
+            .Where(item => item.LocalMessageCount is >= 10 and <= 120)
+            .OrderBy(item => Math.Abs(item.LocalMessageCount - 60))
+            .ThenByDescending(item => item.LastUpdatedAtUtc)
+            .FirstOrDefault();
+        candidate ??= RealUserConfigProbe.LoadReplayBackedCandidates()
+            .OrderByDescending(item => item.LastUpdatedAtUtc)
+            .FirstOrDefault();
+        Skip.If(candidate is null, "No replay-backed remote conversation is available for settings round-trip validation.");
+
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sessionId = SessionAutomationId(candidate.ConversationId);
+        var sessionItem = session.FindByAutomationId(sessionId, TimeSpan.FromSeconds(10));
+        session.ActivateElement(sessionItem);
+
+        var initialOverlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(60));
+        Assert.True(initialOverlayHidden, $"Initial remote hydration did not finish for conversation {candidate.ConversationId}.");
+
+        var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
+        session.ActivateElement(settingsItem);
+
+        var acpSettingsItem = session.TryFindVisibleElementByNameAnywhere("Agent (ACP)", TimeSpan.FromSeconds(10));
+        Assert.True(acpSettingsItem is not null, "Agent (ACP) settings entry did not become visible after opening the main settings item.");
+
+        session.ActivateElement(acpSettingsItem!);
+
+        var acpVisible = session.WaitUntilVisible("Acp.PathMappings.Section", TimeSpan.FromSeconds(10))
+            || session.WaitUntilVisible("Acp.PathMappings.List", TimeSpan.FromSeconds(10));
+        Assert.True(acpVisible, "ACP settings page did not become visible after selecting Agent (ACP).");
+
+        Thread.Sleep(TimeSpan.FromSeconds(30));
+
+        sessionItem = session.FindByAutomationId(sessionId, TimeSpan.FromSeconds(10));
+        session.ActivateElement(sessionItem);
+
+        var headerVisible = session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(8));
+        if (!headerVisible)
+        {
+            var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
+            Directory.CreateDirectory(captureRoot);
+            var capturePath = Path.Combine(
+                captureRoot,
+                $"settings-roundtrip-header-missing-{DateTime.UtcNow:yyyyMMddHHmmssfff}.png");
+            capturePath = TryCaptureMainWindow(session, capturePath);
+
+            var appDataRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SalmonEgg");
+            var bootLogPath = Path.Combine(appDataRoot, "boot.log");
+            var bootTail = File.Exists(bootLogPath)
+                ? string.Join(Environment.NewLine, File.ReadLines(bootLogPath).TakeLast(40))
+                : "<boot.log missing>";
+
+            Assert.Fail(
+                $"Conversation header did not recover promptly after ACP settings round-trip for {candidate.ConversationId}.{Environment.NewLine}Screenshot: {capturePath}{Environment.NewLine}boot.log:{Environment.NewLine}{bootTail}");
+        }
+
+        var returnedOverlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(8));
+        Assert.True(returnedOverlayHidden, $"Conversation remained stuck behind the loading overlay after ACP settings round-trip for {candidate.ConversationId}.");
     }
 
     [SkippableFact]
