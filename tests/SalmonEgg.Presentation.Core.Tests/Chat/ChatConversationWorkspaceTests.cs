@@ -1222,6 +1222,109 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task ApplySessionInfoSnapshotAsync_RemoteMetadataRefreshDoesNotOverrideEstablishedSessionCwd()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original title"
+            }));
+
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Refreshed title",
+                Cwd = @"C:\Users\shang\AppData\Local\SalmonEgg",
+                UpdatedAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        var snapshot = workspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(snapshot);
+        var sessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(snapshot!.SessionInfo);
+        Assert.Equal("Refreshed title", sessionInfo.Title);
+        Assert.Equal(@"C:\repo\one", sessionInfo.Cwd);
+        Assert.Equal(
+            @"C:\repo\one",
+            sessionManager.GetSession("session-1")!.Cwd);
+    }
+
+    [Fact]
+    public async Task GetCatalog_WhenSessionManagerCwdDrifts_UsesWorkspaceSessionInfoCwdForProjection()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        var session = await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original title",
+                Cwd = @"C:\repo\one"
+            }));
+
+        session.Cwd = @"C:\Users\shang\AppData\Local\SalmonEgg";
+
+        var item = Assert.Single(workspace.GetCatalog());
+        Assert.Equal(@"C:\repo\one", item.Cwd);
+    }
+
+    [Fact]
+    public async Task UpsertConversationSnapshot_SeedsSessionInfoCwdFromEstablishedConversationContext()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original title"
+            }));
+
+        var sessionInfo = workspace.GetConversationSnapshot("session-1")!.SessionInfo;
+        Assert.NotNull(sessionInfo);
+        Assert.Equal(@"C:\repo\one", sessionInfo!.Cwd);
+    }
+
+    [Fact]
     public async Task SaveAsync_SessionScopedCommandsAndUsage_RoundTrips()
     {
         var syncContext = new ImmediateSynchronizationContext();

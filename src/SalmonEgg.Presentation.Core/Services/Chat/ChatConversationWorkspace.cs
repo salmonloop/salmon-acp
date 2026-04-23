@@ -180,7 +180,9 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 .Select(binding => new ConversationCatalogItem(
                     binding.ConversationId,
                     ResolveSessionDisplayName(binding.ConversationId),
-                    _sessionManager.GetSession(binding.ConversationId)?.Cwd,
+                    !string.IsNullOrWhiteSpace(binding.SessionInfo?.Cwd)
+                        ? binding.SessionInfo!.Cwd
+                        : _sessionManager.GetSession(binding.ConversationId)?.Cwd,
                     binding.CreatedAt,
                     binding.LastUpdatedAt,
                     binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt,
@@ -436,7 +438,9 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             binding.ShowConfigOptionsPanel = snapshot.ShowConfigOptionsPanel;
             binding.AvailableCommands.Clear();
             binding.AvailableCommands.AddRange((snapshot.AvailableCommands ?? Array.Empty<ConversationAvailableCommandSnapshot>()).Select(CloneAvailableCommand));
-            binding.SessionInfo = ConversationSessionInfoSnapshots.Clone(snapshot.SessionInfo);
+            binding.SessionInfo = EnsureSessionInfoCarriesEstablishedCwd(
+                ConversationSessionInfoSnapshots.Clone(snapshot.SessionInfo),
+                _sessionManager.GetSession(snapshot.ConversationId)?.Cwd);
             binding.Usage = CloneUsage(snapshot.Usage);
             binding.ShowPlanPanel = snapshot.ShowPlanPanel;
             binding.PlanTitle = snapshot.PlanTitle;
@@ -595,6 +599,29 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
                 var metadataChanged = false;
                 var mergedSessionInfo = ConversationSessionInfoSnapshots.Merge(binding.SessionInfo, sessionInfo);
+                var establishedCwd = _sessionManager.GetSession(conversationId)?.Cwd?.Trim();
+                if (string.IsNullOrWhiteSpace(establishedCwd))
+                {
+                    establishedCwd = binding.SessionInfo?.Cwd?.Trim();
+                }
+
+                if (!string.IsNullOrWhiteSpace(establishedCwd)
+                    && !string.Equals(mergedSessionInfo.Cwd?.Trim(), establishedCwd, StringComparison.Ordinal))
+                {
+                    // ACP session/list and session_info_update are metadata channels and must not
+                    // overwrite the cwd established by session/new or session/load.
+                    mergedSessionInfo = new ConversationSessionInfoSnapshot
+                    {
+                        Title = mergedSessionInfo.Title,
+                        Description = mergedSessionInfo.Description,
+                        Cwd = establishedCwd,
+                        UpdatedAtUtc = mergedSessionInfo.UpdatedAtUtc,
+                        Meta = mergedSessionInfo.Meta is null
+                            ? null
+                            : new Dictionary<string, object?>(mergedSessionInfo.Meta, StringComparer.Ordinal)
+                    };
+                }
+
                 if (!SessionInfoEquals(binding.SessionInfo, mergedSessionInfo))
                 {
                     binding.SessionInfo = mergedSessionInfo;
@@ -843,7 +870,9 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 binding.ShowConfigOptionsPanel = conversation.ShowConfigOptionsPanel;
                 binding.AvailableCommands.Clear();
                 binding.AvailableCommands.AddRange((conversation.AvailableCommands ?? []).Select(CloneAvailableCommand));
-                binding.SessionInfo = ConversationSessionInfoSnapshots.Clone(conversation.SessionInfo);
+                binding.SessionInfo = EnsureSessionInfoCarriesEstablishedCwd(
+                    ConversationSessionInfoSnapshots.Clone(conversation.SessionInfo),
+                    conversation.Cwd);
                 binding.Usage = CloneUsage(conversation.Usage);
                 binding.Plan.Clear();
                 binding.Plan.AddRange((conversation.Plan ?? []).Select(ClonePlanEntry));
@@ -1162,6 +1191,41 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private static ConversationSessionInfoSnapshot? EnsureSessionInfoCarriesEstablishedCwd(
+        ConversationSessionInfoSnapshot? sessionInfo,
+        string? establishedCwd)
+    {
+        var normalizedCwd = string.IsNullOrWhiteSpace(establishedCwd) ? null : establishedCwd.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedCwd))
+        {
+            return sessionInfo;
+        }
+
+        if (sessionInfo is null)
+        {
+            return new ConversationSessionInfoSnapshot
+            {
+                Cwd = normalizedCwd
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(sessionInfo.Cwd))
+        {
+            return sessionInfo;
+        }
+
+        return new ConversationSessionInfoSnapshot
+        {
+            Title = sessionInfo.Title,
+            Description = sessionInfo.Description,
+            Cwd = normalizedCwd,
+            UpdatedAtUtc = sessionInfo.UpdatedAtUtc,
+            Meta = sessionInfo.Meta is null
+                ? null
+                : new Dictionary<string, object?>(sessionInfo.Meta, StringComparer.Ordinal)
+        };
     }
 
     private sealed record PersistedConversationState(

@@ -391,8 +391,6 @@ public class MessageParserTests
         Assert.NotNull(updateParams);
         var sessionInfo = Assert.IsType<SessionInfoUpdate>(updateParams!.Update);
         Assert.Equal("Debug authentication timeout", sessionInfo.Title);
-        Assert.Null(sessionInfo.Description);
-        Assert.Null(sessionInfo.Cwd);
         Assert.Null(sessionInfo.UpdatedAt);
         Assert.NotNull(sessionInfo.Meta);
         Assert.Equal("api-server", ReadMetaValue(sessionInfo.Meta!["projectName"]));

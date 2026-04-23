@@ -67,6 +67,7 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
     {
         var projectedOptions = configOptions?
             .Where(static option => option is not null)
+            .Where(static option => IsSupportedConfigOptionType(option.Type))
             .Select(MapConfigOption)
             .ToArray() ?? Array.Empty<AcpConfigOptionSnapshot>();
 
@@ -90,10 +91,8 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
         IReadOnlyList<ConfigOption>? configOptions)
     {
         var configDelta = BuildConfigDelta(configOptions);
-        var hasModeConfigProjection =
-            (configDelta.AvailableModes?.Count ?? 0) > 0
-            || !string.IsNullOrWhiteSpace(configDelta.SelectedModeId);
-        var availableModes = hasModeConfigProjection
+        var usesConfigOptions = configOptions is not null;
+        var availableModes = usesConfigOptions
             ? configDelta.AvailableModes?.ToArray() ?? Array.Empty<AcpModeOption>()
             : modes?.AvailableModes?
                 .Where(static mode => mode is not null)
@@ -103,7 +102,7 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
                     mode.Description ?? string.Empty))
                 .ToArray() ?? Array.Empty<AcpModeOption>();
 
-        var selectedModeId = hasModeConfigProjection
+        var selectedModeId = usesConfigOptions
             ? configDelta.SelectedModeId ?? availableModes.FirstOrDefault()?.ModeId
             : string.IsNullOrWhiteSpace(modes?.CurrentModeId)
                 ? configDelta.SelectedModeId ?? availableModes.FirstOrDefault()?.ModeId
@@ -115,6 +114,9 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
             SelectedModeId = selectedModeId
         };
     }
+
+    private static bool IsSupportedConfigOptionType(string? valueType)
+        => string.Equals(valueType, "select", StringComparison.Ordinal);
 
     private static IReadOnlyList<ConversationPlanEntrySnapshot> MapPlanEntries(IReadOnlyList<PlanEntry>? entries)
         => entries?.Select(static entry => new ConversationPlanEntrySnapshot
@@ -137,7 +139,7 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
     private static AcpSessionInfoSnapshot MapSessionInfo(SessionInfoUpdate update)
         => new(
             Title: update.Title,
-            Description: update.Description,
+            Description: null,
             // ACP session_info_update does not redefine cwd; cwd is established during
             // session/new or session/load and must remain immutable for the session.
             Cwd: null,

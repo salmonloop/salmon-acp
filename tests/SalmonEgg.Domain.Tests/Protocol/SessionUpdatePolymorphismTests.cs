@@ -88,16 +88,14 @@ public sealed class SessionUpdatePolymorphismTests
     }
 
     [Test]
-    public void Deserialize_SessionInfoUpdate_WithParityFields_Works()
+    public void Deserialize_SessionInfoUpdate_WithOfficialFields_Works()
     {
         var json = """
         {
           "sessionId": "s-info",
           "update": {
             "sessionUpdate": "session_info_update",
-            "cwd": "/home/user/project",
             "title": "New Title",
-            "description": "Session summary",
             "updatedAt": "2026-03-22T19:00:00Z",
             "_meta": {
               "source": "unit-test",
@@ -114,9 +112,7 @@ public sealed class SessionUpdatePolymorphismTests
         Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
 
         var update = (SessionInfoUpdate)parsed.Update!;
-        Assert.That(update.Cwd, Is.EqualTo("/home/user/project"));
         Assert.That(update.Title, Is.EqualTo("New Title"));
-        Assert.That(update.Description, Is.EqualTo("Session summary"));
         Assert.That(update.UpdatedAt, Is.EqualTo("2026-03-22T19:00:00Z"));
 
         var meta = update.Meta;
@@ -125,6 +121,29 @@ public sealed class SessionUpdatePolymorphismTests
         Assert.That(ReadMetaValue(meta["source"]), Is.EqualTo("unit-test"));
         Assert.That(ReadMetaValue(meta["pinned"]), Is.EqualTo("true"));
         Assert.That(ReadMetaValue(meta["rank"]), Is.EqualTo("3"));
+    }
+
+    [Test]
+    public void Deserialize_SessionInfoUpdate_IgnoresUnsupportedCwdField()
+    {
+        var json = """
+        {
+          "sessionId": "s-info",
+          "update": {
+            "sessionUpdate": "session_info_update",
+            "cwd": "/home/user/project",
+            "title": "New Title"
+          }
+        }
+        """;
+
+        var serializerOptions = new MessageParser().Options;
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, serializerOptions);
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
+
+        Assert.That(typeof(SessionInfoUpdate).GetProperty("Cwd"), Is.Null);
     }
 
     [Test]
@@ -148,9 +167,7 @@ public sealed class SessionUpdatePolymorphismTests
         Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
 
         var update = (SessionInfoUpdate)parsed.Update!;
-        Assert.That(update.Cwd, Is.Null);
         Assert.That(update.Title, Is.Null);
-        Assert.That(update.Description, Is.Null);
         Assert.That(update.UpdatedAt, Is.Null);
 
         var meta = update.Meta;

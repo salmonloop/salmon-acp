@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1256,17 +1257,15 @@ public class ChatViewModelTests
                     .Add("conv-background", new ConversationBindingSlice("conv-background", "remote-background", "profile-1"))
             });
 
-            var initialActionCount = fixture.ChatStore.Actions.Count;
             chatService.Raise(
                 service => service.SessionUpdateReceived += null,
                 new SessionUpdateEventArgs("remote-background", new SessionInfoUpdate
                 {
                     Title = "Background title",
-                    Cwd = @"C:\repo\background",
                     UpdatedAt = "2026-04-21T00:00:00Z"
                 }));
 
-            await WaitForConditionAsync(() => Task.FromResult(fixture.ChatStore.Actions.Count > initialActionCount));
+            await Task.Delay(50);
 
             var attentionState = await fixture.GetAttentionStateAsync();
             Assert.False(HasUnreadAttention(attentionState, "conv-background"));
@@ -4295,7 +4294,7 @@ public class ChatViewModelTests
     }
 
     [Fact]
-    public async Task SendPromptAsync_WhenSessionNewUsesLegacyModesAndNonCanonicalConfigOptions_StillProjectsModeList()
+    public async Task SendPromptAsync_WhenSessionNewUsesNonCanonicalConfigOptions_IgnoresLegacyModesPerAcp()
     {
         var syncContext = new QueueingSynchronizationContext();
         var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
@@ -4352,14 +4351,13 @@ public class ChatViewModelTests
         {
             syncContext.RunAll();
             return Task.FromResult(
-                viewModel.AvailableModes.Count == 2
-                && string.Equals(viewModel.SelectedMode?.ModeId, "yolo", StringComparison.Ordinal)
+                viewModel.AvailableModes.Count == 0
+                && viewModel.SelectedMode is null
                 && viewModel.ConfigOptions.Count == 2);
         });
 
-        Assert.Contains(viewModel.AvailableModes, mode => string.Equals(mode.ModeId, "interactive", StringComparison.Ordinal));
-        Assert.Contains(viewModel.AvailableModes, mode => string.Equals(mode.ModeId, "yolo", StringComparison.Ordinal));
-        Assert.Equal("yolo", viewModel.SelectedMode?.ModeId);
+        Assert.Empty(viewModel.AvailableModes);
+        Assert.Null(viewModel.SelectedMode);
         Assert.Equal(2, viewModel.ConfigOptions.Count);
     }
 
@@ -5179,7 +5177,6 @@ public class ChatViewModelTests
                 new SessionInfoUpdate
                 {
                     Title = "Renamed by agent",
-                    Cwd = @"C:\repo\illegal",
                     UpdatedAt = "2026-03-24T03:00:00Z"
                 }));
 
@@ -5297,8 +5294,6 @@ public class ChatViewModelTests
                 new SessionInfoUpdate
                 {
                     Title = string.Empty,
-                    Description = "   ",
-                    Cwd = "\t",
                     UpdatedAt = "2026-03-24T03:00:00Z",
                     Meta = new Dictionary<string, object?>(StringComparer.Ordinal)
                     {
@@ -6342,7 +6337,6 @@ public class ChatViewModelTests
                     new SessionInfoUpdate
                     {
                         Title = "   ",
-                        Cwd = "\t",
                         UpdatedAt = "2026-03-29T01:02:03Z"
                     }));
 
@@ -6420,8 +6414,6 @@ public class ChatViewModelTests
                 new SessionInfoUpdate
                 {
                     Title = "   ",
-                    Description = "\t",
-                    Cwd = "  ",
                     UpdatedAt = "   "
                 }));
 
@@ -12634,6 +12626,292 @@ public class ChatViewModelTests
         Assert.Equal("plan", capturedParams.Value);
         Assert.Equal("plan", viewModel.SelectedMode?.ModeId);
         Assert.Equal("plan", viewModel.ConfigOptions[0].Value);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_CurrentModeUpdate_WhenConfigOptionsExist_DoesNotOverrideSelectedMode()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+
+        viewModel.ReplaceChatService(chatService.Object);
+        syncContext.RunAll();
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        syncContext.RunAll();
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new ConfigOptionUpdate
+            {
+                ConfigOptions = CreateModeConfigOptions("agent")
+            }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            var sessionSlice = state.ResolveSessionStateSlice("conv-1");
+            syncContext.RunAll();
+            return sessionSlice.HasValue
+                && string.Equals(sessionSlice.Value.SelectedModeId, "agent", StringComparison.Ordinal)
+                && sessionSlice.Value.ConfigOptions.Count == 1
+                && string.Equals(sessionSlice.Value.ConfigOptions[0].SelectedValue, "agent", StringComparison.Ordinal);
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new CurrentModeUpdate("plan")));
+
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        var finalState = await fixture.GetStateAsync();
+        var finalSessionSlice = finalState.ResolveSessionStateSlice("conv-1");
+
+        Assert.NotNull(finalSessionSlice);
+        Assert.Equal("agent", finalSessionSlice!.Value.SelectedModeId);
+        Assert.Single(finalSessionSlice.Value.ConfigOptions);
+        Assert.Equal("agent", finalSessionSlice.Value.ConfigOptions[0].SelectedValue);
+        Assert.Equal("agent", viewModel.SelectedMode?.ModeId);
+        Assert.Single(viewModel.ConfigOptions);
+        Assert.Equal("agent", viewModel.ConfigOptions[0].Value);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_CurrentModeUpdate_WhenNoConfigOptions_StillProjectsLegacyMode()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+
+        viewModel.ReplaceChatService(chatService.Object);
+        syncContext.RunAll();
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            ConversationSessionStates = ImmutableDictionary<string, ConversationSessionStateSlice>.Empty
+                .Add(
+                    "conv-1",
+                    new ConversationSessionStateSlice(
+                        ImmutableList.Create(
+                            new ConversationModeOptionSnapshot { ModeId = "agent", ModeName = "Agent" },
+                            new ConversationModeOptionSnapshot { ModeId = "plan", ModeName = "Plan" }),
+                        "agent",
+                        ImmutableList<ConversationConfigOptionSnapshot>.Empty,
+                        false,
+                        ImmutableList<ConversationAvailableCommandSnapshot>.Empty,
+                        null,
+                        null))
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(
+                string.Equals(viewModel.SelectedMode?.ModeId, "agent", StringComparison.Ordinal)
+                && viewModel.ConfigOptions.Count == 0);
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new CurrentModeUpdate("plan")));
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            var sessionSlice = state.ResolveSessionStateSlice("conv-1");
+            syncContext.RunAll();
+            return sessionSlice.HasValue
+                && string.Equals(sessionSlice.Value.SelectedModeId, "plan", StringComparison.Ordinal);
+        });
+
+        var finalState = await fixture.GetStateAsync();
+        var finalSessionSlice = finalState.ResolveSessionStateSlice("conv-1");
+
+        Assert.NotNull(finalSessionSlice);
+        Assert.Equal("plan", finalSessionSlice!.Value.SelectedModeId);
+        Assert.Empty(finalSessionSlice.Value.ConfigOptions);
+        Assert.Equal("plan", viewModel.SelectedMode?.ModeId);
+        Assert.Empty(viewModel.ConfigOptions);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_CurrentModeUpdate_WhenConfigAuthorityWasEstablishedByEmptyConfigOptions_DoesNotProjectLegacyMode()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+
+        var applySessionNewResponseAsync = typeof(ChatViewModel).GetMethod(
+            "ApplySessionNewResponseAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(applySessionNewResponseAsync);
+
+        var applyTask = (Task?)applySessionNewResponseAsync!.Invoke(
+            viewModel,
+            new object[]
+            {
+                "conv-1",
+                new SessionNewResponse(
+                    "remote-1",
+                    modes: new SessionModesState
+                    {
+                        CurrentModeId = "agent",
+                        AvailableModes = new List<SalmonEgg.Domain.Models.Protocol.SessionMode>
+                        {
+                            new() { Id = "agent", Name = "Agent" },
+                            new() { Id = "plan", Name = "Plan" }
+                        }
+                    },
+                    configOptions: new List<ConfigOption>())
+            });
+        Assert.NotNull(applyTask);
+        await applyTask!;
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            var sessionSlice = state.ResolveSessionStateSlice("conv-1");
+            return sessionSlice.HasValue
+                && sessionSlice.Value.ConfigOptions.Count == 0
+                && sessionSlice.Value.AvailableModes.Count == 0
+                && sessionSlice.Value.SelectedModeId is null;
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new CurrentModeUpdate("plan")));
+
+        await Task.Delay(50);
+
+        var finalState = await fixture.GetStateAsync();
+        var finalSessionSlice = finalState.ResolveSessionStateSlice("conv-1");
+
+        Assert.NotNull(finalSessionSlice);
+        Assert.Empty(finalSessionSlice!.Value.ConfigOptions);
+        Assert.Empty(finalSessionSlice.Value.AvailableModes);
+        Assert.Null(finalSessionSlice.Value.SelectedModeId);
+        Assert.Empty(viewModel.ConfigOptions);
+        Assert.Empty(viewModel.AvailableModes);
+        Assert.Null(viewModel.SelectedMode);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_CurrentModeUpdate_WhenConversationRebindsToLegacyOnlySession_ProjectsLegacyMode()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+
+        var applySessionNewResponseAsync = typeof(ChatViewModel).GetMethod(
+            "ApplySessionNewResponseAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(applySessionNewResponseAsync);
+
+        var establishConfigAuthorityTask = (Task?)applySessionNewResponseAsync!.Invoke(
+            viewModel,
+            new object[]
+            {
+                "conv-1",
+                new SessionNewResponse(
+                    "remote-1",
+                    modes: new SessionModesState
+                    {
+                        CurrentModeId = "agent",
+                        AvailableModes = new List<SalmonEgg.Domain.Models.Protocol.SessionMode>
+                        {
+                            new() { Id = "agent", Name = "Agent" },
+                            new() { Id = "plan", Name = "Plan" }
+                        }
+                    },
+                    configOptions: new List<ConfigOption>())
+            });
+        Assert.NotNull(establishConfigAuthorityTask);
+        await establishConfigAuthorityTask!;
+
+        var rebindLegacyOnlyTask = (Task?)applySessionNewResponseAsync.Invoke(
+            viewModel,
+            new object[]
+            {
+                "conv-1",
+                new SessionNewResponse(
+                    "remote-2",
+                    modes: new SessionModesState
+                    {
+                        CurrentModeId = "agent",
+                        AvailableModes = new List<SalmonEgg.Domain.Models.Protocol.SessionMode>
+                        {
+                            new() { Id = "agent", Name = "Agent" },
+                            new() { Id = "plan", Name = "Plan" }
+                        }
+                    },
+                    configOptions: null)
+            });
+        Assert.NotNull(rebindLegacyOnlyTask);
+        await rebindLegacyOnlyTask!;
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            var sessionSlice = state.ResolveSessionStateSlice("conv-1");
+            return sessionSlice.HasValue
+                && sessionSlice.Value.ConfigOptions.Count == 0
+                && sessionSlice.Value.AvailableModes.Count == 2
+                && string.Equals(sessionSlice.Value.SelectedModeId, "agent", StringComparison.Ordinal);
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new CurrentModeUpdate("plan")));
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            var sessionSlice = state.ResolveSessionStateSlice("conv-1");
+            return sessionSlice.HasValue
+                && string.Equals(sessionSlice.Value.SelectedModeId, "plan", StringComparison.Ordinal);
+        });
+
+        var finalState = await fixture.GetStateAsync();
+        var finalSessionSlice = finalState.ResolveSessionStateSlice("conv-1");
+
+        Assert.NotNull(finalSessionSlice);
+        Assert.Equal("plan", finalSessionSlice!.Value.SelectedModeId);
+        Assert.Empty(finalSessionSlice.Value.ConfigOptions);
+        Assert.Equal("plan", viewModel.SelectedMode?.ModeId);
     }
 
     [Fact]

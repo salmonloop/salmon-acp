@@ -22,7 +22,7 @@ public class ConfigOption
     public string? Category { get; set; }
 
     [JsonPropertyName("type")]
-    public string Type { get; set; } = "select";
+    public string Type { get; set; } = string.Empty;
 
     [JsonPropertyName("currentValue")]
     public string CurrentValue { get; set; } = string.Empty;
@@ -42,4 +42,3 @@ public class ConfigOptionValue
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 }
-

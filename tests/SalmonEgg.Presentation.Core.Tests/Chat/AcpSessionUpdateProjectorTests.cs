@@ -30,6 +30,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "mode",
                     Category = "mode",
+                    Type = "select",
                     CurrentValue = "agent",
                     Options = new List<ConfigOptionValue>
                     {
@@ -66,6 +67,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "mode",
                     Category = "mode",
+                    Type = "select",
                     CurrentValue = "config-mode",
                     Options = new List<ConfigOptionValue>
                     {
@@ -83,7 +85,7 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
-    public void ProjectSessionLoad_FallsBackToLegacyModes_WhenConfigOptionsDoNotExposeModeSelector()
+    public void ProjectSessionLoad_WhenConfigOptionsDoNotExposeStandardModeSelector_IgnoresLegacyModes()
     {
         var projector = new AcpSessionUpdateProjector();
         var response = new SessionLoadResponse(
@@ -102,6 +104,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "_salmonloop_permission_policy",
                     Name = "Permission policy",
+                    Type = "select",
                     CurrentValue = "ask",
                     Options = new List<ConfigOptionValue>
                     {
@@ -113,8 +116,8 @@ public class AcpSessionUpdateProjectorTests
 
         var delta = projector.ProjectSessionLoad(response);
 
-        Assert.Equal("yolo", delta.SelectedModeId);
-        Assert.Equal(2, delta.AvailableModes?.Count);
+        Assert.Null(delta.SelectedModeId);
+        Assert.Empty(delta.AvailableModes!);
         Assert.True(delta.ShowConfigOptionsPanel);
         Assert.Single(delta.ConfigOptions!);
     }
@@ -153,6 +156,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "mode",
                     Category = "mode",
+                    Type = "select",
                     CurrentValue = "agent",
                     Options = new List<ConfigOptionValue>
                     {
@@ -190,6 +194,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "mode",
                     Category = "mode",
+                    Type = "select",
                     CurrentValue = "config-mode",
                     Options = new List<ConfigOptionValue>
                     {
@@ -211,7 +216,7 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
-    public void ProjectSessionNew_FallsBackToLegacyModes_WhenConfigOptionsDoNotExposeModeSelector()
+    public void ProjectSessionNew_WhenConfigOptionsDoNotExposeStandardModeSelector_IgnoresLegacyModes()
     {
         var projector = new AcpSessionUpdateProjector();
         var response = new SessionNewResponse(
@@ -231,6 +236,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "_salmonloop_permission_policy",
                     Name = "Permission policy",
+                    Type = "select",
                     CurrentValue = "ask",
                     Options = new List<ConfigOptionValue>
                     {
@@ -242,6 +248,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "_salmonloop_mode",
                     Name = "Session Mode",
+                    Type = "select",
                     CurrentValue = "yolo",
                     Options = new List<ConfigOptionValue>
                     {
@@ -253,10 +260,8 @@ public class AcpSessionUpdateProjectorTests
 
         var delta = projector.ProjectSessionNew(response);
 
-        Assert.Equal("yolo", delta.SelectedModeId);
-        Assert.Equal(2, delta.AvailableModes?.Count);
-        Assert.Contains(delta.AvailableModes!, mode => mode.ModeId == "interactive");
-        Assert.Contains(delta.AvailableModes!, mode => mode.ModeId == "yolo");
+        Assert.Null(delta.SelectedModeId);
+        Assert.Empty(delta.AvailableModes!);
         Assert.True(delta.ShowConfigOptionsPanel);
         Assert.Equal(2, delta.ConfigOptions?.Count);
     }
@@ -273,6 +278,7 @@ public class AcpSessionUpdateProjectorTests
                 {
                     Id = "mode",
                     Category = "mode",
+                    Type = "select",
                     CurrentValue = "config-mode",
                     Options = new List<ConfigOptionValue>
                     {
@@ -287,6 +293,41 @@ public class AcpSessionUpdateProjectorTests
         Assert.NotNull(delta.ConfigOptions);
         Assert.True(delta.ShowConfigOptionsPanel);
         Assert.Equal("config-mode", delta.SelectedModeId);
+    }
+
+    [Fact]
+    public void Project_ConfigOptionUpdate_IgnoresOptionsWithoutRecognizedType()
+    {
+        var projector = new AcpSessionUpdateProjector();
+        var update = new ConfigOptionUpdate
+        {
+            ConfigOptions = new List<ConfigOption>
+            {
+                new()
+                {
+                    Id = "mode",
+                    Category = "mode",
+                    CurrentValue = "config-mode",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "config-mode", Name = "Config Mode" }
+                    }
+                },
+                new()
+                {
+                    Id = "sandbox",
+                    Type = "future-type",
+                    CurrentValue = "ask"
+                }
+            }
+        };
+
+        var delta = projector.Project(new SessionUpdateEventArgs("remote-1", update));
+
+        Assert.Empty(delta.ConfigOptions!);
+        Assert.False(delta.ShowConfigOptionsPanel);
+        Assert.Empty(delta.AvailableModes!);
+        Assert.Null(delta.SelectedModeId);
     }
 
     [Fact]
@@ -353,8 +394,6 @@ public class AcpSessionUpdateProjectorTests
             new SessionInfoUpdate
             {
                 Title = "Remote session",
-                Description = "ACP metadata",
-                Cwd = @"C:\repo\remote",
                 UpdatedAt = updatedAt,
                 Meta = new Dictionary<string, object?>
                 {
@@ -368,8 +407,8 @@ public class AcpSessionUpdateProjectorTests
         // Assert
         Assert.NotNull(delta.SessionInfo);
         Assert.Equal("Remote session", delta.SessionInfo.Title);
-        Assert.Equal("ACP metadata", delta.SessionInfo.Description);
-        Assert.Equal(@"C:\repo\remote", delta.SessionInfo.Cwd);
+        Assert.Null(delta.SessionInfo.Description);
+        Assert.Null(delta.SessionInfo.Cwd);
         Assert.Equal(updatedAt, delta.SessionInfo.UpdatedAt);
         Assert.Equal("profile-1", delta.SessionInfo.Meta!["profileId"]);
     }

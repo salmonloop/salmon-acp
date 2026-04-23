@@ -326,6 +326,8 @@ public sealed class ChatSkeletonSmokeTests
         Assert.Contains("\"method\":\"session/prompt\"", appLogTail, StringComparison.Ordinal);
         Assert.Contains("\"method\":\"session/update\"", appLogTail, StringComparison.Ordinal);
         Assert.Contains("\"messageId\":\"gui-server-user-77\"", appLogTail, StringComparison.Ordinal);
+        Assert.Contains("projectId=project-1", appLogTail, StringComparison.Ordinal);
+        Assert.DoesNotContain("projectId=__unclassified__", appLogTail, StringComparison.Ordinal);
     }
 
     [SkippableFact]

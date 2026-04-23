@@ -798,6 +798,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     [ObservableProperty]
     private bool _showConfigOptionsPanel;
 
+    private readonly HashSet<string> _configAuthoritativeConversationIds = new(StringComparer.Ordinal);
     private string? _modeConfigId;
 
     // Slash command completion
@@ -2816,6 +2817,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
 
     private async Task ApplySessionNewResponseAsync(string conversationId, SessionNewResponse response)
     {
+        SetConversationConfigAuthority(conversationId, response.ConfigOptions != null);
+
         var delta = _acpSessionUpdateProjector.ProjectSessionNew(response);
         await ApplySessionUpdateDeltaAsync(conversationId, delta).ConfigureAwait(true);
         Logger.LogInformation(
@@ -2826,6 +2829,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private async Task ApplySessionLoadResponseAsync(string conversationId, SessionLoadResponse response)
     {
         var currentVersion = Interlocked.Read(ref _activationVersion);
+        SetConversationConfigAuthority(conversationId, response.ConfigOptions != null);
+
         var delta = _acpSessionUpdateProjector.ProjectSessionLoad(response);
         await ApplySessionUpdateDeltaAsync(conversationId, delta).ConfigureAwait(true);
         
@@ -2980,18 +2985,38 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
             else if (e.Update is CurrentModeUpdate modeChange)
             {
+                if (IsConversationConfigAuthoritative(targetConversationId))
+                {
+                    Logger.LogDebug(
+                        "Ignoring legacy current mode update because config options are authoritative. conversationId={ConversationId} remoteSessionId={RemoteSessionId} modeId={ModeId}",
+                        targetConversationId,
+                        e.SessionId,
+                        modeChange.NormalizedModeId);
+                    return;
+                }
+
                 await ApplySessionUpdateDeltaAsync(
                     targetConversationId,
                     _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, modeChange))).ConfigureAwait(true);
             }
             else if (e.Update is ConfigUpdateUpdate configUpdate)
             {
+                if (configUpdate.ConfigOptions != null)
+                {
+                    SetConversationConfigAuthority(targetConversationId, true);
+                }
+
                 await ApplySessionUpdateDeltaAsync(
                     targetConversationId,
                     _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, configUpdate))).ConfigureAwait(true);
             }
             else if (e.Update is ConfigOptionUpdate optionUpdate)
             {
+                if (optionUpdate.ConfigOptions != null)
+                {
+                    SetConversationConfigAuthority(targetConversationId, true);
+                }
+
                 await ApplySessionUpdateDeltaAsync(
                     targetConversationId,
                     _acpSessionUpdateProjector.Project(new SessionUpdateEventArgs(e.SessionId, optionUpdate))).ConfigureAwait(true);
@@ -5261,6 +5286,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
+        SetConversationConfigAuthority(conversationId, true);
+
         await ApplySessionUpdateDeltaAsync(conversationId, _acpSessionUpdateProjector.Project(
             new SessionUpdateEventArgs(
                 remoteSessionId,
@@ -5284,6 +5311,32 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             new SessionUpdateEventArgs(
                 remoteSessionId,
                 new CurrentModeUpdate(response.ModeId)))).ConfigureAwait(true);
+    }
+
+    private bool IsConversationConfigAuthoritative(string conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return false;
+        }
+
+        return _configAuthoritativeConversationIds.Contains(conversationId);
+    }
+
+    private void SetConversationConfigAuthority(string conversationId, bool isAuthoritative)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return;
+        }
+
+        if (isAuthoritative)
+        {
+            _configAuthoritativeConversationIds.Add(conversationId);
+            return;
+        }
+
+        _configAuthoritativeConversationIds.Remove(conversationId);
     }
 
    [RelayCommand]
@@ -7639,7 +7692,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         return ToConversationSessionInfoSnapshot(new AcpSessionInfoSnapshot(
             sessionInfo.Title,
             sessionInfo.Description,
-            sessionInfo.Cwd,
+            null,
             sessionInfo.UpdatedAt,
             sessionInfo.Meta));
     }
