@@ -7,6 +7,7 @@ pushd "%REPO_ROOT%" >nul
 
 if /I "%1"=="desktop" goto :desktop
 if /I "%1"=="msix" goto :msix
+if /I "%1"=="wasm" goto :wasm
 if /I "%1"=="-h" goto :usage
 if /I "%1"=="--help" goto :usage
 if /I "%1"=="/?" goto :usage
@@ -58,12 +59,25 @@ set "EC=%errorlevel%"
 popd >nul
 exit /b %EC%
 
+:wasm
+echo ========================================
+echo SalmonEgg WebAssembly Run
+echo ========================================
+echo.
+echo Starting dev server at http://localhost:5000
+echo.
+dotnet run --project SalmonEgg/SalmonEgg/SalmonEgg.csproj --framework net10.0-browserwasm
+set "EC=%errorlevel%"
+popd >nul
+exit /b %EC%
+
 :usage
 echo.
 echo Usage:
 echo   run.bat            ^(default: msix^)
 echo   run.bat msix       ^(build/install/run WinUI 3 MSIX^)
 echo   run.bat desktop    ^(dotnet run net10.0-desktop^)
+echo   run.bat wasm      ^(dotnet run net10.0-browserwasm^)
 echo.
 popd >nul
 exit /b 0

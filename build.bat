@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 if /I "%1"=="msix" goto :msix
+if /I "%1"=="wasm" goto :wasm
 if /I "%1"=="desktop" goto :desktop
 if /I "%1"=="-h" goto :usage
 if /I "%1"=="--help" goto :usage
@@ -120,6 +121,33 @@ set "EC=%errorlevel%"
 popd >nul
 exit /b %EC%
 
+:wasm
+echo ========================================
+echo SalmonEgg WebAssembly Build
+echo ========================================
+echo.
+
+echo [1/3] Restoring dependencies...
+dotnet restore SalmonEgg.sln
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo.
+echo [2/3] Publishing WebAssembly...
+dotnet publish SalmonEgg/SalmonEgg/SalmonEgg.csproj ^
+  --configuration Release ^
+  --framework net10.0-browserwasm ^
+  --output publish/wasm ^
+  -p:PublishTrimmed=true ^
+  -p:TrimMode=link
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo.
+echo ========================================
+echo WebAssembly build completed!
+echo Output: publish/wasm/wwwroot/
+echo ========================================
+exit /b 0
+
 :desktop
 goto :build
 
@@ -129,5 +157,6 @@ echo Usage:
 echo   build.bat            ^(default: desktop release build^)
 echo   build.bat desktop    ^(restore/build/test/publish desktop^)
 echo   build.bat msix       ^(build MSIX package, no install^)
+echo   build.bat wasm      ^(build WebAssembly, publish/wasm^)
 echo.
 exit /b 0

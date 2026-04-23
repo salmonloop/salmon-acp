@@ -36,11 +36,36 @@ case "$1" in
     echo "MSIX packaging is only supported on Windows. Use build.bat msix."
     exit 1
     ;;
+  wasm )
+    echo "========================================"
+    echo "SalmonEgg WebAssembly Build"
+    echo "========================================"
+    echo
+
+    echo "[1/3] Restoring dependencies..."
+    dotnet restore SalmonEgg.sln || exit 1
+
+    echo
+    echo "[2/3] Publishing WebAssembly..."
+    dotnet publish SalmonEgg/SalmonEgg/SalmonEgg.csproj \
+      --configuration Release \
+      --framework net10.0-browserwasm \
+      --output publish/wasm \
+      -p:PublishTrimmed=true \
+      -p:TrimMode=link || exit 1
+
+    echo
+    echo "========================================"
+    echo "WebAssembly build completed!"
+    echo "Output: publish/wasm/wwwroot/"
+    echo "========================================"
+    ;;
   -h|--help )
     echo "Usage:"
     echo "  ./build.sh           (default: desktop release build)"
     echo "  ./build.sh desktop   (desktop release build)"
     echo "  ./build.sh msix      (Windows only)"
+    echo "  ./build.sh wasm     (build WebAssembly)"
     ;;
   * )
     echo "Unknown option: $1"
