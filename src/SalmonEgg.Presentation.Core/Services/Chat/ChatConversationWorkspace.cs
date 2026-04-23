@@ -180,9 +180,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 .Select(binding => new ConversationCatalogItem(
                     binding.ConversationId,
                     ResolveSessionDisplayName(binding.ConversationId),
-                    !string.IsNullOrWhiteSpace(binding.SessionInfo?.Cwd)
-                        ? binding.SessionInfo!.Cwd
-                        : _sessionManager.GetSession(binding.ConversationId)?.Cwd,
+                    ResolveEstablishedConversationCwd(binding),
                     binding.CreatedAt,
                     binding.LastUpdatedAt,
                     binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt,
@@ -440,7 +438,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             binding.AvailableCommands.AddRange((snapshot.AvailableCommands ?? Array.Empty<ConversationAvailableCommandSnapshot>()).Select(CloneAvailableCommand));
             binding.SessionInfo = EnsureSessionInfoCarriesEstablishedCwd(
                 ConversationSessionInfoSnapshots.Clone(snapshot.SessionInfo),
-                _sessionManager.GetSession(snapshot.ConversationId)?.Cwd);
+                ResolveEstablishedConversationCwd(binding));
             binding.Usage = CloneUsage(snapshot.Usage);
             binding.ShowPlanPanel = snapshot.ShowPlanPanel;
             binding.PlanTitle = snapshot.PlanTitle;
@@ -599,11 +597,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
                 var metadataChanged = false;
                 var mergedSessionInfo = ConversationSessionInfoSnapshots.Merge(binding.SessionInfo, sessionInfo);
-                var establishedCwd = _sessionManager.GetSession(conversationId)?.Cwd?.Trim();
-                if (string.IsNullOrWhiteSpace(establishedCwd))
-                {
-                    establishedCwd = binding.SessionInfo?.Cwd?.Trim();
-                }
+                var establishedCwd = ResolveEstablishedConversationCwd(binding)?.Trim();
 
                 if (!string.IsNullOrWhiteSpace(establishedCwd)
                     && !string.Equals(mergedSessionInfo.Cwd?.Trim(), establishedCwd, StringComparison.Ordinal))
@@ -1226,6 +1220,30 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 ? null
                 : new Dictionary<string, object?>(sessionInfo.Meta, StringComparer.Ordinal)
         };
+    }
+
+    private string? ResolveEstablishedConversationCwd(ConversationBinding binding)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+
+        var localCwd = _sessionManager.GetSession(binding.ConversationId)?.Cwd;
+        if (!string.IsNullOrWhiteSpace(localCwd))
+        {
+            return localCwd.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.RemoteSessionId))
+        {
+            var remoteCwd = _sessionManager.GetSession(binding.RemoteSessionId)?.Cwd;
+            if (!string.IsNullOrWhiteSpace(remoteCwd))
+            {
+                return remoteCwd.Trim();
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(binding.SessionInfo?.Cwd)
+            ? null
+            : binding.SessionInfo.Cwd.Trim();
     }
 
     private sealed record PersistedConversationState(

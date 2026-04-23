@@ -1325,6 +1325,104 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task GetCatalog_WhenLocalConversationSessionIsMissing_UsesRemoteSessionSetupCwd()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("remote-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.UpdateRemoteBinding("session-1", "remote-1", "profile-1");
+
+        var item = Assert.Single(workspace.GetCatalog());
+        Assert.Equal(@"C:\repo\one", item.Cwd);
+    }
+
+    [Fact]
+    public async Task ApplySessionInfoSnapshotAsync_WhenOnlyRemoteSessionCarriesEstablishedCwd_PreservesThatCwd()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("remote-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.UpdateRemoteBinding("session-1", "remote-1", "profile-1");
+
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Refreshed title",
+                UpdatedAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        var snapshot = workspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(snapshot);
+        Assert.Equal(@"C:\repo\one", snapshot!.SessionInfo!.Cwd);
+    }
+
+    [Fact]
+    public async Task UpsertConversationSnapshot_WhenOnlyRemoteSessionCarriesEstablishedCwd_SeedsSessionInfoFromRemoteBinding()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("remote-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.UpdateRemoteBinding("session-1", "remote-1", "profile-1");
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Updated title"
+            }));
+
+        var sessionInfo = workspace.GetConversationSnapshot("session-1")!.SessionInfo;
+        Assert.NotNull(sessionInfo);
+        Assert.Equal(@"C:\repo\one", sessionInfo!.Cwd);
+    }
+
+    [Fact]
     public async Task SaveAsync_SessionScopedCommandsAndUsage_RoundTrips()
     {
         var syncContext = new ImmediateSynchronizationContext();

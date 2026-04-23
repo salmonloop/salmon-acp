@@ -7848,6 +7848,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         var establishedCwd = _sessionManager.GetSession(conversationId)?.Cwd?.Trim();
         if (string.IsNullOrWhiteSpace(establishedCwd))
         {
+            var remoteSessionId = _conversationWorkspace.GetRemoteBinding(conversationId)?.RemoteSessionId;
+            if (!string.IsNullOrWhiteSpace(remoteSessionId))
+            {
+                establishedCwd = _sessionManager.GetSession(remoteSessionId)?.Cwd?.Trim();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(establishedCwd))
+        {
             establishedCwd = TryGetConversationSnapshot(conversationId)?.SessionInfo?.Cwd?.Trim();
         }
 
