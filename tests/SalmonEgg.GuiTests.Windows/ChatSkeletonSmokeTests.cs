@@ -315,7 +315,6 @@ public sealed class ChatSkeletonSmokeTests
             expectedCount: 1,
             requiredAppLogFragments: new[]
             {
-                "\"method\":\"session/new\"",
                 "\"method\":\"session/prompt\"",
                 "\"method\":\"session/update\"",
                 "\"messageId\":\"gui-server-user-77\""
@@ -323,7 +322,7 @@ public sealed class ChatSkeletonSmokeTests
             timeout: TimeSpan.FromSeconds(10));
 
         var appLogTail = appData.ReadLatestAppLogTail();
-        Assert.Contains("\"method\":\"session/new\"", appLogTail, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"method\":\"session/new\"", appLogTail, StringComparison.Ordinal);
         Assert.Contains("\"method\":\"session/prompt\"", appLogTail, StringComparison.Ordinal);
         Assert.Contains("\"method\":\"session/update\"", appLogTail, StringComparison.Ordinal);
         Assert.Contains("\"messageId\":\"gui-server-user-77\"", appLogTail, StringComparison.Ordinal);

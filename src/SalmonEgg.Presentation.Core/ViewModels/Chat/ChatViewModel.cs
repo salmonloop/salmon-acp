@@ -5052,6 +5052,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             ? delta.AvailableCommands.Select(ToConversationAvailableCommandSnapshot).ToImmutableList()
             : null;
         var nextSessionInfo = ToConversationSessionInfoSnapshot(delta.SessionInfo);
+        if (nextSessionInfo is not null)
+        {
+            nextSessionInfo = NormalizeSessionInfoSnapshotForEstablishedConversationContext(
+                conversationId,
+                nextSessionInfo);
+        }
         var nextUsage = ToConversationUsageSnapshot(delta.Usage);
         var hasSelectedModeId = !string.IsNullOrWhiteSpace(delta.SelectedModeId)
             || delta.AvailableModes is { Count: 0 };
@@ -7668,6 +7674,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
+        sessionInfo = NormalizeSessionInfoSnapshotForEstablishedConversationContext(conversationId, sessionInfo);
+
         var currentBinding = await ResolveConversationBindingAsync(conversationId, cancellationToken).ConfigureAwait(false);
         if (currentBinding is null
             || !string.Equals(currentBinding.RemoteSessionId, expectedBinding.RemoteSessionId, StringComparison.Ordinal)
@@ -7773,6 +7781,46 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         while (!string.IsNullOrWhiteSpace(cursor));
 
         return null;
+    }
+
+    private ConversationSessionInfoSnapshot NormalizeSessionInfoSnapshotForEstablishedConversationContext(
+        string conversationId,
+        ConversationSessionInfoSnapshot sessionInfo)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return sessionInfo;
+        }
+
+        var establishedCwd = _sessionManager.GetSession(conversationId)?.Cwd?.Trim();
+        if (string.IsNullOrWhiteSpace(establishedCwd))
+        {
+            establishedCwd = TryGetConversationSnapshot(conversationId)?.SessionInfo?.Cwd?.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(establishedCwd))
+        {
+            return sessionInfo;
+        }
+
+        var incomingCwd = sessionInfo.Cwd?.Trim();
+        if (string.Equals(incomingCwd, establishedCwd, StringComparison.Ordinal))
+        {
+            return sessionInfo;
+        }
+
+        // ACP session/list is a discovery API and must not redefine immutable session setup
+        // fields such as cwd after session/load or session/new has already established them.
+        return new ConversationSessionInfoSnapshot
+        {
+            Title = sessionInfo.Title,
+            Description = sessionInfo.Description,
+            Cwd = establishedCwd,
+            UpdatedAtUtc = sessionInfo.UpdatedAtUtc,
+            Meta = sessionInfo.Meta is null
+                ? null
+                : new Dictionary<string, object?>(sessionInfo.Meta, StringComparer.Ordinal)
+        };
     }
 
     private void SetConversationOverlayOwners(

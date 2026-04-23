@@ -3247,25 +3247,35 @@ public class ChatViewModelTests
     {
         private readonly HashSet<string> _knownRemoteSessions = new(StringComparer.Ordinal);
         private int _nextRecoveredSessionId = 1;
+        private event EventHandler<SessionUpdateEventArgs>? SessionUpdateReceivedCore;
 
         public string? CurrentSessionId { get; private set; }
         public bool IsInitialized => true;
         public bool IsConnected => true;
         public AgentInfo? AgentInfo => new("agent", "1.0.0");
-        public AgentCapabilities? AgentCapabilities => new(loadSession: true);
+        public AgentCapabilities? AgentCapabilities => new(
+            loadSession: true,
+            sessionCapabilities: new SessionCapabilities
+            {
+                List = new SessionListCapabilities()
+            });
         public IReadOnlyList<SessionUpdateEntry> SessionHistory => Array.Empty<SessionUpdateEntry>();
         public Plan? CurrentPlan => null;
         public SessionModeState? CurrentMode => null;
         public int LoadSessionCallCount { get; private set; }
         public int SendPromptCallCount { get; private set; }
         public int CreateSessionCallCount { get; private set; }
+        public int ListSessionsCallCount { get; private set; }
         public List<string> LoadedSessionIds { get; } = [];
         public List<string> PromptSessionIds { get; } = [];
+        public List<string?> SessionListCursors { get; } = [];
+        public Func<SessionLoadParams, CancellationToken, Task<SessionLoadResponse>>? OnLoadSessionAsync { get; set; }
+        public Func<SessionListParams?, CancellationToken, Task<SessionListResponse>>? OnListSessionsAsync { get; set; }
 
         public event EventHandler<SessionUpdateEventArgs>? SessionUpdateReceived
         {
-            add { }
-            remove { }
+            add => SessionUpdateReceivedCore += value;
+            remove => SessionUpdateReceivedCore -= value;
         }
 
         public event EventHandler<PermissionRequestEventArgs>? PermissionRequestReceived
@@ -3322,11 +3332,17 @@ public class ChatViewModelTests
             CurrentSessionId = @params.SessionId;
             _knownRemoteSessions.Add(@params.SessionId);
             LoadedSessionIds.Add(@params.SessionId);
-            return Task.FromResult(SessionLoadResponse.Completed);
+            return OnLoadSessionAsync?.Invoke(@params, cancellationToken)
+                ?? Task.FromResult(SessionLoadResponse.Completed);
         }
 
         public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            ListSessionsCallCount++;
+            SessionListCursors.Add(@params?.Cursor);
+            return OnListSessionsAsync?.Invoke(@params, cancellationToken)
+                ?? Task.FromResult(new SessionListResponse());
+        }
 
         public Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)
         {
@@ -3371,6 +3387,9 @@ public class ChatViewModelTests
         public void ClearHistory()
         {
         }
+
+        public void RaiseSessionUpdate(SessionUpdateEventArgs args)
+            => SessionUpdateReceivedCore?.Invoke(this, args);
     }
 
     private sealed class ForwardingAcpConnectionCommands : IAcpConnectionCommands
@@ -5094,6 +5113,97 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_WithCwd_DoesNotOverrideEstablishedSessionSetup()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((sessionId, cwd) =>
+            {
+                var session = new Session(sessionId, cwd);
+                sessions[sessionId] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(sessionId => sessions.TryGetValue(sessionId, out var session) ? session : null);
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((sessionId, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(sessionId, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(sessionId => sessions.Remove(sessionId));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\demo");
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original title",
+                Cwd = @"C:\repo\demo",
+                UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+            }));
+        var chatService = CreateConnectedChatService();
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs(
+                "remote-1",
+                new SessionInfoUpdate
+                {
+                    Title = "Renamed by agent",
+                    Cwd = @"C:\repo\illegal",
+                    UpdatedAt = "2026-03-24T03:00:00Z"
+                }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetStateAsync();
+            return string.Equals(
+                state.ResolveSessionStateSlice("conv-1")?.SessionInfo?.Title,
+                "Renamed by agent",
+                StringComparison.Ordinal);
+        });
+
+        Assert.Equal(@"C:\repo\demo", sessions["conv-1"].Cwd);
+        var finalState = await fixture.GetStateAsync();
+        var storeSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
+            finalState.ResolveSessionStateSlice("conv-1")!.Value.SessionInfo);
+        var workspaceSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
+            fixture.Workspace.GetConversationSnapshot("conv-1")!.SessionInfo);
+        Assert.Equal("Renamed by agent", storeSessionInfo.Title);
+        Assert.Equal(@"C:\repo\demo", storeSessionInfo.Cwd);
+        Assert.Equal(storeSessionInfo.Cwd, workspaceSessionInfo.Cwd);
+    }
+
+    [Fact]
     public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_PreservesWhitespaceFieldsConsistentlyAcrossStoreAndWorkspace()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -5801,7 +5911,7 @@ public class ChatViewModelTests
     }
 
     [Fact]
-    public async Task HydrateActiveConversationAsync_WhenRemoteMetadataProvidesNewCwd_RefreshesSsotAfterHydration()
+    public async Task HydrateActiveConversationAsync_WhenSessionListReportsDifferentCwd_PreservesLoadedCwdPerAcpSessionSetup()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
@@ -5959,13 +6069,14 @@ public class ChatViewModelTests
                     "Remote title",
                     StringComparison.Ordinal);
             }, timeoutMilliseconds: 2000);
-            Assert.Equal(@"C:\repo\fresh", sessions["conv-1"].Cwd);
+            Assert.Equal(@"C:\repo\stale", sessions["conv-1"].Cwd);
             var finalState = await fixture.GetStateAsync();
             var storeSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
                 finalState.ResolveSessionStateSlice("conv-1")!.Value.SessionInfo);
             var workspaceSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
                 fixture.Workspace.GetConversationSnapshot("conv-1")!.SessionInfo);
             Assert.Equal("Remote title", storeSessionInfo.Title);
+            Assert.Equal(@"C:\repo\stale", storeSessionInfo.Cwd);
             Assert.Equal(workspaceSessionInfo.Title, storeSessionInfo.Title);
             Assert.Equal(workspaceSessionInfo.Cwd, storeSessionInfo.Cwd);
             Assert.Equal(workspaceSessionInfo.UpdatedAtUtc, storeSessionInfo.UpdatedAtUtc);
@@ -6069,12 +6180,12 @@ public class ChatViewModelTests
             return string.Equals(sessionInfo?.Title, "Remote title", StringComparison.Ordinal);
         }, timeoutMilliseconds: 2000);
 
-        Assert.Equal(@"C:\repo\fresh", sessions["conv-1"].Cwd);
+        Assert.Equal(@"C:\repo\stale", sessions["conv-1"].Cwd);
         var finalState = await fixture.GetStateAsync();
         var storeSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
             finalState.ResolveSessionStateSlice("conv-1")!.Value.SessionInfo);
         Assert.Equal("Remote title", storeSessionInfo.Title);
-        Assert.Equal(@"C:\repo\fresh", storeSessionInfo.Cwd);
+        Assert.Equal(@"C:\repo\stale", storeSessionInfo.Cwd);
     }
 
     [Fact]
@@ -6249,7 +6360,7 @@ public class ChatViewModelTests
                 fixture.Workspace.GetConversationSnapshot("conv-1")!.SessionInfo);
 
             Assert.Equal("Remote title", storeSessionInfo.Title);
-            Assert.Equal(@"C:\repo\fresh", storeSessionInfo.Cwd);
+            Assert.Equal(@"C:\repo\stale", storeSessionInfo.Cwd);
             Assert.Equal(storeSessionInfo.Title, workspaceSessionInfo.Title);
             Assert.Equal(storeSessionInfo.Cwd, workspaceSessionInfo.Cwd);
             Assert.Equal(storeSessionInfo.UpdatedAtUtc, workspaceSessionInfo.UpdatedAtUtc);
@@ -12127,8 +12238,16 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
 
-        await fixture.ViewModel.ConnectToAcpProfileCommand.ExecuteAsync(profile);
-        await fixture.ViewModel.SwitchConversationAsync("conv-1");
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.ViewModel.ConnectToAcpProfileCommand.ExecuteAsync(profile));
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.ViewModel.SwitchConversationAsync("conv-1"));
+        await WaitForConditionAsync(() => Task.FromResult(
+            fixture.ViewModel.IsSessionActive
+            && string.Equals(fixture.ViewModel.CurrentSessionId, "conv-1", StringComparison.Ordinal)
+            && string.Equals(fixture.ViewModel.CurrentRemoteSessionId, "remote-1", StringComparison.Ordinal)));
 
         Assert.Equal(1, chatService.LoadSessionCallCount);
         Assert.Equal("remote-1", Assert.Single(chatService.LoadedSessionIds));
@@ -12137,7 +12256,9 @@ public class ChatViewModelTests
         Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
 
         fixture.ViewModel.CurrentPrompt = "hello after warm load";
-        await fixture.ViewModel.SendPromptCommand.ExecuteAsync(null);
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.ViewModel.SendPromptCommand.ExecuteAsync(null));
 
         Assert.Equal(1, chatService.SendPromptCallCount);
         Assert.Equal("remote-1", Assert.Single(chatService.PromptSessionIds));
@@ -12145,6 +12266,150 @@ public class ChatViewModelTests
         chatServiceFactory.Verify(
             factory => factory.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task WarmHydratedRemoteConversation_FirstPromptAfterReplayHydration_ReusesLoadedRemoteSessionWithoutRecovery()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\stale");
+
+        var loadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var innerChatService = new ContinuityTrackingChatService
+        {
+            OnLoadSessionAsync = (_, _) =>
+            {
+                loadStarted.TrySetResult(null);
+                return Task.FromResult(SessionLoadResponse.Completed);
+            },
+            OnListSessionsAsync = (_, _) => Task.FromResult(new SessionListResponse
+            {
+                Sessions =
+                [
+                    new AgentSessionInfo
+                    {
+                        SessionId = "remote-1",
+                        Title = "Remote title after warm hydration",
+                        Cwd = @"C:\repo\fresh",
+                        UpdatedAt = "2026-04-23T10:00:00Z"
+                    }
+                ]
+            })
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(innerChatService, eventAdapter);
+
+        await using var fixture = CreateViewModel(
+            syncContext,
+            sessionManager: sessionManager);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(adapter));
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 4, 23, 9, 55, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 4, 23, 9, 55, 0, DateTimeKind.Utc)));
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+
+        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        syncContext.RunAll();
+
+        var activationTask = fixture.ViewModel.SwitchConversationAsync("conv-1");
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(loadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 4000);
+
+        innerChatService.RaiseSessionUpdate(new SessionUpdateEventArgs(
+            "remote-1",
+            new UserMessageUpdate(new TextContentBlock("warm replay prompt"))));
+        innerChatService.RaiseSessionUpdate(new SessionUpdateEventArgs(
+            "remote-1",
+            new AgentMessageUpdate(new TextContentBlock("warm replay answer"))));
+
+        await syncContext.RunUntilCompletedAsync(activationTask);
+        Assert.True(await activationTask);
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var state = await fixture.GetStateAsync();
+            var runtime = state.ResolveRuntimeState("conv-1");
+            return runtime is { Phase: ConversationRuntimePhase.Warm }
+                && fixture.ViewModel.MessageHistory.Any(message =>
+                    string.Equals(message.TextContent, "warm replay answer", StringComparison.Ordinal))
+                && string.Equals(fixture.ViewModel.CurrentRemoteSessionId, "remote-1", StringComparison.Ordinal);
+        }, timeoutMilliseconds: 8000);
+
+        var warmedState = await fixture.GetStateAsync();
+        var warmedRuntime = warmedState.ResolveRuntimeState("conv-1");
+        Assert.NotNull(warmedRuntime);
+        Assert.Equal(ConversationRuntimePhase.Warm, warmedRuntime!.Value.Phase);
+        Assert.Equal("conn-1", warmedRuntime.Value.ConnectionInstanceId);
+        Assert.Equal("remote-1", warmedRuntime.Value.RemoteSessionId);
+        Assert.Equal("profile-1", warmedRuntime.Value.ProfileId);
+        Assert.Equal(1, innerChatService.LoadSessionCallCount);
+        Assert.Equal("remote-1", Assert.Single(innerChatService.LoadedSessionIds));
+        if (innerChatService.ListSessionsCallCount > 0)
+        {
+            Assert.Equal(@"C:\repo\stale", sessions["conv-1"].Cwd);
+        }
+
+        fixture.ViewModel.CurrentPrompt = "hello after replay hydration";
+        syncContext.RunAll();
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.ViewModel.SendPromptCommand.ExecuteAsync(null));
+        syncContext.RunAll();
+
+        Assert.Equal(1, innerChatService.SendPromptCallCount);
+        Assert.Equal("remote-1", Assert.Single(innerChatService.PromptSessionIds));
+        Assert.Equal(0, innerChatService.CreateSessionCallCount);
     }
 
     [Fact]

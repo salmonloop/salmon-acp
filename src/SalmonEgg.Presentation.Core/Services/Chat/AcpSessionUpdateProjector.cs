@@ -138,7 +138,9 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
         => new(
             Title: update.Title,
             Description: update.Description,
-            Cwd: update.Cwd,
+            // ACP session_info_update does not redefine cwd; cwd is established during
+            // session/new or session/load and must remain immutable for the session.
+            Cwd: null,
             UpdatedAt: update.UpdatedAt,
             Meta: update.Meta is null
                 ? null
