@@ -14,6 +14,7 @@ using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Infrastructure.Client;
+using SalmonEgg.Infrastructure.Services;
 using Xunit;
 using SalmonEgg.Domain.Interfaces;
 
@@ -560,6 +561,58 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(sameSessionUpdate)));
 
             await Assert.ThrowsAsync<TimeoutException>(() => promptTask);
+        }
+
+        [Fact]
+        public async Task SendPromptAsync_WhenSessionIsTrackedByInjectedManager_AllowsWarmLoadedSession()
+        {
+            var parser = new MessageParser();
+            var sessionManager = new SessionManager();
+            await sessionManager.CreateSessionAsync("remote-1", "cwd");
+
+            var client = new AcpClient(
+                _transportMock.Object,
+                parser,
+                null,
+                _errorLoggerMock.Object,
+                sessionManager);
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsRegex("initialize"), It.IsAny<CancellationToken>()))
+                .Returns<string, CancellationToken>((_, _) =>
+                {
+                    var response = new JsonRpcResponse(
+                        1,
+                        JsonSerializer.SerializeToElement(
+                            new InitializeResponse(
+                                1,
+                                new AgentInfo("TestAgent", "1.0.0"),
+                                new AgentCapabilities(loadSession: true)),
+                            parser.Options));
+                    _transportMock.Raise(
+                        t => t.MessageReceived += null,
+                        new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+                    return Task.FromResult(true);
+                });
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
+                .Returns<string, CancellationToken>((_, _) =>
+                {
+                    var response = new JsonRpcResponse(
+                        2,
+                        JsonSerializer.SerializeToElement(new SessionPromptResponse(StopReason.EndTurn), parser.Options));
+                    _transportMock.Raise(
+                        t => t.MessageReceived += null,
+                        new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+                    return Task.FromResult(true);
+                });
+
+            await client.InitializeAsync(new InitializeParams(new ClientInfo("Test", "1.0.0"), new ClientCapabilities()));
+
+            var result = await client.SendPromptAsync(new SessionPromptParams("remote-1", new List<ContentBlock> { new TextContentBlock("hi") }));
+
+            Assert.Equal(StopReason.EndTurn, result.StopReason);
         }
 
         [Fact]

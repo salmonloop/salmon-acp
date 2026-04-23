@@ -288,11 +288,13 @@ namespace SalmonEgg.Application.Services.Chat
                 _currentPlan = null;
                 _currentMode = null;
 
-                var existing = _sessionManager.GetSession(@params.SessionId);
-                if (existing != null && existing.History.Count > 0)
+                var session = GetOrCreateSession(@params.SessionId, @params.Cwd);
+                session.Cwd = @params.Cwd;
+
+                if (session.History.Count > 0)
                 {
                     hadPreviousHistory = true;
-                    previousHistory = existing.History.ToList();
+                    previousHistory = session.History.ToList();
                 }
                 
                 // Clear history before loading to ensure we don't have duplicate entries 
@@ -302,7 +304,6 @@ namespace SalmonEgg.Application.Services.Chat
                 var response = await _acpClient.LoadSessionAsync(@params, cancellationToken).ConfigureAwait(false);
                 try
                 {
-                    var session = GetOrCreateSession(@params.SessionId, @params.Cwd);
                     session.Cwd = @params.Cwd;
                     session.State = SessionState.Active;
                 }

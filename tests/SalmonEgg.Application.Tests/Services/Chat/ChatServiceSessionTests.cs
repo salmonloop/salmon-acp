@@ -1,16 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using Serilog;
 using SalmonEgg.Application.Services.Chat;
+using SalmonEgg.Domain.Interfaces;
+using SalmonEgg.Domain.Interfaces.Transport;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Content;
+using SalmonEgg.Domain.Models.JsonRpc;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Domain.Services.Security;
+using SalmonEgg.Infrastructure.Serialization;
 using SalmonEgg.Infrastructure.Services;
 
 namespace SalmonEgg.Application.Tests.Services.Chat;
@@ -105,6 +111,41 @@ public sealed class ChatServiceSessionTests
     }
 
     [Fact]
+    public async Task LoadSessionAsync_WhenTargetSessionIsNotTracked_PreRegistersSessionBeforeClientCall()
+    {
+        var acpClient = new Mock<IAcpClient>(MockBehavior.Strict);
+        var errorLogger = new Mock<IErrorLogger>(MockBehavior.Loose);
+        var sessionManager = new SessionManager();
+
+        acpClient.SetupGet(c => c.IsInitialized).Returns(true);
+        acpClient.SetupGet(c => c.IsConnected).Returns(true);
+        acpClient.SetupGet(c => c.AgentInfo).Returns((AgentInfo?)null);
+        acpClient.SetupGet(c => c.AgentCapabilities).Returns((AgentCapabilities?)null);
+        acpClient
+            .Setup(c => c.LoadSessionAsync(
+                It.Is<SessionLoadParams>(p => p.SessionId == "remote-1"),
+                default))
+            .Callback(() =>
+            {
+                var tracked = sessionManager.GetSession("remote-1");
+                Assert.NotNull(tracked);
+                Assert.Equal(Environment.CurrentDirectory, tracked!.Cwd);
+            })
+            .ReturnsAsync(new SessionLoadResponse());
+
+        var sut = new ChatService(acpClient.Object, errorLogger.Object, sessionManager);
+
+        await sut.LoadSessionAsync(new SessionLoadParams("remote-1", Environment.CurrentDirectory));
+
+        var session = sessionManager.GetSession("remote-1");
+        Assert.NotNull(session);
+        Assert.Equal(Environment.CurrentDirectory, session!.Cwd);
+        Assert.Equal(SessionState.Active, session.State);
+
+        sut.Dispose();
+    }
+
+    [Fact]
     public void SessionUpdate_CurrentModeUpdate_UsesNormalizedModeIdForLegacyPayload()
     {
         var acpClient = new Mock<IAcpClient>(MockBehavior.Loose);
@@ -127,5 +168,92 @@ public sealed class ChatServiceSessionTests
         Assert.Equal("legacy-mode", session!.History.Single().ModeId);
 
         sut.Dispose();
+    }
+
+    [Fact]
+    public async Task ChatServiceFactory_CreateChatService_UsesSharedSessionManagerForWarmLoadedPrompt()
+    {
+        var transport = new ScriptedTransport();
+        var transportFactory = new Mock<ITransportFactory>(MockBehavior.Strict);
+        var errorLogger = new Mock<IErrorLogger>(MockBehavior.Loose);
+        var sessionManager = new SessionManager();
+        var parser = new MessageParser();
+        var validator = new MessageValidator();
+
+        transportFactory
+            .Setup(factory => factory.CreateTransport(TransportType.Stdio, "agent", null, null))
+            .Returns(transport);
+
+        var sut = new ChatServiceFactory(
+            transportFactory.Object,
+            parser,
+            validator,
+            errorLogger.Object,
+            sessionManager,
+            new LoggerConfiguration().CreateLogger());
+
+        var chatService = sut.CreateChatService(TransportType.Stdio, "agent");
+
+        await chatService.InitializeAsync(new InitializeParams(new ClientInfo("Test", "1.0.0"), new ClientCapabilities()));
+        await chatService.LoadSessionAsync(new SessionLoadParams("remote-1", Environment.CurrentDirectory));
+        var promptResponse = await chatService.SendPromptAsync(
+            new SessionPromptParams("remote-1", new List<ContentBlock> { new TextContentBlock("hello") }));
+
+        Assert.Equal(StopReason.EndTurn, promptResponse.StopReason);
+        Assert.NotNull(sessionManager.GetSession("remote-1"));
+        Assert.Contains(transport.SentMessages, message => message.Contains("\"method\":\"session/prompt\"", StringComparison.Ordinal));
+    }
+
+    private sealed class ScriptedTransport : ITransport
+    {
+        private readonly MessageParser _parser = new();
+        private int _nextResponseId = 1;
+
+        public event EventHandler<MessageReceivedEventArgs>? MessageReceived;
+
+        public event EventHandler<TransportErrorEventArgs>? ErrorOccurred;
+
+        public bool IsConnected => true;
+
+        public List<string> SentMessages { get; } = [];
+
+        public Task<bool> ConnectAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public Task<bool> DisconnectAsync() => Task.FromResult(true);
+
+        public Task<bool> SendMessageAsync(string message, CancellationToken cancellationToken = default)
+        {
+            _ = ErrorOccurred;
+            SentMessages.Add(message);
+
+            var parsed = _parser.ParseMessage(message);
+            if (parsed is JsonRpcRequest request)
+            {
+                var response = request.Method switch
+                {
+                    "initialize" => new JsonRpcResponse(
+                        request.Id,
+                        JsonSerializer.SerializeToElement(
+                            new InitializeResponse(
+                                1,
+                                new AgentInfo("TestAgent", "1.0.0"),
+                                new AgentCapabilities(loadSession: true)),
+                            _parser.Options)),
+                    "session/load" => new JsonRpcResponse(
+                        request.Id,
+                        JsonSerializer.SerializeToElement(new SessionLoadResponse(), _parser.Options)),
+                    "session/prompt" => new JsonRpcResponse(
+                        request.Id,
+                        JsonSerializer.SerializeToElement(new SessionPromptResponse(StopReason.EndTurn), _parser.Options)),
+                    _ => new JsonRpcResponse(
+                        request.Id ?? _nextResponseId++,
+                        JsonSerializer.SerializeToElement(new { }, _parser.Options))
+                };
+
+                MessageReceived?.Invoke(this, new MessageReceivedEventArgs(_parser.SerializeMessage(response)));
+            }
+
+            return Task.FromResult(true);
+        }
     }
 }

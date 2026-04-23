@@ -3243,6 +3243,213 @@ public class ChatViewModelTests
         }
     }
 
+    private sealed class ContinuityTrackingChatService : IChatService
+    {
+        private readonly HashSet<string> _knownRemoteSessions = new(StringComparer.Ordinal);
+        private int _nextRecoveredSessionId = 1;
+
+        public string? CurrentSessionId { get; private set; }
+        public bool IsInitialized => true;
+        public bool IsConnected => true;
+        public AgentInfo? AgentInfo => new("agent", "1.0.0");
+        public AgentCapabilities? AgentCapabilities => new(loadSession: true);
+        public IReadOnlyList<SessionUpdateEntry> SessionHistory => Array.Empty<SessionUpdateEntry>();
+        public Plan? CurrentPlan => null;
+        public SessionModeState? CurrentMode => null;
+        public int LoadSessionCallCount { get; private set; }
+        public int SendPromptCallCount { get; private set; }
+        public int CreateSessionCallCount { get; private set; }
+        public List<string> LoadedSessionIds { get; } = [];
+        public List<string> PromptSessionIds { get; } = [];
+
+        public event EventHandler<SessionUpdateEventArgs>? SessionUpdateReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler<PermissionRequestEventArgs>? PermissionRequestReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler<FileSystemRequestEventArgs>? FileSystemRequestReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler<TerminalRequestEventArgs>? TerminalRequestReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler<AskUserRequestEventArgs>? AskUserRequestReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler<string>? ErrorOccurred
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<InitializeResponse> InitializeAsync(InitializeParams @params)
+            => Task.FromResult(new InitializeResponse(
+                1,
+                new AgentInfo("agent", "1.0.0"),
+                new AgentCapabilities(loadSession: true)));
+
+        public Task<SessionNewResponse> CreateSessionAsync(SessionNewParams @params)
+        {
+            CreateSessionCallCount++;
+            var sessionId = $"remote-recovered-{_nextRecoveredSessionId++}";
+            _knownRemoteSessions.Add(sessionId);
+            CurrentSessionId = sessionId;
+            return Task.FromResult(new SessionNewResponse(sessionId));
+        }
+
+        public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params)
+            => LoadSessionAsync(@params, CancellationToken.None);
+
+        public Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken)
+        {
+            LoadSessionCallCount++;
+            CurrentSessionId = @params.SessionId;
+            _knownRemoteSessions.Add(@params.SessionId);
+            LoadedSessionIds.Add(@params.SessionId);
+            return Task.FromResult(SessionLoadResponse.Completed);
+        }
+
+        public Task<SessionListResponse> ListSessionsAsync(SessionListParams? @params = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<SessionPromptResponse> SendPromptAsync(SessionPromptParams @params, CancellationToken cancellationToken = default)
+        {
+            SendPromptCallCount++;
+            PromptSessionIds.Add(@params.SessionId);
+            if (!_knownRemoteSessions.Contains(@params.SessionId))
+            {
+                throw new AcpException(JsonRpcErrorCode.SessionNotFound, $"Session '{@params.SessionId}' not found");
+            }
+
+            CurrentSessionId = @params.SessionId;
+            return Task.FromResult(new SessionPromptResponse(StopReason.EndTurn, "user-message-1"));
+        }
+
+        public Task<SessionSetModeResponse> SetSessionModeAsync(SessionSetModeParams @params)
+            => throw new NotSupportedException();
+
+        public Task<SessionSetConfigOptionResponse> SetSessionConfigOptionAsync(SessionSetConfigOptionParams @params)
+            => throw new NotSupportedException();
+
+        public Task<SessionCancelResponse> CancelSessionAsync(SessionCancelParams @params)
+            => throw new NotSupportedException();
+
+        public Task<AuthenticateResponse> AuthenticateAsync(AuthenticateParams @params, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> RespondToPermissionRequestAsync(object messageId, string outcome, string? optionId = null)
+            => throw new NotSupportedException();
+
+        public Task<bool> RespondToFileSystemRequestAsync(object messageId, bool success, string? content = null, string? message = null)
+            => throw new NotSupportedException();
+
+        public Task<bool> RespondToAskUserRequestAsync(object messageId, IReadOnlyDictionary<string, string> answers)
+            => throw new NotSupportedException();
+
+        public Task<bool> DisconnectAsync()
+            => Task.FromResult(true);
+
+        public Task<List<SalmonEgg.Domain.Models.Protocol.SessionMode>?> GetAvailableModesAsync()
+            => throw new NotSupportedException();
+
+        public void ClearHistory()
+        {
+        }
+    }
+
+    private sealed class ForwardingAcpConnectionCommands : IAcpConnectionCommands
+    {
+        public IAcpConnectionCommands? Inner { get; set; }
+
+        public Task<AcpTransportApplyResult> ConnectToProfileAsync(
+            ServerConfiguration profile,
+            IAcpTransportConfiguration transportConfiguration,
+            IAcpChatCoordinatorSink sink,
+            CancellationToken cancellationToken = default)
+            => RequireInner().ConnectToProfileAsync(profile, transportConfiguration, sink, cancellationToken);
+
+        public Task<AcpTransportApplyResult> ConnectToProfileAsync(
+            ServerConfiguration profile,
+            IAcpTransportConfiguration transportConfiguration,
+            IAcpChatCoordinatorSink sink,
+            AcpConnectionContext connectionContext,
+            CancellationToken cancellationToken = default)
+            => RequireInner().ConnectToProfileAsync(profile, transportConfiguration, sink, connectionContext, cancellationToken);
+
+        public Task<AcpTransportApplyResult> ApplyTransportConfigurationAsync(
+            IAcpTransportConfiguration transportConfiguration,
+            IAcpChatCoordinatorSink sink,
+            bool preserveConversation,
+            CancellationToken cancellationToken = default)
+            => RequireInner().ApplyTransportConfigurationAsync(transportConfiguration, sink, preserveConversation, cancellationToken);
+
+        public Task<AcpTransportApplyResult> ApplyTransportConfigurationAsync(
+            IAcpTransportConfiguration transportConfiguration,
+            IAcpChatCoordinatorSink sink,
+            AcpConnectionContext connectionContext,
+            CancellationToken cancellationToken = default)
+            => RequireInner().ApplyTransportConfigurationAsync(transportConfiguration, sink, connectionContext, cancellationToken);
+
+        public Task<AcpRemoteSessionResult> EnsureRemoteSessionAsync(
+            IAcpChatCoordinatorSink sink,
+            Func<CancellationToken, Task<bool>> authenticateAsync,
+            CancellationToken cancellationToken = default)
+            => RequireInner().EnsureRemoteSessionAsync(sink, authenticateAsync, cancellationToken);
+
+        public Task<AcpPromptDispatchResult> SendPromptAsync(
+            string promptText,
+            string? promptMessageId,
+            IAcpChatCoordinatorSink sink,
+            Func<CancellationToken, Task<bool>> authenticateAsync,
+            CancellationToken cancellationToken = default)
+            => RequireInner().SendPromptAsync(promptText, promptMessageId, sink, authenticateAsync, cancellationToken);
+
+        public Task<AcpPromptDispatchResult> DispatchPromptToRemoteSessionAsync(
+            string remoteSessionId,
+            string promptText,
+            string? promptMessageId,
+            IAcpChatCoordinatorSink sink,
+            Func<CancellationToken, Task<bool>> authenticateAsync,
+            CancellationToken cancellationToken = default)
+            => RequireInner().DispatchPromptToRemoteSessionAsync(
+                remoteSessionId,
+                promptText,
+                promptMessageId,
+                sink,
+                authenticateAsync,
+                cancellationToken);
+
+        public Task CancelPromptAsync(
+            IAcpChatCoordinatorSink sink,
+            string? reason = null,
+            CancellationToken cancellationToken = default)
+            => RequireInner().CancelPromptAsync(sink, reason, cancellationToken);
+
+        public Task DisconnectAsync(
+            IAcpChatCoordinatorSink sink,
+            CancellationToken cancellationToken = default)
+            => RequireInner().DisconnectAsync(sink, cancellationToken);
+
+        private IAcpConnectionCommands RequireInner()
+            => Inner ?? throw new InvalidOperationException("Connection commands have not been initialized.");
+    }
+
     private static List<ConfigOption> CreateModeConfigOptions(string currentValue)
         => new()
         {
@@ -11828,6 +12035,118 @@ public class ChatViewModelTests
         Assert.Equal(2, loadCounts.GetValueOrDefault("remote-1"));
         Assert.Equal(1, loadCounts.GetValueOrDefault("remote-2"));
     }
+
+    [Fact]
+    public async Task WarmLoadedRemoteConversation_FirstPrompt_ReusesLoadedRemoteSessionWithoutRecovery()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
+        var sessionManager = new Mock<ISessionManager>();
+        sessionManager.Setup(s => s.GetSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.TryGetValue(id, out var session) ? session : null);
+        sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns<string, string?>((id, cwd) =>
+            {
+                var session = new Session(id, cwd);
+                sessions[id] = session;
+                return Task.FromResult(session);
+            });
+        sessionManager.Setup(s => s.UpdateSession(It.IsAny<string>(), It.IsAny<Action<Session>>(), It.IsAny<bool>()))
+            .Returns<string, Action<Session>, bool>((id, update, updateActivity) =>
+            {
+                if (!sessions.TryGetValue(id, out var session))
+                {
+                    return false;
+                }
+
+                update(session);
+                if (updateActivity)
+                {
+                    session.UpdateActivity();
+                }
+
+                return true;
+            });
+        sessionManager.Setup(s => s.RemoveSession(It.IsAny<string>()))
+            .Returns<string>(id => sessions.Remove(id));
+
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\one");
+
+        var chatService = new ContinuityTrackingChatService();
+        var chatServiceFactory = new Mock<IAcpChatServiceFactory>(MockBehavior.Strict);
+        chatServiceFactory
+            .Setup(factory => factory.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
+            .Returns(chatService);
+
+        var commandProxy = new ForwardingAcpConnectionCommands();
+        IAcpConnectionCoordinator? connectionCoordinator = null;
+
+        await using var fixture = CreateViewModel(
+            syncContext,
+            sessionManager: sessionManager,
+            acpConnectionCommands: commandProxy,
+            acpConnectionCoordinatorFactory: store =>
+            {
+                connectionCoordinator = new AcpConnectionCoordinator(
+                    store,
+                    Mock.Of<ILogger<AcpConnectionCoordinator>>());
+                return connectionCoordinator;
+            });
+
+        commandProxy.Inner = new AcpChatCoordinator(
+            chatServiceFactory.Object,
+            Mock.Of<ILogger<AcpChatCoordinator>>(),
+            connectionCoordinator: connectionCoordinator);
+
+        var profile = CreateConnectableStdioProfile("profile-1", "Profile 1");
+        fixture.Profiles.Profiles.Add(profile);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        fixture.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "conv-1",
+            Transcript:
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "msg-1",
+                    Timestamp = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = true,
+                    ContentType = "text",
+                    TextContent = "warm transcript"
+                }
+            ],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+
+        await fixture.ViewModel.ConnectToAcpProfileCommand.ExecuteAsync(profile);
+        await fixture.ViewModel.SwitchConversationAsync("conv-1");
+
+        Assert.Equal(1, chatService.LoadSessionCallCount);
+        Assert.Equal("remote-1", Assert.Single(chatService.LoadedSessionIds));
+        Assert.True(fixture.ViewModel.IsSessionActive);
+        Assert.Equal("conv-1", fixture.ViewModel.CurrentSessionId);
+        Assert.Equal("remote-1", fixture.ViewModel.CurrentRemoteSessionId);
+
+        fixture.ViewModel.CurrentPrompt = "hello after warm load";
+        await fixture.ViewModel.SendPromptCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, chatService.SendPromptCallCount);
+        Assert.Equal("remote-1", Assert.Single(chatService.PromptSessionIds));
+        Assert.Equal(0, chatService.CreateSessionCallCount);
+        chatServiceFactory.Verify(
+            factory => factory.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null),
+            Times.Once);
+    }
+
     [Fact]
     public async Task ActivateConversationAsync_WhenConnectionInstanceChangesDuringReturnActivation_ReloadsRemoteSession()
     {

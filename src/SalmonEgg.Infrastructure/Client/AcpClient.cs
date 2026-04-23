@@ -129,12 +129,13 @@ namespace SalmonEgg.Infrastructure.Client
             ITransport transport,
             IMessageParser? parser = null,
             IMessageValidator? validator = null,
-            IErrorLogger? errorLogger = null)
+            IErrorLogger? errorLogger = null,
+            ISessionManager? sessionManager = null)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _parser = parser ?? new MessageParser();
             _validator = validator ?? new MessageValidator();
-            _sessionManager = new Services.SessionManager();
+            _sessionManager = sessionManager ?? new Services.SessionManager();
             _pathValidator = new Services.Security.PathValidator();
             _permissionManager = new Services.Security.PermissionManager();
             _terminalSessionManager = new Services.TerminalSessionManager();
@@ -156,8 +157,9 @@ namespace SalmonEgg.Infrastructure.Client
             IMessageParser? parser,
             IMessageValidator? validator,
             IErrorLogger? errorLogger,
-            AcpRequestTimeouts timeouts)
-            : this(transport, parser, validator, errorLogger)
+            AcpRequestTimeouts timeouts,
+            ISessionManager? sessionManager = null)
+            : this(transport, parser, validator, errorLogger, sessionManager)
         {
             _timeouts = timeouts ?? throw new ArgumentNullException(nameof(timeouts));
         }

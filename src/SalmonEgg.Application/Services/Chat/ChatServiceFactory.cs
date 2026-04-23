@@ -72,7 +72,9 @@ public class ChatServiceFactory
         var acpClient = new AcpClient(
             transport,
             _messageParser,
-            _messageValidator);
+            _messageValidator,
+            _errorLogger,
+            _sessionManager);
 
         // 3. 创建 Chat 服务
         return _decorateChatService(new ChatService(acpClient, _errorLogger, _sessionManager));
