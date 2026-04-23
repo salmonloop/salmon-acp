@@ -67,6 +67,7 @@ public sealed record BeginTurnAction(
     string TurnId,
     ChatTurnPhase InitialPhase,
     string? PendingUserMessageLocalId = null,
+    string? PendingUserProtocolMessageId = null,
     string? PendingUserMessageText = null) : ChatAction;
 
 public sealed record AdvanceTurnPhaseAction(string ConversationId, string TurnId, ChatTurnPhase NewPhase, string? ToolCallId = null, string? ToolTitle = null) : ChatAction;

@@ -3451,7 +3451,7 @@ public class ChatViewModelTests
 
         commands.Setup(x => x.EnsureRemoteSessionAsync(It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .Returns(tcsSession.Task);
-        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), null, It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .Returns(tcsPrompt.Task);
 
         await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
@@ -3531,7 +3531,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -3598,6 +3598,97 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task SendPromptAsync_WhenUserMessageUpdateArrivesBeforePromptResponseWithDifferentAuthoritativeId_ReusesOptimisticOutgoingMessage()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        var tcsSession = new TaskCompletionSource<AcpRemoteSessionResult>();
+        var tcsPrompt = new TaskCompletionSource<AcpPromptDispatchResult>();
+
+        commands.Setup(x => x.EnsureRemoteSessionAsync(
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(tcsSession.Task);
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(tcsPrompt.Task);
+
+        await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+        });
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        viewModel.CurrentPrompt = "hello";
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        var sendTask = viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            return (await fixture.GetStateAsync()).ActiveTurn?.Phase == ChatTurnPhase.CreatingRemoteSession;
+        });
+
+        tcsSession.SetResult(new AcpRemoteSessionResult("remote-1", new SessionNewResponse("remote-1"), false));
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            return (await fixture.GetStateAsync()).ActiveTurn?.Phase == ChatTurnPhase.WaitingForAgent;
+        });
+        await fixture.DispatchAsync(new SetBindingSliceAction(new ConversationBindingSlice("conv-1", "remote-1", null)));
+        syncContext.RunAll();
+
+        var optimisticTranscript = (await fixture.GetStateAsync()).ResolveContentSlice("conv-1")?.Transcript
+            ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        var optimisticMessageId = Assert.Single(optimisticTranscript).Id;
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new UserMessageUpdate(new TextContentBlock("hello"))
+            {
+                MessageId = "server-auth-1"
+            }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var transcript = (await fixture.GetStateAsync()).ResolveContentSlice("conv-1")?.Transcript
+                ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+            return transcript.Count == 1
+                && string.Equals(transcript[0].Id, optimisticMessageId, StringComparison.Ordinal)
+                && string.Equals(transcript[0].ProtocolMessageId, "server-auth-1", StringComparison.Ordinal);
+        });
+
+        tcsPrompt.SetResult(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(StopReason.EndTurn, "server-auth-1"), false));
+        await sendTask;
+
+        var finalTranscript = (await fixture.GetStateAsync()).ResolveContentSlice("conv-1")?.Transcript
+            ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        Assert.Single(finalTranscript);
+        Assert.Equal(optimisticMessageId, finalTranscript[0].Id);
+        Assert.Equal("server-auth-1", finalTranscript[0].ProtocolMessageId);
+    }
+
+    [Fact]
     public async Task SendPromptAsync_WhenRemoteSessionIsCreated_ProjectsSessionModesFromSessionNewResponse()
     {
         var syncContext = new QueueingSynchronizationContext();
@@ -3613,7 +3704,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 "remote-1",
                 "show modes",
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -3682,7 +3773,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 "remote-1",
                 "show modes",
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -3731,7 +3822,7 @@ public class ChatViewModelTests
         var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
         commands.Setup(x => x.EnsureRemoteSessionAsync(It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AcpRemoteSessionResult("remote-1", new SessionNewResponse("remote-1"), false));
-        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), null, It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(StopReason.Cancelled), false));
 
         await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
@@ -3936,13 +4027,152 @@ public class ChatViewModelTests
     }
 
     [Fact]
+    public async Task SendPromptAsync_WhenPromptResponseReturnsUserMessageId_ReconcilesOptimisticOutgoingMessage()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
+        string? capturedPromptMessageId = null;
+        commands.Setup(x => x.EnsureRemoteSessionAsync(It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AcpRemoteSessionResult("remote-1", new SessionNewResponse("remote-1"), false));
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<System.Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, string?, IAcpChatCoordinatorSink, System.Func<CancellationToken, Task<bool>>, CancellationToken>(
+                (_, _, promptMessageId, _, _, _) => capturedPromptMessageId = promptMessageId)
+            .ReturnsAsync(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(StopReason.EndTurn, "user-auth-1"), false));
+
+        await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+        var viewModel = fixture.ViewModel;
+        viewModel.ReplaceChatService(CreateConnectedChatService().Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+        });
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+
+        viewModel.CurrentPrompt = "hello";
+        syncContext.RunAll();
+        await Task.Delay(50);
+        syncContext.RunAll();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(viewModel.CanSendPromptUi);
+        }, timeoutMilliseconds: 2000);
+
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var transcript = (await fixture.GetStateAsync()).ResolveContentSlice("conv-1")?.Transcript
+                ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+            return transcript.Count == 1
+                && string.Equals(transcript[0].ProtocolMessageId, "user-auth-1", StringComparison.Ordinal);
+        });
+
+        var state = await fixture.GetStateAsync();
+        var transcript = state.ResolveContentSlice("conv-1")?.Transcript
+            ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        Assert.Single(transcript);
+        Assert.Equal("hello", transcript[0].TextContent);
+        Assert.Equal("user-auth-1", transcript[0].ProtocolMessageId);
+        Assert.False(string.IsNullOrWhiteSpace(capturedPromptMessageId));
+        commands.Verify(
+            x => x.DispatchPromptToRemoteSessionAsync(
+                "remote-1",
+                "hello",
+                capturedPromptMessageId,
+                It.IsAny<IAcpChatCoordinatorSink>(),
+                It.IsAny<System.Func<CancellationToken, Task<bool>>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessSessionUpdateAsync_UserMessageUpdate_AfterPromptCompletes_WithMatchingUserMessageId_ReusesExistingOutgoingMessage()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        var initialState = (await fixture.GetStateAsync()) with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1")),
+            ActiveTurn = new ActiveTurnState(
+                "conv-1",
+                "turn-1",
+                ChatTurnPhase.Completed,
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                PendingUserMessageLocalId: "local-1",
+                PendingUserProtocolMessageId: "user-auth-1",
+                PendingUserMessageText: "local draft text"),
+            ConversationContents = ImmutableDictionary<string, ConversationContentSlice>.Empty.Add(
+                "conv-1",
+                new ConversationContentSlice(
+                    ImmutableList.Create(new ConversationMessageSnapshot
+                    {
+                        Id = "local-1",
+                        IsOutgoing = true,
+                        ContentType = "text",
+                        TextContent = "local optimistic text",
+                        Timestamp = new DateTime(2026, 4, 22, 0, 0, 0, DateTimeKind.Utc)
+                    }),
+                    ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+                    false,
+                    null))
+        };
+        await fixture.UpdateStateAsync(_ => initialState);
+        syncContext.RunAll();
+
+        chatService.Raise(
+            service => service.SessionUpdateReceived += null,
+            new SessionUpdateEventArgs("remote-1", new UserMessageUpdate(new TextContentBlock("server echoed hello"))
+            {
+                MessageId = "user-auth-1"
+            }));
+
+        await WaitForConditionAsync(async () =>
+        {
+            syncContext.RunAll();
+            var transcript = (await fixture.GetStateAsync()).ResolveContentSlice("conv-1")?.Transcript
+                ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+            return transcript.Count == 1
+                && string.Equals(transcript[0].Id, "local-1", StringComparison.Ordinal)
+                && string.Equals(transcript[0].ProtocolMessageId, "user-auth-1", StringComparison.Ordinal);
+        });
+
+        var state = await fixture.GetStateAsync();
+        var transcript = state.ResolveContentSlice("conv-1")?.Transcript
+            ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        Assert.Single(transcript);
+        Assert.Equal("local-1", transcript[0].Id);
+        Assert.Equal("user-auth-1", transcript[0].ProtocolMessageId);
+        Assert.Equal("server echoed hello", transcript[0].TextContent);
+    }
+
+    [Fact]
     public async Task SendPromptAsync_WhenPromptResponseIsRefusal_PreservesFailedTurnWithReason()
     {
         var syncContext = new QueueingSynchronizationContext();
         var commands = new Mock<IAcpConnectionCommands>(MockBehavior.Strict);
         commands.Setup(x => x.EnsureRemoteSessionAsync(It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AcpRemoteSessionResult("remote-1", new SessionNewResponse("remote-1"), false));
-        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), null, It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
+        commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IAcpChatCoordinatorSink>(), It.IsAny<System.Func<CancellationToken, Task<bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AcpPromptDispatchResult("remote-1", new SessionPromptResponse(StopReason.Refusal), false));
 
         await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
@@ -4992,7 +5222,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -5156,7 +5386,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -5431,7 +5661,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -5638,7 +5868,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -5759,7 +5989,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))
@@ -10353,7 +10583,7 @@ public class ChatViewModelTests
         commands.Setup(x => x.DispatchPromptToRemoteSessionAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                null,
+                It.IsAny<string?>(),
                 It.IsAny<IAcpChatCoordinatorSink>(),
                 It.IsAny<Func<CancellationToken, Task<bool>>>(),
                 It.IsAny<CancellationToken>()))

@@ -1033,6 +1033,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             ImageMimeType = source.ImageMimeType,
             AudioData = source.AudioData,
             AudioMimeType = source.AudioMimeType,
+            ProtocolMessageId = source.ProtocolMessageId,
             ToolCallId = source.ToolCallId,
             ToolCallKind = source.ToolCallKind,
             ToolCallStatus = source.ToolCallStatus,

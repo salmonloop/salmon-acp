@@ -50,6 +50,7 @@ public static class ChatReducer
                     DateTime.UtcNow,
                     DateTime.UtcNow,
                     PendingUserMessageLocalId: begin.PendingUserMessageLocalId,
+                    PendingUserProtocolMessageId: begin.PendingUserProtocolMessageId,
                     PendingUserMessageText: begin.PendingUserMessageText)
             }),
             AdvanceTurnPhaseAction advance when MatchesActiveTurn(current.ActiveTurn, advance.ConversationId, advance.TurnId)

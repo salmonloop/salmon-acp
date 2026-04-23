@@ -3382,6 +3382,42 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
+    private async Task ReconcilePromptUserMessageIdAsync(
+        string? conversationId,
+        string pendingUserMessageLocalId,
+        string requestMessageId,
+        string? responseUserMessageId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId) || string.IsNullOrWhiteSpace(pendingUserMessageLocalId))
+        {
+            return;
+        }
+
+        var resolvedProtocolMessageId = string.IsNullOrWhiteSpace(responseUserMessageId)
+            ? requestMessageId
+            : responseUserMessageId;
+        if (string.IsNullOrWhiteSpace(resolvedProtocolMessageId))
+        {
+            return;
+        }
+
+        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var transcript = currentState.ResolveContentSlice(conversationId)?.Transcript
+            ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        var existing = transcript.LastOrDefault(message =>
+            message.IsOutgoing
+            && string.Equals(message.Id, pendingUserMessageLocalId, StringComparison.Ordinal));
+        if (existing is null
+            || string.Equals(existing.ProtocolMessageId, resolvedProtocolMessageId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var reconciled = CloneSnapshot(existing);
+        reconciled.ProtocolMessageId = resolvedProtocolMessageId;
+        await UpsertTranscriptSnapshotAsync(conversationId, reconciled).ConfigureAwait(false);
+    }
+
     private async Task HandleAgentContentChunkAsync(string? conversationId, ContentBlock content)
     {
         // ACP streams response content as an array of blocks. We coalesce adjacent text blocks
@@ -4601,14 +4637,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             userMessageUpdate.MessageId,
             content,
             activeTurn);
+        var resolvedProtocolMessageId = existing is null
+            ? userMessageUpdate.MessageId
+            : userMessageUpdate.MessageId ?? existing.ProtocolMessageId;
+
         var snapshot = existing is null
-            ? CreateContentSnapshot(content, isOutgoing: true, protocolMessageId: userMessageUpdate.MessageId)
+            ? CreateContentSnapshot(content, isOutgoing: true, protocolMessageId: resolvedProtocolMessageId)
             : CreateContentSnapshot(
                 content,
                 isOutgoing: true,
                 id: existing.Id,
                 timestamp: existing.Timestamp,
-                protocolMessageId: userMessageUpdate.MessageId ?? existing.ProtocolMessageId);
+                protocolMessageId: resolvedProtocolMessageId);
 
         await UpsertTranscriptSnapshotAsync(conversationId, snapshot).ConfigureAwait(true);
     }
@@ -4628,6 +4668,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             {
                 return byProtocolMessageId;
             }
+
+            if (activeTurn is not null
+                && !string.IsNullOrWhiteSpace(activeTurn.PendingUserMessageLocalId)
+                && string.Equals(activeTurn.PendingUserProtocolMessageId, protocolMessageId, StringComparison.Ordinal))
+            {
+                var byPendingProtocolId = transcript.LastOrDefault(message =>
+                    message.IsOutgoing
+                    && string.Equals(message.Id, activeTurn.PendingUserMessageLocalId, StringComparison.Ordinal));
+                if (byPendingProtocolId is not null)
+                {
+                    return byPendingProtocolId;
+                }
+            }
         }
 
         if (!CanReusePendingLocalUserMessage(activeTurn, content))
@@ -4643,8 +4696,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private static bool CanReusePendingLocalUserMessage(ActiveTurnState? activeTurn, ContentBlock content)
     {
         if (activeTurn is null
-            || string.IsNullOrWhiteSpace(activeTurn.PendingUserMessageLocalId)
-            || IsTerminalTurnPhase(activeTurn.Phase))
+            || string.IsNullOrWhiteSpace(activeTurn.PendingUserMessageLocalId))
+        {
+            return false;
+        }
+
+        if (IsTerminalTurnPhase(activeTurn.Phase))
         {
             return false;
         }
@@ -5350,8 +5407,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         var promptText = CurrentPrompt;
         var conversationId = CurrentSessionId!;
         var turnId = Guid.NewGuid().ToString();
+        var promptMessageId = Guid.NewGuid().ToString("N");
         var userContent = new TextContentBlock { Text = promptText };
-        var userSnapshot = CreateContentSnapshot(userContent, isOutgoing: true);
+        var userSnapshot = CreateContentSnapshot(userContent, isOutgoing: true, protocolMessageId: promptMessageId);
 
         try
         {
@@ -5362,6 +5420,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 turnId,
                 ChatTurnPhase.CreatingRemoteSession,
                 PendingUserMessageLocalId: userSnapshot.Id,
+                PendingUserProtocolMessageId: promptMessageId,
                 PendingUserMessageText: promptText));
 
             // Clear input immediately for better UX
@@ -5394,11 +5453,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                     .DispatchPromptToRemoteSessionAsync(
                         sessionResult.RemoteSessionId,
                         promptText,
-                        promptMessageId: null,
+                        promptMessageId,
                         this,
                         TryAuthenticateAsync,
                         token)
                     .ConfigureAwait(false);
+
+                await ReconcilePromptUserMessageIdAsync(
+                    conversationId,
+                    userSnapshot.Id,
+                    promptMessageId,
+                    promptDispatchResult.Response.UserMessageId).ConfigureAwait(false);
 
                 await ApplyPromptDispatchResultAsync(conversationId, turnId, promptDispatchResult.Response).ConfigureAwait(false);
             }

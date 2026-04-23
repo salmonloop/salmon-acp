@@ -12,4 +12,5 @@ public sealed record ActiveTurnState(
     string? ToolTitle = null,
     string? FailureMessage = null,
     string? PendingUserMessageLocalId = null,
+    string? PendingUserProtocolMessageId = null,
     string? PendingUserMessageText = null);

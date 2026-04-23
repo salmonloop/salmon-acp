@@ -103,6 +103,37 @@ public sealed class WorkspaceWriterTests
     }
 
     [Fact]
+    public async Task FlushAsync_BackgroundConversationSlices_PreserveProtocolMessageId()
+    {
+        var dispatcher = new ImmediateUiDispatcher();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(dispatcher);
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, dispatcher);
+        using var writer = new WorkspaceWriter(workspace, dispatcher, TimeSpan.Zero);
+
+        var message = CreateTextMessage("bg-1", "background");
+        message.ProtocolMessageId = "protocol-bg-1";
+
+        writer.Enqueue(new ChatState(
+            HydratedConversationId: "session-active",
+            ConversationContents: ImmutableDictionary<string, ConversationContentSlice>.Empty.Add(
+                "session-bg",
+                new ConversationContentSlice(
+                    ImmutableList.Create(message),
+                    ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+                    false,
+                    null)),
+            Generation: 1), scheduleSave: false);
+        await writer.FlushAsync();
+
+        var snapshot = workspace.GetConversationSnapshot("session-bg");
+        Assert.NotNull(snapshot);
+        var persistedMessage = Assert.Single(snapshot!.Transcript);
+        Assert.Equal("protocol-bg-1", persistedMessage.ProtocolMessageId);
+    }
+
+    [Fact]
     public async Task FlushAsync_BackgroundAuxiliarySessionState_DoesNotOverwriteExistingTranscriptAndPlan()
     {
         var dispatcher = new ImmediateUiDispatcher();

@@ -553,6 +553,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             && string.Equals(left.ImageMimeType, right.ImageMimeType, StringComparison.Ordinal)
             && string.Equals(left.AudioData, right.AudioData, StringComparison.Ordinal)
             && string.Equals(left.AudioMimeType, right.AudioMimeType, StringComparison.Ordinal)
+            && string.Equals(left.ProtocolMessageId, right.ProtocolMessageId, StringComparison.Ordinal)
             && string.Equals(left.ToolCallId, right.ToolCallId, StringComparison.Ordinal)
             && left.ToolCallKind == right.ToolCallKind
             && left.ToolCallStatus == right.ToolCallStatus
@@ -706,6 +707,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             ImageMimeType = snapshot.ImageMimeType,
             AudioData = snapshot.AudioData,
             AudioMimeType = snapshot.AudioMimeType,
+            ProtocolMessageId = snapshot.ProtocolMessageId,
             ToolCallId = snapshot.ToolCallId,
             ToolCallKind = snapshot.ToolCallKind,
             ToolCallStatus = snapshot.ToolCallStatus,

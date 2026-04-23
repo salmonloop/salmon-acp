@@ -200,6 +200,49 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task SaveAsync_ProtocolMessageId_RoundTripsThroughConversationDocument()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        using (var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext))
+        {
+            var message = CreateTextMessage("m-1", "hello");
+            message.ProtocolMessageId = "protocol-1";
+
+            workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+                ConversationId: "session-1",
+                Transcript:
+                [
+                    message
+                ],
+                Plan: Array.Empty<ConversationPlanEntrySnapshot>(),
+                ShowPlanPanel: false,
+                PlanTitle: null,
+                CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+
+            await workspace.SaveAsync();
+        }
+
+        var saved = Assert.IsType<ConversationDocument>(store.LastSavedDocument);
+        var savedConversation = Assert.Single(saved.Conversations);
+        var savedMessage = Assert.Single(savedConversation.Messages);
+        Assert.Equal("protocol-1", savedMessage.ProtocolMessageId);
+
+        store.LoadResult = saved;
+        using var restoredWorkspace = CreateWorkspace(store, new FakeSessionManager(), preferences, syncContext);
+        await restoredWorkspace.RestoreAsync();
+
+        var restored = restoredWorkspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(restored);
+        var restoredMessage = Assert.Single(restored!.Transcript);
+        Assert.Equal("protocol-1", restoredMessage.ProtocolMessageId);
+    }
+
+    [Fact]
     public async Task UpsertConversationSnapshot_PreservesStructuredToolCallContentInSnapshotsAndPersistence()
     {
         var syncContext = new ImmediateSynchronizationContext();
