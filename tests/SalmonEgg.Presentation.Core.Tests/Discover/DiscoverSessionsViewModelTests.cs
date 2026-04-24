@@ -62,7 +62,7 @@ public sealed class DiscoverSessionsViewModelTests
                                 Title = "Unclassified",
                                 Description = "No cwd from remote metadata",
                                 UpdatedAt = "2026-03-28T10:05:00+08:00",
-                                Cwd = null
+                                Cwd = string.Empty
                             }
                         }
                     }

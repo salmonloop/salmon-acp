@@ -99,6 +99,20 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         }
 
         [Fact]
+        public async Task CreateSessionAsync_WhenCwdIsRelative_ThrowsInvalidParams()
+        {
+            var client = await CreateInitializedClientAsync();
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() =>
+                client.CreateSessionAsync(new SessionNewParams("relative-path", null)));
+
+            Assert.Equal(JsonRpcErrorCode.InvalidParams, ex.ErrorCode);
+            _transportMock.Verify(
+                t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Fact]
         public async Task InitializeAsync_SendsAskUserCapabilityMetadataInClientCapabilities()
         {
             var parser = new MessageParser();
@@ -279,6 +293,21 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             cts.Cancel();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loadTask);
+        }
+
+        [Fact]
+        public async Task LoadSessionAsync_WhenCwdIsRelative_ThrowsInvalidParams()
+        {
+            var client = await CreateInitializedClientAsync(
+                capabilities: new AgentCapabilities(loadSession: true));
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() =>
+                client.LoadSessionAsync(new SessionLoadParams("session-123", "relative-path", null)));
+
+            Assert.Equal(JsonRpcErrorCode.InvalidParams, ex.ErrorCode);
+            _transportMock.Verify(
+                t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()),
+                Times.Never);
         }
 
         [Fact]
@@ -964,6 +993,24 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         }
 
         [Fact]
+        public async Task ListSessionsAsync_WhenFilterCwdIsRelative_ThrowsInvalidParams()
+        {
+            var client = await CreateInitializedClientAsync(
+                capabilities: new AgentCapabilities(sessionCapabilities: new SessionCapabilities
+                {
+                    List = new SessionListCapabilities()
+                }));
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() =>
+                client.ListSessionsAsync(new SessionListParams { Cwd = "relative-path" }));
+
+            Assert.Equal(JsonRpcErrorCode.InvalidParams, ex.ErrorCode);
+            _transportMock.Verify(
+                t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Fact]
         public async Task ListSessionsAsync_ParsesNextCursorFromRuntimeResponse()
         {
             var parser = new MessageParser();
@@ -1003,6 +1050,87 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             await responseTrigger;
 
             Assert.Equal("cursor-2", result.NextCursor);
+        }
+
+        [Fact]
+        public async Task ListSessionsAsync_WhenResponseSessionCwdIsMissing_ThrowsParseError()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync(
+                capabilities: new AgentCapabilities(sessionCapabilities: new SessionCapabilities
+                {
+                    List = new SessionListCapabilities()
+                }));
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var responseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(
+                    2,
+                    JsonSerializer.SerializeToElement(
+                        new
+                        {
+                            sessions = new[]
+                            {
+                                new
+                                {
+                                    sessionId = "session-1",
+                                    title = "Imported"
+                                }
+                            }
+                        },
+                        parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() => client.ListSessionsAsync(new SessionListParams()));
+            await responseTrigger;
+
+            Assert.Equal(JsonRpcErrorCode.ParseError, ex.ErrorCode);
+        }
+
+        [Fact]
+        public async Task ListSessionsAsync_WhenResponseSessionCwdIsRelative_ThrowsParseError()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync(
+                capabilities: new AgentCapabilities(sessionCapabilities: new SessionCapabilities
+                {
+                    List = new SessionListCapabilities()
+                }));
+
+            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var responseTrigger = Task.Run(async () =>
+            {
+                await Task.Delay(10);
+                var response = new JsonRpcResponse(
+                    2,
+                    JsonSerializer.SerializeToElement(
+                        new
+                        {
+                            sessions = new[]
+                            {
+                                new
+                                {
+                                    sessionId = "session-1",
+                                    cwd = "relative-path",
+                                    title = "Imported"
+                                }
+                            }
+                        },
+                        parser.Options));
+                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
+            });
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() => client.ListSessionsAsync(new SessionListParams()));
+            await responseTrigger;
+
+            Assert.Equal(JsonRpcErrorCode.ParseError, ex.ErrorCode);
         }
 
         private static async Task<JsonRpcResponse> WaitForResponseAsync(

@@ -255,6 +255,7 @@ namespace SalmonEgg.Infrastructure.Client
         public async Task<SessionNewResponse> CreateSessionAsync(SessionNewParams @params, CancellationToken cancellationToken = default)
         {
             EnsureInitialized();
+            ValidateRequiredAbsolutePath(@params.Cwd, "cwd", "session/new");
 
             var request = new JsonRpcRequest(
                 Interlocked.Increment(ref _nextMessageId),
@@ -286,6 +287,7 @@ namespace SalmonEgg.Infrastructure.Client
         public async Task<SessionLoadResponse> LoadSessionAsync(SessionLoadParams @params, CancellationToken cancellationToken = default)
         {
             EnsureInitialized();
+            ValidateRequiredAbsolutePath(@params.Cwd, "cwd", "session/load");
 
             if (!SupportsSessionLoad)
             {
@@ -329,6 +331,7 @@ namespace SalmonEgg.Infrastructure.Client
         public async Task<SessionListResponse> ListSessionsAsync(SessionListParams @params, CancellationToken cancellationToken = default)
         {
             EnsureInitialized();
+            ValidateOptionalAbsolutePath(@params.Cwd, "cwd", "session/list");
 
             if (!SupportsSessionList)
             {
@@ -359,6 +362,7 @@ namespace SalmonEgg.Infrastructure.Client
                 throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to parse session/list response");
             }
 
+            ValidateSessionListResponse(listResponse);
             return listResponse;
         }
 
@@ -1464,6 +1468,46 @@ namespace SalmonEgg.Infrastructure.Client
             if (!_isInitialized)
             {
                 throw new InvalidOperationException("ACP client is not initialized. Call InitializeAsync first.");
+            }
+        }
+
+        private void ValidateRequiredAbsolutePath(string? path, string fieldName, string methodName)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !_pathValidator.IsAbsolutePath(path))
+            {
+                throw new AcpException(
+                    JsonRpcErrorCode.InvalidParams,
+                    $"{methodName} requires '{fieldName}' to be an absolute path.");
+            }
+        }
+
+        private void ValidateOptionalAbsolutePath(string? path, string fieldName, string methodName)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            ValidateRequiredAbsolutePath(path, fieldName, methodName);
+        }
+
+        private void ValidateSessionListResponse(SessionListResponse response)
+        {
+            foreach (var session in response.Sessions)
+            {
+                if (string.IsNullOrWhiteSpace(session.SessionId))
+                {
+                    throw new AcpException(
+                        JsonRpcErrorCode.ParseError,
+                        "Invalid session/list response: sessionId is required.");
+                }
+
+                if (string.IsNullOrWhiteSpace(session.Cwd) || !_pathValidator.IsAbsolutePath(session.Cwd))
+                {
+                    throw new AcpException(
+                        JsonRpcErrorCode.ParseError,
+                        $"Invalid session/list response: session '{session.SessionId}' must include an absolute cwd.");
+                }
             }
         }
 

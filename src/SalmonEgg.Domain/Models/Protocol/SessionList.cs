@@ -33,7 +33,7 @@ public class AgentSessionInfo
     public string SessionId { get; set; } = string.Empty;
 
     [JsonPropertyName("cwd")]
-    public string? Cwd { get; set; }
+    public string Cwd { get; set; } = string.Empty;
 
     [JsonPropertyName("title")]
     public string? Title { get; set; }
