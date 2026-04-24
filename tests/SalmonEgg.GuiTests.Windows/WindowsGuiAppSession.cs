@@ -37,15 +37,15 @@ internal sealed class WindowsGuiAppSession : IDisposable
     {
         GuiTestGate.RequireEnabled();
 
-        var manifest = MsixManifestInfo.LoadFromRepo();
-        var existing = Process.GetProcessesByName(ProcessName)
-            .OrderByDescending(process => process.StartTime)
-            .FirstOrDefault();
+        var currentInstall = GuiTestGate.GetRequiredCurrentInstall();
+        var executablePath = currentInstall.InstalledExecutablePath
+            ?? throw new InvalidOperationException(currentInstall.FailureMessage);
+        var existing = FindRunningProcess(executablePath);
 
         if (existing == null)
         {
-            LaunchInstalledMsix(manifest);
-            existing = WaitForProcess(ProcessName, TimeSpan.FromSeconds(20));
+            LaunchInstalledMsix(executablePath);
+            existing = WaitForProcess(executablePath, TimeSpan.FromSeconds(20));
         }
 
         var automation = new UIA3Automation();
@@ -64,26 +64,34 @@ internal sealed class WindowsGuiAppSession : IDisposable
         GuiTestGate.RequireEnabled();
         StopAllRunningInstances();
 
-        var manifest = MsixManifestInfo.LoadFromRepo();
-        LaunchInstalledMsix(manifest);
+        var currentInstall = GuiTestGate.GetRequiredCurrentInstall();
+        var executablePath = currentInstall.InstalledExecutablePath
+            ?? throw new InvalidOperationException(currentInstall.FailureMessage);
+        LaunchInstalledMsix(executablePath);
 
-        var process = RetryUntil(
-            () => Process.GetProcessesByName(ProcessName)
-                .OrderByDescending(candidate => candidate.StartTime)
-                .FirstOrDefault(),
-            candidate => candidate != null,
-            TimeSpan.FromSeconds(20),
-            $"Timed out waiting for process '{ProcessName}'.")!;
+        var process = WaitForProcess(executablePath, TimeSpan.FromSeconds(20));
 
         return AttachToProcess(process, ownsProcess: true);
     }
 
+    public static bool IsInstalled()
+    {
+        return GuiTestGate.GetRequiredCurrentInstall().IsCurrentInstall;
+    }
+
     public static void StopAllRunningInstances()
     {
+        var targetExecutablePath = TryGetCurrentInstallExecutablePath();
+
         foreach (var process in Process.GetProcessesByName(ProcessName))
         {
             try
             {
+                if (!ShouldStopProcess(process, targetExecutablePath))
+                {
+                    continue;
+                }
+
                 if (!process.HasExited)
                 {
                     if (process.CloseMainWindow())
@@ -720,9 +728,8 @@ internal sealed class WindowsGuiAppSession : IDisposable
         }
     }
 
-    private static void LaunchInstalledMsix(MsixManifestInfo manifest)
+    private static void LaunchInstalledMsix(string executablePath)
     {
-        var executablePath = ResolveInstalledExecutablePath(manifest.IdentityName);
         var process = Process.Start(new ProcessStartInfo
         {
             FileName = executablePath,
@@ -738,6 +745,19 @@ internal sealed class WindowsGuiAppSession : IDisposable
     }
 
     private static string ResolveInstalledExecutablePath(string identityName)
+    {
+        if (TryResolveInstalledExecutablePath(identityName, out var executablePath, out var failureMessage))
+        {
+            return executablePath;
+        }
+
+        throw new InvalidOperationException(failureMessage);
+    }
+
+    internal static bool TryResolveInstalledExecutablePath(
+        string identityName,
+        out string executablePath,
+        out string failureMessage)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -757,29 +777,86 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
         if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
         {
-            throw new InvalidOperationException(
-                $"SalmonEgg MSIX is not installed or InstallLocation could not be resolved. {error}".Trim());
+            executablePath = string.Empty;
+            failureMessage = string.IsNullOrWhiteSpace(error)
+                ? $"SalmonEgg MSIX is not installed or InstallLocation could not be resolved for '{identityName}'."
+                : $"SalmonEgg MSIX is not installed or InstallLocation could not be resolved for '{identityName}'. {error}";
+            return false;
         }
 
-        var executablePath = Path.Combine(output, $"{ProcessName}.exe");
-        if (!File.Exists(executablePath))
+        var resolvedExecutablePath = Path.Combine(output, $"{ProcessName}.exe");
+        if (!File.Exists(resolvedExecutablePath))
         {
-            throw new InvalidOperationException(
-                $"Installed SalmonEgg executable '{executablePath}' was not found.");
+            executablePath = string.Empty;
+            failureMessage = $"Installed SalmonEgg executable '{resolvedExecutablePath}' was not found.";
+            return false;
         }
 
-        return executablePath;
+        executablePath = resolvedExecutablePath;
+        failureMessage = string.Empty;
+        return true;
     }
 
-    private static Process WaitForProcess(string processName, TimeSpan timeout)
+    private static Process? FindRunningProcess(string executablePath)
+    {
+        return Process.GetProcessesByName(ProcessName)
+            .OrderByDescending(process => process.StartTime)
+            .FirstOrDefault(process =>
+                TryGetProcessExecutablePath(process, out var candidatePath)
+                && string.Equals(candidatePath, executablePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static Process WaitForProcess(string executablePath, TimeSpan timeout)
     {
         return RetryUntil(
-            () => Process.GetProcessesByName(processName)
+            () => Process.GetProcessesByName(ProcessName)
                 .OrderByDescending(process => process.StartTime)
-                .FirstOrDefault(),
+                .FirstOrDefault(process =>
+                    TryGetProcessExecutablePath(process, out var candidatePath)
+                    && string.Equals(candidatePath, executablePath, StringComparison.OrdinalIgnoreCase)),
             process => process != null,
             timeout,
-            $"Timed out waiting for process '{processName}'.")!;
+            $"Timed out waiting for SalmonEgg process from installed executable '{executablePath}'.")!;
+    }
+
+    private static bool TryGetProcessExecutablePath(Process process, out string executablePath)
+    {
+        try
+        {
+            executablePath = process.MainModule?.FileName ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(executablePath);
+        }
+        catch
+        {
+            executablePath = string.Empty;
+            return false;
+        }
+    }
+
+    private static string? TryGetCurrentInstallExecutablePath()
+    {
+        try
+        {
+            var currentInstall = GuiTestGate.GetRequiredCurrentInstall();
+            return currentInstall.IsCurrentInstall
+                ? currentInstall.InstalledExecutablePath
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool ShouldStopProcess(Process process, string? targetExecutablePath)
+    {
+        if (string.IsNullOrWhiteSpace(targetExecutablePath))
+        {
+            return true;
+        }
+
+        return TryGetProcessExecutablePath(process, out var candidatePath)
+            && string.Equals(candidatePath, targetExecutablePath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static WindowsGuiAppSession AttachToProcess(Process process, bool ownsProcess)

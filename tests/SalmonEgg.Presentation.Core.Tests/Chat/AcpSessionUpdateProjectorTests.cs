@@ -85,6 +85,59 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
+    public void ProjectSessionLoad_WhenConfigOptionsIncludeUnknownType_IgnoresLegacyModesAndUnknownOptions()
+    {
+        var projector = new AcpSessionUpdateProjector();
+        var response = new SessionLoadResponse(
+            modes: new SessionModesState
+            {
+                CurrentModeId = "legacy-mode",
+                AvailableModes = new List<SessionMode>
+                {
+                    new() { Id = "legacy-mode", Name = "Legacy" },
+                    new() { Id = "legacy-alt", Name = "Legacy Alt" }
+                }
+            },
+            configOptions: new List<ConfigOption>
+            {
+                new()
+                {
+                    Id = "mode",
+                    Category = "mode",
+                    Type = "select",
+                    CurrentValue = "config-mode",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "config-mode", Name = "Config Mode" },
+                        new() { Value = "config-alt", Name = "Config Alt" }
+                    }
+                },
+                new()
+                {
+                    Id = "future-switch",
+                    Name = "Future switch",
+                    Type = "future-type",
+                    CurrentValue = "legacy-mode",
+                    Options = new List<ConfigOptionValue>
+                    {
+                        new() { Value = "legacy-mode", Name = "Legacy Mode" }
+                    }
+                }
+            });
+
+        var delta = projector.ProjectSessionLoad(response);
+
+        Assert.Equal("config-mode", delta.SelectedModeId);
+        Assert.Equal(2, delta.AvailableModes?.Count);
+        Assert.All(
+            delta.AvailableModes!,
+            mode => Assert.Contains(mode.ModeId, new[] { "config-mode", "config-alt" }));
+        Assert.True(delta.ShowConfigOptionsPanel);
+        var configOption = Assert.Single(delta.ConfigOptions!);
+        Assert.Equal("mode", configOption.Id);
+    }
+
+    [Fact]
     public void ProjectSessionLoad_WhenConfigOptionsDoNotExposeStandardModeSelector_IgnoresLegacyModes()
     {
         var projector = new AcpSessionUpdateProjector();

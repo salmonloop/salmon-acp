@@ -381,6 +381,47 @@ function Get-MsixManifestInfo {
     }
 }
 
+function Get-FileSha256 {
+    param([Parameter(Mandatory = $true)] [string] $Path)
+
+    if (-not (Test-Path $Path)) {
+        throw "File '$Path' was not found for SHA256 calculation."
+    }
+
+    $hash = Get-FileHash -Path $Path -Algorithm SHA256 -ErrorAction Stop
+    return $hash.Hash.ToUpperInvariant()
+}
+
+function Write-CurrentInstallMarker {
+    param(
+        [Parameter(Mandatory = $true)] [string] $RepoRoot,
+        [Parameter(Mandatory = $true)] [string] $MarkerPath,
+        [Parameter(Mandatory = $true)] [string] $Configuration,
+        [Parameter(Mandatory = $true)] [string] $PackageIdentity,
+        [Parameter(Mandatory = $true)] [string] $InstalledExecutablePath,
+        [Parameter(Mandatory = $true)] [string] $MsixPath
+    )
+
+    $markerDirectory = Split-Path -Parent $MarkerPath
+    if ($markerDirectory) {
+        New-Item -ItemType Directory -Force -Path $markerDirectory | Out-Null
+    }
+
+    $payload = [ordered]@{
+        repoRoot                = $RepoRoot
+        configuration           = $Configuration
+        packageIdentity         = $PackageIdentity
+        installedExecutablePath = $InstalledExecutablePath
+        installedExecutableSha256 = (Get-FileSha256 -Path $InstalledExecutablePath)
+        writtenAtUtc            = [DateTime]::UtcNow.ToString('o')
+        msixPath                = $MsixPath
+        msixSha256              = (Get-FileSha256 -Path $MsixPath)
+    }
+
+    $json = $payload | ConvertTo-Json -Depth 4
+    [System.IO.File]::WriteAllText($MarkerPath, $json, [System.Text.UTF8Encoding]::new($false))
+}
+
 function ConvertTo-ProcessArgumentString {
     param([Parameter(Mandatory = $true)] [string[]] $Arguments)
 
@@ -499,6 +540,7 @@ $signLogPath = Join-Path $msixLogDir "$logStamp-sign.log"
 $restoreBinLogPath = Join-Path $msixLogDir "$logStamp-restore.binlog"
 $referenceBuildBinLogPath = Join-Path $msixLogDir "$logStamp-reference-build.binlog"
 $publishBinLogPath = Join-Path $msixLogDir "$logStamp-publish.binlog"
+$currentInstallMarkerPath = Join-Path $msixOutDir 'current-install.json'
 
 Write-Host "Publishing MSIX ($Configuration, $tfm)..."
 New-Item -ItemType Directory -Force -Path $msixOutDir | Out-Null
@@ -663,6 +705,21 @@ $pkg = Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue | Selec
 if (-not $pkg) {
     throw "Package '$identityName' not found after install; cannot determine PackageFamilyName for launch."
 }
+
+$installedExecutablePath = Join-Path $pkg.InstallLocation 'SalmonEgg.exe'
+if (-not (Test-Path $installedExecutablePath)) {
+    throw "Installed SalmonEgg executable '$installedExecutablePath' was not found after install."
+}
+
+Write-CurrentInstallMarker `
+    -RepoRoot $repoRoot `
+    -MarkerPath $currentInstallMarkerPath `
+    -Configuration $Configuration `
+    -PackageIdentity $identityName `
+    -InstalledExecutablePath $installedExecutablePath `
+    -MsixPath $msix.FullName
+
+Write-Host "Wrote install provenance marker: $currentInstallMarkerPath"
 
 $aumid = "$($pkg.PackageFamilyName)!$appId"
 Write-Host "Launching: $aumid"
