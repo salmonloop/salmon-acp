@@ -82,14 +82,6 @@ public sealed class MainNavigationViewModelPaneTests
         }
     }
 
-    private static ConversationCatalogPresenter CreatePresenter(FakeChatSessionCatalog catalog)
-    {
-        var presenter = new ConversationCatalogPresenter();
-        presenter.SetLoading(catalog.IsConversationListLoading);
-        presenter.Refresh(catalog.CreateSnapshot());
-        return presenter;
-    }
-
     private static MainNavigationViewModel CreateNavigationViewModel(
         IConversationCatalog chatCatalog,
         Mock<ISessionManager> sessionManager,
@@ -97,10 +89,11 @@ public sealed class MainNavigationViewModelPaneTests
         FakeNavigationPaneState navState)
     {
         var ui = new Mock<IUiInteractionService>();
-        var shellNavigation = new Mock<IShellNavigationService>();
         var navigationCoordinator = new StubNavigationCoordinator();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
         var metricsSink = new Mock<IShellLayoutMetricsSink>();
+        var presenter = CreatePresenter(chatCatalog);
+        var uiDispatcher = SynchronizationContext.Current as IUiDispatcher ?? new ImmediateUiDispatcher();
 
         return new MainNavigationViewModel(
             chatCatalog,
@@ -113,9 +106,9 @@ public sealed class MainNavigationViewModelPaneTests
             new NavigationSelectionProjector(),
             new ShellSelectionStateStore(),
             new ShellNavigationRuntimeStateStore(),
-            CreatePresenter((FakeChatSessionCatalog)chatCatalog),
+            presenter,
             new ProjectAffinityResolver(),
-            new ImmediateUiDispatcher());
+            uiDispatcher);
     }
 
     private static FakeChatSessionCatalog CreateChatSessionCatalog(params string[] conversationIds)
@@ -196,6 +189,60 @@ public sealed class MainNavigationViewModelPaneTests
         public void RaiseConversationListChanged()
         {
             ConversationListVersion++;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ConversationListVersion)));
+        }
+    }
+
+    private static MutableConversationCatalogDisplayReadModel CreatePresenter(IConversationCatalog chatCatalog)
+    {
+        var presenter = new MutableConversationCatalogDisplayReadModel();
+        presenter.SetLoading(false);
+        presenter.Refresh(chatCatalog.GetKnownConversationIds().Select(id => new ConversationCatalogItem(
+            id,
+            id,
+            @"C:\repo\demo",
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            DateTime.UtcNow)));
+        return presenter;
+    }
+
+    private sealed class MutableConversationCatalogDisplayReadModel : IConversationCatalogDisplayReadModel
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public bool IsConversationListLoading { get; private set; }
+
+        public int ConversationListVersion { get; private set; }
+
+        public IReadOnlyList<ConversationCatalogDisplayItem> Snapshot { get; private set; } = Array.Empty<ConversationCatalogDisplayItem>();
+
+        public void SetLoading(bool isConversationListLoading)
+        {
+            if (IsConversationListLoading == isConversationListLoading)
+            {
+                return;
+            }
+
+            IsConversationListLoading = isConversationListLoading;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsConversationListLoading)));
+        }
+
+        public void Refresh(IEnumerable<ConversationCatalogItem> snapshot)
+        {
+            Snapshot = snapshot.Select(item => new ConversationCatalogDisplayItem(
+                item.ConversationId,
+                item.DisplayName,
+                item.Cwd,
+                item.CreatedAt,
+                item.LastUpdatedAt,
+                item.LastAccessedAt,
+                HasUnreadAttention: false,
+                item.RemoteSessionId,
+                item.BoundProfileId,
+                item.ProjectAffinityOverrideProjectId)).ToArray();
+            ConversationListVersion++;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Snapshot)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ConversationListVersion)));
         }
     }

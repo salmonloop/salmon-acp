@@ -14,6 +14,7 @@
     xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:searchModels="using:SalmonEgg.Presentation.Models.Search"
     xmlns:navViews="using:SalmonEgg.Presentation.Views.Navigation"
+    xmlns:chatViews="using:SalmonEgg.Presentation.Views.Chat"
     xmlns:navUi="using:SalmonEgg.Presentation.Navigation"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:chatVm="using:SalmonEgg.Presentation.ViewModels.Chat"
@@ -461,54 +462,70 @@
                              DisplayModeChanged="OnMainNavPanePresentationChanged"
                              PaneOpened="OnMainNavPanePresentationChanged"
                              PaneClosed="OnMainNavPanePresentationChanged">
-            <NavigationView.Content>
+                <NavigationView.Content>
                     <Grid>
-                        <Frame x:Name="ContentFrame"
-                               Background="Transparent"
-                               ContentTransitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="{x:Bind LayoutVM.BottomPanelHeight, Mode=OneWay, Converter={StaticResource GridLengthConverter}}" />
+                        </Grid.RowDefinitions>
 
-                        <ContentControl x:Name="ShellLoadingOverlayPresenter"
-                                        x:Uid="ChatViewLoadingOverlay"
-                                        AutomationProperties.AutomationId="ChatView.LoadingOverlay"
-                                        HorizontalAlignment="Stretch"
-                                        VerticalAlignment="Stretch"
-                                        HorizontalContentAlignment="Stretch"
-                                        VerticalContentAlignment="Stretch"
-                                        IsTabStop="False"
-                                        IsHitTestVisible="{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay}"
-                                        Visibility="{x:Bind ShellOverlayVM.ShowsPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid>
-                                <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-                                        AutomationProperties.AutomationId="ChatView.LoadingOverlayMask"
-                                        Visibility="{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <controls:ChatSkeleton VerticalAlignment="Stretch"
-                                                           HorizontalAlignment="Stretch" />
-                                </Border>
+                        <Grid Grid.Row="0">
+                            <Frame x:Name="ContentFrame"
+                                   Background="Transparent"
+                                   ContentTransitions="{x:Bind models:UiMotion.Current.PageTransitions, Mode=OneWay}" />
 
+                            <ContentControl x:Name="ShellLoadingOverlayPresenter"
+                                            Grid.Row="0"
+                                            x:Uid="ChatViewLoadingOverlay"
+                                            AutomationProperties.AutomationId="ChatView.LoadingOverlay"
+                                            HorizontalAlignment="Stretch"
+                                            VerticalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            VerticalContentAlignment="Stretch"
+                                            IsTabStop="False"
+                                            IsHitTestVisible="{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay}"
+                                            Visibility="{x:Bind ShellOverlayVM.ShowsPresenter, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Grid>
-                                    <Border VerticalAlignment="Bottom"
-                                            HorizontalAlignment="Center"
-                                            Margin="0,0,0,48"
-                                            Padding="16,8"
-                                            Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="20"
-                                            Visibility="{x:Bind ShellOverlayVM.ShowsStatusPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <ProgressRing IsActive="True" Width="16" Height="16" />
-                                            <TextBlock AutomationProperties.AutomationId="ChatView.LoadingOverlayStatus"
-                                                       Text="{x:Bind ShellOverlayVM.StatusText, Mode=OneWay}"
-                                                       FontSize="12"
-                                                       FontWeight="Medium"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
+                                    <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                                            AutomationProperties.AutomationId="ChatView.LoadingOverlayMask"
+                                            Visibility="{x:Bind ShellOverlayVM.ShowsBlockingMask, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <controls:ChatSkeleton VerticalAlignment="Stretch"
+                                                               HorizontalAlignment="Stretch" />
                                     </Border>
+
+                                    <Grid>
+                                        <Border VerticalAlignment="Bottom"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,0,0,48"
+                                                Padding="16,8"
+                                                Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="20"
+                                                Visibility="{x:Bind ShellOverlayVM.ShowsStatusPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <ProgressRing IsActive="True" Width="16" Height="16" />
+                                                <TextBlock AutomationProperties.AutomationId="ChatView.LoadingOverlayStatus"
+                                                           Text="{x:Bind ShellOverlayVM.StatusText, Mode=OneWay}"
+                                                           FontSize="12"
+                                                           FontWeight="Medium"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
                                 </Grid>
-                            </Grid>
-                        </ContentControl>
+                            </ContentControl>
+                        </Grid>
+
+                        <chatViews:BottomPanelHost Grid.Row="1"
+                                                   Visibility="{x:Bind LayoutVM.BottomPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                   TabsSource="{x:Bind ChatVM.BottomPanelTabs, Mode=OneWay}"
+                                                   SelectedTab="{x:Bind ChatVM.SelectedBottomPanelTab, Mode=TwoWay}"
+                                                   TerminalSessions="{x:Bind ChatVM.TerminalSessions, Mode=OneWay}"
+                                                   SelectedTerminalSession="{x:Bind ChatVM.SelectedTerminalSession, Mode=OneWay}"
+                                                   LocalTerminalSession="{x:Bind ChatVM.ActiveLocalTerminalSession, Mode=OneWay}" />
                     </Grid>
-            </NavigationView.Content>
+                </NavigationView.Content>
             </NavigationView>
 
             <Button x:Name="AutomationArchiveSelectedButton"

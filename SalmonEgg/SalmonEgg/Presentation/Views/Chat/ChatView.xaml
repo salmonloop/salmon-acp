@@ -1,7 +1,6 @@
 <Page x:Class="SalmonEgg.Presentation.Views.Chat.ChatView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:SalmonEgg.Presentation.Views.Chat"
     xmlns:chatVm="using:SalmonEgg.Presentation.ViewModels.Chat"
     xmlns:behaviors="using:SalmonEgg.Presentation.Behaviors"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
@@ -14,8 +13,6 @@
     AllowDrop="False">
 
     <Page.Resources>
-        <converters:GridLengthConverter x:Key="GridLengthConverter" />
-
         <Style x:Key="InlineHeaderButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
@@ -81,7 +78,6 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="{x:Bind LayoutVM.BottomPanelHeight, Mode=OneWay, Converter={StaticResource GridLengthConverter}}" />
             </Grid.RowDefinitions>
 
             <!-- 顶部状态条 -->
@@ -275,18 +271,9 @@
                         <controls:ChatInputArea ViewModel="{x:Bind ViewModel, Mode=OneWay}"
                                                 SubmitCommand="{x:Bind ViewModel.SendPromptCommand}"
                                                 HorizontalAlignment="Stretch" />
-                    </controls:ResponsiveContentHost.Child>
+                        </controls:ResponsiveContentHost.Child>
                 </controls:ResponsiveContentHost>
             </Grid>
-
-            <local:BottomPanelHost Grid.Row="2"
-                                   Visibility="{x:Bind LayoutVM.BottomPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                   TabsSource="{x:Bind ViewModel.BottomPanelTabs, Mode=OneWay}"
-                                   SelectedTab="{x:Bind ViewModel.SelectedBottomPanelTab, Mode=TwoWay}"
-                                   TerminalSessions="{x:Bind ViewModel.TerminalSessions, Mode=OneWay}"
-                                   SelectedTerminalSession="{x:Bind ViewModel.SelectedTerminalSession, Mode=OneWay}"
-                                   LocalTerminalSession="{x:Bind ViewModel.ActiveLocalTerminalSession, Mode=OneWay}" />
-
         </Grid>
     </Grid>
 </Page>

@@ -22,6 +22,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 {
     public class AcpClientTests
     {
+        private const string AbsoluteCwd = @"C:\workspace\project";
         private readonly Mock<ITransport> _transportMock = new();
         private readonly Mock<IMessageParser> _parserMock = new();
         private readonly Mock<IErrorLogger> _errorLoggerMock = new();
@@ -93,7 +94,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var result = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            var result = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
             await responseTrigger;
             Assert.Equal("session-123", result.SessionId);
         }
@@ -264,7 +265,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
             await responseTrigger;
 
             Assert.NotNull(result);
@@ -286,7 +287,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             using var cts = new CancellationTokenSource();
             var loadTask = client.LoadSessionAsync(
-                new SessionLoadParams("session-123", "cwd", null),
+                new SessionLoadParams("session-123", AbsoluteCwd, null),
                 cts.Token);
 
             await Task.Delay(50);
@@ -316,7 +317,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var client = await CreateInitializedClientAsync(
                 capabilities: new AgentCapabilities(loadSession: false));
 
-            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
 
             Assert.Same(SessionLoadResponse.Completed, result);
             _transportMock.Verify(
@@ -330,7 +331,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var client = await CreateInitializedClientAsync(
                 capabilities: new AgentCapabilities());
 
-            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
 
             Assert.Same(SessionLoadResponse.Completed, result);
             _transportMock.Verify(
@@ -356,7 +357,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
             await responseTrigger;
 
             Assert.Same(SessionLoadResponse.Completed, result);
@@ -417,7 +418,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
             await responseTrigger;
 
             Assert.NotNull(result.Modes);
@@ -449,7 +450,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", "cwd", null));
+            var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
             await responseTrigger;
 
             Assert.NotNull(result);
@@ -469,7 +470,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var client = await CreateInitializedClientAsync(timeouts);
             
-            var ex = await Assert.ThrowsAsync<TimeoutException>(() => client.CreateSessionAsync(new SessionNewParams("cwd", null)));
+            var ex = await Assert.ThrowsAsync<TimeoutException>(() => client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null)));
             
             Assert.Contains("method=session/new", ex.Message);
             Assert.Contains("timeout=", ex.Message);
@@ -496,7 +497,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var createResult = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            var createResult = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
             await createResponseTrigger;
 
             var promptResponseTrigger = Task.Run(async () => {
@@ -535,7 +536,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var createResult = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            var createResult = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
             await createResponseTrigger;
 
             var promptTask = client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
@@ -573,7 +574,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
-            var createResult = await client.CreateSessionAsync(new SessionNewParams("cwd", null));
+            var createResult = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
             await createResponseTrigger;
 
             var promptTask = client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
@@ -597,7 +598,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         {
             var parser = new MessageParser();
             var sessionManager = new SessionManager();
-            await sessionManager.CreateSessionAsync("remote-1", "cwd");
+            await sessionManager.CreateSessionAsync("remote-1", AbsoluteCwd);
 
             var client = new AcpClient(
                 _transportMock.Object,

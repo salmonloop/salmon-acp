@@ -60,6 +60,13 @@ public class UiConventionsTests
             .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, attributeLocalName, StringComparison.Ordinal))
             ?.Value;
 
+    private static string? GetAttributeValueByXamlName(XElement element, string attributeName)
+        => element.Attributes()
+            .FirstOrDefault(attribute =>
+                string.Equals(attribute.Name.LocalName, attributeName, StringComparison.Ordinal)
+                || string.Equals(attribute.Name.ToString(), attributeName, StringComparison.Ordinal))
+            ?.Value;
+
     private static List<string> EnumerateUiXamlFiles(string repoRoot)
     {
         var uiRoot = Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg");
@@ -761,6 +768,33 @@ public class UiConventionsTests
         Assert.Contains("GetDiffPanelButtonIconTemplate", codeBehindText);
         Assert.Contains("GetTodoPanelButtonIconTemplate", codeBehindText);
         Assert.Contains("GetAuxiliaryIconTemplate", codeBehindText);
+    }
+
+    [Fact]
+    public void ShellAuxiliaryPanels_ShouldRenderBottomPanelOutsideChatOverlayBlock()
+    {
+        var repoRoot = FindRepoRoot();
+        var mainPage = ReadXml(Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml"));
+        var chatView = ReadXml(Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "Presentation", "Views", "Chat", "ChatView.xaml"));
+
+        var mainPageBottomPanel = mainPage
+            .Descendants()
+            .SingleOrDefault(element => string.Equals(element.Name.LocalName, "BottomPanelHost", StringComparison.Ordinal));
+        var chatViewBottomPanel = chatView
+            .Descendants()
+            .SingleOrDefault(element => string.Equals(element.Name.LocalName, "BottomPanelHost", StringComparison.Ordinal));
+        var overlayPresenter = FindElementByXName(mainPage, "ContentControl", "ShellLoadingOverlayPresenter");
+
+        Assert.NotNull(mainPageBottomPanel);
+        Assert.Equal("1", GetAttributeValueByXamlName(mainPageBottomPanel!, "Grid.Row"));
+        Assert.Contains(
+            mainPage.Descendants().Where(element => string.Equals(element.Name.LocalName, "RowDefinition", StringComparison.Ordinal)),
+            rowDefinition => string.Equals(
+                GetAttributeValueByLocalName(rowDefinition, "Height"),
+                "{x:Bind LayoutVM.BottomPanelHeight, Mode=OneWay, Converter={StaticResource GridLengthConverter}}",
+                StringComparison.Ordinal));
+        Assert.Null(chatViewBottomPanel);
+        Assert.Equal("0", GetAttributeValueByXamlName(overlayPresenter, "Grid.Row"));
     }
 
     [Fact]

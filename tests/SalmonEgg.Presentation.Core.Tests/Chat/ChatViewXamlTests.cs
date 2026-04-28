@@ -40,11 +40,12 @@ public sealed class ChatViewXamlTests
     [Fact]
     public void ChatViewXaml_BindsTerminalPanelStateIntoBottomPanelHost()
     {
-        var xaml = LoadChatViewXaml();
+        var root = FindRepoRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "SalmonEgg", "SalmonEgg", "MainPage.xaml"));
 
-        Assert.Contains("TerminalSessions=\"{x:Bind ViewModel.TerminalSessions, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedTerminalSession=\"{x:Bind ViewModel.SelectedTerminalSession, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("LocalTerminalSession=\"{x:Bind ViewModel.ActiveLocalTerminalSession, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TerminalSessions=\"{x:Bind ChatVM.TerminalSessions, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedTerminalSession=\"{x:Bind ChatVM.SelectedTerminalSession, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("LocalTerminalSession=\"{x:Bind ChatVM.ActiveLocalTerminalSession, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
