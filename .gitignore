@@ -160,10 +160,6 @@ DerivedData/
 # WebAssembly
 wwwroot/
 
-AGENTS.md
-CLAUDE.md
-GEMINI.md
-
 opencode.jsonc
 
 # Visual Studio packaging project dev certificate (generated locally)
