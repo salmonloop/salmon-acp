@@ -15,6 +15,7 @@ The product requirement is that multiple ACP connections may coexist. A manual c
 - Preserve true multi-connection behavior: pool connections may coexist by `profileId`.
 - Ensure only the conversation activation chain owns active chat conversation state.
 - Prevent Settings explicit connect from preserving or rewriting the currently visible chat conversation.
+- Remove any remaining global-single-owner semantics from `SelectedProfileId`.
 - Preserve hot return for previously hydrated remote sessions when conversation identity and connection identity still match.
 - Guarantee that blocking overlay/skeleton appears before stale or cached conversation content can leak during a visible switch.
 
@@ -31,6 +32,7 @@ The product requirement is that multiple ACP connections may coexist. A manual c
 2. Settings explicit connect is a pool-level operation, not a chat-page ownership operation.
 3. The chat page remains owned by the user’s current conversation activation intent.
 4. A later background/pool connection establishment must never rewrite the page the user is currently on.
+5. No single `SelectedProfileId` may act as the global ACP/chat owner in a multi-connection system.
 
 ## Authoritative Ownership Model
 
@@ -45,12 +47,14 @@ Responsibilities:
 - Whether a profile is connected, connecting, disconnected, or reusable.
 - Which connection instance belongs to which `profileId`.
 - Pool retention, reuse, and cleanup.
+- Per-profile connectivity facts only.
 
 Non-responsibilities:
 
 - Deciding which conversation is visible.
 - Marking a conversation hydrated or warm.
 - Routing visible chat projection.
+- Acting as the global active-chat owner through a single selected profile sentinel.
 
 ### 2. Conversation Runtime State
 
@@ -63,6 +67,7 @@ Responsibilities:
 - The active conversation’s activation phase.
 - The conversation’s `remoteSessionId`.
 - The conversation’s `ConnectionInstanceId`.
+- The conversation’s owning `profileId`, derived from authoritative binding/runtime state.
 - Whether that conversation is `Warm`, `Hydrating`, `Faulted`, or otherwise.
 
 Non-responsibilities:
@@ -82,6 +87,22 @@ Responsibilities:
 Non-responsibilities:
 
 - Deriving authority from “a connection was just established”.
+- Inferring active chat ownership from a global selected profile value.
+
+### 4. Settings UI Selection State
+
+Owned by Settings UI state only.
+
+Responsibilities:
+
+- Which ACP profile is currently selected in Settings for manual connect/edit actions.
+- Editing transport or mapping options for that selected Settings profile.
+
+Non-responsibilities:
+
+- Defining the current active chat owner.
+- Overwriting conversation runtime ownership.
+- Serving as the single source of truth for which profile the chat page belongs to.
 
 ## Required Behavioral Contracts
 
@@ -92,8 +113,10 @@ When Settings explicitly connects `profile B` while Chat is showing `conv-A` bou
 - `profile B` may connect and become reusable in the pool.
 - `conv-A` remains the active chat owner.
 - `conv-A` transcript, header, `remoteSessionId`, hydration phase, warm/runtime state, and overlay owner must remain unchanged.
+- Settings may reflect `profile B` as the current Settings selection without changing chat ownership.
 - No code in this path may read `CurrentSessionId` to infer a preserve target.
 - No code in this path may generate a conversation-preserving ACP connection context.
+- No code may reinterpret `SelectedProfileId` as a global owner and use that to rewrite the visible chat page.
 
 ### Contract B: Pool Events Never Own Chat Conversations
 
@@ -143,11 +166,29 @@ Design requirement:
 - Add a dedicated explicit-profile-connect command surface for pool-only connects.
 - This path must operate without conversation ownership context.
 - It must not call logic that marks the active conversation hydrated, preserved, or resynced.
+- It must not depend on or mutate a global-single-owner `SelectedProfileId` contract.
 
 Expected effect:
 
 - Settings can explicitly bring up or warm a profile connection.
 - The active chat conversation remains unchanged unless the user activates a conversation bound to that profile.
+
+### Change 1A: Remove `SelectedProfileId` As A Global Chat Owner Signal
+
+Historical single-connection assumptions must stop leaking into multi-connection behavior.
+
+Design requirement:
+
+- `SelectedProfileId` must no longer be used as the authoritative owner of the current chat page.
+- Conversation ownership must come from `conversationId -> binding/runtime -> profileId`.
+- Settings-selected profile state must be modeled separately from active chat ownership.
+- Pool-level connection facts may remain in connection store, but they must not imply “the visible chat now belongs to this profile”.
+
+Expected effect:
+
+- Explicit Settings profile selection remains a UI concern.
+- Multi-connection behavior no longer depends on a single global selected-profile sentinel.
+- Later connection completions cannot back-write the current page by first changing global selected profile state.
 
 ### Change 2: Stop Global Runtime Resets On Non-Owner Service Replacement
 
@@ -187,10 +228,13 @@ Expected effect:
 2. Pool event is never conversation authority.
    Background connect completion cannot rewrite the chat page the user is on.
 
-3. Warm reuse is identity-based, not timing-based.
+3. Global selected profile is not conversation authority.
+   A single `SelectedProfileId` value may not be used to infer or overwrite active chat ownership.
+
+4. Warm reuse is identity-based, not timing-based.
    Reuse decisions must be derived from `conversationId + remoteSessionId + ConnectionInstanceId`.
 
-4. Visible switch protection is monotonic.
+5. Visible switch protection is monotonic.
    Once stale visible content is possible, overlay ownership must not arrive late.
 
 ## Error Handling Rules
@@ -212,6 +256,7 @@ Likely touch points:
 - `src/SalmonEgg.Presentation.Core/Services/Chat/SettingsChatConnectionAdapter.cs`
 - `src/SalmonEgg.Presentation.Core/Services/Chat/AcpChatCoordinator.cs`
 - `src/SalmonEgg.Presentation.Core/ViewModels/Chat/ChatViewModel.cs`
+- connection-state / projection code that still treats `SelectedProfileId` as active chat ownership
 - supporting ACP command interfaces/seams used by the above
 - related Core / Presentation tests
 - GUI smoke covering hot return and overlay ordering
@@ -225,6 +270,7 @@ This fix must stay scoped to ownership, runtime invalidation, and overlay gating
 Add or update tests that prove:
 
 - Settings explicit connect for `profile B` does not create a preserve-conversation context from the current chat page.
+- `SelectedProfileId` changes alone cannot rewrite active chat ownership.
 - Background connect/reuse/replace does not clear unrelated conversation runtime slices.
 - Only explicit owner supersession can invalidate or replace conversation runtime state.
 - Warm return skips `session/load` only on exact identity match.
@@ -235,6 +281,7 @@ Add or update tests that prove:
 Add or update tests that prove:
 
 - When Chat shows `conv-A(profile-A)`, explicitly connecting `profile-B` leaves header, transcript, runtime phase, and current visible conversation unchanged.
+- When Settings selects `profile-B`, Chat may keep showing `conv-A(profile-A)` without ownership drift.
 - `conv-A -> conv-B -> conv-A` returns hot when A’s warm identity still matches.
 - If latest intent changed while old transcript could still be visible, blocking overlay appears before stale content can leak.
 - A later connection completion cannot back-write the current page to a different session state.
@@ -252,10 +299,11 @@ Keep and extend GUI smoke coverage:
 The fix is accepted only if all are true:
 
 1. Explicit Settings connect for another profile never changes the conversation page the user is currently viewing.
-2. Later background connection completion never back-writes the current visible chat page.
-3. Hot return does not trigger extra `session/load` when conversation and connection identity still match.
-4. No stale/cached transcript or header becomes visible before blocking overlay ownership during a session switch.
-5. Logging remains sufficient to explain any fallback from hot return to slow hydration.
+2. A single `SelectedProfileId` value is no longer sufficient to change active chat ownership.
+3. Later background connection completion never back-writes the current visible chat page.
+4. Hot return does not trigger extra `session/load` when conversation and connection identity still match.
+5. No stale/cached transcript or header becomes visible before blocking overlay ownership during a session switch.
+6. Logging remains sufficient to explain any fallback from hot return to slow hydration.
 
 ## Risks
 
