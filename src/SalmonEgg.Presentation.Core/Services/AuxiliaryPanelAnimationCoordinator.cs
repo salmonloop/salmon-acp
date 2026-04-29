@@ -53,8 +53,19 @@ public sealed class AuxiliaryPanelAnimationCoordinator
 
         return Phase switch
         {
-            AuxiliaryPanelAnimationPhase.Hidden when targetVisible => StartOpeningOrShow(),
+            AuxiliaryPanelAnimationPhase.Hidden when targetVisible => StartOpeningIfExtentReady(),
             AuxiliaryPanelAnimationPhase.Visible when !targetVisible => StartClosingOrHide(),
+            _ => default
+        };
+    }
+
+    public AuxiliaryPanelAnimationRequest UpdateExtent(double extent)
+    {
+        RememberExtent(extent);
+
+        return Phase switch
+        {
+            AuxiliaryPanelAnimationPhase.Hidden when TargetVisible && extent > 0 => StartOpeningIfExtentReady(),
             _ => default
         };
     }
@@ -95,16 +106,16 @@ public sealed class AuxiliaryPanelAnimationCoordinator
             return new AuxiliaryPanelAnimationRequest(AuxiliaryPanelAnimationAction.Hide);
         }
 
-        return StartOpeningOrShow();
+        return StartOpeningIfExtentReady();
     }
 
-    private AuxiliaryPanelAnimationRequest StartOpeningOrShow()
+    private AuxiliaryPanelAnimationRequest StartOpeningIfExtentReady()
     {
         var travelDistance = ResolveTravelDistance();
         if (travelDistance <= 0)
         {
-            Phase = AuxiliaryPanelAnimationPhase.Visible;
-            return new AuxiliaryPanelAnimationRequest(AuxiliaryPanelAnimationAction.Show);
+            Phase = AuxiliaryPanelAnimationPhase.Hidden;
+            return default;
         }
 
         Phase = AuxiliaryPanelAnimationPhase.Opening;

@@ -774,6 +774,18 @@ public class UiConventionsTests
     }
 
     [Fact]
+    public void MainPage_ShouldProjectAuxiliaryPanelExtentChangesIntoAnimationCoordinator()
+    {
+        var repoRoot = FindRepoRoot();
+        var mainPageText = File.ReadAllText(Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml.cs"));
+
+        Assert.Contains("nameof(ShellLayoutViewModel.RightPanelWidth)", mainPageText);
+        Assert.Contains("_rightPanelAnimation.UpdateExtent(LayoutVM.RightPanelWidth)", mainPageText);
+        Assert.Contains("nameof(ShellLayoutViewModel.BottomPanelHeight)", mainPageText);
+        Assert.Contains("_bottomPanelAnimation.UpdateExtent(LayoutVM.BottomPanelHeight)", mainPageText);
+    }
+
+    [Fact]
     public void AppTheme_ShouldNotOverrideNavigationViewPaneBackgroundThemeResources()
     {
         var repoRoot = FindRepoRoot();

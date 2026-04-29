@@ -70,16 +70,32 @@ public sealed class AuxiliaryPanelAnimationCoordinatorTests
     }
 
     [Fact]
-    public void SnapTo_HiddenThenShowWithoutExtent_FallsBackToHide()
+    public void UpdateTarget_OpenWithoutExtent_DefersUntilExtentArrives()
     {
-        var coordinator = new AuxiliaryPanelAnimationCoordinator(initiallyVisible: true, initialExtent: 200);
+        var coordinator = new AuxiliaryPanelAnimationCoordinator();
 
-        coordinator.SnapTo(visible: false, extent: 0);
-        var request = coordinator.UpdateTarget(targetVisible: true, extent: 0, animationsEnabled: true);
+        var initialRequest = coordinator.UpdateTarget(targetVisible: true, extent: 0, animationsEnabled: true);
+        var extentRequest = coordinator.UpdateExtent(200);
 
-        Assert.Equal(AuxiliaryPanelAnimationAction.StartOpening, request.Action);
-        Assert.Equal(200, request.TravelDistance);
+        Assert.Equal(AuxiliaryPanelAnimationAction.None, initialRequest.Action);
+        Assert.Equal(AuxiliaryPanelAnimationAction.StartOpening, extentRequest.Action);
+        Assert.Equal(200, extentRequest.TravelDistance);
         Assert.Equal(AuxiliaryPanelAnimationPhase.Opening, coordinator.Phase);
         Assert.True(coordinator.TargetVisible);
+    }
+
+    [Fact]
+    public void UpdateExtent_WhileVisible_CloseUsesLatestExtent()
+    {
+        var coordinator = new AuxiliaryPanelAnimationCoordinator(initiallyVisible: true, initialExtent: 240);
+
+        var extentUpdate = coordinator.UpdateExtent(360);
+        var closeRequest = coordinator.UpdateTarget(targetVisible: false, extent: 0, animationsEnabled: true);
+
+        Assert.Equal(AuxiliaryPanelAnimationAction.None, extentUpdate.Action);
+        Assert.Equal(AuxiliaryPanelAnimationAction.StartClosing, closeRequest.Action);
+        Assert.Equal(360, closeRequest.TravelDistance);
+        Assert.Equal(AuxiliaryPanelAnimationPhase.Closing, coordinator.Phase);
+        Assert.False(coordinator.TargetVisible);
     }
 }

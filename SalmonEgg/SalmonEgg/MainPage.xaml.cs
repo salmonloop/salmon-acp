@@ -1218,10 +1218,20 @@ public sealed partial class MainPage : Page
                 _rightPanelAnimation.UpdateTarget(LayoutVM.RightPanelVisible, LayoutVM.RightPanelWidth, UiMotion.Current.IsAnimationEnabled));
         }
 
+        if (e.PropertyName == nameof(ShellLayoutViewModel.RightPanelWidth))
+        {
+            ApplyRightPanelAnimationRequest(_rightPanelAnimation.UpdateExtent(LayoutVM.RightPanelWidth));
+        }
+
         if (e.PropertyName == nameof(ShellLayoutViewModel.BottomPanelVisible))
         {
             ApplyBottomPanelAnimationRequest(
                 _bottomPanelAnimation.UpdateTarget(LayoutVM.BottomPanelVisible, LayoutVM.BottomPanelHeight, UiMotion.Current.IsAnimationEnabled));
+        }
+
+        if (e.PropertyName == nameof(ShellLayoutViewModel.BottomPanelHeight))
+        {
+            ApplyBottomPanelAnimationRequest(_bottomPanelAnimation.UpdateExtent(LayoutVM.BottomPanelHeight));
         }
 
         if (e.PropertyName == nameof(ShellLayoutViewModel.IsNavPaneOpen))
