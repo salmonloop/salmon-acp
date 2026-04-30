@@ -1247,7 +1247,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             }
 
             ApplySettingsSelectedProfileFromStore(projection.SettingsSelectedProfileId);
-            _selectedProfileIdFromStore = projection.ChatOwnerProfileId;
+            _selectedProfileIdFromStore = !string.IsNullOrWhiteSpace(projection.ChatOwnerProfileId)
+                ? projection.ChatOwnerProfileId
+                : projection.SettingsSelectedProfileId;
             _currentRemoteSessionId = projection.RemoteSessionId;
 
             // CRITICAL: Sync transcript BEFORE notifying IsSessionActive/IsHydrating.
@@ -3620,6 +3622,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             initialWarmReuseBinding,
             ConnectionInstanceId);
 
+        if (!canOptimisticallyReuseWarmRemoteConversation)
+        {
+            var denialReason = ConversationWarmReusePolicy.GetWarmReuseDenialReason(
+                warmRuntimeSnapshot, initialWarmReuseBinding, ConnectionInstanceId);
+            Logger.LogInformation(
+                "Warm reuse denied for conversation, will attempt slow hydration. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ExpectedConnectionInstanceId={ExpectedConnectionInstanceId} ActualConnectionInstanceId={ActualConnectionInstanceId} Reason={Reason}",
+                sessionId,
+                initialWarmReuseBinding?.RemoteSessionId,
+                warmRuntimeSnapshot?.ConnectionInstanceId,
+                ConnectionInstanceId,
+                denialReason);
+        }
+
         await SetConversationRuntimeStateAsync(
                 sessionId,
                 ConversationRuntimePhase.Selecting,
@@ -3729,6 +3744,16 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 NotifyConversationListChanged();
                 return true;
             }
+
+            var warmDenialReason = ConversationWarmReusePolicy.GetWarmReuseDenialReason(
+                warmRuntimeSnapshot, warmReuseBinding, warmReuseConnectionInstanceId);
+            Logger.LogInformation(
+                "Warm reuse denied after connection established, falling back to slow hydration. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ExpectedConnectionInstanceId={ExpectedConnectionInstanceId} ActualConnectionInstanceId={ActualConnectionInstanceId} Reason={Reason}",
+                sessionId,
+                warmReuseBinding?.RemoteSessionId,
+                warmRuntimeSnapshot?.ConnectionInstanceId,
+                warmReuseConnectionInstanceId,
+                warmDenialReason);
 
             await SetConversationRuntimeStateAsync(
                     sessionId,
@@ -3879,6 +3904,18 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 sessionId);
             await ClearConversationUnreadAttentionAsync(sessionId).ConfigureAwait(false);
             return true;
+        }
+
+        {
+            var denialReason = ConversationWarmReusePolicy.GetWarmReuseDenialReason(
+                warmRuntimeSnapshot ?? state.ResolveRuntimeState(sessionId), binding, ConnectionInstanceId);
+            Logger.LogInformation(
+                "Warm reuse denied in HydrateConversationAsync, falling back to slow hydration. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ExpectedConnectionInstanceId={ExpectedConnectionInstanceId} ActualConnectionInstanceId={ActualConnectionInstanceId} Reason={Reason}",
+                sessionId,
+                binding?.RemoteSessionId,
+                (warmRuntimeSnapshot ?? state.ResolveRuntimeState(sessionId))?.ConnectionInstanceId,
+                ConnectionInstanceId,
+                denialReason);
         }
 
         var remotePhaseStopwatch = Stopwatch.StartNew();
@@ -7216,7 +7253,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         await _chatConnectionStore.Dispatch(new SetSettingsSelectedProfileAction(profile.Id)).ConfigureAwait(false);
     }
 
-    private void ApplyChatServiceReplacement(IChatService? chatService, ServiceReplaceIntent intent = ServiceReplaceIntent.ForegroundOwner)
+    private void ApplyChatServiceReplacement(
+        IChatService? chatService,
+        ServiceReplaceIntent intent = ServiceReplaceIntent.ForegroundOwner)
     {
         if (_chatService != null)
         {
@@ -7245,6 +7284,37 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         OnPropertyChanged(nameof(IsInitialized));
     }
 
+    private async Task ApplyChatServiceReplacementAsync(
+        IChatService? chatService,
+        ServiceReplaceIntent intent = ServiceReplaceIntent.ForegroundOwner)
+    {
+        if (_chatService != null)
+        {
+            UnsubscribeFromChatService(_chatService);
+        }
+
+        if (intent == ServiceReplaceIntent.ForegroundOwner)
+        {
+            await _chatStore.Dispatch(new ResetConversationRuntimeStatesAction()).ConfigureAwait(false);
+            _remoteHydrationSessionUpdateBaselineCounts.Clear();
+            _remoteHydrationKnownTranscriptBaselineCounts.Clear();
+            _remoteHydrationKnownTranscriptGrowthGraceDeadlineUtc.Clear();
+            _hydrationOverlayPhase = HydrationOverlayPhase.None;
+            _hydrationOverlayPhaseConversationId = null;
+            _pendingAskUserRequestsByConversation.Clear();
+            PendingAskUserRequest = null;
+        }
+        _chatService = chatService;
+        if (chatService != null)
+        {
+            SubscribeToChatService(chatService);
+        }
+
+        OnPropertyChanged(nameof(OverlayStatusText));
+        OnPropertyChanged(nameof(CurrentChatService));
+        OnPropertyChanged(nameof(IsInitialized));
+    }
+
     public void ReplaceChatService(IChatService? chatService)
     {
         if (_uiDispatcher.HasThreadAccess)
@@ -7253,19 +7323,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
-        _ = ReplaceChatServiceAsync(chatService);
+        _uiDispatcher.Enqueue(() => ApplyChatServiceReplacement(chatService));
     }
 
     public Task ReplaceChatServiceAsync(IChatService? chatService, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return PostToUiAsync(() => ApplyChatServiceReplacement(chatService));
+        return PostToUiAsync(() => ApplyChatServiceReplacementAsync(chatService));
     }
 
     internal Task ReplaceChatServiceWithIntentAsync(IChatService? chatService, ServiceReplaceIntent intent, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return PostToUiAsync(() => ApplyChatServiceReplacement(chatService, intent));
+        return PostToUiAsync(() => ApplyChatServiceReplacementAsync(chatService, intent));
     }
 
     public void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)
@@ -7622,6 +7692,19 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 binding.RemoteSessionId,
                 ConnectionInstanceId);
             return true;
+        }
+
+        {
+            var runtimeState = state.ResolveRuntimeState(conversationId);
+            var denialReason = ConversationWarmReusePolicy.GetWarmReuseDenialReason(
+                runtimeState, binding, ConnectionInstanceId);
+            Logger.LogInformation(
+                "Warm reuse denied in HydrateConversationAsync, falling back to slow hydration. ConversationId={ConversationId} RemoteSessionId={RemoteSessionId} ExpectedConnectionInstanceId={ExpectedConnectionInstanceId} ActualConnectionInstanceId={ActualConnectionInstanceId} Reason={Reason}",
+                conversationId,
+                binding.RemoteSessionId,
+                runtimeState?.ConnectionInstanceId,
+                ConnectionInstanceId,
+                denialReason);
         }
 
         await TryPublishShellSessionActivationPhaseAsync(

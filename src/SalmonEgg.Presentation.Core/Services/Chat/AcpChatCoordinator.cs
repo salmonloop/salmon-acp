@@ -879,6 +879,10 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
     {
         public static InlineDispatcher Instance { get; } = new();
 
+        /// <summary>
+        /// Pool connections have no UI thread; return true to allow direct enqueue
+        /// semantics. Callers that need real UI-thread affinity should not use this.
+        /// </summary>
         public bool HasThreadAccess => true;
 
         public void Enqueue(Action action) => action();

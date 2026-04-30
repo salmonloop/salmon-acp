@@ -1042,6 +1042,8 @@ public class ChatViewModelTests
                     .Add("conv-foreground", new ConversationBindingSlice("conv-foreground", "remote-foreground", "profile-1"))
                     .Add("conv-background", new ConversationBindingSlice("conv-background", "remote-background", "profile-1"))
             });
+            await WaitForConditionAsync(() =>
+                Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-foreground", StringComparison.Ordinal)));
 
             chatService.Raise(
                 service => service.SessionUpdateReceived += null,
@@ -1300,6 +1302,8 @@ public class ChatViewModelTests
                     .Add("conv-stale-profile-background", new ConversationBindingSlice("conv-stale-profile-background", "remote-stale-background", "profile-1"))
                     .Add("conv-active-profile-background", new ConversationBindingSlice("conv-active-profile-background", "remote-active-background", "profile-2"))
             });
+            await WaitForConditionAsync(() =>
+                Task.FromResult(string.Equals(fixture.ViewModel.CurrentSessionId, "conv-foreground", StringComparison.Ordinal)));
             await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-2"));
 
             oldProfileService.Raise(
@@ -8340,7 +8344,14 @@ public class ChatViewModelTests
         await syncContext.RunUntilCompletedAsync(hydrationTask);
 
         Assert.True(await hydrationTask);
-        Assert.Equal("remote title only", fixture.ViewModel.CurrentSessionDisplayName);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(string.Equals(
+                fixture.ViewModel.CurrentSessionDisplayName,
+                "remote title only",
+                StringComparison.Ordinal));
+        });
         await WaitForConditionAsync(async () =>
         {
             syncContext.RunAll();

@@ -26,4 +26,43 @@ public static class ConversationWarmReusePolicy
             && string.Equals(hydratedRuntime.ProfileId, binding.ProfileId, StringComparison.Ordinal)
             && string.Equals(hydratedRuntime.ConnectionInstanceId, currentConnectionInstanceId, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Returns a human-readable reason why warm reuse was denied, or null if reuse is allowed.
+    /// Useful for diagnostic logging when falling back from hot return to slow hydration.
+    /// </summary>
+    public static string? GetWarmReuseDenialReason(
+        ConversationRuntimeSlice? runtimeState,
+        ConversationBindingSlice? binding,
+        string? currentConnectionInstanceId)
+    {
+        if (runtimeState is not { Phase: ConversationRuntimePhase.Warm } hydratedRuntime)
+        {
+            return "RuntimeStateNotWarm";
+        }
+
+        if (binding is null
+            || string.IsNullOrWhiteSpace(binding.RemoteSessionId)
+            || string.IsNullOrWhiteSpace(currentConnectionInstanceId))
+        {
+            return "MissingBindingOrConnectionInstanceId";
+        }
+
+        if (!string.Equals(hydratedRuntime.RemoteSessionId, binding.RemoteSessionId, StringComparison.Ordinal))
+        {
+            return "RemoteSessionIdMismatch";
+        }
+
+        if (!string.Equals(hydratedRuntime.ProfileId, binding.ProfileId, StringComparison.Ordinal))
+        {
+            return "ProfileIdMismatch";
+        }
+
+        if (!string.Equals(hydratedRuntime.ConnectionInstanceId, currentConnectionInstanceId, StringComparison.Ordinal))
+        {
+            return "ConnectionInstanceIdMismatch";
+        }
+
+        return null;
+    }
 }
