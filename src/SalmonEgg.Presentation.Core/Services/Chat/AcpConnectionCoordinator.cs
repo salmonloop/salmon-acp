@@ -44,7 +44,7 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
     public async Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await UpdateProfileAsync(profileId).ConfigureAwait(false);
+        await UpdateForegroundProfileAsync(profileId).ConfigureAwait(false);
         await _store.Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Connecting, Error: null))
             .ConfigureAwait(false);
     }
@@ -52,7 +52,7 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
     public async Task SetInitializingAsync(string? profileId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await UpdateProfileAsync(profileId).ConfigureAwait(false);
+        await UpdateForegroundProfileAsync(profileId).ConfigureAwait(false);
         await _store.Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Initializing, Error: null))
             .ConfigureAwait(false);
     }
@@ -60,7 +60,7 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
     public async Task SetConnectedAsync(string? profileId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await UpdateProfileAsync(profileId).ConfigureAwait(false);
+        await UpdateForegroundProfileAsync(profileId).ConfigureAwait(false);
         await _store.Dispatch(new SetConnectionPhaseAction(ConnectionPhase.Connected, Error: null))
             .ConfigureAwait(false);
     }
@@ -192,8 +192,8 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
         }
     }
 
-    private Task UpdateProfileAsync(string? profileId)
-        => _store.Dispatch(new SetSelectedProfileAction(profileId)).AsTask();
+    private Task UpdateForegroundProfileAsync(string? profileId)
+        => _store.Dispatch(new SetForegroundTransportProfileAction(profileId)).AsTask();
 
     private static void ReleaseBufferedUpdatesAfterInterruptedHydration(
         IAcpSessionUpdateBufferController? adapter,

@@ -23,10 +23,12 @@ public sealed class ChatStateProjector : IChatStateProjector
         ConversationRemoteBindingState? binding)
     {
         ArgumentNullException.ThrowIfNull(storeState);
-        var selectedProfileId = connectionState.SelectedProfileId;
-        var effectiveDisplayProfileId = !string.IsNullOrWhiteSpace(connectionState.CommittedProfileId)
-            ? connectionState.CommittedProfileId
-            : selectedProfileId;
+        var settingsSelectedProfileId = connectionState.SettingsSelectedProfileId;
+        var foregroundTransportProfileId = connectionState.ForegroundTransportProfileId;
+        var chatOwnerProfileId = binding?.BoundProfileId;
+        var effectiveDisplayProfileId = !string.IsNullOrWhiteSpace(chatOwnerProfileId)
+            ? chatOwnerProfileId
+            : foregroundTransportProfileId;
         var displayAgentName = string.Equals(storeState.AgentProfileId, effectiveDisplayProfileId, StringComparison.Ordinal)
             ? storeState.AgentName
             : null;
@@ -70,7 +72,11 @@ public sealed class ChatStateProjector : IChatStateProjector
 
         return new ChatUiProjection(
             HydratedConversationId: hydratedConversationId,
-            SelectedProfileId: selectedProfileId,
+            ChatOwnerProfileId: chatOwnerProfileId,
+            SettingsSelectedProfileId: !string.IsNullOrWhiteSpace(settingsSelectedProfileId)
+                ? settingsSelectedProfileId
+                : effectiveDisplayProfileId,
+            ForegroundTransportProfileId: foregroundTransportProfileId,
             RemoteSessionId: binding?.RemoteSessionId,
             IsSessionActive: !string.IsNullOrWhiteSpace(hydratedConversationId),
             IsPromptInFlight: storeState.IsPromptInFlight,
@@ -135,7 +141,9 @@ public sealed class ChatStateProjector : IChatStateProjector
 
 public sealed record ChatUiProjection(
     string? HydratedConversationId,
-    string? SelectedProfileId,
+    string? ChatOwnerProfileId,
+    string? SettingsSelectedProfileId,
+    string? ForegroundTransportProfileId,
     string? RemoteSessionId,
     bool IsSessionActive,
     bool IsPromptInFlight,

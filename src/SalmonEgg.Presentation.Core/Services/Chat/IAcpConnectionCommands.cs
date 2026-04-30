@@ -89,6 +89,15 @@ public interface IAcpConnectionCommands
     Task DisconnectAsync(
         IAcpChatCoordinatorSink sink,
         CancellationToken cancellationToken = default);
+
+    Task<AcpTransportApplyResult> ConnectProfileInPoolAsync(
+        ServerConfiguration profile,
+        IAcpTransportConfiguration transportConfiguration,
+        CancellationToken cancellationToken = default);
+
+    Task DisconnectProfileInPoolAsync(
+        string profileId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

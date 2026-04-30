@@ -48,7 +48,7 @@ public sealed class AcpConnectionDependencySnapshotProvider : IAcpConnectionDepe
             .Select(binding => binding.ProfileId!)
             .ToImmutableHashSet(StringComparer.Ordinal);
 
-        return new AcpConnectionDependencySnapshot(connectionState.SelectedProfileId, profiles);
+        return new AcpConnectionDependencySnapshot(connectionState.ForegroundTransportProfileId, profiles);
     }
 }
 

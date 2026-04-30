@@ -20,7 +20,7 @@ public sealed class AcpConnectionDependencySnapshotProviderTests
         });
         var connectionState = State.Value(new object(), () => ChatConnectionState.Empty with
         {
-            SelectedProfileId = "profile-b"
+            ForegroundTransportProfileId = "profile-b"
         });
         var provider = new AcpConnectionDependencySnapshotProvider(
             new ChatStore(chatState),

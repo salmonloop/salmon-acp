@@ -288,7 +288,7 @@ public sealed class AcpConnectionCoordinatorTests
             () => ChatConnectionState.Empty with
             {
                 Phase = ConnectionPhase.Connected,
-                SelectedProfileId = "profile-1",
+                SettingsSelectedProfileId = "profile-1",
                 ConnectionInstanceId = "conn-old",
                 Generation = 9
             });
@@ -301,7 +301,7 @@ public sealed class AcpConnectionCoordinatorTests
 
         var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
         Assert.Equal(ConnectionPhase.Connected, updated.Phase);
-        Assert.Equal("profile-1", updated.SelectedProfileId);
+        Assert.Equal("profile-1", updated.SettingsSelectedProfileId);
         Assert.Equal("conn-new", updated.ConnectionInstanceId);
         Assert.Equal(10, updated.Generation);
     }
@@ -314,7 +314,7 @@ public sealed class AcpConnectionCoordinatorTests
             () => ChatConnectionState.Empty with
             {
                 Phase = ConnectionPhase.Connected,
-                SelectedProfileId = "profile-1",
+                SettingsSelectedProfileId = "profile-1",
                 ConnectionInstanceId = "conn-1",
                 Generation = 3
             });
@@ -340,7 +340,7 @@ public sealed class AcpConnectionCoordinatorTests
             () => ChatConnectionState.Empty with
             {
                 Phase = ConnectionPhase.Connected,
-                SelectedProfileId = "profile-1",
+                SettingsSelectedProfileId = "profile-1",
                 ConnectionInstanceId = "conn-1",
                 Generation = 5
             });
@@ -355,14 +355,14 @@ public sealed class AcpConnectionCoordinatorTests
             var state = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
             return state.Phase == ConnectionPhase.Disconnected
                 && string.Equals(state.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)
-                && state.SelectedProfileId is null
+                && state.ForegroundTransportProfileId is null
                 && state.Generation == 6;
         });
 
         var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
         Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
         Assert.Equal("conn-1", updated.ConnectionInstanceId);
-        Assert.Null(updated.SelectedProfileId);
+        Assert.Null(updated.ForegroundTransportProfileId);
         Assert.Equal(6, updated.Generation);
     }
 

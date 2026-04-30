@@ -120,11 +120,12 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     public AcpConnectionSettingsViewModel(
         ChatViewModel chatViewModel,
+        IAcpConnectionCommands connectionCommands,
         AcpProfilesViewModel profiles,
         AppPreferencesViewModel preferences,
         ILogger<AcpConnectionSettingsViewModel> logger,
         IUiDispatcher? uiDispatcher = null)
-        : this(new SettingsChatConnectionAdapter(chatViewModel), profiles, preferences, logger, uiDispatcher)
+        : this(new SettingsChatConnectionAdapter(chatViewModel, connectionCommands), profiles, preferences, logger, uiDispatcher)
     {
     }
 
@@ -414,7 +415,8 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
 
     public async Task HandleConnectionToggleAsync(bool shouldConnect)
     {
-        if (_connectionState.IsConnecting || _connectionState.IsInitializing)
+        var profile = Profiles.SelectedProfile;
+        if (profile == null)
         {
             return;
         }
@@ -423,18 +425,11 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         {
             if (shouldConnect)
             {
-                if (!_connectionState.IsConnected)
-                {
-                    await ConnectToProfileAsync(Profiles.SelectedProfile);
-                }
-
+                await _connectionCommands.ConnectProfileInPoolAsync(profile);
                 return;
             }
 
-            if (_connectionState.IsConnected)
-            {
-                await _connectionCommands.DisconnectCommand.ExecuteAsync(null);
-            }
+            await _connectionCommands.DisconnectProfileInPoolAsync(profile.Id);
         }
         catch (Exception ex)
         {

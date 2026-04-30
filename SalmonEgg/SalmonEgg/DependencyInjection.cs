@@ -318,7 +318,9 @@ public static class DependencyInjection
                 sp.GetRequiredService<IConversationBindingCommands>(),
                 sp.GetRequiredService<ILogger<DiscoverSessionImportCoordinator>>()));
         services.AddSingleton<ISettingsChatConnection>(sp =>
-            new SettingsChatConnectionAdapter(sp.GetRequiredService<ChatViewModel>()));
+            new SettingsChatConnectionAdapter(
+                sp.GetRequiredService<ChatViewModel>(),
+                sp.GetRequiredService<IAcpConnectionCommands>()));
         services.AddSingleton<IChatLaunchWorkflowChatFacade>(sp =>
             new ChatLaunchWorkflowChatFacadeAdapter(
                 sp.GetRequiredService<ChatViewModel>(),

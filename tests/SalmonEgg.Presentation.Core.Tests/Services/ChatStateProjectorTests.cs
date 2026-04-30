@@ -10,40 +10,39 @@ namespace SalmonEgg.Presentation.Core.Tests.Services;
 public sealed class ChatStateProjectorTests
 {
     [Fact]
-    public async Task Apply_SelectedProfilePrefersStoreOverBinding()
+    public async Task Apply_ChatOwnerComesFromBindingProfile()
     {
         var binding = new ConversationRemoteBindingState("conv-1", "remote-1", "profile-binding");
         var projector = new ChatStateProjector();
-        var connectionState = ChatConnectionState.Empty with { SelectedProfileId = "profile-store" };
+        var connectionState = ChatConnectionState.Empty with { SettingsSelectedProfileId = "profile-store" };
 
         var projection = projector.Apply(ChatState.Empty, connectionState, "conv-1", binding);
 
-        Assert.Equal("profile-store", projection.SelectedProfileId);
+        Assert.Equal("profile-binding", projection.ChatOwnerProfileId);
+        Assert.Equal("profile-store", projection.SettingsSelectedProfileId);
         Assert.Equal("remote-1", projection.RemoteSessionId);
     }
 
     [Fact]
-    public void Apply_DoesNotFallbackToBindingProfileWhenConnectionStoreProfileMissing()
+    public void Apply_ChatOwnerIsNullWhenBindingMissing()
     {
-        var binding = new ConversationRemoteBindingState("conv-2", "remote-2", "profile-binding");
         var projector = new ChatStateProjector();
 
-        var projection = projector.Apply(ChatState.Empty, ChatConnectionState.Empty, "conv-2", binding);
+        var projection = projector.Apply(ChatState.Empty, ChatConnectionState.Empty, "conv-2", binding: null);
 
-        Assert.Null(projection.SelectedProfileId);
-        Assert.Equal("remote-2", projection.RemoteSessionId);
+        Assert.Null(projection.ChatOwnerProfileId);
     }
 
     [Fact]
     public void Apply_ReturnsNullRemoteSessionWhenBindingMissing()
     {
         var projector = new ChatStateProjector();
-        var connectionState = ChatConnectionState.Empty with { SelectedProfileId = "profile-store" };
+        var connectionState = ChatConnectionState.Empty with { SettingsSelectedProfileId = "profile-store" };
 
         var projection = projector.Apply(ChatState.Empty, connectionState, "conv-3", binding: null);
 
         Assert.Null(projection.RemoteSessionId);
-        Assert.Equal("profile-store", projection.SelectedProfileId);
+        Assert.Equal("profile-store", projection.SettingsSelectedProfileId);
     }
 
     [Fact]
@@ -109,7 +108,7 @@ public sealed class ChatStateProjectorTests
     }
 
     [Fact]
-    public void Apply_AgentDisplayPrefersCommittedProfileOwnershipOverSelectedIntent()
+    public void Apply_AgentDisplayUsesForegroundTransportProfileWhenNoBinding()
     {
         var projector = new ChatStateProjector();
         var storeState = ChatState.Empty with
@@ -120,8 +119,8 @@ public sealed class ChatStateProjectorTests
         };
         var connectionState = ChatConnectionState.Empty with
         {
-            SelectedProfileId = "profile-next",
-            CommittedProfileId = "profile-committed"
+            SettingsSelectedProfileId = "profile-next",
+            ForegroundTransportProfileId = "profile-committed"
         };
 
         var projection = projector.Apply(storeState, connectionState, "conv-1", null);
@@ -131,25 +130,26 @@ public sealed class ChatStateProjectorTests
     }
 
     [Fact]
-    public void Apply_AgentDisplayFallsBackToSelectedProfileBeforeCommitExists()
+    public void Apply_AgentDisplayPrefersBindingProfileOverForegroundTransport()
     {
         var projector = new ChatStateProjector();
         var storeState = ChatState.Empty with
         {
-            AgentProfileId = "profile-selected",
-            AgentName = "Selected Agent",
-            AgentVersion = "1.0.0"
+            AgentProfileId = "profile-binding",
+            AgentName = "Binding Agent",
+            AgentVersion = "2.0.0"
         };
         var connectionState = ChatConnectionState.Empty with
         {
-            SelectedProfileId = "profile-selected",
-            CommittedProfileId = null
+            SettingsSelectedProfileId = "profile-other",
+            ForegroundTransportProfileId = "profile-transport"
         };
+        var binding = new ConversationRemoteBindingState("conv-1", "remote-1", "profile-binding");
 
-        var projection = projector.Apply(storeState, connectionState, "conv-1", null);
+        var projection = projector.Apply(storeState, connectionState, "conv-1", binding);
 
-        Assert.Equal("Selected Agent", projection.AgentName);
-        Assert.Equal("1.0.0", projection.AgentVersion);
+        Assert.Equal("Binding Agent", projection.AgentName);
+        Assert.Equal("2.0.0", projection.AgentVersion);
     }
 
     [Fact]

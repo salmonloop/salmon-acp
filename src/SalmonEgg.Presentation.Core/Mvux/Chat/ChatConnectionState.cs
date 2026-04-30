@@ -11,21 +11,21 @@ public enum ConnectionPhase
 
 public sealed record ChatConnectionState(
     ConnectionPhase Phase,
-    string? SelectedProfileId,
+    string? SettingsSelectedProfileId,
     string? Error,
     bool IsAuthenticationRequired,
     string? AuthenticationHintMessage,
     long Generation,
     string? ConnectionInstanceId = null,
-    string? CommittedProfileId = null)
+    string? ForegroundTransportProfileId = null)
 {
     public static ChatConnectionState Empty { get; } = new(
         ConnectionPhase.Disconnected,
-        SelectedProfileId: null,
+        SettingsSelectedProfileId: null,
         Error: null,
         IsAuthenticationRequired: false,
         AuthenticationHintMessage: null,
         Generation: 0,
         ConnectionInstanceId: null,
-        CommittedProfileId: null);
+        ForegroundTransportProfileId: null);
 }

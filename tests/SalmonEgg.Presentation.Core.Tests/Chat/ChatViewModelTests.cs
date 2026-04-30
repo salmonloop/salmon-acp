@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Collections.Generic;
@@ -678,7 +678,7 @@ public class ChatViewModelTests
         await WaitForConditionAsync(async () =>
         {
             var connectionState = await fixture.GetConnectionStateAsync();
-            return string.Equals(connectionState.SelectedProfileId, "profile-1", StringComparison.Ordinal);
+            return string.Equals(connectionState.SettingsSelectedProfileId, "profile-1", StringComparison.Ordinal);
         });
     }
 
@@ -1215,8 +1215,7 @@ public class ChatViewModelTests
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(SessionLoadResponse.Completed);
             await fixture.ViewModel.ReplaceChatServiceAsync(backgroundChatService.Object);
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
             await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
 
             backgroundChatService.Raise(
@@ -1301,7 +1300,7 @@ public class ChatViewModelTests
                     .Add("conv-stale-profile-background", new ConversationBindingSlice("conv-stale-profile-background", "remote-stale-background", "profile-1"))
                     .Add("conv-active-profile-background", new ConversationBindingSlice("conv-active-profile-background", "remote-active-background", "profile-2"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-2"));
+            await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-2"));
 
             oldProfileService.Raise(
                 service => service.SessionUpdateReceived += null,
@@ -2110,7 +2109,7 @@ public class ChatViewModelTests
         await Task.Delay(50);
 
         var connectionState = await fixture.GetConnectionStateAsync();
-        Assert.Equal("profile-a", connectionState.SelectedProfileId);
+        Assert.Equal("profile-a", connectionState.SettingsSelectedProfileId);
     }
 
     [Fact]
@@ -2123,7 +2122,7 @@ public class ChatViewModelTests
         await Task.Delay(50);
 
         var connectionState = await fixture.GetConnectionStateAsync();
-        Assert.Equal("profile-a", connectionState.SelectedProfileId);
+        Assert.Equal("profile-a", connectionState.SettingsSelectedProfileId);
         Assert.Null(fixture.ViewModel.SelectedAcpProfile);
         Assert.Null(fixture.Profiles.SelectedProfile);
     }
@@ -2138,7 +2137,7 @@ public class ChatViewModelTests
         var profile = new ServerConfiguration { Id = "profile-a", Name = "Configured Agent", Transport = TransportType.Stdio };
         fixture.Profiles.Profiles.Add(profile);
         await fixture.ViewModel.SelectProfileAsync(profile);
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-a"));
+        await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-a"));
 
         Assert.Equal("Configured Agent", fixture.ViewModel.CurrentAgentDisplayText);
 
@@ -2170,7 +2169,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-2"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-2"));
+        await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-2"));
 
         await WaitForConditionAsync(() =>
             Task.FromResult(string.Equals(fixture.ViewModel.SelectedAcpProfile?.Id, "profile-2", StringComparison.Ordinal)));
@@ -3340,6 +3339,12 @@ public class ChatViewModelTests
         }
     }
 
+    private static async Task DispatchConnectedAsync(ViewModelFixture fixture, string profileId)
+    {
+        await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction(profileId));
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+    }
+
     private static Task AwaitWithSynchronizationContextAsync(SynchronizationContext syncContext, Task task)
         => syncContext is QueueingSynchronizationContext queueingContext
             ? queueingContext.RunUntilCompletedAsync(task)
@@ -3769,6 +3774,17 @@ public class ChatViewModelTests
             CancellationToken cancellationToken = default)
             => RequireInner().DisconnectAsync(sink, cancellationToken);
 
+        public Task<AcpTransportApplyResult> ConnectProfileInPoolAsync(
+            ServerConfiguration profile,
+            IAcpTransportConfiguration transportConfiguration,
+            CancellationToken cancellationToken = default)
+            => RequireInner().ConnectProfileInPoolAsync(profile, transportConfiguration, cancellationToken);
+
+        public Task DisconnectProfileInPoolAsync(
+            string profileId,
+            CancellationToken cancellationToken = default)
+            => RequireInner().DisconnectProfileInPoolAsync(profileId, cancellationToken);
+
         private IAcpConnectionCommands RequireInner()
             => Inner ?? throw new InvalidOperationException("Connection commands have not been initialized.");
     }
@@ -4149,8 +4165,7 @@ public class ChatViewModelTests
             HydratedConversationId = "conv-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
         await Task.Delay(50);
         syncContext.RunAll();
@@ -4326,8 +4341,7 @@ public class ChatViewModelTests
             HydratedConversationId = "conv-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
         await Task.Delay(50);
         syncContext.RunAll();
@@ -6221,7 +6235,7 @@ public class ChatViewModelTests
                 {
                     var connectionState = await activeFixture.GetConnectionStateAsync();
                     return connectionState.Phase == ConnectionPhase.Connected
-                        && string.Equals(connectionState.CommittedProfileId, profile.Id, StringComparison.Ordinal);
+                        && string.Equals(connectionState.ForegroundTransportProfileId, profile.Id, StringComparison.Ordinal);
                 }, timeoutMilliseconds: 2000);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
@@ -6291,8 +6305,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
             await WaitForConditionAsync(async () =>
                 string.Equals((await fixture.GetStateAsync()).HydratedConversationId, "conv-1", StringComparison.Ordinal));
 
@@ -6385,7 +6398,7 @@ public class ChatViewModelTests
                 {
                     var connectionState = await activeFixture.GetConnectionStateAsync();
                     return connectionState.Phase == ConnectionPhase.Connected
-                        && string.Equals(connectionState.CommittedProfileId, profile.Id, StringComparison.Ordinal);
+                        && string.Equals(connectionState.ForegroundTransportProfileId, profile.Id, StringComparison.Ordinal);
                 }, timeoutMilliseconds: 2000);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
@@ -6450,8 +6463,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
@@ -6556,8 +6568,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
         var capturedParams = await loadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -6685,7 +6696,7 @@ public class ChatViewModelTests
         });
 
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
-        await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1")).AsTask());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1")).AsTask());
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected)).AsTask());
 
         var navState = new FakeNavigationPaneState();
@@ -6812,7 +6823,7 @@ public class ChatViewModelTests
 
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
         sessions.Remove("conv-1");
-        await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1")).AsTask());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1")).AsTask());
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected)).AsTask());
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -6962,8 +6973,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
@@ -7060,7 +7070,7 @@ public class ChatViewModelTests
                 {
                     var connectionState = await activeFixture.GetConnectionStateAsync();
                     return connectionState.Phase == ConnectionPhase.Connected
-                        && string.Equals(connectionState.CommittedProfileId, profile.Id, StringComparison.Ordinal);
+                        && string.Equals(connectionState.ForegroundTransportProfileId, profile.Id, StringComparison.Ordinal);
                 }, timeoutMilliseconds: 2000);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
@@ -7125,8 +7135,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
             Assert.True(hydrated);
@@ -7265,7 +7274,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(chatService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
         commands.Setup(x => x.ConnectToProfileAsync(
@@ -7337,8 +7346,7 @@ public class ChatViewModelTests
                         null,
                         new ConversationUsageSnapshot(7, 128, new ConversationUsageCostSnapshot(1.5m, "USD"))))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
@@ -7386,7 +7394,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(chatService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
         commands.Setup(x => x.ConnectToProfileAsync(
@@ -7449,8 +7457,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
@@ -7525,7 +7532,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(chatService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
         commands.Setup(x => x.ConnectToProfileAsync(
@@ -7588,8 +7595,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
@@ -7668,7 +7674,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(reboundService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(reboundService.Object, new InitializeResponse());
             });
 
@@ -7695,11 +7701,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-2"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
-            await WaitForConditionAsync(() => Task.FromResult(
-                string.Equals(fixture.ViewModel.SelectedProfileId, "profile-2", StringComparison.Ordinal)
-                && string.Equals(fixture.ViewModel.SelectedAcpProfile?.Id, "profile-2", StringComparison.Ordinal)));
+            await DispatchConnectedAsync(fixture, "profile-2");
 
             var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
 
@@ -7782,7 +7784,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(chatService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
 
@@ -7820,8 +7822,7 @@ public class ChatViewModelTests
                     .Add("conv-1", new ConversationBindingSlice("conv-1", null, "profile-1"))
                     .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             Assert.Equal("conv-1", (await fixture.GetStateAsync()).HydratedConversationId);
 
@@ -7906,8 +7907,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
 
         Assert.Equal("conv-1", (await fixture.GetStateAsync()).HydratedConversationId);
 
@@ -7956,8 +7956,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await WaitForConditionAsync(() =>
         {
             syncContext.RunAll();
@@ -8028,8 +8027,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -8164,8 +8162,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -8224,8 +8221,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -8299,8 +8295,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -8386,8 +8381,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -8498,8 +8492,7 @@ public class ChatViewModelTests
                     false,
                     null))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
@@ -8921,7 +8914,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-2"));
+        await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-2"));
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connecting));
 
         Assert.Equal("conv-remote", fixture.ViewModel.CurrentSessionId);
@@ -9531,8 +9524,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
 
         var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
         var activationTask = switcher.SwitchConversationAsync("conv-2");
@@ -9634,8 +9626,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var observedStatuses = new List<string>();
@@ -9794,8 +9785,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
@@ -9952,8 +9942,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switchTask = fixture.ViewModel.SwitchConversationAsync("conv-2");
@@ -10096,8 +10085,7 @@ public class ChatViewModelTests
                 .Add("conv-local", new ConversationBindingSlice("conv-local", "remote-local", "profile-1"))
                 .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switchTask = fixture.ViewModel.SwitchConversationAsync("conv-remote");
@@ -10211,8 +10199,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
@@ -10387,8 +10374,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
@@ -10528,8 +10514,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
@@ -10647,8 +10632,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var switcher = (IConversationSessionSwitcher)fixture.ViewModel;
@@ -11012,7 +10996,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(chatService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
 
@@ -11050,8 +11034,7 @@ public class ChatViewModelTests
                     .Add("conv-1", new ConversationBindingSlice("conv-1", null, "profile-1"))
                     .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-1");
 
             var activated = await fixture.ViewModel.SwitchConversationAsync("conv-2");
 
@@ -11126,8 +11109,7 @@ public class ChatViewModelTests
             LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)));
 
         fixture.ViewModel.ReplaceChatService(chatService.Object);
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await fixture.UpdateStateAsync(state => state with
         {
@@ -11425,8 +11407,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var firstRemoteSwitchTask = fixture.ViewModel.SwitchConversationAsync("conv-remote");
@@ -11600,8 +11581,7 @@ public class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var firstRemoteSwitchTask = fixture.ViewModel.SwitchConversationAsync("conv-remote");
@@ -11776,8 +11756,7 @@ public class ChatViewModelTests
                 .Add("conv-remote-1", new ConversationBindingSlice("conv-remote-1", "remote-1", "profile-1"))
                 .Add("conv-remote-2", new ConversationBindingSlice("conv-remote-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var firstRemoteSwitchTask = fixture.ViewModel.SwitchConversationAsync("conv-remote-1");
@@ -11875,7 +11854,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(chatService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(chatService.Object, new InitializeResponse());
             });
 
@@ -11991,7 +11970,7 @@ public class ChatViewModelTests
             {
                 await sink.SelectProfileAsync(profile, cancellationToken);
                 sink.ReplaceChatService(reboundService.Object);
-                await fixture!.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, profile.Id);
                 return new AcpTransportApplyResult(reboundService.Object, new InitializeResponse());
             });
 
@@ -12036,8 +12015,7 @@ public class ChatViewModelTests
                 Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                     .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
             });
-            await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-2"));
-            await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await DispatchConnectedAsync(fixture, "profile-2");
 
             var switched = await fixture.ViewModel.SwitchConversationAsync("conv-remote");
 
@@ -12122,8 +12100,7 @@ public class ChatViewModelTests
 
                 sink.ReplaceChatService(staleService.Object);
                 sink.UpdateAgentIdentity("stale-agent", "1.0.0");
-                await fixture!.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-                await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+                await DispatchConnectedAsync(fixture!, "profile-1");
 
                 return new AcpTransportApplyResult(
                     staleService.Object,
@@ -12338,8 +12315,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
 
         var switched = await fixture.ViewModel.SwitchConversationAsync("conv-2");
 
@@ -12442,8 +12418,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
 
         var switched = await fixture.ViewModel.SwitchConversationAsync("conv-2");
 
@@ -12566,8 +12541,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
 
         var switched = await fixture.ViewModel.SwitchConversationAsync("conv-2");
 
@@ -12672,8 +12646,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         syncContext.RunAll();
 
         var activationTask = fixture.ViewModel.SwitchConversationAsync("conv-2");
@@ -12802,8 +12775,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await WaitForConditionAsync(() =>
             Task.FromResult(string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)));
@@ -12953,8 +12925,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await WaitForConditionAsync(() =>
             Task.FromResult(string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)));
@@ -13051,8 +13022,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await WaitForConditionAsync(() =>
             Task.FromResult(string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)));
@@ -13293,8 +13263,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
 
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         syncContext.RunAll();
 
@@ -13462,8 +13431,7 @@ public class ChatViewModelTests
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
                 .Add("conv-2", new ConversationBindingSlice("conv-2", "remote-2", "profile-1"))
         });
-        await fixture.DispatchConnectionAsync(new SetSelectedProfileAction("profile-1"));
-        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await WaitForConditionAsync(() =>
             Task.FromResult(string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)));

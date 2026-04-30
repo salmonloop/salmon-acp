@@ -29,6 +29,10 @@ public interface ISettingsAcpConnectionCommands
     IAsyncRelayCommand DisconnectCommand { get; }
 
     Task ConnectToAcpProfileAsync(ServerConfiguration profile);
+
+    Task ConnectProfileInPoolAsync(ServerConfiguration profile);
+
+    Task DisconnectProfileInPoolAsync(string profileId);
 }
 
 public interface ISettingsAcpTransportConfiguration : IAcpTransportConfiguration, INotifyPropertyChanged
@@ -121,6 +125,10 @@ internal sealed class CompositeSettingsChatConnection : ISettingsChatConnection
     public IAsyncRelayCommand DisconnectCommand => _commands.DisconnectCommand;
 
     public Task ConnectToAcpProfileAsync(ServerConfiguration profile) => _commands.ConnectToAcpProfileAsync(profile);
+
+    public Task ConnectProfileInPoolAsync(ServerConfiguration profile) => _commands.ConnectProfileInPoolAsync(profile);
+
+    public Task DisconnectProfileInPoolAsync(string profileId) => _commands.DisconnectProfileInPoolAsync(profileId);
 }
 
 /// <summary>
@@ -140,16 +148,24 @@ public sealed class LazySettingsAcpConnectionCommandsAdapter : ISettingsAcpConne
 
     public Task ConnectToAcpProfileAsync(ServerConfiguration profile)
         => _inner.Value.ConnectToAcpProfileAsync(profile);
+
+    public Task ConnectProfileInPoolAsync(ServerConfiguration profile)
+        => _inner.Value.ConnectProfileInPoolAsync(profile);
+
+    public Task DisconnectProfileInPoolAsync(string profileId)
+        => _inner.Value.DisconnectProfileInPoolAsync(profileId);
 }
 
 public sealed class SettingsChatConnectionAdapter : ISettingsChatConnection
 {
     private readonly ChatViewModel _chatViewModel;
+    private readonly IAcpConnectionCommands _connectionCommands;
     private readonly ISettingsAcpTransportConfiguration _transportConfig;
 
-    public SettingsChatConnectionAdapter(ChatViewModel chatViewModel)
+    public SettingsChatConnectionAdapter(ChatViewModel chatViewModel, IAcpConnectionCommands connectionCommands)
     {
         _chatViewModel = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
+        _connectionCommands = connectionCommands ?? throw new ArgumentNullException(nameof(connectionCommands));
         _transportConfig = new SettingsTransportConfigurationAdapter(_chatViewModel.TransportConfig);
     }
 
@@ -182,4 +198,13 @@ public sealed class SettingsChatConnectionAdapter : ISettingsChatConnection
         ArgumentNullException.ThrowIfNull(profile);
         return _chatViewModel.ConnectToAcpProfileCommand.ExecuteAsync(profile);
     }
+
+    public Task ConnectProfileInPoolAsync(ServerConfiguration profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return _connectionCommands.ConnectProfileInPoolAsync(profile, _transportConfig);
+    }
+
+    public Task DisconnectProfileInPoolAsync(string profileId)
+        => _connectionCommands.DisconnectProfileInPoolAsync(profileId);
 }

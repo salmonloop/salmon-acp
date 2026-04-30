@@ -9,7 +9,7 @@ namespace SalmonEgg.Presentation.Core.Tests.Chat;
 public class ChatStateProjectorTests
 {
     [Fact]
-    public void Apply_ProjectsRemoteBindingFromWorkspaceInput()
+    public void Apply_ProjectsChatOwnerFromBinding()
     {
         var projector = new ChatStateProjector();
         var state = new ChatState(
@@ -23,12 +23,12 @@ public class ChatStateProjectorTests
             "session-1",
             new ConversationRemoteBindingState("session-1", "remote-1", "profile-a"));
 
-        Assert.Null(projection.SelectedProfileId);
+        Assert.Equal("profile-a", projection.ChatOwnerProfileId);
         Assert.Equal("remote-1", projection.RemoteSessionId);
     }
 
     [Fact]
-    public void Apply_PrefersSelectedProfileOverBindingFallback()
+    public void Apply_SetsSettingsSelectedProfileIdSeparatelyFromChatOwner()
     {
         var projector = new ChatStateProjector();
         var state = new ChatState(
@@ -38,11 +38,12 @@ public class ChatStateProjectorTests
 
         var projection = projector.Apply(
             state,
-            ChatConnectionState.Empty with { SelectedProfileId = "profile-b" },
+            ChatConnectionState.Empty with { SettingsSelectedProfileId = "profile-b" },
             "session-1",
             new ConversationRemoteBindingState("session-1", "remote-1", "profile-a"));
 
-        Assert.Equal("profile-b", projection.SelectedProfileId);
+        Assert.Equal("profile-a", projection.ChatOwnerProfileId);
+        Assert.Equal("profile-b", projection.SettingsSelectedProfileId);
         Assert.Equal("remote-1", projection.RemoteSessionId);
     }
 }

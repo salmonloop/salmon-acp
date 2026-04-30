@@ -111,6 +111,12 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
         return Task.CompletedTask;
     }
 
+    Task ReplaceChatServiceAsync(IChatService? chatService, ServiceReplaceIntent intent, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ReplaceChatServiceAsync(chatService, cancellationToken);
+    }
+
     void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)
     {
     }

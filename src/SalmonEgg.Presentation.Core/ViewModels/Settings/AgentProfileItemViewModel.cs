@@ -144,7 +144,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
         IsConnecting = true;
         try
         {
-            await _commands.ConnectToAcpProfileAsync(_profile).ConfigureAwait(false);
+            await _commands.ConnectProfileInPoolAsync(_profile).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -170,7 +170,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
         IsConnecting = true;
         try
         {
-            await _commands.DisconnectCommand.ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            await _commands.DisconnectProfileInPoolAsync(ProfileId).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

@@ -130,6 +130,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     private bool _suppressProfileSyncFromStore;
     private bool _suppressModeSelectionDispatch;
     private string? _selectedProfileIdFromStore;
+    private string? _settingsSelectedProfileId;
     private int _storeProjectionSequence;
     private readonly object _restoreSync = new();
     private Task? _restoreTask;
@@ -332,14 +333,21 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     public bool ShouldShowConversationInputSurface
         => ShouldShowActiveConversationRoot;
 
+    private bool ShouldPromoteLayoutLoadingToBlockingPresenter
+        => IsLayoutLoading
+            && (IsVisibleTranscriptStaleForCurrentSession
+                || IsCurrentVisibleConversationSupersededByShellIntent);
+
     public bool ShouldShowBlockingLoadingMask
-        => ResolveActivationOverlayVisualState().ShowsBlockingMask;
+        => ResolveActivationOverlayVisualState().ShowsBlockingMask
+            || ShouldPromoteLayoutLoadingToBlockingPresenter;
 
     public bool ShouldShowLoadingOverlayStatusPill
         => ResolveActivationOverlayVisualState().ShowsStatusPill;
 
     public bool ShouldShowLoadingOverlayPresenter
-        => ResolveActivationOverlayVisualState().ShowsPresenter;
+        => ResolveActivationOverlayVisualState().ShowsPresenter
+            || ShouldPromoteLayoutLoadingToBlockingPresenter;
 
     public LoadingOverlayStage OverlayLoadingStage =>
         ResolveActivationOverlayVisualState().Stage;
@@ -1238,7 +1246,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
                 CurrentPrompt = draft;
             }
 
-            ApplySelectedProfileFromStore(projection.SelectedProfileId);
+            ApplySettingsSelectedProfileFromStore(projection.SettingsSelectedProfileId);
+            _selectedProfileIdFromStore = projection.ChatOwnerProfileId;
             _currentRemoteSessionId = projection.RemoteSessionId;
 
             // CRITICAL: Sync transcript BEFORE notifying IsSessionActive/IsHydrating.
@@ -1407,6 +1416,31 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
     }
 
+    private void ApplySettingsSelectedProfileFromStore(string? profileId)
+    {
+        _settingsSelectedProfileId = profileId;
+
+        var match = string.IsNullOrWhiteSpace(profileId)
+            ? null
+            : _acpProfiles.Profiles.FirstOrDefault(p => string.Equals(p.Id, profileId, StringComparison.Ordinal));
+
+        if (!ReferenceEquals(SelectedAcpProfile, match))
+        {
+            _suppressAcpProfileConnect = true;
+            _suppressProfileSyncFromStore = true;
+            try
+            {
+                SelectedAcpProfile = match;
+                _acpProfiles.SelectedProfile = match;
+            }
+            finally
+            {
+                _suppressProfileSyncFromStore = false;
+                _suppressAcpProfileConnect = false;
+            }
+        }
+    }
+
     private ServerConfiguration? ResolveLoadedProfileSelection(ServerConfiguration? profile)
     {
         if (profile is null)
@@ -1553,7 +1587,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         if (!_suppressStoreProfileProjection)
         {
-            _ = _chatConnectionStore.Dispatch(new SetSelectedProfileAction(value?.Id));
+            _ = _chatConnectionStore.Dispatch(new SetSettingsSelectedProfileAction(value?.Id));
         }
 
         if (_suppressAcpProfileConnect || value == null)
@@ -1679,7 +1713,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         ArgumentNullException.ThrowIfNull(profile);
 
         await _chatConnectionStore
-            .Dispatch(new SetSelectedProfileAction(profile.Id))
+            .Dispatch(new SetSettingsSelectedProfileAction(profile.Id))
             .ConfigureAwait(false);
         await ApplyCurrentStoreProjectionAsync().ConfigureAwait(false);
     }
@@ -1954,7 +1988,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
-        if (!string.IsNullOrWhiteSpace(connectionState.SelectedProfileId))
+        if (!string.IsNullOrWhiteSpace(connectionState.SettingsSelectedProfileId))
         {
             return;
         }
@@ -1965,7 +1999,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return;
         }
 
-        await _chatConnectionStore.Dispatch(new SetSelectedProfileAction(binding.BoundProfileId)).ConfigureAwait(false);
+        await _chatConnectionStore.Dispatch(new SetSettingsSelectedProfileAction(binding.BoundProfileId)).ConfigureAwait(false);
     }
 
     private void NotifyConversationListChanged()
@@ -2234,7 +2268,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         return new ConversationRemoteBindingState(
             conversationId,
             null,
-            connectionState.SelectedProfileId);
+            connectionState.ForegroundTransportProfileId);
     }
 
     private string ResolveSessionDisplayName(string? sessionId)
@@ -2614,13 +2648,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         }
 
         var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
-        var profileId = connectionState.SelectedProfileId;
+        var profileId = connectionState.SettingsSelectedProfileId;
         if (string.IsNullOrWhiteSpace(profileId))
         {
             profileId = _preferences.LastSelectedServerId;
             if (!string.IsNullOrWhiteSpace(profileId))
             {
-                await _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profileId)).ConfigureAwait(false);
+                await _chatConnectionStore.Dispatch(new SetSettingsSelectedProfileAction(profileId)).ConfigureAwait(false);
             }
         }
 
@@ -7160,7 +7194,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         if (_uiDispatcher.HasThreadAccess)
         {
             ApplySelectedProfile(profile);
-            _ = _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profile.Id));
+            _ = _chatConnectionStore.Dispatch(new SetSettingsSelectedProfileAction(profile.Id));
             return;
         }
 
@@ -7179,24 +7213,27 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
         cancellationToken.ThrowIfCancellationRequested();
         await PostToUiAsync(() => ApplySelectedProfile(profile)).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        await _chatConnectionStore.Dispatch(new SetSelectedProfileAction(profile.Id)).ConfigureAwait(false);
+        await _chatConnectionStore.Dispatch(new SetSettingsSelectedProfileAction(profile.Id)).ConfigureAwait(false);
     }
 
-    private void ApplyChatServiceReplacement(IChatService? chatService)
+    private void ApplyChatServiceReplacement(IChatService? chatService, ServiceReplaceIntent intent = ServiceReplaceIntent.ForegroundOwner)
     {
         if (_chatService != null)
         {
             UnsubscribeFromChatService(_chatService);
         }
 
-        _ = _chatStore.Dispatch(new ResetConversationRuntimeStatesAction());
-        _remoteHydrationSessionUpdateBaselineCounts.Clear();
-        _remoteHydrationKnownTranscriptBaselineCounts.Clear();
-        _remoteHydrationKnownTranscriptGrowthGraceDeadlineUtc.Clear();
-        _hydrationOverlayPhase = HydrationOverlayPhase.None;
-        _hydrationOverlayPhaseConversationId = null;
-        _pendingAskUserRequestsByConversation.Clear();
-        PendingAskUserRequest = null;
+        if (intent == ServiceReplaceIntent.ForegroundOwner)
+        {
+            _ = _chatStore.Dispatch(new ResetConversationRuntimeStatesAction());
+            _remoteHydrationSessionUpdateBaselineCounts.Clear();
+            _remoteHydrationKnownTranscriptBaselineCounts.Clear();
+            _remoteHydrationKnownTranscriptGrowthGraceDeadlineUtc.Clear();
+            _hydrationOverlayPhase = HydrationOverlayPhase.None;
+            _hydrationOverlayPhaseConversationId = null;
+            _pendingAskUserRequestsByConversation.Clear();
+            PendingAskUserRequest = null;
+        }
         _chatService = chatService;
         if (chatService != null)
         {
@@ -7223,6 +7260,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
     {
         cancellationToken.ThrowIfCancellationRequested();
         return PostToUiAsync(() => ApplyChatServiceReplacement(chatService));
+    }
+
+    internal Task ReplaceChatServiceWithIntentAsync(IChatService? chatService, ServiceReplaceIntent intent, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return PostToUiAsync(() => ApplyChatServiceReplacement(chatService, intent));
     }
 
     public void UpdateConnectionState(bool isConnecting, bool isConnected, bool isInitialized, string? errorMessage)
@@ -7410,8 +7453,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             var hasPendingConnection = connectionState.Phase is ConnectionPhase.Connecting or ConnectionPhase.Initializing
                 || IsConnecting
                 || IsInitializing;
-            var pendingProfileId = !string.IsNullOrWhiteSpace(connectionState.SelectedProfileId)
-                ? connectionState.SelectedProfileId
+            var pendingProfileId = !string.IsNullOrWhiteSpace(connectionState.ForegroundTransportProfileId)
+                ? connectionState.ForegroundTransportProfileId
                 : !string.IsNullOrWhiteSpace(SelectedProfileId)
                     ? SelectedProfileId
                     : SelectedAcpProfile?.Id;
@@ -7769,7 +7812,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             return true;
         }
 
-        return string.Equals(requiredProfileId, connectionState.CommittedProfileId, StringComparison.Ordinal);
+        return string.Equals(requiredProfileId, connectionState.ForegroundTransportProfileId, StringComparison.Ordinal);
     }
 
     private async Task<bool> WaitForRemoteConnectionReadyAsync(
@@ -8324,6 +8367,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IConversationCa
             cancellationToken.ThrowIfCancellationRequested();
             return CanMutate()
                 ? _owner.ReplaceChatServiceAsync(chatService, cancellationToken)
+                : Task.CompletedTask;
+        }
+
+        public Task ReplaceChatServiceAsync(IChatService? chatService, ServiceReplaceIntent intent, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CanMutate()
+                ? _owner.ReplaceChatServiceWithIntentAsync(chatService, intent, cancellationToken)
                 : Task.CompletedTask;
         }
 

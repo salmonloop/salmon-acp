@@ -15,21 +15,21 @@ public static class ChatConnectionReducer
             {
                 Phase = setPhase.Phase,
                 Error = setPhase.Error,
-                CommittedProfileId = setPhase.Phase switch
+                ForegroundTransportProfileId = setPhase.Phase switch
                 {
-                    ConnectionPhase.Connected => current.SelectedProfileId,
                     ConnectionPhase.Disconnected or ConnectionPhase.Error => null,
-                    _ => current.CommittedProfileId
+                    _ => current.ForegroundTransportProfileId
                 },
                 Generation = nextGeneration
             },
-            SetSelectedProfileAction setProfile => current with
+            SetSettingsSelectedProfileAction setSettings => current with
             {
-                SelectedProfileId = setProfile.ProfileId,
-                CommittedProfileId =
-                    string.Equals(current.CommittedProfileId, setProfile.ProfileId, StringComparison.Ordinal)
-                    ? current.CommittedProfileId
-                    : null,
+                SettingsSelectedProfileId = setSettings.ProfileId,
+                Generation = nextGeneration
+            },
+            SetForegroundTransportProfileAction setForeground => current with
+            {
+                ForegroundTransportProfileId = setForeground.ProfileId,
                 Generation = nextGeneration
             },
             SetConnectionInstanceIdAction setConnectionInstanceId => current with
@@ -45,6 +45,7 @@ public static class ChatConnectionReducer
             },
             ResetConnectionStateAction => ChatConnectionState.Empty with
             {
+                SettingsSelectedProfileId = current.SettingsSelectedProfileId,
                 ConnectionInstanceId = current.ConnectionInstanceId,
                 Generation = nextGeneration
             },

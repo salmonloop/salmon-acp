@@ -1542,6 +1542,113 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
+    public async Task ConnectProfileInPoolAsync_DoesNotCallConnectionCoordinatorOrReplaceVisibleChatService()
+    {
+        var service = CreateChatService(new AgentCapabilities(loadSession: true));
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        var connectionCoordinator = new Mock<IAcpConnectionCoordinator>();
+        var sink = new FakeSink
+        {
+            CurrentSessionId = "conv-a",
+            CurrentRemoteSessionId = "remote-a",
+            SelectedProfileId = "profile-a"
+        };
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
+            .Returns(service.Object);
+
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            connectionCoordinator: connectionCoordinator.Object);
+
+        var profile = new ServerConfiguration
+        {
+            Id = "profile-b",
+            Name = "Agent B",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent.exe",
+            StdioArgs = "--serve"
+        };
+        var transport = new FakeTransportConfiguration();
+
+        var result = await sut.ConnectProfileInPoolAsync(profile, transport);
+
+        Assert.IsType<AcpChatServiceAdapter>(result.ChatService);
+        service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+        connectionCoordinator.Verify(x => x.SetConnectedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        connectionCoordinator.Verify(x => x.SetConnectingAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        connectionCoordinator.Verify(x => x.SetInitializingAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Empty(sink.ReplaceChatServiceCalls);
+    }
+
+    [Fact]
+    public async Task ConnectProfileInPoolAsync_WhenCalledTwiceForSameProfile_ReusesExistingSession()
+    {
+        var service = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
+            .Returns(service.Object);
+
+        var sut = new AcpChatCoordinator(factory.Object, logger.Object);
+        var profile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent.exe",
+            StdioArgs = "--serve"
+        };
+        var transport = new FakeTransportConfiguration();
+
+        var first = await sut.ConnectProfileInPoolAsync(profile, transport);
+        var second = await sut.ConnectProfileInPoolAsync(profile, transport);
+
+        Assert.Same(first.ChatService, second.ChatService);
+        service.Verify(x => x.InitializeAsync(It.IsAny<InitializeParams>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DisconnectProfileInPoolAsync_RemovesSessionFromPoolAndDisposesService()
+    {
+        var service = CreateChatService();
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        var registry = new InMemoryAcpConnectionSessionRegistry();
+
+        factory
+            .Setup(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
+            .Returns(service.Object);
+
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            sessionRegistry: registry);
+        var profile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Agent",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent.exe",
+            StdioArgs = "--serve"
+        };
+        var transport = new FakeTransportConfiguration();
+
+        await sut.ConnectProfileInPoolAsync(profile, transport);
+        Assert.True(registry.TryGetByProfile("profile-1", out _));
+
+        await sut.DisconnectProfileInPoolAsync("profile-1");
+
+        Assert.False(registry.TryGetByProfile("profile-1", out _));
+        service.Verify(x => x.DisconnectAsync(), Times.Once);
+    }
+
+    [Fact]
     public async Task ApplyTransportConfigurationAsync_GenerationAdvanced_ReleasesBufferedUpdatesImmediately()
     {
         var transport = new FakeTransportConfiguration

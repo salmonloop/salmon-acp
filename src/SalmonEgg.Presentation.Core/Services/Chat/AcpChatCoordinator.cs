@@ -440,24 +440,86 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         await _connectionCoordinator.ResetAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<AcpTransportApplyResult> ConnectProfileInPoolAsync(
+        ServerConfiguration profile,
+        IAcpTransportConfiguration transportConfiguration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(transportConfiguration);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ApplyProfileToTransportConfiguration(profile, transportConfiguration);
+        var reuseKey = BuildConnectionReuseKey(transportConfiguration);
+
+        if (_connectionPoolManager.TryGetReusableSession(profile.Id, reuseKey, out var cachedSession))
+        {
+            _sessionRegistry.Touch(profile.Id);
+            return new AcpTransportApplyResult(cachedSession.Service, cachedSession.InitializeResponse);
+        }
+
+        var service = _chatServiceFactory.CreateChatService(
+            transportConfiguration.SelectedTransportType,
+            transportConfiguration.SelectedTransportType == TransportType.Stdio ? transportConfiguration.StdioCommand : null,
+            transportConfiguration.SelectedTransportType == TransportType.Stdio ? transportConfiguration.StdioArgs : null,
+            transportConfiguration.SelectedTransportType == TransportType.Stdio ? null : transportConfiguration.RemoteUrl);
+
+        var wrapped = WrapChatService(service, sink: null, cancellationToken);
+        try
+        {
+            var initializeResponse = await wrapped
+                .InitializeAsync(CreateDefaultInitializeParams())
+                .ConfigureAwait(false);
+            var connectionInstanceId = CreateConnectionInstanceId();
+            _connectionPoolManager.RecordSession(profile.Id, wrapped, initializeResponse, reuseKey, connectionInstanceId);
+            return new AcpTransportApplyResult(wrapped, initializeResponse);
+        }
+        catch
+        {
+            await DisposeServiceAsync(wrapped).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task DisconnectProfileInPoolAsync(
+        string profileId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(profileId))
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_sessionRegistry.TryGetByProfile(profileId, out var session))
+        {
+            _connectionPoolManager.RemoveByService(session.Service, out _);
+            await DisposeServiceAsync(session.Service).ConfigureAwait(false);
+        }
+    }
+
     private AcpChatServiceAdapter WrapChatService(
         IChatService chatService,
-        IAcpChatCoordinatorSink sink,
+        IAcpChatCoordinatorSink? sink,
         CancellationToken applyScopeToken)
     {
         ArgumentNullException.ThrowIfNull(chatService);
-        ArgumentNullException.ThrowIfNull(sink);
 
         AcpChatServiceAdapter? wrappedService = null;
-        var eventAdapter = new AcpEventAdapter(
-            update => wrappedService!.PublishBufferedUpdate(update),
-            sink.Dispatcher,
-            _sessionUpdateBufferLimit,
-            resyncRequired: sourceSessionId => _ = HandleResyncRequiredAsync(
+        var dispatcher = sink?.Dispatcher ?? InlineDispatcher.Instance;
+        Action<string?>? resyncCallback = sink != null
+            ? sourceSessionId => _ = HandleResyncRequiredAsync(
                 sink,
                 wrappedService!,
                 sourceSessionId,
-                applyScopeToken));
+                applyScopeToken)
+            : null;
+        var eventAdapter = new AcpEventAdapter(
+            update => wrappedService!.PublishBufferedUpdate(update),
+            dispatcher,
+            _sessionUpdateBufferLimit,
+            resyncRequired: resyncCallback);
         wrappedService = new AcpChatServiceAdapter(chatService, eventAdapter);
         return wrappedService;
     }
@@ -806,4 +868,27 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
     private static InitializeParams CreateDefaultInitializeParams()
         => AcpInitializeRequestFactory.CreateDefault();
+
+    /// <summary>
+    /// Inline dispatcher used for pool-only connections that have no chat-page consumer.
+    /// Events are drained synchronously on the calling thread. This is safe because pool
+    /// connections never touch UI-bound objects; if a future pool path requires UI-thread
+    /// affinity, this dispatcher must be replaced with a real one.
+    /// </summary>
+    private sealed class InlineDispatcher : IUiDispatcher
+    {
+        public static InlineDispatcher Instance { get; } = new();
+
+        public bool HasThreadAccess => true;
+
+        public void Enqueue(Action action) => action();
+
+        public Task EnqueueAsync(Action action)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        public Task EnqueueAsync(Func<Task> function) => function();
+    }
 }

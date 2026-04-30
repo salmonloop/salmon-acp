@@ -173,13 +173,13 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
         }
 
         var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
-        if (string.Equals(connectionState.SelectedProfileId, boundProfileId, StringComparison.Ordinal))
+        if (string.Equals(connectionState.SettingsSelectedProfileId, boundProfileId, StringComparison.Ordinal))
         {
             return;
         }
 
         await _chatConnectionStore
-            .Dispatch(new SetSelectedProfileAction(boundProfileId))
+            .Dispatch(new SetSettingsSelectedProfileAction(boundProfileId))
             .ConfigureAwait(false);
     }
 

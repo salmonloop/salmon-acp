@@ -252,8 +252,8 @@ public sealed class AcpConnectionSettingsViewModelTests
 
         await viewModel.HandleConnectionToggleAsync(true);
 
-        Assert.Same(profile, Assert.Single(commands.ConnectedProfiles));
-        Assert.Equal(0, commands.DisconnectCallCount);
+        Assert.Same(profile, Assert.Single(commands.PoolConnectedProfiles));
+        Assert.Empty(commands.ConnectedProfiles);
     }
 
     [Fact]
@@ -261,6 +261,9 @@ public sealed class AcpConnectionSettingsViewModelTests
     {
         var preferences = await CreatePreferencesAsync();
         var profiles = CreateProfiles(preferences);
+        var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile 1" };
+        profiles.Profiles.Add(profile);
+        profiles.SelectedProfile = profile;
         var state = new TestConnectionState { IsConnected = true };
         var commands = new TestConnectionCommands();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
@@ -275,8 +278,9 @@ public sealed class AcpConnectionSettingsViewModelTests
 
         await viewModel.HandleConnectionToggleAsync(false);
 
+        Assert.Equal("profile-1", Assert.Single(commands.PoolDisconnectedProfileIds));
         Assert.Empty(commands.ConnectedProfiles);
-        Assert.Equal(1, commands.DisconnectCallCount);
+        Assert.Equal(0, commands.DisconnectCallCount);
     }
 
     [Fact]
@@ -556,9 +560,24 @@ public sealed class AcpConnectionSettingsViewModelTests
 
         public List<ServerConfiguration> ConnectedProfiles { get; } = new();
 
+        public List<ServerConfiguration> PoolConnectedProfiles { get; } = new();
+        public List<string> PoolDisconnectedProfileIds { get; } = new();
+
         public Task ConnectToAcpProfileAsync(ServerConfiguration profile)
         {
             ConnectedProfiles.Add(profile);
+            return Task.CompletedTask;
+        }
+
+        public Task ConnectProfileInPoolAsync(ServerConfiguration profile)
+        {
+            PoolConnectedProfiles.Add(profile);
+            return Task.CompletedTask;
+        }
+
+        public Task DisconnectProfileInPoolAsync(string profileId)
+        {
+            PoolDisconnectedProfileIds.Add(profileId);
             return Task.CompletedTask;
         }
 
@@ -631,10 +650,24 @@ public sealed class AcpConnectionSettingsViewModelTests
         public int DisconnectCallCount { get; private set; }
 
         public List<ServerConfiguration> ConnectedProfiles { get; } = new();
+        public List<ServerConfiguration> PoolConnectedProfiles { get; } = new();
+        public List<string> PoolDisconnectedProfileIds { get; } = new();
 
         public Task ConnectToAcpProfileAsync(ServerConfiguration profile)
         {
             ConnectedProfiles.Add(profile);
+            return Task.CompletedTask;
+        }
+
+        public Task ConnectProfileInPoolAsync(ServerConfiguration profile)
+        {
+            PoolConnectedProfiles.Add(profile);
+            return Task.CompletedTask;
+        }
+
+        public Task DisconnectProfileInPoolAsync(string profileId)
+        {
+            PoolDisconnectedProfileIds.Add(profileId);
             return Task.CompletedTask;
         }
     }
