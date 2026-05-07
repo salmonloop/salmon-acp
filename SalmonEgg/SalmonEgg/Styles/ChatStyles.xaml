@@ -53,19 +53,6 @@
                                                         IsTextSelectionEnabled="True"/>
                     </Grid>
 
-                    <controls:ToolCallPill x:Name="IncomingToolCallPill"
-                                           x:Load="{x:Bind ShouldShowToolCallPill, Mode=OneWay}"
-                                           Visibility="{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                           Margin="0,4,0,0"
-                                           ToolTitle="{x:Bind Title, Mode=OneWay}"
-                                           ToolKind="{x:Bind ToolCallKind, Mode=OneWay}"
-                                           Status="{x:Bind ToolCallStatus, Mode=OneWay}"
-                                           IsInProgress="{x:Bind IsToolCallInProgress, Mode=OneWay}"
-                                           IsCompleted="{x:Bind IsToolCallCompleted, Mode=OneWay}"
-                                           IsFailed="{x:Bind IsToolCallFailed, Mode=OneWay}"
-                                           IsCancelled="{x:Bind IsToolCallCancelled, Mode=OneWay}"
-                                           RawPayload="{x:Bind ToolCallJson, Mode=OneWay}" />
-
                     <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
                                FontSize="10"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -118,7 +105,36 @@
         </Grid>
     </DataTemplate>
 
+    <DataTemplate x:Key="ToolCallMessageTemplate" x:DataType="vm:ChatMessageViewModel">
+        <Grid Margin="0,8"
+              HorizontalAlignment="{x:Bind IsOutgoing, Mode=OneWay, Converter={StaticResource HorizontalAlignmentConverter}}">
+            <StackPanel Spacing="4">
+                <controls:ToolCallPill x:Name="ToolCallMessagePill"
+                                       x:Load="{x:Bind ShouldShowToolCallPill, Mode=OneWay}"
+                                       Visibility="{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       ToolTitle="{x:Bind Title, Mode=OneWay}"
+                                       ToolKind="{x:Bind ToolCallKind, Mode=OneWay}"
+                                       Status="{x:Bind ToolCallStatus, Mode=OneWay}"
+                                       IsInProgress="{x:Bind IsToolCallInProgress, Mode=OneWay}"
+                                       IsCompleted="{x:Bind IsToolCallCompleted, Mode=OneWay}"
+                                       IsFailed="{x:Bind IsToolCallFailed, Mode=OneWay}"
+                                       IsCancelled="{x:Bind IsToolCallCancelled, Mode=OneWay}"
+                                       RawPayload="{x:Bind ToolCallJson, Mode=OneWay}"
+                                       ToolCallContent="{x:Bind ToolCallContent, Mode=OneWay}"
+                                       ToolCallLocations="{x:Bind ToolCallLocations, Mode=OneWay}"
+                                       PendingPermissionRequest="{x:Bind PendingPermissionRequest, Mode=OneWay}" />
+
+                <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
+                           FontSize="10"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                           Opacity="0.6"
+                           HorizontalAlignment="Right" />
+            </StackPanel>
+        </Grid>
+    </DataTemplate>
+
     <converters:MessageTemplateSelector x:Key="MessageTemplateSelector"
                                         IncomingTemplate="{StaticResource IncomingMessageTemplate}"
-                                        OutgoingTemplate="{StaticResource OutgoingMessageTemplate}" />
+                                        OutgoingTemplate="{StaticResource OutgoingMessageTemplate}"
+                                        ToolCallTemplate="{StaticResource ToolCallMessageTemplate}" />
 </ResourceDictionary>

@@ -31,20 +31,25 @@ public sealed class ChatSkeletonSmokeTests
             Assert.True(hidden, "Loading overlay did not disappear for tool call scenario.");
         }
 
+        var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
         var toolCallPillButton = session.FindByAutomationId("ToolCallPill.RootButton", TimeSpan.FromSeconds(10));
-        AutomationElement? payloadHeader = null;
-        AutomationElement? payloadText = null;
+        var isExpanded = false;
+        var sawPath = false;
+        var sawQuery = false;
 
         for (var attempt = 0; attempt < 4; attempt++)
         {
             session.ClickElement(toolCallPillButton);
-            payloadHeader = session.TryFindVisibleTextAnywhere("调用参数详情", TimeSpan.FromSeconds(2))
-                ?? session.TryFindVisibleTextAnywhere("Payload details", TimeSpan.FromSeconds(2));
-            payloadText = session.TryFindVisibleTextAnywhere(
-                "{\"path\":\"C:/repo/appsettings.json\",\"query\":\"Logging\",\"arguments\":{\"line\":12}}",
+            isExpanded = WaitUntilToggleState(
+                session,
+                "ToolCallPill.RootButton",
+                ToggleState.On,
                 TimeSpan.FromSeconds(2));
+            var visibleTexts = session.GetVisibleTexts(messagesList);
+            sawPath = visibleTexts.Any(text => text.Contains("appsettings.json", StringComparison.Ordinal));
+            sawQuery = visibleTexts.Any(text => text.Contains("Logging", StringComparison.Ordinal));
 
-            if (payloadHeader is not null && payloadText is not null)
+            if (isExpanded && sawPath && sawQuery)
             {
                 break;
             }
@@ -52,8 +57,9 @@ public sealed class ChatSkeletonSmokeTests
             Thread.Sleep(150);
         }
 
-        Assert.NotNull(payloadHeader);
-        Assert.NotNull(payloadText);
+        Assert.True(isExpanded, "Tool call pill did not expand after activation.");
+        Assert.True(sawPath, "Expanded tool call pill did not expose the expected path details.");
+        Assert.True(sawQuery, "Expanded tool call pill did not expose the expected query details.");
 
         session.PressEscape();
 

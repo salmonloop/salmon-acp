@@ -82,6 +82,14 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private IReadOnlyList<ToolCallContent>? _toolCallContent;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasToolCallLocations))]
+        private IReadOnlyList<ToolCallLocation>? _toolCallLocations;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasPendingPermissionRequest))]
+        private PermissionRequestViewModel? _pendingPermissionRequest;
+
+        [ObservableProperty]
         private bool _isToolCallInProgress;
 
         [ObservableProperty]
@@ -262,6 +270,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
            get => _isToolCallCancelled;
            set => SetProperty(ref _isToolCallCancelled, value);
        }
+       public bool HasToolCallLocations => ToolCallLocations?.Count > 0;
+       public bool HasPendingPermissionRequest => PendingPermissionRequest != null;
        public bool ShouldShowToolCallPill =>
            string.Equals(ContentType, "tool_call", StringComparison.Ordinal)
            && (HasToolCall

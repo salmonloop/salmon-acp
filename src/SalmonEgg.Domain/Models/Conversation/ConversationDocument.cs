@@ -201,6 +201,8 @@ namespace SalmonEgg.Domain.Models.Conversation
 
         public List<ToolCallContent>? ToolCallContent { get; set; }
 
+        public List<ToolCallLocation>? ToolCallLocations { get; set; }
+
         public ConversationPlanEntrySnapshot? PlanEntry { get; set; }
 
         public string? ModeId { get; set; }

@@ -794,6 +794,7 @@ public partial class ChatViewModel
         finally
         {
             ShowPermissionDialog = false;
+            ClearInlinePermissionRequest(pending);
             if (ReferenceEquals(PendingPermissionRequest, pending))
             {
                 PendingPermissionRequest = null;

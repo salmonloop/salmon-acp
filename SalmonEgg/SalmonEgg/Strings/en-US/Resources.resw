@@ -80,6 +80,9 @@
   <data name="ToolCallPillPayloadTitle" xml:space="preserve">
     <value>Payload details</value>
   </data>
+  <data name="ToolCallPillPermissionHeader" xml:space="preserve">
+    <value>Approval required</value>
+  </data>
   <data name="ToolCallPillKindRead" xml:space="preserve">
     <value>Read file</value>
   </data>

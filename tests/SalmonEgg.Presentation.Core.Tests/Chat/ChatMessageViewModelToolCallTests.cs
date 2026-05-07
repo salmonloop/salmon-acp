@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
@@ -62,5 +63,52 @@ public sealed class ChatMessageViewModelToolCallTests
 
         Assert.True(vm.IsToolCallCancelled);
         Assert.False(vm.IsToolCallFailed);
+    }
+
+    [Fact]
+    public void ToolCallLocationsChange_RaisesHasToolCallLocationsPropertyChanged()
+    {
+        var vm = ChatMessageViewModel.CreateFromToolCall(
+            id: "tool-4",
+            toolCallId: "call-4",
+            rawInput: null,
+            rawOutput: null,
+            kind: ToolCallKind.Edit,
+            status: ToolCallStatus.InProgress,
+            title: "Editing file");
+
+        var changedProperties = new List<string>();
+        vm.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is not null)
+            {
+                changedProperties.Add(args.PropertyName);
+            }
+        };
+
+        vm.ToolCallLocations =
+        [
+            new ToolCallLocation(@"C:\repo\demo.cs", 42)
+        ];
+
+        Assert.True(vm.HasToolCallLocations);
+        Assert.Contains(nameof(ChatMessageViewModel.HasToolCallLocations), changedProperties);
+    }
+
+    [Fact]
+    public void PendingPermissionRequestChange_EnablesInlinePermissionActions()
+    {
+        var vm = ChatMessageViewModel.CreateFromToolCall(
+            id: "tool-5",
+            toolCallId: "call-5",
+            rawInput: null,
+            rawOutput: null,
+            kind: ToolCallKind.Read,
+            status: ToolCallStatus.Pending,
+            title: "Read file");
+
+        vm.PendingPermissionRequest = new PermissionRequestViewModel();
+
+        Assert.True(vm.HasPendingPermissionRequest);
     }
 }

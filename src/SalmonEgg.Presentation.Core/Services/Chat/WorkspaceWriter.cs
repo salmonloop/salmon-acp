@@ -646,6 +646,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             && left.ToolCallStatus == right.ToolCallStatus
             && string.Equals(left.ToolCallJson, right.ToolCallJson, StringComparison.Ordinal)
             && ToolCallContentSnapshots.SequenceEquals(left.ToolCallContent, right.ToolCallContent)
+            && ToolCallContentSnapshots.LocationsSequenceEquals(left.ToolCallLocations, right.ToolCallLocations)
             && string.Equals(left.ModeId, right.ModeId, StringComparison.Ordinal)
             && PlanEntryEquals(left.PlanEntry, right.PlanEntry);
     }
@@ -800,6 +801,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
             ToolCallStatus = snapshot.ToolCallStatus,
             ToolCallJson = snapshot.ToolCallJson,
             ToolCallContent = ToolCallContentSnapshots.CloneList(snapshot.ToolCallContent),
+            ToolCallLocations = ToolCallContentSnapshots.CloneLocations(snapshot.ToolCallLocations),
             PlanEntry = ClonePlanEntrySnapshot(snapshot.PlanEntry),
             ModeId = snapshot.ModeId
         };

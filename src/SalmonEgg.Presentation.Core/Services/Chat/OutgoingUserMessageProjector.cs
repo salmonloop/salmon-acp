@@ -160,6 +160,7 @@ public sealed class OutgoingUserMessageProjector
             ToolCallStatus = snapshot.ToolCallStatus,
             ToolCallJson = snapshot.ToolCallJson,
             ToolCallContent = snapshot.ToolCallContent is null ? null : new List<ToolCallContent>(snapshot.ToolCallContent),
+            ToolCallLocations = ToolCallContentSnapshots.CloneLocations(snapshot.ToolCallLocations),
             PlanEntry = snapshot.PlanEntry is null
                 ? null
                 : new ConversationPlanEntrySnapshot

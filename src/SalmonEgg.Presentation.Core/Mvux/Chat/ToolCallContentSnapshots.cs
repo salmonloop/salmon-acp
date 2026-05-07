@@ -32,6 +32,37 @@ internal static class ToolCallContentSnapshots
     public static bool SequenceEquals(
         IReadOnlyList<ToolCallContent>? left,
         IReadOnlyList<ToolCallContent>? right)
+        => JsonSequenceEquals(left, right);
+
+    public static List<ToolCallLocation>? CloneLocations(IReadOnlyList<ToolCallLocation>? locations)
+    {
+        if (locations is null)
+        {
+            return null;
+        }
+
+        var cloned = new List<ToolCallLocation>(locations.Count);
+        foreach (var location in locations)
+        {
+            cloned.Add(new ToolCallLocation(location.Path, location.Line));
+        }
+
+        return cloned;
+    }
+
+    public static bool LocationsSequenceEquals(
+        IReadOnlyList<ToolCallLocation>? left,
+        IReadOnlyList<ToolCallLocation>? right)
+        => JsonSequenceEquals(left, right);
+
+    public static string? SerializePayload(IReadOnlyList<ToolCallContent>? content)
+        => content is { Count: > 0 }
+            ? JsonSerializer.Serialize(content)
+            : null;
+
+    private static bool JsonSequenceEquals<T>(
+        IReadOnlyList<T>? left,
+        IReadOnlyList<T>? right)
     {
         if (ReferenceEquals(left, right))
         {
@@ -53,9 +84,4 @@ internal static class ToolCallContentSnapshots
 
         return true;
     }
-
-    public static string? SerializePayload(IReadOnlyList<ToolCallContent>? content)
-        => content is { Count: > 0 }
-            ? JsonSerializer.Serialize(content)
-            : null;
 }

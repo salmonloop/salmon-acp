@@ -907,6 +907,9 @@
   <data name="ToolCallPillPayloadTitle" xml:space="preserve">
     <value>调用参数详情</value>
   </data>
+  <data name="ToolCallPillPermissionHeader" xml:space="preserve">
+    <value>需要审批</value>
+  </data>
   <data name="ToolCallPillKindRead" xml:space="preserve">
     <value>读取文件</value>
   </data>

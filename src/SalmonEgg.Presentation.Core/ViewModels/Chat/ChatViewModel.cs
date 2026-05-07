@@ -1732,6 +1732,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ToolCallStatus = vm.ToolCallStatus,
             ToolCallJson = vm.ToolCallJson,
             ToolCallContent = CloneToolCallContentList(vm.ToolCallContent),
+            ToolCallLocations = CloneToolCallLocationList(vm.ToolCallLocations),
             PlanEntry = vm.PlanEntry != null
                 ? new ConversationPlanEntrySnapshot
                 {
@@ -1765,6 +1766,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ToolCallStatus = s.ToolCallStatus,
             ToolCallJson = s.ToolCallJson,
             ToolCallContent = CloneToolCallContentList(s.ToolCallContent),
+            ToolCallLocations = CloneToolCallLocationList(s.ToolCallLocations),
             ModeId = s.ModeId
         };
 
@@ -1798,6 +1800,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             && viewModel.ToolCallStatus == snapshot.ToolCallStatus
             && string.Equals(viewModel.ToolCallJson, snapshot.ToolCallJson, StringComparison.Ordinal)
             && ToolCallContentSnapshots.SequenceEquals(viewModel.ToolCallContent, snapshot.ToolCallContent)
+            && ToolCallContentSnapshots.LocationsSequenceEquals(viewModel.ToolCallLocations, snapshot.ToolCallLocations)
             && string.Equals(viewModel.ModeId, snapshot.ModeId, StringComparison.Ordinal)
             && PlanEntryMatches(viewModel.PlanEntry, snapshot.PlanEntry);
     }
@@ -1839,6 +1842,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ToolCallStatus = snapshot.ToolCallStatus,
             ToolCallJson = snapshot.ToolCallJson,
             ToolCallContent = CloneToolCallContentList(snapshot.ToolCallContent),
+            ToolCallLocations = CloneToolCallLocationList(snapshot.ToolCallLocations),
             PlanEntry = ClonePlanEntrySnapshot(snapshot.PlanEntry),
             ModeId = snapshot.ModeId
         };

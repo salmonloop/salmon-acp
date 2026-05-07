@@ -1579,7 +1579,8 @@ public partial class ChatViewModel
         _uiDispatcher.Enqueue(() => {
             try
             {
-                PendingPermissionRequest = _interactionEventBridge.CreatePermissionRequestViewModel(
+                PermissionRequestViewModel? permissionRequest = null;
+                permissionRequest = _interactionEventBridge.CreatePermissionRequestViewModel(
                     e,
                     async (messageId, outcome, optionId) =>
                     {
@@ -1593,8 +1594,11 @@ public partial class ChatViewModel
                     () =>
                     {
                         ShowPermissionDialog = false;
+                        ClearInlinePermissionRequest(permissionRequest);
                         PendingPermissionRequest = null;
                     });
+                PendingPermissionRequest = permissionRequest;
+                ApplyInlinePermissionRequest(e, permissionRequest);
                 ShowPermissionDialog = true;
             }
             catch (Exception ex)
@@ -1602,6 +1606,67 @@ public partial class ChatViewModel
                 Logger.LogError(ex, "Error processing permission request");
             }
         });
+    }
+
+    private void ApplyInlinePermissionRequest(PermissionRequestEventArgs request, PermissionRequestViewModel permissionRequest)
+    {
+        var toolCallId = TryResolvePermissionToolCallId(request.ToolCall);
+        if (string.IsNullOrWhiteSpace(toolCallId))
+        {
+            return;
+        }
+
+        var target = MessageHistory.LastOrDefault(message =>
+            string.Equals(message.ContentType, "tool_call", StringComparison.Ordinal)
+            && string.Equals(message.ToolCallId, toolCallId, StringComparison.Ordinal));
+        if (target != null)
+        {
+            target.PendingPermissionRequest = permissionRequest;
+        }
+    }
+
+    private void ClearInlinePermissionRequest(PermissionRequestViewModel? permissionRequest)
+    {
+        if (permissionRequest is null)
+        {
+            return;
+        }
+
+        foreach (var message in MessageHistory)
+        {
+            if (ReferenceEquals(message.PendingPermissionRequest, permissionRequest))
+            {
+                message.PendingPermissionRequest = null;
+            }
+        }
+    }
+
+    private static string? TryResolvePermissionToolCallId(object? toolCall)
+    {
+        if (toolCall is null)
+        {
+            return null;
+        }
+
+        if (toolCall is JsonElement element)
+        {
+            return TryGetToolCallId(element);
+        }
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(toolCall));
+        return TryGetToolCallId(document.RootElement);
+    }
+
+    private static string? TryGetToolCallId(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return element.TryGetProperty("toolCallId", out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private void OnFileSystemRequestReceived(object? sender, FileSystemRequestEventArgs e)
@@ -1840,7 +1905,8 @@ public partial class ChatViewModel
             ToolCallKind = toolCall.Kind,
             ToolCallStatus = toolCall.Status,
             ToolCallJson = ResolveToolCallPayload(toolCall.RawInput, toolCall.Content),
-            ToolCallContent = ToolCallContentSnapshots.CloneList(toolCall.Content)
+            ToolCallContent = ToolCallContentSnapshots.CloneList(toolCall.Content),
+            ToolCallLocations = ToolCallContentSnapshots.CloneLocations(toolCall.Locations)
         };
     }
 
@@ -1892,6 +1958,9 @@ public partial class ChatViewModel
                 ToolCallContent = toolCallStatusUpdate.Content is not null
                     ? ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content)
                     : existing.ToolCallContent,
+                ToolCallLocations = toolCallStatusUpdate.Locations is not null
+                    ? ToolCallContentSnapshots.CloneLocations(toolCallStatusUpdate.Locations)
+                    : existing.ToolCallLocations,
                 PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
                 ModeId = existing.ModeId
             };
@@ -1913,7 +1982,8 @@ public partial class ChatViewModel
             ToolCallKind = toolCallStatusUpdate.Kind,
             ToolCallStatus = toolCallStatusUpdate.Status,
             ToolCallJson = ResolveToolCallPayload(toolCallStatusUpdate.RawInput, toolCallStatusUpdate.Content),
-            ToolCallContent = ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content)
+            ToolCallContent = ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content),
+            ToolCallLocations = ToolCallContentSnapshots.CloneLocations(toolCallStatusUpdate.Locations)
         };
     }
 
@@ -1923,6 +1993,10 @@ public partial class ChatViewModel
     private static List<Domain.Models.Tool.ToolCallContent>? CloneToolCallContentList(
         IReadOnlyList<Domain.Models.Tool.ToolCallContent>? content)
         => ToolCallContentSnapshots.CloneList(content);
+
+    private static List<Domain.Models.Tool.ToolCallLocation>? CloneToolCallLocationList(
+        IReadOnlyList<Domain.Models.Tool.ToolCallLocation>? locations)
+        => ToolCallContentSnapshots.CloneLocations(locations);
 
     private static string? ResolveToolCallPayload(
         System.Text.Json.JsonElement? rawPayload,
@@ -2048,6 +2122,7 @@ public partial class ChatViewModel
                 ToolCallStatus = Domain.Models.Tool.ToolCallStatus.Cancelled,
                 ToolCallJson = existing.ToolCallJson,
                 ToolCallContent = CloneToolCallContentList(existing.ToolCallContent),
+                ToolCallLocations = CloneToolCallLocationList(existing.ToolCallLocations),
                 PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),
                 ModeId = existing.ModeId
             })).ConfigureAwait(true);

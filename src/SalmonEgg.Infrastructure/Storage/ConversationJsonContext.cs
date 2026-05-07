@@ -32,6 +32,7 @@ namespace SalmonEgg.Infrastructure.Storage;
 [JsonSerializable(typeof(ContentToolCallContent))]
 [JsonSerializable(typeof(DiffToolCallContent))]
 [JsonSerializable(typeof(TerminalToolCallContent))]
+[JsonSerializable(typeof(ToolCallLocation))]
 
 // ContentBlock has a custom [JsonConverter], so source-gen can't provide metadata.
 // It is handled at runtime via ContentBlockJsonConverter on the type itself.

@@ -37,7 +37,7 @@ public sealed class ChatStylesMarkdownXamlTests
         Assert.Contains("MessageViewModel=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Load=\"{x:Bind ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Load=\"{x:Bind ShouldRenderPlainText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Load=\"{x:Bind ShouldShowToolCallPill, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"IncomingToolCallPill\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -57,8 +57,16 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.Contains("x:Name=\"IncomingPlainTextBlock\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"IncomingMarkdownPresenter\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"IncomingToolCallPill\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"OutgoingPlainTextBlock\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MessageTemplateSelector_BindsDedicatedToolCallTemplate()
+    {
+        var xaml = LoadChatStylesXaml();
+
+        Assert.Contains("<DataTemplate x:Key=\"ToolCallMessageTemplate\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolCallTemplate=\"{StaticResource ToolCallMessageTemplate}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
