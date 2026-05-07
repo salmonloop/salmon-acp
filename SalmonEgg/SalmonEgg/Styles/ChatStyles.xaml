@@ -12,14 +12,17 @@
     <converters:TimeFormatConverter x:Key="TimeFormatConverter"/>
     <converters:MessageDirectionToAlignmentConverter x:Key="HorizontalAlignmentConverter"/>
 
+    <!-- Shared Style for AI left-reference line -->
+    <Style x:Key="IncomingMessageBorderStyle" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="2,0,0,0" />
+        <Setter Property="Padding" Value="16,0,0,8" />
+    </Style>
+
     <DataTemplate x:Key="IncomingMessageTemplate" x:DataType="vm:ChatMessageViewModel">
         <Grid Margin="0,8"
               HorizontalAlignment="{x:Bind IsOutgoing, Mode=OneWay, Converter={StaticResource HorizontalAlignmentConverter}}">
-            <Border CornerRadius="12,12,12,0"
-                    Padding="16,10"
-                    Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                    BorderThickness="1">
+            <Border Style="{StaticResource IncomingMessageBorderStyle}">
                 <Border.ContextFlyout>
                     <MenuFlyout>
                         <MenuFlyoutItem x:Uid="ChatMessageCopyMenu"
@@ -29,12 +32,12 @@
                     </MenuFlyout>
                 </Border.ContextFlyout>
                 <StackPanel>
-                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                               FontWeight="Bold"
-                               FontSize="12"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               Visibility="{x:Bind HasTitle, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                               Margin="0,0,0,4"/>
+                    <!-- Header Metadata -->
+                    <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorDisabledBrush}"
+                               HorizontalAlignment="Left"
+                               Margin="0,0,0,8"/>
 
                     <Grid x:Name="IncomingTextContentHost"
                           Visibility="{x:Bind HasTextContent, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -52,13 +55,6 @@
                                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                                         IsTextSelectionEnabled="True"/>
                     </Grid>
-
-                    <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
-                               FontSize="10"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                               Opacity="0.6"
-                               HorizontalAlignment="Right"
-                               Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
         </Grid>
@@ -69,8 +65,10 @@
               HorizontalAlignment="{x:Bind IsOutgoing, Mode=OneWay, Converter={StaticResource HorizontalAlignmentConverter}}">
             <Border CornerRadius="12,12,0,12"
                     Padding="16,10"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}"
                     BorderThickness="0">
+                <Border.Background>
+                    <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.15" />
+                </Border.Background>
                 <Border.ContextFlyout>
                     <MenuFlyout>
                         <MenuFlyoutItem x:Uid="ChatMessageCopyMenu"
@@ -80,26 +78,19 @@
                     </MenuFlyout>
                 </Border.ContextFlyout>
                 <StackPanel x:Name="OutgoingMessageContentRoot">
-                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                               FontWeight="Bold"
-                               FontSize="12"
-                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                               Visibility="{x:Bind HasTitle, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                    <!-- Header Metadata -->
+                    <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Right"
                                Margin="0,0,0,4"/>
 
                     <TextBlock x:Name="OutgoingPlainTextBlock"
                                x:Load="{x:Bind HasTextContent, Mode=OneWay}"
                                Text="{x:Bind TextContent, Mode=OneWay}"
                                TextWrapping="Wrap"
-                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                IsTextSelectionEnabled="True"/>
-
-                    <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
-                               FontSize="10"
-                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                               Opacity="0.7"
-                               HorizontalAlignment="Right"
-                               Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
         </Grid>
@@ -108,28 +99,31 @@
     <DataTemplate x:Key="ToolCallMessageTemplate" x:DataType="vm:ChatMessageViewModel">
         <Grid Margin="0,8"
               HorizontalAlignment="{x:Bind IsOutgoing, Mode=OneWay, Converter={StaticResource HorizontalAlignmentConverter}}">
-            <StackPanel Spacing="4">
-                <controls:ToolCallPill x:Name="ToolCallMessagePill"
-                                       x:Load="{x:Bind ShouldShowToolCallPill, Mode=OneWay}"
-                                       Visibility="{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       ToolTitle="{x:Bind Title, Mode=OneWay}"
-                                       ToolKind="{x:Bind ToolCallKind, Mode=OneWay}"
-                                       Status="{x:Bind ToolCallStatus, Mode=OneWay}"
-                                       IsInProgress="{x:Bind IsToolCallInProgress, Mode=OneWay}"
-                                       IsCompleted="{x:Bind IsToolCallCompleted, Mode=OneWay}"
-                                       IsFailed="{x:Bind IsToolCallFailed, Mode=OneWay}"
-                                       IsCancelled="{x:Bind IsToolCallCancelled, Mode=OneWay}"
-                                       RawPayload="{x:Bind ToolCallJson, Mode=OneWay}"
-                                       ToolCallContent="{x:Bind ToolCallContent, Mode=OneWay}"
-                                       ToolCallLocations="{x:Bind ToolCallLocations, Mode=OneWay}"
-                                       PendingPermissionRequest="{x:Bind PendingPermissionRequest, Mode=OneWay}" />
+            <Border Style="{StaticResource IncomingMessageBorderStyle}">
+                <StackPanel>
+                    <!-- Header Metadata -->
+                    <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorDisabledBrush}"
+                               HorizontalAlignment="Left"
+                               Margin="0,0,0,8"/>
 
-                <TextBlock Text="{x:Bind Timestamp, Mode=OneWay, Converter={StaticResource TimeFormatConverter}}"
-                           FontSize="10"
-                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                           Opacity="0.6"
-                           HorizontalAlignment="Right" />
-            </StackPanel>
+                    <controls:ToolCallPill x:Name="ToolCallMessagePill"
+                                           x:Load="{x:Bind ShouldShowToolCallPill, Mode=OneWay}"
+                                           Visibility="{x:Bind ShouldShowToolCallPill, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           ToolTitle="{x:Bind Title, Mode=OneWay}"
+                                           ToolKind="{x:Bind ToolCallKind, Mode=OneWay}"
+                                           Status="{x:Bind ToolCallStatus, Mode=OneWay}"
+                                           IsInProgress="{x:Bind IsToolCallInProgress, Mode=OneWay}"
+                                           IsCompleted="{x:Bind IsToolCallCompleted, Mode=OneWay}"
+                                           IsFailed="{x:Bind IsToolCallFailed, Mode=OneWay}"
+                                           IsCancelled="{x:Bind IsToolCallCancelled, Mode=OneWay}"
+                                           RawPayload="{x:Bind ToolCallJson, Mode=OneWay}"
+                                           ToolCallContent="{x:Bind ToolCallContent, Mode=OneWay}"
+                                           ToolCallLocations="{x:Bind ToolCallLocations, Mode=OneWay}"
+                                           PendingPermissionRequest="{x:Bind PendingPermissionRequest, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
         </Grid>
     </DataTemplate>
 

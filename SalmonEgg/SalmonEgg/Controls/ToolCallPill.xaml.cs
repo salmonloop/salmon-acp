@@ -171,6 +171,8 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(PreviewMaxHeight));
             OnPropertyChanged(nameof(InlineContentVisibility));
+            UpdateVisualStates();
+            UpdateExpansionState(true);
         }
     }
 
@@ -198,6 +200,13 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
     {
         InitializeComponent();
         UpdateDisplayProjection();
+        Loaded += ToolCallPill_Loaded;
+    }
+
+    private void ToolCallPill_Loaded(object sender, RoutedEventArgs e)
+    {
+        UpdateVisualStates();
+        UpdateExpansionState(false);
     }
 
     private static void OnDisplayInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -232,6 +241,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             {
                 pill.OnPropertyChanged(propertyName);
                 pill.OnPropertyChanged(nameof(InlineContentVisibility));
+                pill.UpdateExpansionState(true);
             }
         }
     }
@@ -258,6 +268,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         OnPropertyChanged(nameof(HasInlineContent));
         OnPropertyChanged(nameof(PreviewMaxHeight));
         OnPropertyChanged(nameof(InlineContentVisibility));
+        UpdateExpansionState(true);
     }
 
     private string ResolveToolName()
@@ -695,6 +706,85 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             && PendingPermissionRequest?.RespondCommand is { } command)
         {
             await command.ExecuteAsync(option);
+        }
+    }
+
+    private bool _isHovered;
+
+    private void HeaderGrid_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        IsExpanded = !IsExpanded;
+    }
+
+    private void HeaderGrid_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _isHovered = true;
+        UpdateVisualStates();
+    }
+
+    private void HeaderGrid_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _isHovered = false;
+        UpdateVisualStates();
+    }
+
+    private void HeaderGrid_KeyUp(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter || e.Key == Windows.System.VirtualKey.Space)
+        {
+            IsExpanded = !IsExpanded;
+            e.Handled = true;
+        }
+    }
+
+    private void UpdateExpansionState(bool useTransitions)
+    {
+        if (DetailScrollViewer == null)
+        {
+            return;
+        }
+
+        bool shouldShow = HasInlineContent && (!IsCompleted || IsExpanded);
+        string stateName = shouldShow ? "DetailExpandedState" : "DetailCollapsedState";
+        VisualStateManager.GoToState(this, stateName, useTransitions);
+    }
+
+    private void UpdateVisualStates()
+    {
+        if (ToolNameTextBlock == null)
+        {
+            return;
+        }
+
+        string brushKey;
+        if (IsExpanded)
+        {
+            brushKey = "AccentTextFillColorPrimaryBrush";
+        }
+        else if (_isHovered)
+        {
+            brushKey = "TextFillColorPrimaryBrush";
+        }
+        else
+        {
+            brushKey = "TextFillColorSecondaryBrush";
+        }
+
+        if (Microsoft.UI.Xaml.Application.Current.Resources.TryGetValue(brushKey, out var brushObj))
+        {
+            if (brushObj is Brush brush)
+            {
+                ToolNameTextBlock.Foreground = brush;
+                return;
+            }
+        }
+
+        if (Microsoft.UI.Xaml.Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out var fallbackObj))
+        {
+            if (fallbackObj is Brush fallbackBrush)
+            {
+                ToolNameTextBlock.Foreground = fallbackBrush;
+            }
         }
     }
 }

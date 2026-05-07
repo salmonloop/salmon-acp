@@ -23,6 +23,8 @@ public sealed partial class UiMotion : ObservableObject
                 OnPropertyChanged(nameof(PageTransitions));
                 OnPropertyChanged(nameof(NavItemTransitions));
                 OnPropertyChanged(nameof(ListItemTransitions));
+                OnPropertyChanged(nameof(ToolCallTransitions));
+                OnPropertyChanged(nameof(StatusIconTransitions));
             }
         }
     }
@@ -46,6 +48,18 @@ public sealed partial class UiMotion : ObservableObject
     public TransitionCollection? ListItemTransitions =>
         IsAnimationEnabled ? CreateListTransitions() : null;
 
+    /// <summary>
+    /// Transitions for Tool Call expand/collapse and state changes.
+    /// </summary>
+    public TransitionCollection? ToolCallTransitions =>
+        IsAnimationEnabled ? CreateToolCallTransitions() : null;
+
+    /// <summary>
+    /// Transitions for small status icon changes.
+    /// </summary>
+    public TransitionCollection? StatusIconTransitions =>
+        IsAnimationEnabled ? CreateStatusIconTransitions() : null;
+
     private static TransitionCollection CreateEntranceTransitions(double fromHorizontal, double fromVertical)
     {
         return new TransitionCollection
@@ -64,6 +78,23 @@ public sealed partial class UiMotion : ObservableObject
         {
             new AddDeleteThemeTransition(),
             new RepositionThemeTransition()
+        };
+    }
+
+    private static TransitionCollection CreateToolCallTransitions()
+    {
+        return new TransitionCollection
+        {
+            new EntranceThemeTransition { FromVerticalOffset = 8 },
+            new RepositionThemeTransition()
+        };
+    }
+
+    private static TransitionCollection CreateStatusIconTransitions()
+    {
+        return new TransitionCollection
+        {
+            new EntranceThemeTransition { FromVerticalOffset = 4 }
         };
     }
 }

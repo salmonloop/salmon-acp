@@ -7,6 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:SalmonEgg.Controls"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:models="using:SalmonEgg.Presentation.Models"
     mc:Ignorable="d">
 
     <UserControl.Resources>
@@ -64,6 +65,7 @@
                 Background="{ThemeResource ControlFillColorTertiaryBrush}"
                 BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                 BorderThickness="1"
+                CornerRadius="4"
                 Padding="12">
                 <StackPanel Spacing="4">
                     <TextBlock
@@ -91,10 +93,8 @@
 
     <Border
         x:Name="RootFrame"
-        Padding="0"
-        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-        BorderThickness="2,0,0,0"
         Background="Transparent"
+        Padding="0"
         HorizontalAlignment="Left"
         AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}">
         <VisualStateManager.VisualStateGroups>
@@ -127,36 +127,124 @@
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
+
+            <VisualStateGroup x:Name="LifecycleStates">
+                <VisualState x:Name="CompletedState">
+                    <VisualState.StateTriggers>
+                        <StateTrigger IsActive="{x:Bind IsCompleted, Mode=OneWay}" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="RootFrame.Opacity" Value="0.65" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="CancelledState">
+                    <VisualState.StateTriggers>
+                        <StateTrigger IsActive="{x:Bind IsCancelled, Mode=OneWay}" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="RootFrame.Opacity" Value="0.5" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+            <VisualStateGroup x:Name="DetailStates">
+                <VisualStateGroup.Transitions>
+                    <VisualTransition From="DetailCollapsedState" To="DetailExpandedState">
+                        <Storyboard>
+                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="DetailScrollViewer" Storyboard.TargetProperty="Visibility">
+                                <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                            </ObjectAnimationUsingKeyFrames>
+                            <DoubleAnimation
+                                Storyboard.TargetName="DetailScrollViewer"
+                                Storyboard.TargetProperty="Opacity"
+                                From="0.0" To="1.0"
+                                Duration="0:0:0.25">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseOut" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation
+                                Storyboard.TargetName="DetailTransform"
+                                Storyboard.TargetProperty="Y"
+                                From="-8" To="0"
+                                Duration="0:0:0.25">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseOut" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </VisualTransition>
+                    <VisualTransition From="DetailExpandedState" To="DetailCollapsedState">
+                        <Storyboard>
+                            <DoubleAnimation
+                                Storyboard.TargetName="DetailScrollViewer"
+                                Storyboard.TargetProperty="Opacity"
+                                From="1.0" To="0.0"
+                                Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseIn" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation
+                                Storyboard.TargetName="DetailTransform"
+                                Storyboard.TargetProperty="Y"
+                                From="0" To="-8"
+                                Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseIn" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="DetailScrollViewer" Storyboard.TargetProperty="Visibility">
+                                <DiscreteObjectKeyFrame KeyTime="0:0:0.2" Value="Collapsed" />
+                            </ObjectAnimationUsingKeyFrames>
+                        </Storyboard>
+                    </VisualTransition>
+                </VisualStateGroup.Transitions>
+
+                <VisualState x:Name="DetailCollapsedState">
+                    <VisualState.Setters>
+                        <Setter Target="DetailScrollViewer.Visibility" Value="Collapsed" />
+                        <Setter Target="DetailScrollViewer.Opacity" Value="0" />
+                        <Setter Target="DetailTransform.Y" Value="-8" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="DetailExpandedState">
+                    <VisualState.Setters>
+                        <Setter Target="DetailScrollViewer.Visibility" Value="Visible" />
+                        <Setter Target="DetailScrollViewer.Opacity" Value="1" />
+                        <Setter Target="DetailTransform.Y" Value="0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <Grid Padding="16,8" RowSpacing="8">
+        <Grid Padding="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <ToggleButton
-                x:Name="HeaderButton"
+            <Grid
+                x:Name="HeaderGrid"
                 Grid.Row="0"
-                Padding="0"
                 Background="Transparent"
-                BorderThickness="0"
-                HorizontalAlignment="Stretch"
-                HorizontalContentAlignment="Stretch"
-                AutomationProperties.AutomationId="ToolCallPill.RootButton"
-                IsChecked="{x:Bind IsExpanded, Mode=TwoWay}">
+                Tapped="HeaderGrid_Tapped"
+                PointerEntered="HeaderGrid_PointerEntered"
+                PointerExited="HeaderGrid_PointerExited"
+                KeyUp="HeaderGrid_KeyUp"
+                IsTabStop="True"
+                UseSystemFocusVisuals="True">
                 <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <Grid
                         Grid.Column="0"
                         Width="20"
                         Height="20"
-                        VerticalAlignment="Top">
+                        VerticalAlignment="Top"
+                        ChildrenTransitions="{x:Bind models:UiMotion.Current.StatusIconTransitions, Mode=OneWay}">
                         <ProgressRing
                             IsActive="{x:Bind IsInProgress, Mode=OneWay}"
                             Width="14"
@@ -182,10 +270,11 @@
 
                     <StackPanel Grid.Column="1" Spacing="2">
                         <TextBlock
+                            x:Name="ToolNameTextBlock"
                             Text="{x:Bind DisplayToolName, Mode=OneWay}"
                             Style="{StaticResource BodyTextBlockStyle}"
-                            FontWeight="SemiBold"
-                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            FontWeight="Normal"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             TextTrimming="CharacterEllipsis" />
                         <TextBlock
                             Text="{x:Bind DisplaySummary, Mode=OneWay}"
@@ -194,22 +283,21 @@
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1" />
                     </StackPanel>
-
-                    <FontIcon
-                        Grid.Column="2"
-                        Glyph="&#xE70D;"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Visibility="{x:Bind HasInlineContent, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </Grid>
-            </ToggleButton>
+            </Grid>
 
             <ScrollViewer
+                x:Name="DetailScrollViewer"
                 Grid.Row="1"
+                Margin="28,8,0,0"
                 MaxHeight="{x:Bind PreviewMaxHeight, Mode=OneWay}"
                 VerticalScrollBarVisibility="Hidden"
                 HorizontalScrollBarVisibility="Disabled"
-                Visibility="{x:Bind InlineContentVisibility, Mode=OneWay}">
+                Visibility="Collapsed"
+                Opacity="0">
+                <ScrollViewer.RenderTransform>
+                    <TranslateTransform x:Name="DetailTransform" Y="-8" />
+                </ScrollViewer.RenderTransform>
                 <StackPanel Spacing="8">
                     <TextBlock
                         Text="{x:Bind PayloadHeaderText, Mode=OneWay}"
