@@ -40,4 +40,19 @@ public sealed class AppShortcutBindingMapTests
         Assert.True(AppShortcutGesture.TryParse("Ctrl+N", out var conflictedGesture));
         Assert.False(map.TryResolveActionId(conflictedGesture, out _));
     }
+
+    [Fact]
+    public void Create_FallsBackToDefaultWhenSavedGestureIsReservedForNativeTextEditing()
+    {
+        var bindings = new Dictionary<string, string>
+        {
+            ["search"] = "Ctrl+C"
+        };
+
+        var map = AppShortcutBindingMap.Create(bindings);
+
+        Assert.True(AppShortcutGesture.TryParse("Ctrl+K", out var defaultGesture));
+        Assert.True(map.TryResolveActionId(defaultGesture, out var actionId));
+        Assert.Equal(AppShortcutActionIds.Search, actionId);
+    }
 }

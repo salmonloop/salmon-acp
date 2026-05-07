@@ -280,7 +280,7 @@
     <value>快捷键格式无效</value>
   </data>
   <data name="Shortcuts_InvalidInfo.Message" xml:space="preserve">
-    <value>请输入如 Ctrl+K、Ctrl+Shift+N 的格式。</value>
+    <value>请输入如 Ctrl+K、Ctrl+Shift+N 的格式；Ctrl+C、Ctrl+V 等原生文本编辑快捷键不可绑定。</value>
   </data>
   <data name="Shortcuts_CustomTitle.Text" xml:space="preserve">
     <value>自定义</value>
@@ -288,8 +288,11 @@
   <data name="Shortcuts_AppOnlyHint.Text" xml:space="preserve">
     <value>这些快捷键仅在 SalmonEgg 窗口处于前台时生效，不会注册系统级热键，也不会覆盖输入框内的原生编辑行为。</value>
   </data>
-  <data name="Shortcuts_GestureInput.PlaceholderText" xml:space="preserve">
-    <value>例如：Ctrl+K</value>
+  <data name="Shortcuts_GestureRecorder.PlaceholderText" xml:space="preserve">
+    <value>单击后录制快捷键</value>
+  </data>
+  <data name="Shortcuts_GestureRecorder.RecordingText" xml:space="preserve">
+    <value>按下快捷键</value>
   </data>
   <data name="Shortcuts_RestoreSingle.Content" xml:space="preserve">
     <value>恢复</value>

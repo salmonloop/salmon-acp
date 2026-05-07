@@ -146,7 +146,7 @@ public sealed partial class MainPage : Page
 
         // 2. Listen for global preference changes (animations, theme, backdrop)
         Preferences.PropertyChanged += OnPreferencesPropertyChanged;
-        Preferences.KeyBindings.CollectionChanged += OnShortcutBindingsChanged;
+        Preferences.ShortcutBindingsChanged += OnShortcutBindingsChanged;
         _chatViewModel.PropertyChanged += OnChatViewModelPropertyChanged;
         NavVM.PropertyChanged += OnNavigationViewModelPropertyChanged;
         NavVM.TreeRebuilt += OnNavigationTreeRebuilt;
@@ -195,7 +195,7 @@ public sealed partial class MainPage : Page
     {
         DetachGamepadInput();
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
-        Preferences.KeyBindings.CollectionChanged -= OnShortcutBindingsChanged;
+        Preferences.ShortcutBindingsChanged -= OnShortcutBindingsChanged;
         _chatViewModel.PropertyChanged -= OnChatViewModelPropertyChanged;
         NavVM.PropertyChanged -= OnNavigationViewModelPropertyChanged;
         NavVM.TreeRebuilt -= OnNavigationTreeRebuilt;
@@ -256,7 +256,7 @@ public sealed partial class MainPage : Page
 #endif
     }
 
-    private void OnShortcutBindingsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    private void OnShortcutBindingsChanged(object? sender, EventArgs e)
     {
         RebuildAppShortcuts();
     }

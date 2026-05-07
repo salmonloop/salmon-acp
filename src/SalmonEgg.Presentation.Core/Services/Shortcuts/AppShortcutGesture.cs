@@ -73,7 +73,13 @@ public readonly record struct AppShortcutGesture(AppShortcutModifiers Modifiers,
             return false;
         }
 
-        gesture = new AppShortcutGesture(modifiers, keyToken);
+        var candidate = new AppShortcutGesture(modifiers, keyToken);
+        if (IsReservedForNativeTextEditing(candidate))
+        {
+            return false;
+        }
+
+        gesture = candidate;
         return true;
     }
 
@@ -124,5 +130,15 @@ public readonly record struct AppShortcutGesture(AppShortcutModifiers Modifiers,
         }
 
         return false;
+    }
+
+    private static bool IsReservedForNativeTextEditing(AppShortcutGesture gesture)
+    {
+        return gesture.Modifiers switch
+        {
+            AppShortcutModifiers.Control => gesture.KeyToken is "A" or "C" or "V" or "X" or "Y" or "Z",
+            AppShortcutModifiers.Control | AppShortcutModifiers.Shift => gesture.KeyToken == "Z",
+            _ => false
+        };
     }
 }

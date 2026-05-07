@@ -367,7 +367,7 @@
     <value>Invalid shortcut format</value>
   </data>
   <data name="Shortcuts_InvalidInfo.Message" xml:space="preserve">
-    <value>Enter formats like Ctrl+K or Ctrl+Shift+N.</value>
+    <value>Enter formats like Ctrl+K or Ctrl+Shift+N. Native text editing shortcuts such as Ctrl+C and Ctrl+V cannot be assigned.</value>
   </data>
   <data name="Shortcuts_CustomTitle.Text" xml:space="preserve">
     <value>Customize</value>
@@ -375,8 +375,11 @@
   <data name="Shortcuts_AppOnlyHint.Text" xml:space="preserve">
     <value>These shortcuts work only while the SalmonEgg window is active. They do not register system-wide hotkeys or override native text editing behaviors.</value>
   </data>
-  <data name="Shortcuts_GestureInput.PlaceholderText" xml:space="preserve">
-    <value>e.g. Ctrl+K</value>
+  <data name="Shortcuts_GestureRecorder.PlaceholderText" xml:space="preserve">
+    <value>Click to record shortcut</value>
+  </data>
+  <data name="Shortcuts_GestureRecorder.RecordingText" xml:space="preserve">
+    <value>Press shortcut</value>
   </data>
   <data name="Shortcuts_RestoreSingle.Content" xml:space="preserve">
     <value>Restore</value>

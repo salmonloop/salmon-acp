@@ -238,4 +238,49 @@ public class AppPreferencesViewModelTests
 
         Assert.Equal("project-123", vm.LastSelectedProjectId);
     }
+
+    [Fact]
+    public async Task SetKeyBinding_ExistingBinding_RaisesShortcutBindingsChanged()
+    {
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings
+        {
+            KeyBindings = new Dictionary<string, string>
+            {
+                ["search"] = "Ctrl+K"
+            }
+        });
+        appSettingsService.Setup(s => s.SaveAsync(It.IsAny<AppSettings>())).Returns(Task.CompletedTask);
+
+        var startupService = new Mock<IAppStartupService>();
+        startupService.SetupGet(s => s.IsSupported).Returns(false);
+
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        capabilities.SetupGet(c => c.SupportsLaunchOnStartup).Returns(false);
+        capabilities.SetupGet(c => c.SupportsTray).Returns(false);
+        capabilities.SetupGet(c => c.SupportsLanguageOverride).Returns(false);
+
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        var logger = new Mock<ILogger<AppPreferencesViewModel>>();
+
+        var vm = new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            logger.Object,
+            new ImmediateUiDispatcher());
+
+        await Task.Delay(100);
+
+        var raisedCount = 0;
+        vm.ShortcutBindingsChanged += (_, _) => raisedCount++;
+
+        vm.SetKeyBinding("search", "Alt+K");
+
+        Assert.Equal("Alt+K", vm.GetKeyBinding("search"));
+        Assert.Equal(1, raisedCount);
+    }
 }

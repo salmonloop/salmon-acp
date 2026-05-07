@@ -19,12 +19,7 @@ public sealed class AppShortcutBindingMap
 
         foreach (var definition in AppShortcutCatalog.EditableActions)
         {
-            var configuredGesture = savedBindings != null &&
-                                    savedBindings.TryGetValue(definition.ActionId, out var savedValue)
-                ? savedValue
-                : definition.DefaultGesture;
-
-            if (!AppShortcutGesture.TryParse(configuredGesture, out var gesture))
+            if (!TryResolveConfiguredGesture(savedBindings, definition, out var gesture))
             {
                 continue;
             }
@@ -44,4 +39,19 @@ public sealed class AppShortcutBindingMap
         => _gestureToAction.TryGetValue(gesture, out actionId!);
 
     public IReadOnlyDictionary<AppShortcutGesture, string> AsDictionary() => _gestureToAction;
+
+    private static bool TryResolveConfiguredGesture(
+        IReadOnlyDictionary<string, string>? savedBindings,
+        AppShortcutDefinition definition,
+        out AppShortcutGesture gesture)
+    {
+        if (savedBindings != null &&
+            savedBindings.TryGetValue(definition.ActionId, out var savedValue) &&
+            AppShortcutGesture.TryParse(savedValue, out gesture))
+        {
+            return true;
+        }
+
+        return AppShortcutGesture.TryParse(definition.DefaultGesture, out gesture);
+    }
 }

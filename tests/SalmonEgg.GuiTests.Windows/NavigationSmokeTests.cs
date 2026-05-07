@@ -91,6 +91,43 @@ public sealed class NavigationSmokeTests
     }
 
     [SkippableFact]
+    public void ShortcutRecorder_UpdatesSearchBindingImmediately_AndDropsPreviousBinding()
+    {
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        NavigateToShortcutsSettings(session);
+
+        var recorderButton = session.FindByAutomationId("Shortcuts.Record.search");
+        session.ClickElement(recorderButton);
+        session.FocusElement(recorderButton);
+        Thread.Sleep(150);
+        session.PressShortcut(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_L);
+        Thread.Sleep(250);
+
+        var recorderName = session.TryGetElementName("Shortcuts.Record.search", TimeSpan.FromSeconds(2));
+        Assert.True(
+            (recorderName ?? string.Empty).Contains("Ctrl+L", StringComparison.Ordinal),
+            $"Expected shortcut recorder to display Ctrl+L after capture, but saw '{recorderName ?? "<null>"}'.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var startItem = session.FindByAutomationId("MainNav.Start");
+        session.FocusElement(startItem);
+        session.PressShortcut(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_K);
+        Thread.Sleep(150);
+
+        Assert.False(
+            session.IsFocusWithinAutomationId("TopSearchBox"),
+            $"Expected previous Ctrl+K binding to stop focusing TopSearchBox after recorder update.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        session.FocusElement(startItem);
+        session.PressShortcut(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_L);
+
+        Assert.True(
+            session.IsFocusWithinAutomationId("TopSearchBox"),
+            $"Expected recorded Ctrl+L binding to focus TopSearchBox immediately.{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void TitleBarPanelButtons_Toggle_ChangesBottomPanelState()
     {
         using var _ = GuiAppDataScope.CreateDeterministicLeftNavData();
@@ -567,6 +604,23 @@ public sealed class NavigationSmokeTests
         return session.WaitUntilOnscreen("MainNav.Start", timeout)
             || session.WaitUntilOnscreen("MainNav.AddProject", timeout)
             || session.WaitUntilOnscreen("MainNav.Project.project-1", timeout);
+    }
+
+    private static void NavigateToShortcutsSettings(WindowsGuiAppSession session)
+    {
+        var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
+        session.ActivateElement(settingsItem);
+
+        var shortcutsSettingsItem = session.TryFindByAutomationId("SettingsNav.Shortcuts", TimeSpan.FromSeconds(10))
+            ?? session.TryFindVisibleElementByNameAnywhere("Shortcuts", TimeSpan.FromSeconds(10))
+            ?? session.TryFindVisibleElementByNameAnywhere("快捷键", TimeSpan.FromSeconds(10));
+
+        Assert.NotNull(shortcutsSettingsItem);
+        session.ActivateElement(shortcutsSettingsItem!);
+
+        Assert.True(
+            session.WaitUntilOnscreen("Shortcuts.Record.search", TimeSpan.FromSeconds(10)),
+            "Shortcut recorder for search did not become visible.");
     }
 
     private static string DumpCompactNavigationAffordance(WindowsGuiAppSession session)

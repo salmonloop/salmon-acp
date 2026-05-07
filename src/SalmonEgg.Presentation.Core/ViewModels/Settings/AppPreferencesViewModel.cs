@@ -84,6 +84,7 @@ public partial class AppPreferencesViewModel : ObservableObject
     private bool _isLoaded;
 
     public ObservableCollection<KeyBindingPairViewModel> KeyBindings { get; } = new();
+    public event EventHandler? ShortcutBindingsChanged;
 
     public bool IsLaunchOnStartupSupported => _capabilities.SupportsLaunchOnStartup;
 
@@ -191,9 +192,7 @@ public partial class AppPreferencesViewModel : ObservableObject
                 KeyBindings.Clear();
                 foreach (var kvp in settings.KeyBindings)
                 {
-                    var pair = new KeyBindingPairViewModel(kvp.Key, kvp.Value);
-                    pair.PropertyChanged += OnKeyBindingPairPropertyChanged;
-                    KeyBindings.Add(pair);
+                    KeyBindings.Add(new KeyBindingPairViewModel(kvp.Key, kvp.Value));
                 }
 
                 if (shouldPersistAnimation)
@@ -287,6 +286,7 @@ public partial class AppPreferencesViewModel : ObservableObject
             }
         }
 
+        NotifyShortcutBindingsChanged();
         ScheduleSave();
     }
 
@@ -295,8 +295,14 @@ public partial class AppPreferencesViewModel : ObservableObject
         if (e.PropertyName == nameof(KeyBindingPairViewModel.Gesture) ||
             e.PropertyName == nameof(KeyBindingPairViewModel.ActionId))
         {
+            NotifyShortcutBindingsChanged();
             ScheduleSave();
         }
+    }
+
+    private void NotifyShortcutBindingsChanged()
+    {
+        ShortcutBindingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetKeyBinding(string actionId, string gesture)

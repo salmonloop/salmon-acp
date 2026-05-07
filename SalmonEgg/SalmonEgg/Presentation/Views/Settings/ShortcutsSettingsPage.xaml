@@ -58,11 +58,11 @@
                                             <TextBlock Text="{x:Bind DefaultGesture, Mode=OneWay}" FontSize="12" Opacity="0.65"/>
                                         </StackPanel>
 
-                                        <TextBox Grid.Column="1"
-                                                 Text="{x:Bind Gesture, Mode=TwoWay}"
-                                                 x:Uid="Shortcuts_GestureInput"
-                                                 PlaceholderText="例如：Ctrl+K"
-                                                 HorizontalAlignment="Stretch" />
+                                        <controls:ShortcutRecorder Grid.Column="1"
+                                                                   Gesture="{x:Bind Gesture, Mode=TwoWay}"
+                                                                   RecorderAutomationId="{x:Bind RecorderAutomationId, Mode=OneWay}"
+                                                                   x:Uid="Shortcuts_GestureRecorder"
+                                                                   HorizontalAlignment="Stretch" />
 
                                         <Button Grid.Column="2"
                                                 x:Uid="Shortcuts_RestoreSingle"

@@ -189,6 +189,8 @@ public sealed partial class ShortcutEntryViewModel : ObservableObject
 
     public string DefaultGesture { get; }
 
+    public string RecorderAutomationId => $"Shortcuts.Record.{ActionId}";
+
     public IRelayCommand RestoreDefaultCommand { get; }
 
     [ObservableProperty]

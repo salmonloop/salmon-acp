@@ -57,6 +57,17 @@ public sealed class ShortcutsSettingsViewModelTests
         Assert.Null(preferences.GetKeyBinding("toggle_right_pane"));
     }
 
+    [Fact]
+    public async Task ShortcutEntry_ExposesStableRecorderAutomationId()
+    {
+        var preferences = await CreatePreferencesAsync(new AppSettings());
+
+        var viewModel = new ShortcutsSettingsViewModel(preferences);
+
+        var searchShortcut = Assert.Single(viewModel.Shortcuts.Where(shortcut => shortcut.ActionId == "search"));
+        Assert.Equal("Shortcuts.Record.search", searchShortcut.RecorderAutomationId);
+    }
+
     private static async Task<AppPreferencesViewModel> CreatePreferencesAsync(AppSettings settings)
     {
         var appSettingsService = new Mock<IAppSettingsService>();
