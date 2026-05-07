@@ -113,4 +113,60 @@ public sealed class ChatConversationSurfaceStatePresenterTests
         Assert.False(state.ShouldShowTranscriptSurface);
         Assert.False(state.ShouldShowConversationInputSurface);
     }
+
+    [Fact]
+    public void Resolve_WhenShellHasNewLatestIntent_UsesShellIntentAsActivationOverlayOwner()
+    {
+        var state = ChatConversationSurfaceStatePresenter.Resolve(new ChatConversationSurfaceStateInput(
+            IsSessionActive: true,
+            CurrentSessionId: "conv-1",
+            MessageHistoryCount: 1,
+            VisibleTranscriptConversationId: "conv-1",
+            IsChatShellVisibleForRemoteUi: true,
+            IsConnecting: false,
+            IsInitializing: false,
+            IsHydrating: false,
+            IsLayoutLoading: false,
+            IsSessionSwitching: false,
+            SessionSwitchOverlayConversationId: null,
+            SessionSwitchPreviewConversationId: null,
+            ConnectionLifecycleOverlayConversationId: null,
+            HistoryOverlayConversationId: null,
+            PendingShellActivationConversationId: "conv-2",
+            HydrationLoadedMessageCount: 0));
+
+        Assert.True(state.IsActivationOverlayVisible);
+        Assert.True(state.ShouldShowBlockingLoadingMask);
+        Assert.True(state.ShouldShowLoadingOverlayPresenter);
+        Assert.True(state.ShouldShowLoadingOverlayStatusPill);
+        Assert.Equal(ChatViewModel.LoadingOverlayStage.PreparingSession, state.OverlayLoadingStage);
+    }
+
+    [Fact]
+    public void Resolve_WhenShellIntentStartsBeforeSessionIsActive_UsesShellIntentAsActivationOverlayOwner()
+    {
+        var state = ChatConversationSurfaceStatePresenter.Resolve(new ChatConversationSurfaceStateInput(
+            IsSessionActive: false,
+            CurrentSessionId: null,
+            MessageHistoryCount: 0,
+            VisibleTranscriptConversationId: null,
+            IsChatShellVisibleForRemoteUi: true,
+            IsConnecting: false,
+            IsInitializing: false,
+            IsHydrating: false,
+            IsLayoutLoading: false,
+            IsSessionSwitching: false,
+            SessionSwitchOverlayConversationId: null,
+            SessionSwitchPreviewConversationId: null,
+            ConnectionLifecycleOverlayConversationId: null,
+            HistoryOverlayConversationId: null,
+            PendingShellActivationConversationId: "conv-2",
+            HydrationLoadedMessageCount: 0));
+
+        Assert.True(state.IsActivationOverlayVisible);
+        Assert.True(state.ShouldShowBlockingLoadingMask);
+        Assert.True(state.ShouldShowLoadingOverlayPresenter);
+        Assert.True(state.ShouldShowLoadingOverlayStatusPill);
+        Assert.Equal(ChatViewModel.LoadingOverlayStage.PreparingSession, state.OverlayLoadingStage);
+    }
 }

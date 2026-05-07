@@ -931,6 +931,7 @@ public partial class ChatViewModel
     {
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSendPromptUi));
+        RefreshCurrentSessionDisplayName();
         OnPropertyChanged(nameof(ShouldShowActiveConversationRoot));
         OnPropertyChanged(nameof(ShouldLoadActiveConversationRoot));
         OnPropertyChanged(nameof(ShouldShowSessionHeader));

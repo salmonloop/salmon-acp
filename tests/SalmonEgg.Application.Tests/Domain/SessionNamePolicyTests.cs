@@ -25,4 +25,15 @@ public class SessionNamePolicyTests
     {
         Assert.Equal(string.Empty, SessionNamePolicy.Sanitize("   "));
     }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("   ", true)]
+    [InlineData("会话 12345678", true)]
+    [InlineData("Custom title", false)]
+    public void IsUnsetOrDefault_DetectsOnlyUnsetOrGeneratedDefault(string? displayName, bool expected)
+    {
+        Assert.Equal(expected, SessionNamePolicy.IsUnsetOrDefault(displayName, "1234567890"));
+    }
 }

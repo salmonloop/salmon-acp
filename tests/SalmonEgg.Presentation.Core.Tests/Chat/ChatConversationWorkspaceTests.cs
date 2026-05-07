@@ -1393,6 +1393,48 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
+    public async Task ApplySessionInfoSnapshotAsync_RemoteTitleDoesNotOverrideEstablishedDisplayName()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        var session = await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        session.DisplayName = "User chosen title";
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original remote metadata title",
+                Cwd = @"C:\repo\one",
+                UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+            }));
+
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "/systematic-debugging",
+                UpdatedAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        var snapshot = workspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(snapshot);
+        Assert.Equal("/systematic-debugging", snapshot!.SessionInfo!.Title);
+        Assert.Equal("User chosen title", sessionManager.GetSession("session-1")!.DisplayName);
+        Assert.Equal("User chosen title", workspace.GetCatalog().Single(item => item.ConversationId == "session-1").DisplayName);
+    }
+
+    [Fact]
     public async Task ApplySessionInfoSnapshotAsync_WhitespaceFields_StillMergeMetadata()
     {
         var syncContext = new ImmediateSynchronizationContext();

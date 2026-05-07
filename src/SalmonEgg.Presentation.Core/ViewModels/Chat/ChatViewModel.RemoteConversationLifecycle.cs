@@ -613,6 +613,7 @@ public partial class ChatViewModel
         var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         MessageHistory = new ObservableCollection<ChatMessageViewModel>(messages.Select(FromSnapshot));
         UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
+        RefreshCurrentSessionDisplayName();
         OnPropertyChanged(nameof(HasVisibleTranscriptContent));
         OnPropertyChanged(nameof(OverlayStatusText));
         OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
@@ -624,6 +625,7 @@ public partial class ChatViewModel
         var messages = transcript ?? Array.Empty<ChatMessageViewModel>();
         MessageHistory = new ObservableCollection<ChatMessageViewModel>(messages);
         UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
+        RefreshCurrentSessionDisplayName();
         OnPropertyChanged(nameof(HasVisibleTranscriptContent));
         OnPropertyChanged(nameof(OverlayStatusText));
         OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
@@ -691,10 +693,8 @@ public partial class ChatViewModel
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = await _chatStore.State ?? ChatState.Empty;
-        var isAuthoritativelyCurrentConversation =
-            string.Equals(state.HydratedConversationId, sessionId, StringComparison.Ordinal)
-            || string.Equals(CurrentSessionId, sessionId, StringComparison.Ordinal);
-        if (!isAuthoritativelyCurrentConversation)
+        if (!string.Equals(state.HydratedConversationId, sessionId, StringComparison.Ordinal)
+            || !string.Equals(ResolvePresentedSessionConversationId(), sessionId, StringComparison.Ordinal))
         {
             return false;
         }
@@ -1974,7 +1974,7 @@ public partial class ChatViewModel
             {
                 if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
                 {
-                    CurrentSessionDisplayName = ResolveSessionDisplayName(conversationId);
+                    RefreshCurrentSessionDisplayName();
                 }
             }).ConfigureAwait(false);
         }

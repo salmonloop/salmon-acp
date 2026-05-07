@@ -85,7 +85,8 @@ internal sealed class GuiAppDataScope : IDisposable
     public static GuiAppDataScope CreateDeterministicLeftNavData(
         int sessionCount = 1,
         bool withContent = false,
-        int messageCountPerSession = 2)
+        int messageCountPerSession = 2,
+        string? firstSessionDisplayName = null)
     {
         if (sessionCount <= 0)
         {
@@ -124,7 +125,7 @@ internal sealed class GuiAppDataScope : IDisposable
             projectRootPath,
             previousGuiAppDataRootOverride);
 
-        scope.Seed(sessionCount, withContent, messageCountPerSession);
+        scope.Seed(sessionCount, withContent, messageCountPerSession, firstSessionDisplayName);
         return scope;
     }
 
@@ -556,7 +557,11 @@ internal sealed class GuiAppDataScope : IDisposable
         }
     }
 
-    private void Seed(int sessionCount, bool withContent = false, int messageCountPerSession = 2)
+    private void Seed(
+        int sessionCount,
+        bool withContent = false,
+        int messageCountPerSession = 2,
+        string? firstSessionDisplayName = null)
     {
         Directory.CreateDirectory(_configDirectory);
         Directory.CreateDirectory(_conversationsDirectory);
@@ -565,7 +570,7 @@ internal sealed class GuiAppDataScope : IDisposable
         File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
         File.WriteAllText(
             _conversationsPath,
-            BuildConversationsJson(_projectRootPath, sessionCount, withContent, messageCountPerSession),
+            BuildConversationsJson(_projectRootPath, sessionCount, withContent, messageCountPerSession, firstSessionDisplayName),
             Encoding.UTF8);
     }
 
@@ -752,7 +757,8 @@ internal sealed class GuiAppDataScope : IDisposable
         string projectRootPath,
         int sessionCount,
         bool withContent = false,
-        int messageCountPerSession = 2)
+        int messageCountPerSession = 2,
+        string? firstSessionDisplayName = null)
     {
         var baseTime = new DateTimeOffset(2026, 03, 19, 09, 00, 00, TimeSpan.Zero);
         var conversations = Enumerable.Range(1, sessionCount)
@@ -780,7 +786,9 @@ internal sealed class GuiAppDataScope : IDisposable
                 return new
                 {
                     conversationId = $"gui-session-{index:00}",
-                    displayName = $"GUI Session {index:00}",
+                    displayName = index == 1 && !string.IsNullOrWhiteSpace(firstSessionDisplayName)
+                        ? firstSessionDisplayName
+                        : $"GUI Session {index:00}",
                     createdAt = timestamp,
                     lastUpdatedAt = timestamp,
                     cwd = projectRootPath,

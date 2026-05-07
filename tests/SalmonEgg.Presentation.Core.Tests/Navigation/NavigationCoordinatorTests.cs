@@ -365,7 +365,7 @@ public sealed class NavigationCoordinatorTests
     }
 
     [Fact]
-    public async Task ActivateSessionAsync_WhenAlreadyOnChatShell_DoesNotPrimeSessionSwitchPreview()
+    public async Task ActivateSessionAsync_WhenAlreadyOnChatShellAndTargetDiffers_UsesRuntimeIntentWithoutPreviewSideChannel()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -377,15 +377,46 @@ public sealed class NavigationCoordinatorTests
             var shellNavigation = CreateShellNavigationService();
             var runtimeState = new ShellNavigationRuntimeStateStore
             {
-                CurrentShellContent = ShellNavigationContent.Chat
+                CurrentShellContent = ShellNavigationContent.Chat,
+                CommittedSessionId = "session-0"
             };
-            var activationCoordinator = new PreviewingConversationSessionSwitcher((_, _) => Task.FromResult(true));
+            var activationCoordinator = new RecordingConversationSessionSwitcher((_, _) => Task.FromResult(true));
             var coordinator = CreateCoordinator(selectionStore, activationCoordinator, preferences, shellNavigation.Object, runtimeState);
 
             await coordinator.ActivateSessionAsync("session-1", "project-1");
 
-            Assert.Empty(activationCoordinator.PrimedConversationIds);
-            Assert.Empty(activationCoordinator.ClearedConversationIds);
+            Assert.Equal(new[] { "session-1" }, activationCoordinator.ActivatedSessionIds);
+            Assert.Equal("session-1", runtimeState.CommittedSessionId);
+            Assert.Equal(SessionActivationPhase.Selected, runtimeState.ActiveSessionActivation?.Phase);
+            Assert.Equal("session-1", runtimeState.ActiveSessionActivation?.SessionId);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task ActivateSessionAsync_WhenAlreadyOnCommittedSession_DoesNotUsePreviewSideChannel()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferencesWithProject();
+            var selectionStore = new ShellSelectionStateStore();
+            var shellNavigation = CreateShellNavigationService();
+            var runtimeState = new ShellNavigationRuntimeStateStore
+            {
+                CurrentShellContent = ShellNavigationContent.Chat,
+                CommittedSessionId = "session-1"
+            };
+            var activationCoordinator = new RecordingConversationSessionSwitcher((_, _) => Task.FromResult(true));
+            var coordinator = CreateCoordinator(selectionStore, activationCoordinator, preferences, shellNavigation.Object, runtimeState);
+
+            await coordinator.ActivateSessionAsync("session-1", "project-1");
+
             Assert.Equal(new[] { "session-1" }, activationCoordinator.ActivatedSessionIds);
         }
         finally
@@ -611,8 +642,9 @@ public sealed class NavigationCoordinatorTests
                 new Session("session-2", @"C:\repo\two") { DisplayName = "Imported Session" });
             var preferences = CreatePreferencesWithProject();
             var shellNavigation = new TokenAwareShellNavigationService();
+            var runtimeState = new ShellNavigationRuntimeStateStore();
 
-            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object, runtimeState);
             await chat.ViewModel.RestoreAsync();
 
             var bindResult = await chat.ViewModel.ConversationBindingCommands
@@ -628,7 +660,7 @@ public sealed class NavigationCoordinatorTests
             chat.ViewModel.ReplaceChatService(chatService.Object);
 
             var selectionStore = new ShellSelectionStateStore();
-            var coordinator = CreateCoordinator(selectionStore, (IConversationSessionSwitcher)chat.ViewModel, preferences, shellNavigation);
+            var coordinator = CreateCoordinator(selectionStore, (IConversationSessionSwitcher)chat.ViewModel, preferences, shellNavigation, runtimeState);
 
             var activationTask = coordinator.ActivateSessionAsync("session-2", "project-1");
 
@@ -954,6 +986,83 @@ public sealed class NavigationCoordinatorTests
 
             allowLoadCompletion.TrySetResult(null);
             await WaitForConditionAsync(() => !chat.ViewModel.IsOverlayVisible);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    [Trait("Suite", "Smoke")]
+    public async Task ActivateSessionAsync_RemoteBoundConversation_KeepsPresentedSessionIdentityAlignedWhenLateReplayProjects()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            var sessionManager = CreateSessionManager(
+                new Session("session-1", @"C:\repo\one") { DisplayName = "Session 1" },
+                new Session("session-2", @"C:\repo\two") { DisplayName = "Imported Session" });
+            var preferences = CreatePreferencesWithProject();
+            var shellNavigation = CreateShellNavigationService();
+
+            using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
+            await chat.ViewModel.RestoreAsync();
+
+            var bindResult = await chat.ViewModel.ConversationBindingCommands
+                .UpdateBindingAsync("session-2", "remote-2", null);
+            Assert.Equal(BindingUpdateStatus.Success, bindResult.Status);
+
+            var loadReturned = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var chatService = new Mock<IChatService>();
+            chatService.SetupGet(service => service.IsConnected).Returns(true);
+            chatService.SetupGet(service => service.IsInitialized).Returns(true);
+            chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
+            chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+                .Returns<SessionLoadParams, CancellationToken>(async (_, _) =>
+                {
+                    loadReturned.TrySetResult(null);
+                    await allowLoadCompletion.Task;
+                    return SessionLoadResponse.Completed;
+                });
+            chat.ViewModel.ReplaceChatService(chatService.Object);
+
+            var selectionStore = new ShellSelectionStateStore();
+            var coordinator = CreateCoordinator(selectionStore, (IConversationSessionSwitcher)chat.ViewModel, preferences, shellNavigation.Object);
+            using var navVm = CreateNavigationViewModel(chat, sessionManager.Object, preferences, navState, selectionStore, coordinator);
+
+            navVm.RebuildTree();
+            Assert.True(await chat.ViewModel.SwitchConversationAsync("session-1"));
+
+            var activationTask = coordinator.ActivateSessionAsync("session-2", "project-1");
+            await loadReturned.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.True(await activationTask);
+            Assert.Equal("session-2", chat.ViewModel.CurrentSessionId);
+            Assert.Equal("Imported Session", chat.ViewModel.CurrentSessionDisplayName);
+            Assert.Equal(string.Empty, chat.ViewModel.PresentedSessionHeaderDisplayName);
+
+            chatService.Raise(service => service.SessionUpdateReceived += null,
+                new SessionUpdateEventArgs(
+                    "remote-2",
+                    new AgentMessageUpdate(new SalmonEgg.Domain.Models.Content.TextContentBlock("late replay"))));
+
+            await WaitForConditionAsync(
+                () => chat.ViewModel.MessageHistory.Any(message =>
+                    string.Equals(message.TextContent, "late replay", StringComparison.Ordinal)),
+                maxAttempts: 100,
+                delayMilliseconds: 20);
+
+            allowLoadCompletion.TrySetResult(null);
+            await WaitForConditionAsync(() => !chat.ViewModel.IsOverlayVisible, maxAttempts: 100, delayMilliseconds: 20);
+
+            Assert.Equal("session-2", chat.ViewModel.CurrentSessionId);
+            Assert.Equal("Imported Session", chat.ViewModel.CurrentSessionDisplayName);
+            Assert.Equal("Imported Session", chat.ViewModel.PresentedSessionHeaderDisplayName);
         }
         finally
         {
@@ -1615,38 +1724,6 @@ public sealed class NavigationCoordinatorTests
         {
             ActivatedSessionIds.Add(sessionId);
             return _onActivate(sessionId, cancellationToken);
-        }
-    }
-
-    private sealed class PreviewingConversationSessionSwitcher : IConversationSessionSwitcher, IConversationActivationPreview
-    {
-        private readonly Func<string, CancellationToken, Task<bool>> _onActivate;
-
-        public PreviewingConversationSessionSwitcher(Func<string, CancellationToken, Task<bool>> onActivate)
-        {
-            _onActivate = onActivate;
-        }
-
-        public List<string> ActivatedSessionIds { get; } = new();
-
-        public List<string> PrimedConversationIds { get; } = new();
-
-        public List<string> ClearedConversationIds { get; } = new();
-
-        public Task<bool> SwitchConversationAsync(string sessionId, CancellationToken cancellationToken = default)
-        {
-            ActivatedSessionIds.Add(sessionId);
-            return _onActivate(sessionId, cancellationToken);
-        }
-
-        public void PrimeSessionSwitchPreview(string conversationId)
-        {
-            PrimedConversationIds.Add(conversationId);
-        }
-
-        public void ClearSessionSwitchPreview(string conversationId)
-        {
-            ClearedConversationIds.Add(conversationId);
         }
     }
 

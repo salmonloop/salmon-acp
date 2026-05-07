@@ -182,6 +182,7 @@ public partial class ChatViewModel
 
     private void RaiseOverlayStateChanged()
     {
+        RefreshCurrentSessionDisplayName();
         OnPropertyChanged(nameof(IsActivationOverlayVisible));
         OnPropertyChanged(nameof(IsOverlayVisible));
         OnPropertyChanged(nameof(ShouldShowActiveConversationRoot));
@@ -1258,7 +1259,7 @@ public partial class ChatViewModel
             !hasCompetingNonWarmActivation
             && initialWarmReuseDecision.CanReuse;
 
-        ((IConversationActivationPreview)this).ClearSessionSwitchPreview(sessionId);
+        ClearSessionSwitchPreview(sessionId);
         await PostToUiAsync(() =>
         {
             if (canOptimisticallyReuseWarmRemoteConversation)
@@ -1338,6 +1339,7 @@ public partial class ChatViewModel
         }
 
         await ApplyCurrentStoreProjectionAsync(context.ActivationVersion).ConfigureAwait(false);
+        await EnsureCurrentSessionIdAlignedAsync(sessionId, context.ActivationVersion).ConfigureAwait(false);
         const int slowSelectionActivationThresholdMs = 1200;
         if (activationStopwatch.ElapsedMilliseconds >= slowSelectionActivationThresholdMs)
         {
@@ -1494,7 +1496,7 @@ public partial class ChatViewModel
         RaiseOverlayStateChanged();
     }
 
-    void IConversationActivationPreview.PrimeSessionSwitchPreview(string conversationId)
+    internal void PrimeSessionSwitchPreview(string conversationId)
     {
         if (string.IsNullOrWhiteSpace(conversationId))
         {
@@ -1512,7 +1514,7 @@ public partial class ChatViewModel
         });
     }
 
-    void IConversationActivationPreview.ClearSessionSwitchPreview(string conversationId)
+    internal void ClearSessionSwitchPreview(string conversationId)
     {
         if (string.IsNullOrWhiteSpace(conversationId))
         {

@@ -62,17 +62,17 @@ public sealed class MainNavigationViewAdapter
 
         if (string.Equals(tag, NavItemTag.Start, StringComparison.Ordinal))
         {
-            return _navigationCoordinator.ActivateStartAsync().ContinueWith(_ => true);
+            return AwaitActivationHandledAsync(_navigationCoordinator.ActivateStartAsync());
         }
 
         if (string.Equals(tag, NavItemTag.DiscoverSessions, StringComparison.Ordinal))
         {
-            return _navigationCoordinator.ActivateDiscoverSessionsAsync().ContinueWith(_ => true);
+            return AwaitActivationHandledAsync(_navigationCoordinator.ActivateDiscoverSessionsAsync());
         }
 
         if (string.Equals(tag, NavItemTag.Settings, StringComparison.Ordinal))
         {
-            return _navigationCoordinator.ActivateSettingsAsync("General").ContinueWith(_ => true);
+            return AwaitActivationHandledAsync(_navigationCoordinator.ActivateSettingsAsync("General"));
         }
 
         if (NavItemTag.TryParseSession(tag, out var sessionId))
@@ -80,10 +80,20 @@ public sealed class MainNavigationViewAdapter
             var sessionProjectId = (navItem.DataContext as SessionNavItemViewModel)?.ProjectId
                 ?? _viewModel.TryGetProjectIdForSession(sessionId);
 
-            _ = _navigationCoordinator.ActivateSessionAsync(sessionId, sessionProjectId);
-            return Task.FromResult(true);
+            return AwaitActivationHandledAsync(_navigationCoordinator.ActivateSessionAsync(sessionId, sessionProjectId));
         }
 
         return Task.FromResult(false);
+    }
+
+    private static async Task<bool> AwaitActivationHandledAsync(Task activationTask)
+    {
+        await activationTask.ConfigureAwait(true);
+        return true;
+    }
+
+    private static async Task<bool> AwaitActivationHandledAsync(Task<bool> activationTask)
+    {
+        return await activationTask.ConfigureAwait(true);
     }
 }

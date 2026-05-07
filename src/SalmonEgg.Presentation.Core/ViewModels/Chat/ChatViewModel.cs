@@ -57,7 +57,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 /// Orchestrates the lifecycle of conversations, ACP agent connectivity, and UI state projection.
 /// Follows the MVVM pattern where the View is driven strictly by this ViewModel and its projected state.
 /// </summary>
-public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordinatorSink, IConversationSessionSwitcher, IConversationActivationPreview, IConversationPanelCleanup, IConversationActivationOrchestratorSink
+public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordinatorSink, IConversationSessionSwitcher, IConversationPanelCleanup, IConversationActivationOrchestratorSink
 {
     private const int MiniWindowCompactDisplayNameMaxLength = 24;
 
@@ -508,6 +508,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
     [ObservableProperty]
     private string _currentSessionDisplayName = string.Empty;
+
+    [ObservableProperty]
+    private string _presentedSessionHeaderDisplayName = string.Empty;
 
     [ObservableProperty]
     private bool _isEditingSessionName;
@@ -1350,8 +1353,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
     private void OnCurrentSessionIdChanged(string? value)
     {
-        // Keep the header name stable and decouple it from ACP sessionId.
-        CurrentSessionDisplayName = ResolveSessionDisplayName(value);
+        RefreshCurrentSessionDisplayName();
 
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -1697,6 +1699,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         var transcriptOwnerChanged = UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
         if (previousCount != MessageHistory.Count || transcriptOwnerChanged)
         {
+            RefreshCurrentSessionDisplayName();
             OnPropertyChanged(nameof(HasVisibleTranscriptContent));
             OnPropertyChanged(nameof(OverlayStatusText));
             OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
@@ -1706,6 +1709,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
     private void RaiseTranscriptProjectionStateChanged()
     {
+        RefreshCurrentSessionDisplayName();
         OnPropertyChanged(nameof(HasVisibleTranscriptContent));
         OnPropertyChanged(nameof(OverlayStatusText));
         OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
@@ -1932,6 +1936,48 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         }
 
         return SessionNamePolicy.CreateDefault(sessionId);
+    }
+
+    private void RefreshCurrentSessionDisplayName()
+    {
+        var nextDisplayName = ResolveSessionDisplayName(CurrentSessionId);
+        if (!string.Equals(CurrentSessionDisplayName, nextDisplayName, StringComparison.Ordinal))
+        {
+            CurrentSessionDisplayName = nextDisplayName;
+        }
+
+        RefreshPresentedSessionHeaderDisplayName();
+    }
+
+    private void RefreshPresentedSessionHeaderDisplayName()
+    {
+        var nextDisplayName = ResolvePresentedSessionDisplayName();
+        if (!string.Equals(PresentedSessionHeaderDisplayName, nextDisplayName, StringComparison.Ordinal))
+        {
+            PresentedSessionHeaderDisplayName = nextDisplayName;
+        }
+    }
+
+    private string ResolvePresentedSessionDisplayName()
+        => ResolveSessionDisplayName(ResolvePresentedSessionConversationId());
+
+    private string? ResolvePresentedSessionConversationId()
+    {
+        var surfaceProjection = ResolveConversationSurfaceProjection();
+        if (!surfaceProjection.ShouldShowSessionHeader)
+        {
+            return null;
+        }
+
+        if (surfaceProjection.ShouldShowTranscriptSurface)
+        {
+            if (!string.IsNullOrWhiteSpace(_visibleTranscriptConversationId))
+            {
+                return _visibleTranscriptConversationId;
+            }
+        }
+
+        return CurrentSessionId;
     }
 
     private static string CreateMiniWindowCompactDisplayName(string displayName)

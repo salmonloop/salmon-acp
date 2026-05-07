@@ -691,7 +691,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                     metadataChanged = true;
                 }
 
-                if (!string.IsNullOrWhiteSpace(mergedSessionInfo?.Title))
+                if (!string.IsNullOrWhiteSpace(mergedSessionInfo?.Title)
+                    && ShouldApplySessionInfoTitleToDisplayName(conversationId))
                 {
                     var sanitized = SessionNamePolicy.Sanitize(mergedSessionInfo.Title);
                     var finalName = string.IsNullOrWhiteSpace(sanitized)
@@ -1101,6 +1102,11 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
         return SessionNamePolicy.CreateDefault(conversationId);
     }
+
+    private bool ShouldApplySessionInfoTitleToDisplayName(string conversationId)
+        => SessionNamePolicy.IsUnsetOrDefault(
+            _sessionManager.GetSession(conversationId)?.DisplayName,
+            conversationId);
 
     private ConversationBinding RegisterConversationCore(
         string conversationId,

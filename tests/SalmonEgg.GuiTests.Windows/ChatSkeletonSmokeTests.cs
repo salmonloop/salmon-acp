@@ -15,6 +15,8 @@ namespace SalmonEgg.GuiTests.Windows;
 
 public sealed class ChatSkeletonSmokeTests
 {
+    private const string LongSessionHeaderTitle = "GUI Session 01 - Long Title For Responsive Header Validation Across Narrow Layout Widths";
+
     [SkippableFact]
     public void SelectSessionWithToolCall_CanOpenToolCallPillWithoutCrashing()
     {
@@ -65,6 +67,53 @@ public sealed class ChatSkeletonSmokeTests
 
         var chatHeader = session.FindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(5));
         Assert.Contains("GUI Tool Call Session 01", chatHeader.Name, StringComparison.Ordinal);
+    }
+
+    [SkippableFact]
+    public void SelectSessionWithLongTitle_WhenWindowNarrows_KeepsFullAccessibilityName_AndMovesAgentToSecondRow()
+    {
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(
+            sessionCount: 1,
+            withContent: true,
+            firstSessionDisplayName: LongSessionHeaderTitle);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        EnsureMainWindowWideForTitleBarCommands(session);
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15));
+        session.ActivateElement(sessionItem);
+
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(10)),
+            "Chat header did not appear after selecting long-title session.");
+
+        ResizeMainWindow(width: 500, height: 900);
+
+        var titleButton = session.FindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(5));
+        var agentDisplay = session.FindByAutomationId("ChatView.CurrentAgentDisplay", TimeSpan.FromSeconds(5));
+
+        Assert.Equal(LongSessionHeaderTitle, titleButton.Name);
+
+        var stacked = false;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            var titleBounds = titleButton.BoundingRectangle;
+            var agentBounds = agentDisplay.BoundingRectangle;
+            stacked = agentBounds.Top >= titleBounds.Bottom - 1;
+            if (stacked)
+            {
+                break;
+            }
+
+            Thread.Sleep(120);
+            titleButton = session.FindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(250));
+            agentDisplay = session.FindByAutomationId("ChatView.CurrentAgentDisplay", TimeSpan.FromMilliseconds(250));
+        }
+
+        Assert.True(
+            stacked,
+            $"Expected agent display to wrap below the long session title in narrow layout. title={titleButton.BoundingRectangle} agent={agentDisplay.BoundingRectangle}");
     }
 
     [SkippableFact]
@@ -621,7 +670,7 @@ public sealed class ChatSkeletonSmokeTests
                 "GUI Local Session 01",
                 "mini-window-warm-cache-local-header",
                 appData);
-            Assert.Contains("GUI Local Session 01", localHeader.Name, StringComparison.Ordinal);
+            Assert.Contains("GUI Local Session 01", TryGetElementDisplayText(localHeader), StringComparison.Ordinal);
 
             var localMessages = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
             var localMessageVisible = session.TryFindVisibleText(
@@ -644,17 +693,24 @@ public sealed class ChatSkeletonSmokeTests
                 staleVisibleText: "GUI Local Session 01 message 004",
                 scenario: "mini-window-warm-cache-remote-overlay-before-shell");
 
-            var overlayHidden = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(30));
+            var overlayHidden = WaitUntilAutomationIdHiddenAnywhere(
+                session,
+                "ChatView.LoadingOverlay",
+                TimeSpan.FromSeconds(30));
             Assert.True(overlayHidden, "Warm-cache mini-window remote activation stayed stuck behind the loading overlay.");
+
+            session.BringMainWindowToFront();
+            Thread.Sleep(200);
 
             var remoteHeader = WaitForSessionHeader(
                 session,
                 "GUI Remote Session 01",
                 "mini-window-warm-cache-remote-header",
                 appData);
-            Assert.Contains("GUI Remote Session 01", remoteHeader.Name, StringComparison.Ordinal);
+            Assert.Contains("GUI Remote Session 01", TryGetElementDisplayText(remoteHeader), StringComparison.Ordinal);
 
-            var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+            var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(2))
+                ?? session.FindByAutomationIdAnywhere("ChatView.MessagesList", TimeSpan.FromSeconds(10));
             var latestReplayMessage = session.TryFindVisibleText(
                 "GUI Remote Session 01 replay 024",
                 messagesList,
@@ -2820,10 +2876,12 @@ public sealed class ChatSkeletonSmokeTests
         while (DateTime.UtcNow < deadline)
         {
             var overlayVisible = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(50)) is not null;
-            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(50));
-            var headerName = header?.Name ?? "<missing>";
+            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(50))
+                ?? session.TryFindByAutomationIdAnywhere("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(50));
+            var headerName = TryGetElementDisplayText(header);
             var remoteHeaderVisible = header is not null && headerName.Contains(expectedRemoteHeaderText, StringComparison.Ordinal);
-            var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(50));
+            var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(50))
+                ?? session.TryFindByAutomationIdAnywhere("ChatView.MessagesList", TimeSpan.FromMilliseconds(50));
             var staleTextVisible = messagesList is not null
                 && session.TryFindVisibleText(staleVisibleText, messagesList, TimeSpan.FromMilliseconds(50)) is not null;
 
@@ -3046,10 +3104,15 @@ public sealed class ChatSkeletonSmokeTests
 
         while (DateTime.UtcNow < deadline)
         {
-            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100));
-            var headerName = header?.Name ?? "<missing>";
-            var overlayVisible = session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(100)) is not null;
-            var statusVisible = session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null;
+            var header = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100))
+                ?? session.TryFindByAutomationIdAnywhere("ChatView.CurrentSessionNameButton", TimeSpan.FromMilliseconds(100));
+            var headerName = TryGetElementDisplayText(header);
+            var overlayVisible =
+                session.TryFindByAutomationId("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(100)) is not null
+                || session.TryFindByAutomationIdAnywhere("ChatView.LoadingOverlay", TimeSpan.FromMilliseconds(100)) is not null;
+            var statusVisible =
+                session.TryFindByAutomationId("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null
+                || session.TryFindByAutomationIdAnywhere("ChatView.LoadingOverlayStatus", TimeSpan.FromMilliseconds(100)) is not null;
 
             timeline.Add(
                 $"{DateTime.UtcNow:HH:mm:ss.fff} header={headerName} overlay={overlayVisible} status={statusVisible}");
@@ -3069,6 +3132,60 @@ public sealed class ChatSkeletonSmokeTests
             scenario,
             $"Expected header containing '{expectedTitle}' was not observed.{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
         throw new Xunit.Sdk.XunitException("Unreachable");
+    }
+
+    private static bool WaitUntilAutomationIdHiddenAnywhere(
+        WindowsGuiAppSession session,
+        string automationId,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var scoped = session.TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(150));
+            var desktop = session.TryFindByAutomationIdAnywhere(automationId, TimeSpan.FromMilliseconds(150));
+            if (scoped is null && desktop is null)
+            {
+                return true;
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return false;
+    }
+
+    private static string TryGetElementDisplayText(AutomationElement? element)
+    {
+        if (element is null)
+        {
+            return "<missing>";
+        }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(element.Name))
+            {
+                return element.Name;
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            var textDescendant = element.FindFirstDescendant(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Text));
+            if (textDescendant is not null && !string.IsNullOrWhiteSpace(textDescendant.Name))
+            {
+                return textDescendant.Name;
+            }
+        }
+        catch
+        {
+        }
+
+        return "<missing>";
     }
 
     private static void ThrowWithScreenshot(

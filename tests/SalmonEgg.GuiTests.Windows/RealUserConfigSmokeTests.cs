@@ -1533,7 +1533,7 @@ public sealed partial class RealUserConfigSmokeTests
         var remoteAHeader = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(2));
         Assert.True(
             remoteAHeader is not null && remoteAHeader.Name.Contains(remoteAExpectedHeader, StringComparison.Ordinal),
-            $"Remote conversation {remoteA.ConversationId} did not project the expected header title before cross-profile switch. Expected='{remoteAExpectedHeader}' Actual='{remoteAHeader?.Name ?? "<missing>"}'");
+            $"Remote conversation {remoteA.ConversationId} did not project the expected header title before cross-profile switch. Expected='{remoteAExpectedHeader}' Actual='{remoteAHeader?.Name ?? "<missing>"}'{Environment.NewLine}{DumpChatTitleProjection(session)}");
 
         var remoteBItem = session.FindByAutomationId(remoteBId, TimeSpan.FromSeconds(10));
         var remoteBExpectedHeader = FirstUsableVisibleLabel(remoteB.DisplayName, remoteBItem.Name, remoteB.ConversationId);
@@ -1548,14 +1548,18 @@ public sealed partial class RealUserConfigSmokeTests
         var remoteBHeader = session.TryFindByAutomationId("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(2));
         Assert.True(
             remoteBHeader is not null && remoteBHeader.Name.Contains(remoteBExpectedHeader, StringComparison.Ordinal),
-            $"Remote conversation {remoteB.ConversationId} did not project the expected header title before hot return. Expected='{remoteBExpectedHeader}' Actual='{remoteBHeader?.Name ?? "<missing>"}'");
+            $"Remote conversation {remoteB.ConversationId} did not project the expected header title before hot return. Expected='{remoteBExpectedHeader}' Actual='{remoteBHeader?.Name ?? "<missing>"}'{Environment.NewLine}{DumpChatTitleProjection(session)}");
 
         remoteAItem = session.FindByAutomationId(remoteAId, TimeSpan.FromSeconds(10));
 
         const int hotReturnProbeWindowMs = 1200;
         var timeline = new List<string>();
-        var hotReturnStopwatch = Stopwatch.StartNew();
+        var activationStopwatch = Stopwatch.StartNew();
         session.ActivateElement(remoteAItem);
+        var activationElapsedMs = activationStopwatch.ElapsedMilliseconds;
+        timeline.Add($"activateElapsed={activationElapsedMs}ms");
+
+        var hotReturnStopwatch = Stopwatch.StartNew();
 
         long? remoteAHeaderRecoveredAtMs = null;
         var sawBlockingMask = false;
@@ -1619,7 +1623,106 @@ public sealed partial class RealUserConfigSmokeTests
                 : "<boot.log missing>";
 
             throw new Xunit.Sdk.XunitException(
-                $"Cross-profile hot return did not recover conversation {remoteA.ConversationId} without reload UI. ExpectedHeader='{remoteAExpectedHeader}' FinalHeader='{finalHeaderName}' HeaderRecoveredAtMs={remoteAHeaderRecoveredAtMs?.ToString() ?? "<missing>"} sawMask={sawBlockingMask} sawStatus={sawOverlayStatus}{Environment.NewLine}Screenshot: {capturePath}{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}{Environment.NewLine}boot.log:{Environment.NewLine}{bootTail}");
+                $"Cross-profile hot return did not recover conversation {remoteA.ConversationId} without reload UI. ExpectedHeader='{remoteAExpectedHeader}' FinalHeader='{finalHeaderName}' HeaderRecoveredAtMs={remoteAHeaderRecoveredAtMs?.ToString() ?? "<missing>"} sawMask={sawBlockingMask} sawStatus={sawOverlayStatus}{Environment.NewLine}Screenshot: {capturePath}{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}{Environment.NewLine}{DumpChatTitleProjection(session)}{Environment.NewLine}boot.log:{Environment.NewLine}{bootTail}");
+        }
+    }
+
+    private static string DumpChatTitleProjection(WindowsGuiAppSession session)
+    {
+        var lines = new List<string>
+        {
+            $"SelectionState={DumpAutomationSelectionState(session)}",
+            $"ViewportState={session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}",
+            $"ViewportDebug={session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}",
+        };
+
+        foreach (var automationId in new[]
+        {
+            "ChatView.ActiveRoot",
+            "ChatView.CurrentSessionNameButton",
+            "ChatView.CurrentSessionNameEditor",
+            "ChatView.LoadingOverlay",
+            "ChatView.LoadingOverlayMask",
+            "ChatView.LoadingOverlayStatus",
+            "ChatView.MessagesList",
+        })
+        {
+            lines.Add($"{automationId}={DescribeElementsByAutomationId(session, automationId)}");
+        }
+
+        var visibleTexts = session.GetVisibleTexts()
+            .Take(40)
+            .ToArray();
+        lines.Add($"VisibleTexts=[{string.Join(" | ", visibleTexts)}]");
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string DescribeElementsByAutomationId(WindowsGuiAppSession session, string automationId)
+    {
+        try
+        {
+            var matches = session.MainWindow
+                .FindAllDescendants()
+                .Where(element => string.Equals(TryGetAutomationId(element), automationId, StringComparison.Ordinal))
+                .Take(12)
+                .Select(DescribeAutomationElement)
+                .ToArray();
+
+            return matches.Length == 0
+                ? "<missing>"
+                : string.Join(" || ", matches);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            return $"<error: {ex.Message}>";
+        }
+    }
+
+    private static string DescribeAutomationElement(AutomationElement element)
+    {
+        var name = TryGetName(element) ?? "<unnamed>";
+        var controlType = TryGetControlType(element) ?? "<unknown>";
+        var bounds = TryGetBounds(element) ?? "<bounds-error>";
+        var selected = TryGetIsSelected(element)?.ToString() ?? "null";
+        return $"{controlType} name='{name}' offscreen={TryGetIsOffscreen(element)} selected={selected} bounds={bounds}";
+    }
+
+    private static string? TryGetName(AutomationElement element)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(element.Name)
+                ? null
+                : element.Name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryGetControlType(AutomationElement element)
+    {
+        try
+        {
+            return element.ControlType.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryGetBounds(AutomationElement element)
+    {
+        try
+        {
+            return element.BoundingRectangle.ToString();
+        }
+        catch
+        {
+            return null;
         }
     }
 

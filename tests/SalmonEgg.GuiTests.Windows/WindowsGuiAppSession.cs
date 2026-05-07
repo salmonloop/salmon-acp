@@ -21,19 +21,28 @@ namespace SalmonEgg.GuiTests.Windows;
 internal sealed class WindowsGuiAppSession : IDisposable
 {
     private const string ProcessName = "SalmonEgg";
+    private static readonly string[] MainShellWindowAnchorAutomationIds =
+    [
+        "TitleBar.OpenMiniWindow",
+        "TitleBarMiniWindowButton",
+        "MainNav.Automation.SelectionState",
+        "MainNav.Start",
+        "MainNav.DiscoverSessions"
+    ];
     private readonly UIA3Automation _automation;
     private readonly Application _application;
     private readonly bool _ownsProcess;
+    private Window _mainWindow;
 
     private WindowsGuiAppSession(Application application, UIA3Automation automation, Window mainWindow, bool ownsProcess)
     {
         _application = application;
         _automation = automation;
-        MainWindow = mainWindow;
+        _mainWindow = mainWindow;
         _ownsProcess = ownsProcess;
     }
 
-    public Window MainWindow { get; }
+    public Window MainWindow => ResolveMainWindow();
 
     public static WindowsGuiAppSession LaunchOrAttach()
     {
@@ -134,10 +143,10 @@ internal sealed class WindowsGuiAppSession : IDisposable
     public AutomationElement FindByAutomationIdAnywhere(string automationId, TimeSpan? timeout = null)
     {
         return RetryUntil(
-            () => _automation.GetDesktop().FindFirstDescendant(cf => cf.ByAutomationId(automationId)),
+            () => FindByAutomationIdInApplicationWindows(automationId),
             element => element != null,
             timeout ?? TimeSpan.FromSeconds(10),
-            $"AutomationId '{automationId}' was not found anywhere on the desktop.")!;
+            $"AutomationId '{automationId}' was not found in any SalmonEgg application window.")!;
     }
 
     public AutomationElement? TryFindByAutomationId(string automationId, TimeSpan? timeout = null)
@@ -145,6 +154,18 @@ internal sealed class WindowsGuiAppSession : IDisposable
         try
         {
             return FindByAutomationId(automationId, timeout);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
+    public AutomationElement? TryFindByAutomationIdAnywhere(string automationId, TimeSpan? timeout = null)
+    {
+        try
+        {
+            return FindByAutomationIdAnywhere(automationId, timeout);
         }
         catch (TimeoutException)
         {
@@ -520,14 +541,15 @@ internal sealed class WindowsGuiAppSession : IDisposable
         var expectedText = NormalizeVisibleText(text);
 
         return RetryUntil(
-            () => _automation.GetDesktop()
-                .FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
-                .FirstOrDefault(element =>
-                    !TryGetIsOffscreen(element)
-                    && string.Equals(NormalizeVisibleText(element.Name), expectedText, StringComparison.Ordinal)),
+            () => FindVisibleDescendantInApplicationWindows(
+                element => string.Equals(
+                    NormalizeVisibleText(element.Name),
+                    expectedText,
+                    StringComparison.Ordinal),
+                ControlType.Text),
             element => element != null,
             timeout ?? TimeSpan.FromSeconds(3),
-            $"Visible text '{text}' was not found anywhere on the desktop.");
+            $"Visible text '{text}' was not found in application windows.");
     }
 
     public AutomationElement? FindVisibleElementByNameAnywhere(string name, TimeSpan? timeout = null)
@@ -535,26 +557,14 @@ internal sealed class WindowsGuiAppSession : IDisposable
         var expectedName = NormalizeVisibleText(name);
 
         return RetryUntil(
-            () => _automation.GetDesktop()
-                .FindAllDescendants()
-                .FirstOrDefault(element =>
-                {
-                    try
-                    {
-                        return !TryGetIsOffscreen(element)
-                            && string.Equals(
-                                NormalizeVisibleText(element.Name),
-                                expectedName,
-                                StringComparison.Ordinal);
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                }),
+            () => FindVisibleDescendantInApplicationWindows(
+                element => string.Equals(
+                    NormalizeVisibleText(element.Name),
+                    expectedName,
+                    StringComparison.Ordinal)),
             element => element != null,
             timeout ?? TimeSpan.FromSeconds(3),
-            $"Visible element '{name}' was not found anywhere on the desktop.");
+            $"Visible element '{name}' was not found in application windows.");
     }
 
     public AutomationElement? TryFindVisibleTextAnywhere(string text, TimeSpan? timeout = null)
@@ -589,11 +599,12 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void BringMainWindowToFront()
     {
+        var mainWindow = ResolveMainWindow();
         try
         {
-            if (MainWindow.Patterns.Window.IsSupported)
+            if (mainWindow.Patterns.Window.IsSupported)
             {
-                MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+                mainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
             }
         }
         catch
@@ -602,7 +613,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
         try
         {
-            MainWindow.Focus();
+            mainWindow.Focus();
         }
         catch
         {
@@ -615,10 +626,11 @@ internal sealed class WindowsGuiAppSession : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var mainWindow = ResolveMainWindow();
 
         try
         {
-            MainWindow.CaptureToFile(path);
+            mainWindow.CaptureToFile(path);
             return;
         }
         catch (Exception ex) when (ex is COMException or Win32Exception or InvalidOperationException or ArgumentException)
@@ -628,6 +640,115 @@ internal sealed class WindowsGuiAppSession : IDisposable
                 throw;
             }
         }
+    }
+
+    private Window ResolveMainWindow()
+    {
+        try
+        {
+            var candidates = GetApplicationTopLevelWindows();
+
+            var anchored = candidates.FirstOrDefault(ContainsMainShellAnchors);
+            if (anchored is not null)
+            {
+                _mainWindow = anchored;
+                return _mainWindow;
+            }
+        }
+        catch
+        {
+        }
+
+        return _mainWindow;
+    }
+
+    private AutomationElement? FindByAutomationIdInApplicationWindows(string automationId)
+    {
+        foreach (var window in GetApplicationTopLevelWindows())
+        {
+            try
+            {
+                var match = window.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private AutomationElement? FindVisibleDescendantInApplicationWindows(
+        Func<AutomationElement, bool> predicate,
+        ControlType? controlType = null)
+    {
+        foreach (var window in GetApplicationTopLevelWindows())
+        {
+            AutomationElement[] descendants;
+            try
+            {
+                descendants = controlType is null
+                    ? window.FindAllDescendants()
+                    : window.FindAllDescendants(cf => cf.ByControlType(controlType.Value));
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var element in descendants)
+            {
+                try
+                {
+                    if (!TryGetIsOffscreen(element) && predicate(element))
+                    {
+                        return element;
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Window[] GetApplicationTopLevelWindows()
+    {
+        try
+        {
+            return _application.GetAllTopLevelWindows(_automation)
+                .Where(window => !TryGetIsOffscreen(window))
+                .ToArray();
+        }
+        catch
+        {
+            return [_mainWindow];
+        }
+    }
+
+    private static bool ContainsMainShellAnchors(Window window)
+    {
+        foreach (var automationId in MainShellWindowAnchorAutomationIds)
+        {
+            try
+            {
+                if (window.FindFirstDescendant(cf => cf.ByAutomationId(automationId)) is not null)
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return false;
     }
 
     private static void PressKey(VirtualKeyShort key)

@@ -293,6 +293,7 @@ public partial class ChatViewModel
         _currentRestoreProjectionEpoch = projection.RestoreProjection.IsReady
             ? projection.RestoreProjection.ProjectionEpoch
             : -1;
+        RefreshCurrentSessionDisplayName();
     }
 
     private void ApplyConversationStatusProjection(ChatUiProjection projection)
@@ -472,7 +473,7 @@ public partial class ChatViewModel
 
         if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
         {
-            CurrentSessionDisplayName = ResolveSessionDisplayName(conversationId);
+            RefreshCurrentSessionDisplayName();
         }
     }
 

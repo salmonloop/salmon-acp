@@ -38,6 +38,100 @@ public sealed class ChatViewXamlTests
     }
 
     [Fact]
+    public void ChatViewXaml_SessionHeader_PreservesFullSessionNameMetadata()
+    {
+        var xaml = LoadChatViewXaml();
+
+        Assert.Contains("AutomationProperties.Name=\"{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTipService.ToolTip=\"{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxLines=\"1\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatViewCodeBehind_SessionHeaderTitleChangeRefreshesGeneratedXBind()
+    {
+        var codeBehind = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
+
+        Assert.Contains("e.PropertyName == nameof(ChatViewModel.PresentedSessionHeaderDisplayName)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Bindings.Update();", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("AutomationProperties.SetName(CurrentSessionNameButton", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatViewXaml_SessionHeader_UsesNativeButtonAndSharedWidthContractForReadOnlyAndEditStates()
+    {
+        var xaml = LoadChatViewXaml();
+
+        Assert.DoesNotContain("Style x:Key=\"InlineHeaderButtonStyle\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource InlineHeaderButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ChatView.CurrentSessionNameButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Stretch\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"0\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=\"560\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"120\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatViewXaml_SessionHeader_UsesNamedResponsiveLayoutParts()
+    {
+        var xaml = LoadChatViewXaml();
+
+        Assert.Contains("x:Name=\"SessionHeaderMetaGrid\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SessionHeaderAgentRow\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SessionHeaderAgentColumn\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SessionHeaderAgentDisplay\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatViewSessionHeader_UsesActualHeaderWidthInsteadOfWindowAdaptiveTriggers()
+    {
+        var xaml = LoadChatViewXaml();
+        var codeBehind = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
+
+        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"720\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"1080\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("Loaded=\"OnSessionHeaderRootLoaded\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Unloaded=\"OnSessionHeaderRootUnloaded\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SessionHeaderRoot.SizeChanged += OnSessionHeaderRootSizeChanged;", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("SessionHeaderRoot.SizeChanged -= OnSessionHeaderRootSizeChanged;", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("UpdateSessionHeaderLayoutState(SessionHeaderRoot.ActualWidth);", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("useTransitions", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ApplyNarrowSessionHeaderLayout();", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ApplyMediumSessionHeaderLayout();", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ApplyWideSessionHeaderLayout();", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsGuiAppSession_AnywhereLookupStaysWithinApplicationWindows()
+    {
+        var code = LoadText(@"tests\SalmonEgg.GuiTests.Windows\WindowsGuiAppSession.cs");
+
+        Assert.Contains("_application.GetAllTopLevelWindows(_automation)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_automation.GetDesktop().FindFirstDescendant", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsGuiAppSession_VisibleAnywhereLookupsStayWithinApplicationWindows()
+    {
+        var code = LoadText(@"tests\SalmonEgg.GuiTests.Windows\WindowsGuiAppSession.cs");
+
+        Assert.DoesNotContain("_automation.GetDesktop()", code, StringComparison.Ordinal);
+        Assert.Contains("GetApplicationTopLevelWindows()", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConversationActivationPreview_IsNotExposedAsPublicShellFacingServiceSurface()
+    {
+        var serviceCode = LoadText(@"src\SalmonEgg.Presentation.Core\Services\Chat\IConversationSessionSwitcher.cs");
+        var viewModelCode = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Chat\ChatViewModel.cs");
+
+        Assert.DoesNotContain("public interface IConversationActivationPreview", serviceCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("IConversationActivationPreview", viewModelCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChatViewXaml_BindsTerminalPanelStateIntoBottomPanelHost()
     {
         var root = FindRepoRoot();
@@ -86,6 +180,12 @@ public sealed class ChatViewXamlTests
     {
         var root = FindRepoRoot();
         return File.ReadAllText(Path.Combine(root, "SalmonEgg", "SalmonEgg", "Presentation", "Views", "Chat", "ChatView.xaml"));
+    }
+
+    private static string LoadText(string relativePath)
+    {
+        var root = FindRepoRoot();
+        return File.ReadAllText(Path.Combine(root, relativePath));
     }
 
     private static string FindRepoRoot()

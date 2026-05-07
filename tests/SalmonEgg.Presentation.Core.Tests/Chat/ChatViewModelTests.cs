@@ -9107,10 +9107,9 @@ public partial class ChatViewModelTests
         try
         {
             await using var fixture = CreateViewModel(syncContext);
-            var preview = (IConversationActivationPreview)fixture.ViewModel;
             var pendingBeforePrime = syncContext.PendingCount;
 
-            preview.PrimeSessionSwitchPreview("conv-1");
+            fixture.ViewModel.PrimeSessionSwitchPreview("conv-1");
 
             Assert.Equal(pendingBeforePrime, syncContext.PendingCount);
             Assert.True(fixture.ViewModel.IsOverlayVisible);
@@ -9118,7 +9117,7 @@ public partial class ChatViewModelTests
             Assert.Contains("切换", fixture.ViewModel.OverlayStatusText, StringComparison.Ordinal);
 
             var pendingBeforeClear = syncContext.PendingCount;
-            preview.ClearSessionSwitchPreview("conv-1");
+            fixture.ViewModel.ClearSessionSwitchPreview("conv-1");
 
             Assert.Equal(pendingBeforeClear, syncContext.PendingCount);
             Assert.False(fixture.ViewModel.IsOverlayVisible);
@@ -9460,8 +9459,7 @@ public partial class ChatViewModelTests
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1" });
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-1");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-1");
 
         var raised = new List<string>();
         fixture.ViewModel.PropertyChanged += (_, e) =>
@@ -9541,8 +9539,7 @@ public partial class ChatViewModelTests
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1" });
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-1");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-1");
         fixture.ViewModel.IsSessionSwitching = true;
 
         Assert.False(string.IsNullOrWhiteSpace(fixture.ViewModel.OverlayStatusText));
@@ -9582,8 +9579,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         Assert.True(fixture.ViewModel.HasVisibleTranscriptContent);
         Assert.True(fixture.ViewModel.IsOverlayVisible);
@@ -9618,8 +9614,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         Assert.Equal(ShellNavigationContent.Start, runtimeState.CurrentShellContent);
         Assert.True(fixture.ViewModel.IsActivationOverlayVisible);
@@ -9656,8 +9651,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         Assert.Equal(ShellNavigationContent.Start, runtimeState.CurrentShellContent);
         Assert.True(shellOverlay.IsOverlayVisible);
@@ -9687,8 +9681,7 @@ public partial class ChatViewModelTests
             }
         };
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         Assert.Contains(nameof(ShellSessionActivationOverlayViewModel.IsOverlayVisible), raised);
         Assert.Contains(nameof(ShellSessionActivationOverlayViewModel.ShowsBlockingMask), raised);
@@ -9737,6 +9730,61 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task CurrentSessionDisplayName_WhenRefreshedOffUiThread_MarshalsPropertyNotificationToUiDispatcher()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-remote",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-1",
+                    Timestamp = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "remote transcript"
+                }
+            ]
+        });
+
+        var notificationCompleted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedOnUiThread = true;
+
+        fixture.ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(ChatViewModel.CurrentSessionDisplayName))
+            {
+                return;
+            }
+
+            observedOnUiThread = syncContext.HasThreadAccess;
+            notificationCompleted.TrySetResult(null);
+        };
+
+        typeof(ChatViewModel)
+            .GetField("_currentSessionDisplayName", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, string.Empty);
+
+        var refreshCurrentSessionDisplayName = typeof(ChatViewModel)
+            .GetMethod("RefreshCurrentSessionDisplayName", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(refreshCurrentSessionDisplayName);
+
+        await Task.Run(() => refreshCurrentSessionDisplayName!.Invoke(fixture.ViewModel, []));
+
+        Assert.False(notificationCompleted.Task.IsCompleted);
+
+        syncContext.RunAll();
+        await notificationCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(observedOnUiThread);
+    }
+
+    [Fact]
     public async Task Overlay_WhenCurrentSessionChangesBeforeTranscriptReplacement_KeepsBlockingMaskForStaleVisibleTranscript()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -9759,8 +9807,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         bool? blockingMaskWhileTranscriptWasStale = null;
         fixture.ViewModel.PropertyChanged += (_, e) =>
@@ -9809,8 +9856,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         (bool header, bool transcript, bool input)? visibleStateWhileTranscriptWasStale = null;
         fixture.ViewModel.PropertyChanged += (_, e) =>
@@ -9838,6 +9884,294 @@ public partial class ChatViewModelTests
         Assert.False(visibleStateWhileTranscriptWasStale.Value.header);
         Assert.False(visibleStateWhileTranscriptWasStale.Value.transcript);
         Assert.False(visibleStateWhileTranscriptWasStale.Value.input);
+    }
+
+    [Fact]
+    public async Task VisibleConversationContent_WhenTranscriptOwnerIsStale_ClearsSessionHeaderDisplayNameUntilPresentedSurfaceCatchesUp()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-1",
+                    Timestamp = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "stale transcript"
+                }
+            ]
+        });
+
+        Assert.Equal(SessionNamePolicy.CreateDefault("conv-1"), fixture.ViewModel.CurrentSessionDisplayName);
+
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-2",
+            Transcript = [],
+            IsHydrating = true
+        });
+
+        Assert.Equal(SessionNamePolicy.CreateDefault("conv-2"), fixture.ViewModel.CurrentSessionDisplayName);
+        Assert.Equal(string.Empty, fixture.ViewModel.PresentedSessionHeaderDisplayName);
+    }
+
+    [Fact]
+    public async Task PresentedSessionHeaderDisplayName_WhenVisibleTranscriptOwnerIsNewerThanRestoreProjection_UsesVisibleTranscriptOwner()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-remote",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-1",
+                    Timestamp = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "remote transcript"
+                }
+            ]
+        });
+
+        Assert.Equal(SessionNamePolicy.CreateDefault("conv-remote"), fixture.ViewModel.CurrentSessionDisplayName);
+
+        typeof(ChatViewModel)
+            .GetField("_currentRestoreProjectionConversationId", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, "conv-local");
+
+        typeof(ChatViewModel)
+            .GetMethod("RaiseTranscriptProjectionStateChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(fixture.ViewModel, []);
+
+        Assert.Equal(
+            SessionNamePolicy.CreateDefault("conv-remote"),
+            fixture.ViewModel.PresentedSessionHeaderDisplayName);
+    }
+
+    [Fact]
+    public async Task PresentedSessionHeaderDisplayName_WhenVisibleTranscriptOwnerIsMissing_DoesNotUseStaleRestoreProjection()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+        await fixture.Workspace.ApplySessionInfoSnapshotAsync(
+            "conv-a",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Conversation A Title",
+                UpdatedAtUtc = new DateTime(2026, 5, 7, 0, 0, 0, DateTimeKind.Utc)
+            },
+            allowRegisterWhenMissing: true);
+        await fixture.Workspace.ApplySessionInfoSnapshotAsync(
+            "conv-b",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Conversation B Title",
+                UpdatedAtUtc = new DateTime(2026, 5, 7, 0, 0, 1, DateTimeKind.Utc)
+            },
+            allowRegisterWhenMissing: true);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-b",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-b",
+                    Timestamp = new DateTime(2026, 5, 7, 0, 0, 2, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "rendered conversation b"
+                }
+            ]
+        });
+
+        typeof(ChatViewModel)
+            .GetField("_visibleTranscriptConversationId", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, null);
+        typeof(ChatViewModel)
+            .GetField("_currentRestoreProjectionConversationId", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, "conv-a");
+        typeof(ChatViewModel)
+            .GetField("_currentSessionDisplayName", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, string.Empty);
+
+        typeof(ChatViewModel)
+            .GetMethod("RaiseTranscriptProjectionStateChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(fixture.ViewModel, []);
+
+        Assert.Equal("Conversation B Title", fixture.ViewModel.CurrentSessionDisplayName);
+        Assert.Equal("Conversation B Title", fixture.ViewModel.PresentedSessionHeaderDisplayName);
+    }
+
+    [Fact]
+    public async Task PresentedSessionHeaderDisplayName_WhenCurrentSessionTranscriptReplacesSameCountMessages_RefreshesTitle()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+        await fixture.Workspace.ApplySessionInfoSnapshotAsync(
+            "conv-b",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Conversation B Title",
+                UpdatedAtUtc = new DateTime(2026, 5, 7, 0, 0, 0, DateTimeKind.Utc)
+            },
+            allowRegisterWhenMissing: true);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-b",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-b-old",
+                    Timestamp = new DateTime(2026, 5, 7, 0, 0, 1, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "old rendered conversation b"
+                }
+            ]
+        });
+
+        typeof(ChatViewModel)
+            .GetField("_currentSessionDisplayName", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, "hello");
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-b",
+            Transcript =
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "message-b-new",
+                    Timestamp = new DateTime(2026, 5, 7, 0, 0, 2, DateTimeKind.Utc),
+                    IsOutgoing = false,
+                    ContentType = "text",
+                    TextContent = "new rendered conversation b"
+                }
+            ]
+        });
+
+        Assert.Equal("Conversation B Title", fixture.ViewModel.CurrentSessionDisplayName);
+        Assert.Equal("Conversation B Title", fixture.ViewModel.PresentedSessionHeaderDisplayName);
+        Assert.Contains(
+            fixture.ViewModel.MessageHistory,
+            message => string.Equals(message.TextContent, "new rendered conversation b", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SwitchConversationAsync_WhenStoreAlreadyTargetsSessionButVisibleProjectionIsStale_AlignsPresentedTitle()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+        await fixture.Workspace.ApplySessionInfoSnapshotAsync(
+            "conv-a",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "/systematic-debugging",
+                UpdatedAtUtc = new DateTime(2026, 5, 7, 0, 0, 0, DateTimeKind.Utc)
+            },
+            allowRegisterWhenMissing: true);
+        await fixture.Workspace.ApplySessionInfoSnapshotAsync(
+            "conv-b",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Conversation B Title",
+                UpdatedAtUtc = new DateTime(2026, 5, 7, 0, 0, 0, DateTimeKind.Utc)
+            },
+            allowRegisterWhenMissing: true);
+
+        fixture.ChatStore.AfterDispatch = async action =>
+        {
+            if (action is SetConversationRuntimeStateAction
+                {
+                    RuntimeState:
+                    {
+                        ConversationId: "conv-b",
+                        Phase: ConversationRuntimePhase.Selected
+                    }
+                })
+            {
+                await fixture.UpdateStateAsync(state => state with
+                {
+                    RuntimeStates = (state.RuntimeStates ?? ImmutableDictionary<string, ConversationRuntimeSlice>.Empty).SetItem(
+                        "conv-b",
+                        new ConversationRuntimeSlice(
+                            ConversationId: "conv-b",
+                            Phase: ConversationRuntimePhase.Warm,
+                            ConnectionInstanceId: "conn-b",
+                            RemoteSessionId: "remote-b",
+                            ProfileId: "profile-1",
+                            Reason: ConversationRuntimeReasons.SessionLoadCompleted,
+                            UpdatedAtUtc: new DateTime(2026, 5, 7, 0, 0, 2, DateTimeKind.Utc)))
+                });
+            }
+        };
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-b",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-b", new ConversationBindingSlice("conv-b", "remote-b", "profile-1")),
+            ConversationContents = ImmutableDictionary<string, ConversationContentSlice>.Empty
+                .Add("conv-b", new ConversationContentSlice(
+                    ImmutableList.Create(new ConversationMessageSnapshot
+                    {
+                        Id = "message-b",
+                        Timestamp = new DateTime(2026, 5, 7, 0, 0, 1, DateTimeKind.Utc),
+                        IsOutgoing = false,
+                        ContentType = "text",
+                        TextContent = "rendered conversation b"
+                    }),
+                    ImmutableList<ConversationPlanEntrySnapshot>.Empty,
+                    false,
+                    null)),
+            RuntimeStates = ImmutableDictionary<string, ConversationRuntimeSlice>.Empty
+                .Add("conv-b", new ConversationRuntimeSlice(
+                    ConversationId: "conv-b",
+                    Phase: ConversationRuntimePhase.RemoteHydrating,
+                    ConnectionInstanceId: "conn-b",
+                    RemoteSessionId: "remote-b",
+                    ProfileId: "profile-1",
+                    Reason: "RemoteHydrationPending",
+                    UpdatedAtUtc: new DateTime(2026, 5, 7, 0, 0, 1, DateTimeKind.Utc)))
+        });
+        await DispatchConnectedAsync(fixture, "profile-1");
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-b"));
+
+        SetCurrentSessionId(fixture.ViewModel, "conv-a");
+        typeof(ChatViewModel)
+            .GetField("_currentSessionDisplayName", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(fixture.ViewModel, "/systematic-debugging");
+
+        var switched = await ((IConversationSessionSwitcher)fixture.ViewModel).SwitchConversationAsync("conv-b");
+
+        Assert.True(switched);
+        Assert.Equal("conv-b", fixture.ViewModel.CurrentSessionId);
+        Assert.Equal("Conversation B Title", fixture.ViewModel.CurrentSessionDisplayName);
+        Assert.Equal("Conversation B Title", fixture.ViewModel.PresentedSessionHeaderDisplayName);
+        Assert.Contains(
+            fixture.ViewModel.MessageHistory,
+            message => string.Equals(message.TextContent, "rendered conversation b", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -9884,6 +10218,8 @@ public partial class ChatViewModelTests
         Assert.False(fixture.ViewModel.ShouldShowTranscriptSurface);
         Assert.False(fixture.ViewModel.ShouldLoadTranscriptSurface);
         Assert.False(fixture.ViewModel.ShouldShowConversationInputSurface);
+        Assert.Equal(SessionNamePolicy.CreateDefault("conv-1"), fixture.ViewModel.CurrentSessionDisplayName);
+        Assert.Equal(string.Empty, fixture.ViewModel.PresentedSessionHeaderDisplayName);
     }
 
     [Fact]
@@ -9987,8 +10323,7 @@ public partial class ChatViewModelTests
             }
         };
 
-        var preview = (IConversationActivationPreview)fixture.ViewModel;
-        preview.PrimeSessionSwitchPreview("conv-2");
+        fixture.ViewModel.PrimeSessionSwitchPreview("conv-2");
 
         Assert.True(fixture.ViewModel.IsOverlayVisible);
         Assert.False(fixture.ViewModel.CanSendPromptUi);

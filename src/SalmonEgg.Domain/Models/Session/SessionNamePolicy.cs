@@ -37,6 +37,12 @@ namespace SalmonEgg.Domain.Models.Session
 
             return trimmed.Length <= MaxLength ? trimmed : trimmed.Substring(0, MaxLength);
         }
+
+        public static bool IsUnsetOrDefault(string? displayName, string sessionId)
+        {
+            var sanitized = Sanitize(displayName);
+            return string.IsNullOrWhiteSpace(sanitized)
+                || string.Equals(sanitized, CreateDefault(sessionId), StringComparison.Ordinal);
+        }
     }
 }
-

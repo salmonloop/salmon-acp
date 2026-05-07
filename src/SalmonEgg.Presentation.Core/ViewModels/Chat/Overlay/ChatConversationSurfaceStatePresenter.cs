@@ -37,6 +37,11 @@ internal static class ChatConversationSurfaceStatePresenter
             input.IsSessionActive
             && !string.IsNullOrWhiteSpace(input.PendingShellActivationConversationId)
             && !string.Equals(input.PendingShellActivationConversationId, input.CurrentSessionId, StringComparison.Ordinal);
+        var isShellActivationIntentVisible =
+            !string.IsNullOrWhiteSpace(input.PendingShellActivationConversationId)
+            && (!input.IsSessionActive
+                || !MatchesCurrentSession(input.CurrentSessionId, input.PendingShellActivationConversationId)
+                || !input.IsChatShellVisibleForRemoteUi);
         var shouldPromoteLayoutLoadingToBlockingPresenter =
             input.IsLayoutLoading
             && (isVisibleTranscriptStaleForCurrentSession || isCurrentVisibleConversationSupersededByShellIntent);
@@ -46,7 +51,8 @@ internal static class ChatConversationSurfaceStatePresenter
             || shouldShowHistoryOverlay
             || shouldShowProjectedHydrationOverlay
             || isSessionSwitchOverlayVisible
-            || isSessionSwitchPreviewVisible;
+            || isSessionSwitchPreviewVisible
+            || isShellActivationIntentVisible;
 
         var overlayLoadingStage = ResolveOverlayLoadingStage(
             input.IsConnecting,
@@ -55,13 +61,15 @@ internal static class ChatConversationSurfaceStatePresenter
             shouldShowHistoryOverlay,
             shouldShowProjectedHydrationOverlay,
             isSessionSwitchOverlayVisible,
-            isSessionSwitchPreviewVisible);
+            isSessionSwitchPreviewVisible,
+            isShellActivationIntentVisible);
         var overlayStatusText = ResolveOverlayStatusText(overlayLoadingStage, input.HydrationLoadedMessageCount);
         var shouldShowBlockingLoadingMask =
             (activationOverlayVisible
                 && (!hasVisibleTranscriptContent
                     || isSessionSwitchOverlayBlockingVisibleTranscript
-                    || isVisibleTranscriptStaleForCurrentSession))
+                    || isVisibleTranscriptStaleForCurrentSession
+                    || isCurrentVisibleConversationSupersededByShellIntent))
             || shouldPromoteLayoutLoadingToBlockingPresenter;
         var shouldShowLoadingOverlayStatusPill =
             activationOverlayVisible && !string.IsNullOrWhiteSpace(overlayStatusText);
@@ -105,7 +113,8 @@ internal static class ChatConversationSurfaceStatePresenter
         bool historyOverlayVisible,
         bool projectedHydrationOverlayVisible,
         bool sessionSwitchOverlayVisible,
-        bool sessionSwitchPreviewVisible)
+        bool sessionSwitchPreviewVisible,
+        bool shellActivationIntentVisible)
     {
         if (isConnecting && connectionLifecycleOverlayVisible)
         {
@@ -122,7 +131,7 @@ internal static class ChatConversationSurfaceStatePresenter
             return ChatViewModel.LoadingOverlayStage.HydratingHistory;
         }
 
-        if (sessionSwitchOverlayVisible || sessionSwitchPreviewVisible)
+        if (sessionSwitchOverlayVisible || sessionSwitchPreviewVisible || shellActivationIntentVisible)
         {
             return ChatViewModel.LoadingOverlayStage.PreparingSession;
         }

@@ -13,49 +13,6 @@
     AllowDrop="False">
 
     <Page.Resources>
-        <Style x:Key="InlineHeaderButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="6,2"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Root"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
-                            <VisualStateManager.VisualStateGroups>
-                                <VisualStateGroup x:Name="CommonStates">
-                                    <VisualState x:Name="Normal" />
-                                    <VisualState x:Name="PointerOver">
-                                        <VisualState.Setters>
-                                            <Setter Target="Root.Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
-                                            <Setter Target="Root.BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                    <VisualState x:Name="Pressed">
-                                        <VisualState.Setters>
-                                            <Setter Target="Root.Background" Value="{ThemeResource ControlFillColorTertiaryBrush}" />
-                                            <Setter Target="Root.BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                    <VisualState x:Name="Disabled">
-                                        <VisualState.Setters>
-                                            <Setter Target="Root.Opacity" Value="0.45" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                </VisualStateGroup>
-                            </VisualStateManager.VisualStateGroups>
-                            <ContentPresenter Margin="{TemplateBinding Padding}"
-                                              HorizontalAlignment="Left"
-                                              VerticalAlignment="Center" />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Page.Resources>
 
     <Grid>
@@ -102,41 +59,75 @@
                     BorderThickness="0,0,0,1"
                     Padding="16,8"
                     Visibility="{x:Bind ViewModel.ShouldShowSessionHeader, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                <StackPanel Spacing="8">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE8BD;" FontSize="16" Foreground="{ThemeResource AccentBrush}" VerticalAlignment="Center"/>
-                            <StackPanel VerticalAlignment="Center">
-                                <Grid>
-                                    <Button Style="{StaticResource InlineHeaderButtonStyle}"
-                                            AutomationProperties.AutomationId="ChatView.CurrentSessionNameButton"
-                                            HorizontalAlignment="Left"
-                                            Visibility="{x:Bind ViewModel.IsEditingSessionName, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                                            Click="OnSessionNameClick">
-                                        <TextBlock Text="{x:Bind ViewModel.CurrentSessionDisplayName, Mode=OneWay}"
-                                                   FontWeight="SemiBold"
-                                                   FontSize="14"/>
-                                    </Button>
+                <Grid x:Name="SessionHeaderRoot"
+                      Loaded="OnSessionHeaderRootLoaded"
+                      Unloaded="OnSessionHeaderRootUnloaded">
+                    <Grid x:Name="SessionHeaderMetaGrid" ColumnSpacing="12" RowSpacing="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition x:Name="SessionHeaderAgentRow" Height="0" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition x:Name="SessionHeaderAgentColumn" Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                                    <TextBox x:Name="SessionNameEditor"
-                                             AutomationProperties.AutomationId="ChatView.CurrentSessionNameEditor"
-                                             Text="{x:Bind ViewModel.EditingSessionName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             FontWeight="SemiBold"
-                                             FontSize="14"
-                                             MinWidth="160"
-                                             Padding="6,2"
-                                             BorderThickness="1"
-                                             CornerRadius="6"
-                                             KeyDown="OnSessionNameEditorKeyDown"
-                                             LostFocus="OnSessionNameEditorLostFocus"
-                                             Visibility="{x:Bind ViewModel.IsEditingSessionName, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                                </Grid>
-                            </StackPanel>
-                        </StackPanel>
+                        <Grid x:Name="SessionHeaderTitleHost"
+                              Grid.Row="0"
+                              Grid.Column="0"
+                              MinWidth="0"
+                              ColumnDefinitions="Auto,*"
+                              ColumnSpacing="12">
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8BD;"
+                                      FontSize="16"
+                                      Foreground="{ThemeResource AccentBrush}"
+                                      VerticalAlignment="Center" />
 
-                        <TextBlock Grid.Column="1"
+                            <Grid Grid.Column="1"
+                                  MinWidth="0"
+                                  VerticalAlignment="Center">
+                                <Button AutomationProperties.AutomationId="ChatView.CurrentSessionNameButton"
+                                        AutomationProperties.Name="{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}"
+                                        ToolTipService.ToolTip="{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        MinWidth="0"
+                                        Padding="6,2"
+                                        Visibility="{x:Bind ViewModel.IsEditingSessionName, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                                        Click="OnSessionNameClick">
+                                    <TextBlock Text="{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}"
+                                               FontWeight="SemiBold"
+                                               FontSize="14"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxLines="1" />
+                                </Button>
+
+                                <TextBox x:Name="SessionNameEditor"
+                                         AutomationProperties.AutomationId="ChatView.CurrentSessionNameEditor"
+                                         Text="{x:Bind ViewModel.EditingSessionName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         FontWeight="SemiBold"
+                                         FontSize="14"
+                                         MinWidth="0"
+                                         HorizontalAlignment="Stretch"
+                                         Padding="6,2"
+                                         BorderThickness="1"
+                                         CornerRadius="6"
+                                         KeyDown="OnSessionNameEditorKeyDown"
+                                         LostFocus="OnSessionNameEditorLostFocus"
+                                         Visibility="{x:Bind ViewModel.IsEditingSessionName, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </Grid>
+                        </Grid>
+
+                        <TextBlock x:Name="SessionHeaderAgentDisplay"
+                                   Grid.Row="0"
+                                   Grid.Column="1"
                                    AutomationProperties.AutomationId="ChatView.CurrentAgentDisplay"
                                    Text="{x:Bind ViewModel.CurrentAgentDisplayText, Mode=OneWay}"
+                                   ToolTipService.ToolTip="{x:Bind ViewModel.CurrentAgentDisplayText, Mode=OneWay}"
                                    FontSize="12"
                                    FontWeight="SemiBold"
                                    Opacity="0.72"
@@ -144,9 +135,9 @@
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
                                    MaxLines="1"
-                                   MaxWidth="220"/>
+                                   MaxWidth="180" />
                     </Grid>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto,Auto">

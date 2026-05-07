@@ -14,7 +14,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
     private readonly IShellSelectionMutationSink _selectionSink;
     private readonly IShellNavigationRuntimeState _runtimeState;
     private readonly IConversationSessionSwitcher _conversationSessionSwitcher;
-    private readonly IConversationActivationPreview? _conversationActivationPreview;
     private readonly INavigationProjectSelectionStore _projectSelectionStore;
     private readonly IShellNavigationService _shellNavigationService;
     private readonly ILogger<NavigationCoordinator> _logger;
@@ -33,7 +32,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         _selectionSink = selectionSink ?? throw new ArgumentNullException(nameof(selectionSink));
         _runtimeState = runtimeState ?? throw new ArgumentNullException(nameof(runtimeState));
         _conversationSessionSwitcher = conversationSessionSwitcher ?? throw new ArgumentNullException(nameof(conversationSessionSwitcher));
-        _conversationActivationPreview = conversationSessionSwitcher as IConversationActivationPreview;
         _projectSelectionStore = projectSelectionStore ?? throw new ArgumentNullException(nameof(projectSelectionStore));
         _shellNavigationService = shellNavigationService ?? throw new ArgumentNullException(nameof(shellNavigationService));
         _logger = logger ?? NullLogger<NavigationCoordinator>.Instance;
@@ -171,14 +169,9 @@ public sealed class NavigationCoordinator : INavigationCoordinator
     {
         var activationGateEntered = false;
         var committed = false;
-        var shouldPrimeSessionSwitchPreview = _runtimeState.CurrentShellContent != ShellNavigationContent.Chat;
 
         try
         {
-            if (shouldPrimeSessionSwitchPreview)
-            {
-                _conversationActivationPreview?.PrimeSessionSwitchPreview(request.SessionId);
-            }
             var navigationResult = await NavigateToChatAsync(request.Version).ConfigureAwait(true);
             if (!navigationResult.Succeeded
                 || !IsLatestActivationToken(request.Version)
@@ -242,10 +235,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         }
         finally
         {
-            if (shouldPrimeSessionSwitchPreview)
-            {
-                _conversationActivationPreview?.ClearSessionSwitchPreview(request.SessionId);
-            }
             if (activationGateEntered)
             {
                 _sessionActivationGate.Release();
