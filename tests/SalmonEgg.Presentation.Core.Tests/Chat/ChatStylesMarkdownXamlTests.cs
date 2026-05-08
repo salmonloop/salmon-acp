@@ -12,7 +12,7 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.Contains("<DataTemplate x:Key=\"IncomingMessageTemplate\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate x:Key=\"OutgoingMessageTemplate\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"12,12,12,0\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IncomingMessageBorderStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerRadius=\"12,12,0,12\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Visibility=\"{x:Bind IsOutgoing", xaml, StringComparison.Ordinal);
     }

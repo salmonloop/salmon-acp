@@ -5185,6 +5185,64 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task PermissionRequestForNonVisibleToolCall_MaterializedProjectionReceivesInlinePermissionState()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var chatService = CreateConnectedChatService();
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object));
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+
+        var transcript = Enumerable.Range(0, 200)
+            .Select(index => new ConversationMessageSnapshot
+            {
+                Id = $"message-{index}",
+                Timestamp = new DateTime(2026, 5, 8, 0, 0, 0, DateTimeKind.Utc).AddSeconds(index),
+                IsOutgoing = false,
+                ContentType = index == 20 ? "tool_call" : "text",
+                TextContent = $"payload-{index}",
+                ToolCallId = index == 20 ? "call-20" : null,
+                ToolCallStatus = index == 20 ? ToolCallStatus.InProgress : null,
+                Title = index == 20 ? "Tool 20" : string.Empty
+            })
+            .ToImmutableList();
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-large",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-large", new ConversationBindingSlice("conv-large", "remote-1", "profile-1")),
+            Transcript = transcript
+        });
+        syncContext.RunAll();
+
+        Assert.DoesNotContain(
+            fixture.ViewModel.MessageHistory,
+            message => string.Equals(message.ToolCallId, "call-20", StringComparison.Ordinal));
+
+        chatService.Raise(service => service.PermissionRequestReceived += null, new PermissionRequestEventArgs
+        {
+            MessageId = "permission-1",
+            SessionId = "remote-1",
+            ToolCall = new { toolCallId = "call-20" },
+            Options = []
+        });
+        syncContext.RunAll();
+
+        Assert.True(fixture.ViewModel.ShowPermissionDialog);
+        Assert.NotNull(fixture.ViewModel.PendingPermissionRequest);
+
+        var projectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector
+            .CreateProjectionItemKey(transcript[20], 20);
+        Assert.True(fixture.ViewModel.TryMaterializeRenderedTranscriptProjectionItem(projectionItemKey));
+
+        var toolCallMessage = Assert.Single(
+            fixture.ViewModel.MessageHistory.Where(message =>
+                string.Equals(message.ToolCallId, "call-20", StringComparison.Ordinal)));
+        Assert.Same(fixture.ViewModel.PendingPermissionRequest, toolCallMessage.PendingPermissionRequest);
+    }
+
+    [Fact]
     public async Task SendPromptAsync_WhenPromptResponseReturnsUserMessageId_ReconcilesOptimisticOutgoingMessage()
     {
         var syncContext = new QueueingSynchronizationContext();

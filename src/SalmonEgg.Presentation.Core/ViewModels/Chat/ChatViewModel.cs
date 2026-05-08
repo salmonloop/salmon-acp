@@ -179,6 +179,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private readonly Dictionary<string, int> _remoteHydrationKnownTranscriptBaselineCounts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> _remoteHydrationKnownTranscriptGrowthGraceDeadlineUtc = new(StringComparer.Ordinal);
     private readonly Dictionary<string, long> _remoteHydrationSessionUpdateBaselineCounts = new(StringComparer.Ordinal);
+    private readonly object _pendingInlinePermissionRequestsSync = new();
+    private readonly Dictionary<string, PermissionRequestViewModel> _pendingInlinePermissionRequestsByToolCallId = new(StringComparer.Ordinal);
     private HydrationOverlayPhase _hydrationOverlayPhase = HydrationOverlayPhase.None;
     private string? _hydrationOverlayPhaseConversationId;
     private int _pendingSessionUpdateCount;
@@ -903,7 +905,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         {
             GetMessageHistory = () => MessageHistory,
             SetMessageHistory = history => MessageHistory = history,
-            FromSnapshot = FromSnapshot,
+            FromSnapshot = CreateProjectedMessageFromSnapshot,
             MatchesSnapshot = MatchesSnapshot,
             GetProjectionItemKey = GetProjectionItemKey,
             IsTailAnchored = () => _isRenderedTranscriptTailAnchored,
@@ -1476,7 +1478,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         if (shouldPrebuildTranscript)
         {
             var prebuildStopwatch = Stopwatch.StartNew();
-            preparedTranscript = projection.Transcript.Select(FromSnapshot).ToArray();
+            preparedTranscript = projection.Transcript.Select(CreateProjectedMessageFromSnapshot).ToArray();
             Logger.LogInformation(
                 "Prebuilt transcript view-models off UI thread. conversationId={ConversationId} messageCount={MessageCount} elapsedMs={ElapsedMs}",
                 projection.HydratedConversationId,
@@ -1680,47 +1682,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         }
     }
 
-    private void SyncMessageHistory(string? conversationId, IImmutableList<ConversationMessageSnapshot> transcript)
-    {
-        var previousCount = MessageHistory.Count;
-        var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
-        for (int i = 0; i < messages.Count; i++)
-        {
-            var message = messages[i];
-            if (i < MessageHistory.Count)
-            {
-                if (MessageHistory[i].Id != message.Id)
-                {
-                    while (MessageHistory.Count > i) MessageHistory.RemoveAt(i);
-                    MessageHistory.Add(FromSnapshot(message, i));
-                }
-                else if (!MatchesSnapshot(MessageHistory[i], message))
-                {
-                    MessageHistory[i] = FromSnapshot(message, i);
-                }
-            }
-            else
-            {
-                MessageHistory.Add(FromSnapshot(message, i));
-            }
-        }
-
-        while (MessageHistory.Count > messages.Count)
-        {
-            MessageHistory.RemoveAt(MessageHistory.Count - 1);
-        }
-
-        var transcriptOwnerChanged = UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
-        if (previousCount != MessageHistory.Count || transcriptOwnerChanged)
-        {
-            RefreshCurrentSessionDisplayName();
-            OnPropertyChanged(nameof(HasVisibleTranscriptContent));
-            OnPropertyChanged(nameof(OverlayStatusText));
-            OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
-            OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
-        }
-    }
-
     private void RaiseTranscriptProjectionStateChanged()
     {
         RefreshCurrentSessionDisplayName();
@@ -1761,6 +1722,30 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
                 : null,
             ModeId = vm.ModeId
         };
+    }
+
+    private ChatMessageViewModel CreateProjectedMessageFromSnapshot(ConversationMessageSnapshot s, int projectionIndex)
+    {
+        var viewModel = FromSnapshot(s, projectionIndex);
+        ApplyPendingInlinePermissionProjection(viewModel);
+        return viewModel;
+    }
+
+    private void ApplyPendingInlinePermissionProjection(ChatMessageViewModel message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        PermissionRequestViewModel? permissionRequest = null;
+        var toolCallId = message.ToolCallId;
+        if (!string.IsNullOrWhiteSpace(toolCallId))
+        {
+            lock (_pendingInlinePermissionRequestsSync)
+            {
+                _pendingInlinePermissionRequestsByToolCallId.TryGetValue(toolCallId, out permissionRequest);
+            }
+        }
+
+        message.PendingPermissionRequest = permissionRequest;
     }
 
     private static ChatMessageViewModel FromSnapshot(ConversationMessageSnapshot s, int projectionIndex)

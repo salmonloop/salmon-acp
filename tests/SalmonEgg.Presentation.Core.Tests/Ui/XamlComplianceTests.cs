@@ -422,7 +422,7 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Styles\ChatStyles.xaml");
 
         Assert.DoesNotContain("Foreground=\"White\"", xaml);
-        Assert.Contains("TextOnAccentFillColorPrimaryBrush", xaml);
+        Assert.Contains("TextFillColorPrimaryBrush", xaml);
     }
 
     [Fact]

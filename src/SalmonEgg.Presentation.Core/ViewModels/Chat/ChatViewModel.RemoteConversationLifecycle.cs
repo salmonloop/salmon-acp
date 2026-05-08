@@ -608,30 +608,6 @@ public partial class ChatViewModel
         }
     }
 
-    private void ReplaceMessageHistory(string? conversationId, IImmutableList<ConversationMessageSnapshot> transcript)
-    {
-        var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
-        MessageHistory = new ObservableCollection<ChatMessageViewModel>(messages.Select(FromSnapshot));
-        UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
-        RefreshCurrentSessionDisplayName();
-        OnPropertyChanged(nameof(HasVisibleTranscriptContent));
-        OnPropertyChanged(nameof(OverlayStatusText));
-        OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
-        OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
-    }
-
-    private void ReplaceMessageHistory(string? conversationId, IReadOnlyList<ChatMessageViewModel> transcript)
-    {
-        var messages = transcript ?? Array.Empty<ChatMessageViewModel>();
-        MessageHistory = new ObservableCollection<ChatMessageViewModel>(messages);
-        UpdateVisibleTranscriptConversationId(conversationId, MessageHistory.Count > 0);
-        RefreshCurrentSessionDisplayName();
-        OnPropertyChanged(nameof(HasVisibleTranscriptContent));
-        OnPropertyChanged(nameof(OverlayStatusText));
-        OnPropertyChanged(nameof(ShouldShowBlockingLoadingMask));
-        OnPropertyChanged(nameof(ShouldShowLoadingOverlayPresenter));
-    }
-
     private bool UpdateVisibleTranscriptConversationId(string? conversationId, bool hasVisibleTranscript)
     {
         var nextConversationId = hasVisibleTranscript

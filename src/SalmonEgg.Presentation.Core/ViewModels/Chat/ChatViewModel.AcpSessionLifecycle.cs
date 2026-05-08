@@ -1629,6 +1629,11 @@ public partial class ChatViewModel
             return;
         }
 
+        lock (_pendingInlinePermissionRequestsSync)
+        {
+            _pendingInlinePermissionRequestsByToolCallId[toolCallId] = permissionRequest;
+        }
+
         var target = MessageHistory.LastOrDefault(message =>
             string.Equals(message.ContentType, "tool_call", StringComparison.Ordinal)
             && string.Equals(message.ToolCallId, toolCallId, StringComparison.Ordinal));
@@ -1643,6 +1648,18 @@ public partial class ChatViewModel
         if (permissionRequest is null)
         {
             return;
+        }
+
+        lock (_pendingInlinePermissionRequestsSync)
+        {
+            var clearedToolCallIds = _pendingInlinePermissionRequestsByToolCallId
+                .Where(entry => ReferenceEquals(entry.Value, permissionRequest))
+                .Select(entry => entry.Key)
+                .ToArray();
+            foreach (var toolCallId in clearedToolCallIds)
+            {
+                _pendingInlinePermissionRequestsByToolCallId.Remove(toolCallId);
+            }
         }
 
         foreach (var message in MessageHistory)
