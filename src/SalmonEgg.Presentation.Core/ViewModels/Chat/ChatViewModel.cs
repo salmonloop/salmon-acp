@@ -200,7 +200,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     /// and handles reconnections by re-binding new remote sessions to the same local ID.
     /// </summary>
     [ObservableProperty]
-    private ObservableCollection<ChatMessageViewModel> _messageHistory = new();
+    private ChatTranscriptVirtualizedMessageCollection _messageHistory = new();
 
     [ObservableProperty]
     private string _currentPrompt = string.Empty;
@@ -895,7 +895,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         _transcriptProjectionContext = new ChatTranscriptProjectionContext
         {
             GetMessageHistory = () => MessageHistory,
-            SetMessageHistory = history => MessageHistory = history,
             FromSnapshot = CreateProjectedMessageFromSnapshot,
             MatchesSnapshot = MatchesSnapshot,
             GetProjectionItemKey = GetProjectionItemKey,
@@ -1181,9 +1180,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         }
     }
 
-    private void ApplyStoreProjection(
-        ChatUiProjection projection,
-        IReadOnlyList<ChatMessageViewModel>? preparedTranscript = null)
+    private void ApplyStoreProjection(ChatUiProjection projection)
     {
         var projectionApplyStopwatch = Stopwatch.StartNew();
         var sessionChanged = false;
@@ -1191,7 +1188,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         _suppressStorePromptProjection = true;
         try
         {
-            ApplySessionIdentityProjection(projection, preparedTranscript, out sessionChanged);
+            ApplySessionIdentityProjection(projection, out sessionChanged);
             ApplyPromptAndProfileProjection(projection);
             ApplyTranscriptAndPlanProjection(projection, sessionChanged);
             ApplyConversationStatusProjection(projection);
@@ -1450,21 +1447,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             return;
         }
 
-        var shouldPrebuildTranscript =
-            !string.Equals(CurrentSessionId, projection.HydratedConversationId, StringComparison.Ordinal)
-            && projection.Transcript.Count >= 200;
-        IReadOnlyList<ChatMessageViewModel>? preparedTranscript = null;
-        if (shouldPrebuildTranscript)
-        {
-            var prebuildStopwatch = Stopwatch.StartNew();
-            preparedTranscript = projection.Transcript.Select(CreateProjectedMessageFromSnapshot).ToArray();
-            Logger.LogInformation(
-                "Prebuilt transcript view-models off UI thread. conversationId={ConversationId} messageCount={MessageCount} elapsedMs={ElapsedMs}",
-                projection.HydratedConversationId,
-                preparedTranscript.Count,
-                prebuildStopwatch.ElapsedMilliseconds);
-        }
-
         var uiProjectionTask = PostToUiAsync(() =>
         {
             if (_disposed)
@@ -1477,9 +1459,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
                 return;
             }
 
-            // Note: ApplyStoreProjection now internally calls SyncMessageHistory
-            // before notifying state changes to avoid race conditions on the UI thread.
-            ApplyStoreProjection(projection, preparedTranscript);
+            ApplyStoreProjection(projection);
         });
         await AwaitUiProjectionAsync(uiProjectionTask, _storeStateCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }

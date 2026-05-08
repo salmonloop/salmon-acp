@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
@@ -10,6 +9,7 @@ using Microsoft.UI;
 #endif
 using Windows.Foundation;
 using SalmonEgg.Presentation.Behaviors;
+using SalmonEgg.Presentation.Collections;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
@@ -19,10 +19,11 @@ public sealed partial class MiniChatView : Page
 {
     public ChatShellViewModel ShellViewModel { get; }
     public ChatViewModel ViewModel => ShellViewModel.Chat;
+    public ChatTranscriptItemsSourceAdapter TranscriptItemsSource { get; }
     private bool _isLoaded;
     private bool _isMessagesListLoaded;
     private bool _isTrackingViewModel;
-    private ObservableCollection<ChatMessageViewModel>? _trackedMessageHistory;
+    private INotifyCollectionChanged? _trackedMessageHistory;
     private readonly TranscriptScrollSettler _transcriptScrollSettler = new(maxReadyButNotBottomFailures: MaxInitialScrollAttempts);
     private readonly TranscriptViewportCoordinator _viewportCoordinator = new();
     private const double BottomThreshold = 10;
@@ -60,6 +61,7 @@ public sealed partial class MiniChatView : Page
     public MiniChatView()
     {
         ShellViewModel = App.ServiceProvider.GetRequiredService<ChatShellViewModel>();
+        TranscriptItemsSource = new ChatTranscriptItemsSourceAdapter(ViewModel.MessageHistory);
         _messagesListHandledKeyDownHandler = OnMessagesListKeyDown;
         _messagesListHandledPointerPressedHandler = OnMessagesListPointerPressed;
         _messagesListHandledPointerWheelChangedHandler = OnMessagesListPointerWheelChanged;
@@ -212,6 +214,7 @@ public sealed partial class MiniChatView : Page
                 }
 
                 _trackedMessageHistory = ViewModel.MessageHistory;
+                TranscriptItemsSource.Source = ViewModel.MessageHistory;
                 _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
             }
 
@@ -219,6 +222,7 @@ public sealed partial class MiniChatView : Page
         }
 
         _trackedMessageHistory = ViewModel.MessageHistory;
+        TranscriptItemsSource.Source = ViewModel.MessageHistory;
         _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.ProjectionRestoreReady += OnProjectionRestoreReady;

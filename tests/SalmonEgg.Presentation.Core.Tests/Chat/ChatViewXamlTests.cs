@@ -120,6 +120,8 @@ public sealed class ChatViewXamlTests
     {
         var chatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
         var miniChatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
+        var chatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+        var miniChatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
 
         Assert.Contains("TryApplyPendingProjectionRestore();", chatViewCode, StringComparison.Ordinal);
         Assert.Contains("TryApplyPendingProjectionRestore();", miniChatViewCode, StringComparison.Ordinal);
@@ -133,8 +135,31 @@ public sealed class ChatViewXamlTests
         Assert.DoesNotContain("TryExpandOlderRenderedTranscriptWindow", miniChatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", miniChatViewCode, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n        {\r\n            var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n            TryApplyPendingProjectionRestore();", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n    {\r\n        var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n        TryApplyPendingProjectionRestore();", miniChatViewCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Suite", "Smoke")]
+    public void ChatTranscriptVirtualization_UsesNativeRangeInfoAdapterWithoutUiTypesInCore()
+    {
+        var adapterCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Collections\ChatTranscriptItemsSourceAdapter.cs");
+        var coreCollectionCode = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Chat\Transcript\ChatTranscriptVirtualizedMessageCollection.cs");
+        var chatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+        var miniChatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
+
+        Assert.Contains("IItemsRangeInfo", adapterCode, StringComparison.Ordinal);
+        Assert.Contains("RangesChanged(ItemIndexRange visibleRange, IReadOnlyList<ItemIndexRange> trackedItems)", adapterCode, StringComparison.Ordinal);
+        Assert.Contains("_source.ApplyRequiredRanges(ConvertRange(visibleRange), trackedRanges);", adapterCode, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.UI.Xaml", coreCollectionCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemIndexRange", coreCollectionCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("IItemsRangeInfo", coreCollectionCode, StringComparison.Ordinal);
     }
 
     [Fact]

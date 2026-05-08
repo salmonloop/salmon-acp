@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -93,7 +92,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        ObservableCollection<ChatMessageViewModel> originalHistory = fixture.ViewModel.MessageHistory;
+        var originalHistory = fixture.ViewModel.MessageHistory;
 
         await fixture.UpdateStateAsync(state => state with
         {
@@ -252,14 +251,21 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
             .Returns(Task.CompletedTask);
         var coordinator = new ChatTranscriptProjectionCoordinator(previewStore.Object);
         var owner = (string?)null;
-        var history = new ObservableCollection<ChatMessageViewModel>
-        {
-            new() { Id = "stale", TextContent = "stale" }
-        };
+        var history = new ChatTranscriptVirtualizedMessageCollection();
+        history.Reset(
+            "conv-stale",
+            ImmutableList.Create(new ConversationMessageSnapshot
+            {
+                Id = "stale",
+                Timestamp = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+                ContentType = "text",
+                TextContent = "stale"
+            }),
+            CreateProjectedMessage,
+            MatchesSnapshot);
         var originalHistory = history;
         var context = CreateContext(
             () => history,
-            value => history = value,
             (conversationId, hasVisibleTranscript) =>
             {
                 owner = hasVisibleTranscript ? conversationId : conversationId;
@@ -279,7 +285,6 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
                     TextContent = "hello"
                 }
             ],
-            preparedTranscript: null,
             sessionChanged: true);
         coordinator.UpdatePreviewSnapshot(
             "conv-2",
@@ -396,24 +401,25 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
     }
 
     [Fact]
-    public void ApplyProjection_WhenSameSessionReceivesLargeTranscriptGrowth_ReplacesCollection()
+    public void ApplyProjection_WhenSameSessionReceivesLargeTranscriptGrowth_KeepsVirtualizedSourceStable()
     {
         var previewStore = new Mock<IConversationPreviewStore>();
         var coordinator = new ChatTranscriptProjectionCoordinator(previewStore.Object);
-        var originalHistory = new ObservableCollection<ChatMessageViewModel>
-        {
-            new()
+        var originalHistory = new ChatTranscriptVirtualizedMessageCollection();
+        originalHistory.Reset(
+            "conv-1",
+            ImmutableList.Create(new ConversationMessageSnapshot
             {
                 Id = "message-0",
                 Timestamp = new DateTime(2026, 5, 3, 0, 0, 0, DateTimeKind.Utc),
                 ContentType = "text",
                 TextContent = "seed"
-            }
-        };
+            }),
+            CreateProjectedMessage,
+            MatchesSnapshot);
         var history = originalHistory;
         var context = CreateContext(
             () => history,
-            value => history = value,
             static (_, _) => false);
 
         var transcript = ImmutableList.CreateRange(
@@ -431,37 +437,39 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
             context,
             "conv-1",
             transcript,
-            preparedTranscript: null,
             sessionChanged: false);
 
-        Assert.NotSame(originalHistory, history);
+        Assert.Same(originalHistory, history);
         Assert.Equal(96, history.Count);
         Assert.Equal("message-0", history[0].Id);
         Assert.Equal("message-95", history[^1].Id);
     }
 
     private static ChatTranscriptProjectionContext CreateContext(
-        Func<ObservableCollection<ChatMessageViewModel>> getHistory,
-        Action<ObservableCollection<ChatMessageViewModel>> setHistory,
+        Func<ChatTranscriptVirtualizedMessageCollection> getHistory,
         Func<string?, bool, bool> updateVisibleTranscriptConversationId)
         => new()
         {
             GetMessageHistory = getHistory,
-            SetMessageHistory = setHistory,
-            FromSnapshot = (snapshot, index) => new ChatMessageViewModel
-            {
-                Id = snapshot.Id,
-                ProjectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector.CreateProjectionItemKey(snapshot, index),
-                Timestamp = snapshot.Timestamp,
-                IsOutgoing = snapshot.IsOutgoing,
-                ContentType = snapshot.ContentType,
-                TextContent = snapshot.TextContent
-            },
-            MatchesSnapshot = static (message, snapshot) =>
-                string.Equals(message.Id, snapshot.Id, StringComparison.Ordinal)
-                && string.Equals(message.TextContent, snapshot.TextContent, StringComparison.Ordinal),
+            FromSnapshot = CreateProjectedMessage,
+            MatchesSnapshot = MatchesSnapshot,
             GetProjectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector.CreateProjectionItemKey,
             UpdateVisibleTranscriptConversationId = updateVisibleTranscriptConversationId,
             RaiseTranscriptStateChanged = static () => { }
         };
+
+    private static ChatMessageViewModel CreateProjectedMessage(ConversationMessageSnapshot snapshot, int index)
+        => new()
+        {
+            Id = snapshot.Id,
+            ProjectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector.CreateProjectionItemKey(snapshot, index),
+            Timestamp = snapshot.Timestamp,
+            IsOutgoing = snapshot.IsOutgoing,
+            ContentType = snapshot.ContentType,
+            TextContent = snapshot.TextContent
+        };
+
+    private static bool MatchesSnapshot(ChatMessageViewModel message, ConversationMessageSnapshot snapshot)
+        => string.Equals(message.Id, snapshot.Id, StringComparison.Ordinal)
+            && string.Equals(message.TextContent, snapshot.TextContent, StringComparison.Ordinal);
 }

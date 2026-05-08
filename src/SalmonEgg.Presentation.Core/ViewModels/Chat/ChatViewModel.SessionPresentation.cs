@@ -175,7 +175,6 @@ public partial class ChatViewModel
 
     private void ApplySessionIdentityProjection(
         ChatUiProjection projection,
-        IReadOnlyList<ChatMessageViewModel>? preparedTranscript,
         out bool sessionChanged)
     {
         sessionChanged = !string.Equals(CurrentSessionId, projection.HydratedConversationId, StringComparison.Ordinal);
@@ -191,7 +190,6 @@ public partial class ChatViewModel
             _transcriptProjectionContext,
             projection.HydratedConversationId,
             projection.Transcript,
-            preparedTranscript,
             sessionChanged: true);
         ReplacePlanEntries(projection.PlanEntries);
     }
@@ -223,7 +221,6 @@ public partial class ChatViewModel
                 _transcriptProjectionContext,
                 projection.HydratedConversationId,
                 projection.Transcript,
-                preparedTranscript: null,
                 sessionChanged: false);
         }
 

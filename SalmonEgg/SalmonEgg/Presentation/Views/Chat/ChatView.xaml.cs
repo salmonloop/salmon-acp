@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Automation;
@@ -7,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using SalmonEgg.Presentation.Behaviors;
+using SalmonEgg.Presentation.Collections;
 using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
@@ -20,6 +20,7 @@ public sealed partial class ChatView : Page
         public ChatShellViewModel ShellViewModel { get; }
         public ChatViewModel ViewModel => ShellViewModel.Chat;
         public ShellLayoutViewModel LayoutVM => ShellViewModel.ShellLayout;
+        public ChatTranscriptItemsSourceAdapter TranscriptItemsSource { get; }
         public UiMotion Motion => UiMotion.Current;
         private bool _isViewLoaded;
         private bool _isTrackingMessages;
@@ -50,7 +51,7 @@ public sealed partial class ChatView : Page
         private double _pendingRestoreRequestedVerticalOffset = double.NaN;
         private bool _pendingRestoreRetryScheduled;
         private string _transcriptViewportAutomationState = "inactive";
-        private ObservableCollection<ChatMessageViewModel>? _trackedMessageHistory;
+        private INotifyCollectionChanged? _trackedMessageHistory;
         private long _messagesListViewportTokenCallback;
         private readonly Microsoft.UI.Xaml.Input.KeyEventHandler _messagesListHandledKeyDownHandler;
         private readonly PointerEventHandler _messagesListHandledPointerPressedHandler;
@@ -62,6 +63,7 @@ public sealed partial class ChatView : Page
         public ChatView()
         {
             ShellViewModel = App.ServiceProvider.GetRequiredService<ChatShellViewModel>();
+            TranscriptItemsSource = new ChatTranscriptItemsSourceAdapter(ViewModel.MessageHistory);
             NavigationCacheMode = NavigationCacheMode.Required;
             _messagesListHandledKeyDownHandler = OnMessagesListKeyDown;
             _messagesListHandledPointerPressedHandler = OnMessagesListPointerPressed;
@@ -150,6 +152,7 @@ public sealed partial class ChatView : Page
                     }
 
                     _trackedMessageHistory = ViewModel.MessageHistory;
+                    TranscriptItemsSource.Source = ViewModel.MessageHistory;
                     _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
                 }
 
@@ -157,6 +160,7 @@ public sealed partial class ChatView : Page
             }
 
             _trackedMessageHistory = ViewModel.MessageHistory;
+            TranscriptItemsSource.Source = ViewModel.MessageHistory;
             _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
             ViewModel.PropertyChanged += OnViewModelPropertyChanged;
             ViewModel.ProjectionRestoreReady += OnProjectionRestoreReady;

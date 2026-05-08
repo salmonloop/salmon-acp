@@ -5108,7 +5108,11 @@ public partial class ChatViewModelTests
                 .Add("conv-large", new ConversationBindingSlice("conv-large", "remote-1", "profile-1")),
             Transcript = transcript
         });
-        syncContext.RunAll();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.ViewModel.MessageHistory.Count == transcript.Count);
+        });
 
         chatService.Raise(service => service.PermissionRequestReceived += null, new PermissionRequestEventArgs
         {
@@ -5122,9 +5126,8 @@ public partial class ChatViewModelTests
         Assert.True(fixture.ViewModel.ShowPermissionDialog);
         Assert.NotNull(fixture.ViewModel.PendingPermissionRequest);
 
-        var toolCallMessage = Assert.Single(
-            fixture.ViewModel.MessageHistory.Where(message =>
-                string.Equals(message.ToolCallId, "call-20", StringComparison.Ordinal)));
+        var toolCallMessage = fixture.ViewModel.MessageHistory[20];
+        Assert.Equal("call-20", toolCallMessage.ToolCallId);
         Assert.Same(fixture.ViewModel.PendingPermissionRequest, toolCallMessage.PendingPermissionRequest);
     }
 
@@ -8445,7 +8448,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ApplyStoreProjection_WhenSameConversationTranscriptGrowsLarge_ReplacesMessageHistoryCollection()
+    public async Task ApplyStoreProjection_WhenSameConversationTranscriptGrowsLarge_KeepsVirtualizedMessageHistorySourceStable()
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
@@ -8483,9 +8486,13 @@ public partial class ChatViewModelTests
                         TextContent = index == 0 ? "seed" : $"payload-{index}"
                     }))
         });
-        syncContext.RunAll();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.ViewModel.MessageHistory.Count == 96);
+        });
 
-        Assert.NotSame(originalHistory, fixture.ViewModel.MessageHistory);
+        Assert.Same(originalHistory, fixture.ViewModel.MessageHistory);
         Assert.Equal(96, fixture.ViewModel.MessageHistory.Count);
         Assert.Equal("message-95", fixture.ViewModel.MessageHistory[^1].Id);
     }
@@ -13486,7 +13493,8 @@ public partial class ChatViewModelTests
                 return string.Equals(fixture.ViewModel.CurrentSessionId, "conv-local", StringComparison.Ordinal)
                     && fixture.ViewModel.CurrentChatService is null
                     && fixture.ViewModel.AgentName is null
-                    && fixture.ViewModel.AgentVersion is null;
+                    && fixture.ViewModel.AgentVersion is null
+                    && fixture.ViewModel.MessageHistory.Count == 1;
             }, timeoutMilliseconds: 15000);
             Assert.Single(fixture.ViewModel.MessageHistory);
             Assert.Contains("local seed", fixture.ViewModel.MessageHistory[0].TextContent, StringComparison.Ordinal);

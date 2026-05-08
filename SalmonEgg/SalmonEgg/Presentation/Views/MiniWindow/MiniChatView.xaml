@@ -105,7 +105,7 @@
         <ListView x:Name="MessagesList"
                   Grid.Row="1"
                   behaviors:ScrollViewerViewportMonitor.IsEnabled="True"
-                  ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}"
+                  ItemsSource="{x:Bind TranscriptItemsSource, Mode=OneWay}"
                   ItemTemplateSelector="{StaticResource MessageTemplateSelector}"
                   Padding="12"
                   SelectionMode="None"
