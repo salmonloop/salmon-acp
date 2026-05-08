@@ -191,7 +191,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private string? _pendingHistoryOverlayDismissConversationId;
     private string? _sessionSwitchPreviewConversationId;
     private string? _visibleTranscriptConversationId;
-    private bool _isRenderedTranscriptTailAnchored = true;
     private string? _activeVoiceInputRequestId;
     private string _voiceInputBasePrompt = string.Empty;
 
@@ -892,9 +891,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         _sessionHeaderActionCoordinator = new ChatSessionHeaderActionCoordinator();
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _previewStore = previewStore ?? throw new ArgumentNullException(nameof(previewStore));
-        _transcriptProjectionCoordinator = new ChatTranscriptProjectionCoordinator(
-            _previewStore,
-            new ChatTranscriptViewportProjectionCoordinator());
+        _transcriptProjectionCoordinator = new ChatTranscriptProjectionCoordinator(_previewStore);
         _transcriptProjectionContext = new ChatTranscriptProjectionContext
         {
             GetMessageHistory = () => MessageHistory,
@@ -902,7 +899,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             FromSnapshot = CreateProjectedMessageFromSnapshot,
             MatchesSnapshot = MatchesSnapshot,
             GetProjectionItemKey = GetProjectionItemKey,
-            IsTailAnchored = () => _isRenderedTranscriptTailAnchored,
             UpdateVisibleTranscriptConversationId = UpdateVisibleTranscriptConversationId,
             RaiseTranscriptStateChanged = RaiseTranscriptProjectionStateChanged
         };

@@ -16,8 +16,6 @@ internal sealed class ChatTranscriptProjectionContext
 
     public required Func<ConversationMessageSnapshot, int, string> GetProjectionItemKey { get; init; }
 
-    public required Func<bool> IsTailAnchored { get; init; }
-
     public required Func<string?, bool, bool> UpdateVisibleTranscriptConversationId { get; init; }
 
     public required Action RaiseTranscriptStateChanged { get; init; }

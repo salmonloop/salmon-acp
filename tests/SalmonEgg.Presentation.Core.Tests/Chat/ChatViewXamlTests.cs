@@ -116,7 +116,7 @@ public sealed class ChatViewXamlTests
     }
 
     [Fact]
-    public void ChatTranscriptRestore_RetriesFromProjectionAndViewportCheckpoints_NotFromLayoutUpdated()
+    public void ChatTranscriptRestore_DoesNotUseManualRenderedTranscriptWindowExpansion()
     {
         var chatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
         var miniChatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
@@ -127,10 +127,12 @@ public sealed class ChatViewXamlTests
         Assert.Contains("private void OnMessagesListViewportChanged", miniChatViewCode, StringComparison.Ordinal);
         Assert.Contains("private void SchedulePendingProjectionRestoreRetry()", chatViewCode, StringComparison.Ordinal);
         Assert.Contains("private void SchedulePendingProjectionRestoreRetry()", miniChatViewCode, StringComparison.Ordinal);
-        Assert.Contains("TryExpandOlderTranscriptWindowAtTop()", chatViewCode, StringComparison.Ordinal);
-        Assert.Contains("TryExpandOlderTranscriptWindowAtTop()", miniChatViewCode, StringComparison.Ordinal);
-        Assert.Contains("ViewModel.TryExpandOlderRenderedTranscriptWindow()", chatViewCode, StringComparison.Ordinal);
-        Assert.Contains("ViewModel.TryExpandOlderRenderedTranscriptWindow()", miniChatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryExpandOlderTranscriptWindowAtTop()", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryExpandOlderTranscriptWindowAtTop()", miniChatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryExpandOlderRenderedTranscriptWindow", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryExpandOlderRenderedTranscriptWindow", miniChatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", miniChatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n        {\r\n            var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n            TryApplyPendingProjectionRestore();", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n    {\r\n        var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n        TryApplyPendingProjectionRestore();", miniChatViewCode, StringComparison.Ordinal);
     }

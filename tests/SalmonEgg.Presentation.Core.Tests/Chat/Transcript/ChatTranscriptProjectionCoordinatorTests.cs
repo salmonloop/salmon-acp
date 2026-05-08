@@ -175,7 +175,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ExportCurrentSessionJson_UsesAuthoritativeTranscript_NotRenderedViewportWindow()
+    public async Task ExportCurrentSessionJson_UsesFullRenderedTranscriptFromAuthoritativeProjection()
     {
         await using var fixture = CreateViewModel();
         await fixture.ViewModel.RestoreAsync();
@@ -204,7 +204,7 @@ public partial class ChatViewModelTests
         });
         await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.CurrentSessionId == "conv-large"));
 
-        Assert.True(fixture.ViewModel.MessageHistory.Count < transcript.Count);
+        Assert.Equal(transcript.Count, fixture.ViewModel.MessageHistory.Count);
 
         var exportDirectory = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(),
@@ -461,7 +461,6 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
                 string.Equals(message.Id, snapshot.Id, StringComparison.Ordinal)
                 && string.Equals(message.TextContent, snapshot.TextContent, StringComparison.Ordinal),
             GetProjectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector.CreateProjectionItemKey,
-            IsTailAnchored = static () => true,
             UpdateVisibleTranscriptConversationId = updateVisibleTranscriptConversationId,
             RaiseTranscriptStateChanged = static () => { }
         };

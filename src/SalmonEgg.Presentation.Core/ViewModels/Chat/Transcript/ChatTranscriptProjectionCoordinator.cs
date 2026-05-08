@@ -14,17 +14,13 @@ internal sealed class ChatTranscriptProjectionCoordinator
     private const int LargeTranscriptReplacementThreshold = 64;
 
     private readonly IConversationPreviewStore _previewStore;
-    private readonly ChatTranscriptViewportProjectionCoordinator _viewportProjectionCoordinator;
     private readonly object _previewSnapshotSync = new();
     private string? _lastSavedPreviewConversationId;
     private IImmutableList<ConversationMessageSnapshot>? _lastSavedPreviewTranscript;
 
-    public ChatTranscriptProjectionCoordinator(
-        IConversationPreviewStore previewStore,
-        ChatTranscriptViewportProjectionCoordinator? viewportProjectionCoordinator = null)
+    public ChatTranscriptProjectionCoordinator(IConversationPreviewStore previewStore)
     {
         _previewStore = previewStore ?? throw new ArgumentNullException(nameof(previewStore));
-        _viewportProjectionCoordinator = viewportProjectionCoordinator ?? new ChatTranscriptViewportProjectionCoordinator();
     }
 
     public void ApplyProjection(
@@ -38,44 +34,13 @@ internal sealed class ChatTranscriptProjectionCoordinator
 
         if (sessionChanged)
         {
-            var history = context.GetMessageHistory();
             if (preparedTranscript is { Count: > 0 })
             {
-                _viewportProjectionCoordinator.ActivatePreparedTranscript(
-                    conversationId,
-                    preparedTranscript,
-                    history);
+                SyncPreparedMessageHistory(context, conversationId, preparedTranscript);
             }
             else
             {
-                _viewportProjectionCoordinator.ActivateTranscript(
-                    conversationId,
-                    transcript,
-                    history,
-                    context.FromSnapshot);
-            }
-
-            context.UpdateVisibleTranscriptConversationId(conversationId, history.Count > 0);
-            context.RaiseTranscriptStateChanged();
-            return;
-        }
-
-        if (_viewportProjectionCoordinator.HasPartialWindowForConversation(conversationId))
-        {
-            var history = context.GetMessageHistory();
-            var changed = preparedTranscript is { Count: > 0 }
-                ? _viewportProjectionCoordinator.SyncPreparedTranscript(conversationId, preparedTranscript, history)
-                : _viewportProjectionCoordinator.SyncTranscript(
-                    conversationId,
-                    transcript,
-                    history,
-                    context.FromSnapshot,
-                    context.MatchesSnapshot,
-                    context.IsTailAnchored());
-            var transcriptOwnerChanged = context.UpdateVisibleTranscriptConversationId(conversationId, history.Count > 0);
-            if (changed || transcriptOwnerChanged)
-            {
-                context.RaiseTranscriptStateChanged();
+                SyncMessageHistory(context, conversationId, transcript);
             }
 
             return;
@@ -161,58 +126,6 @@ internal sealed class ChatTranscriptProjectionCoordinator
         SavePreviewSnapshot(snapshot);
     }
 
-    public bool TryExpandOlderWindow(
-        ChatTranscriptProjectionContext context,
-        string? conversationId)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        if (!_viewportProjectionCoordinator.IsActiveForConversation(conversationId))
-        {
-            return false;
-        }
-
-        var history = context.GetMessageHistory();
-        var expanded = _viewportProjectionCoordinator.ExpandOlderWindow(history, context.FromSnapshot);
-        if (!expanded)
-        {
-            return false;
-        }
-
-        context.UpdateVisibleTranscriptConversationId(conversationId, history.Count > 0);
-        context.RaiseTranscriptStateChanged();
-        return true;
-    }
-
-    public bool TryMaterializeProjectionItem(
-        ChatTranscriptProjectionContext context,
-        string? conversationId,
-        string? projectionItemKey)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        if (string.IsNullOrWhiteSpace(projectionItemKey)
-            || !_viewportProjectionCoordinator.IsActiveForConversation(conversationId))
-        {
-            return false;
-        }
-
-        var history = context.GetMessageHistory();
-        var materialized = _viewportProjectionCoordinator.MaterializeWindowAroundProjectionItem(
-            projectionItemKey,
-            history,
-            context.FromSnapshot,
-            context.GetProjectionItemKey);
-        if (!materialized)
-        {
-            return false;
-        }
-
-        context.UpdateVisibleTranscriptConversationId(conversationId, history.Count > 0);
-        context.RaiseTranscriptStateChanged();
-        return true;
-    }
-
     private static void SyncMessageHistory(
         ChatTranscriptProjectionContext context,
         string? conversationId,
@@ -246,6 +159,46 @@ internal sealed class ChatTranscriptProjectionCoordinator
             else
             {
                 history.Add(context.FromSnapshot(message, i));
+                changed = true;
+            }
+        }
+
+        while (history.Count > messages.Count)
+        {
+            history.RemoveAt(history.Count - 1);
+            changed = true;
+        }
+
+        var transcriptOwnerChanged = context.UpdateVisibleTranscriptConversationId(conversationId, history.Count > 0);
+        if (changed || previousCount != history.Count || transcriptOwnerChanged)
+        {
+            context.RaiseTranscriptStateChanged();
+        }
+    }
+
+    private static void SyncPreparedMessageHistory(
+        ChatTranscriptProjectionContext context,
+        string? conversationId,
+        IReadOnlyList<ChatMessageViewModel> transcript)
+    {
+        var history = context.GetMessageHistory();
+        var previousCount = history.Count;
+        var changed = false;
+        var messages = transcript ?? Array.Empty<ChatMessageViewModel>();
+        for (int i = 0; i < messages.Count; i++)
+        {
+            var message = messages[i];
+            if (i < history.Count)
+            {
+                if (!ReferenceEquals(history[i], message))
+                {
+                    history[i] = message;
+                    changed = true;
+                }
+            }
+            else
+            {
+                history.Add(message);
                 changed = true;
             }
         }

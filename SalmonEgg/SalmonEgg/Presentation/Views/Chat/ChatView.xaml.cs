@@ -280,12 +280,6 @@ public sealed partial class ChatView : Page
         private void OnMessagesListViewportChanged(DependencyObject sender, DependencyProperty dp)
         {
             TryApplyPendingProjectionRestore();
-            if (TryExpandOlderTranscriptWindowAtTop())
-            {
-                UpdateTranscriptViewportAutomationState();
-                return;
-            }
-
             TryRefreshViewportCoordinatorFromView();
             UpdateTranscriptViewportAutomationState();
         }
@@ -470,39 +464,6 @@ public sealed partial class ChatView : Page
                 ResolveRelativeOffsetWithinAnchor(firstVisibleIndex));
         }
 
-        private bool TryExpandOlderTranscriptWindowAtTop()
-        {
-            if (_pendingRestoreToken is not null
-                || MessagesList is null
-                || !_isViewLoaded
-                || _suspendAutoScrollTracking
-                || ViewModel.IsActivationOverlayVisible
-                || !ViewModel.IsSessionActive
-                || !IsViewportDetachedByUser())
-            {
-                return false;
-            }
-
-            var verticalOffset = ScrollViewerViewportMonitor.GetVerticalOffset(MessagesList);
-            if (verticalOffset > 1d)
-            {
-                return false;
-            }
-
-            var restoreToken = TryCaptureProjectionRestoreToken();
-            if (!ViewModel.TryExpandOlderRenderedTranscriptWindow())
-            {
-                return false;
-            }
-
-            if (restoreToken is { } nonNullRestoreToken)
-            {
-                QueueProjectionOwnedRestore(nonNullRestoreToken, _scrollScheduleGeneration);
-            }
-
-            return true;
-        }
-
         private int ResolveFirstVisibleIndex()
         {
             if (MessagesList is null)
@@ -660,14 +621,12 @@ public sealed partial class ChatView : Page
                     break;
 
                 case TranscriptViewportCommandKind.MarkAutoFollowDetached:
-                    ViewModel.SetRenderedTranscriptTailAnchored(false);
                     _attachToBottomIntentPending = false;
                     _scrollToBottomScheduled = false;
                     ClearPendingProjectionRestore();
                     break;
 
                 case TranscriptViewportCommandKind.MarkAutoFollowAttached:
-                    ViewModel.SetRenderedTranscriptTailAnchored(true);
                     _attachToBottomIntentPending = false;
                     ClearPendingProjectionRestore();
                     break;
@@ -758,13 +717,6 @@ public sealed partial class ChatView : Page
             var index = ResolvePendingProjectionRestoreIndex(token);
             if (index < 0 || index >= ViewModel.MessageHistory.Count)
             {
-                if (ViewModel.TryMaterializeRenderedTranscriptProjectionItem(token.ProjectionItemKey))
-                {
-                    _pendingRestoreResolvedIndex = -1;
-                    SchedulePendingProjectionRestoreRetry();
-                    return;
-                }
-
                 ReportPendingProjectionRestoreUnavailable("ProjectionItemMissing");
                 return;
             }

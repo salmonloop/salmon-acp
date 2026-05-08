@@ -5110,10 +5110,6 @@ public partial class ChatViewModelTests
         });
         syncContext.RunAll();
 
-        Assert.DoesNotContain(
-            fixture.ViewModel.MessageHistory,
-            message => string.Equals(message.ToolCallId, "call-20", StringComparison.Ordinal));
-
         chatService.Raise(service => service.PermissionRequestReceived += null, new PermissionRequestEventArgs
         {
             MessageId = "permission-1",
@@ -5125,10 +5121,6 @@ public partial class ChatViewModelTests
 
         Assert.True(fixture.ViewModel.ShowPermissionDialog);
         Assert.NotNull(fixture.ViewModel.PendingPermissionRequest);
-
-        var projectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector
-            .CreateProjectionItemKey(transcript[20], 20);
-        Assert.True(fixture.ViewModel.TryMaterializeRenderedTranscriptProjectionItem(projectionItemKey));
 
         var toolCallMessage = Assert.Single(
             fixture.ViewModel.MessageHistory.Where(message =>
@@ -16577,7 +16569,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task LargeTranscriptActivation_UsesBoundedTailProjectionWhileKeepingAuthoritativeTranscriptComplete()
+    public async Task LargeTranscriptActivation_ProjectsCompleteTranscriptForNativeListViewVirtualization()
     {
         var syncContext = new ImmediateSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
@@ -16599,13 +16591,14 @@ public partial class ChatViewModelTests
             Transcript = transcript
         });
 
-        Assert.True(fixture.ViewModel.MessageHistory.Count < transcript.Count);
+        Assert.Equal(transcript.Count, fixture.ViewModel.MessageHistory.Count);
+        Assert.Equal("message-0", fixture.ViewModel.MessageHistory[0].Id);
         Assert.Equal("message-199", fixture.ViewModel.MessageHistory[^1].Id);
         Assert.Equal("conv-large", fixture.ViewModel.CurrentSessionId);
     }
 
     [Fact]
-    public async Task LargeTranscriptActivation_WhenTranscriptAppends_PreservesBoundedTailProjection()
+    public async Task LargeTranscriptActivation_WhenTranscriptAppends_PreservesCompleteProjection()
     {
         var syncContext = new ImmediateSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
@@ -16641,9 +16634,9 @@ public partial class ChatViewModelTests
             })
         });
 
-        Assert.Equal(initialRenderedCount, fixture.ViewModel.MessageHistory.Count);
+        Assert.Equal(initialRenderedCount + 1, fixture.ViewModel.MessageHistory.Count);
+        Assert.Equal("message-0", fixture.ViewModel.MessageHistory[0].Id);
         Assert.Equal("message-200", fixture.ViewModel.MessageHistory[^1].Id);
-        Assert.Equal("message-81", fixture.ViewModel.MessageHistory[0].Id);
     }
 }
 
