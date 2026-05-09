@@ -10,7 +10,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
     /// <summary>
     /// Chat 消息 ViewModel，用于在 UI 中显示各种类型的内容
     /// </summary>
-    public partial class ChatMessageViewModel : ObservableObject
+    public partial class ChatMessageViewModel : ObservableObject, IRenderFailureSink
     {
         [ObservableProperty]
         private string _id = string.Empty;
@@ -39,6 +39,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ShouldRenderMarkdown))]
         [NotifyPropertyChangedFor(nameof(ShouldRenderPlainText))]
+        [NotifyPropertyChangedFor(nameof(HasCopyableMarkdownCodeBlock))]
+        [NotifyPropertyChangedFor(nameof(CopyableMarkdownCodeBlockText))]
         private ChatMarkdownRenderMode _markdownRenderMode = ChatMarkdownRenderMode.PlainStreaming;
 
         [ObservableProperty]
@@ -258,6 +260,10 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
         public bool ShouldRenderMarkdown => MarkdownRenderMode == ChatMarkdownRenderMode.MarkdownReady;
         public bool ShouldRenderPlainText => !ShouldRenderMarkdown;
+        public string CopyableMarkdownCodeBlockText => ShouldRenderMarkdown
+           ? ChatMarkdownCodeBlockExtractor.TryExtractFirstFencedCodeBlock(TextContent) ?? string.Empty
+           : string.Empty;
+        public bool HasCopyableMarkdownCodeBlock => !string.IsNullOrEmpty(CopyableMarkdownCodeBlockText);
        public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
        public bool HasAudioContent => !string.IsNullOrEmpty(AudioData);
        public bool HasToolCall => !string.IsNullOrEmpty(ToolCallId);
@@ -312,11 +318,18 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
            RefreshMarkdownRenderMode();
        }
 
+       public void MarkRenderFailed() => MarkMarkdownRenderFailed();
+
        partial void OnIsOutgoingChanged(bool value) => RefreshMarkdownRenderMode();
 
        partial void OnContentTypeChanged(string value) => RefreshMarkdownRenderMode();
 
-       partial void OnTextContentChanged(string value) => RefreshMarkdownRenderMode();
+       partial void OnTextContentChanged(string value)
+       {
+           RefreshMarkdownRenderMode();
+           OnPropertyChanged(nameof(HasCopyableMarkdownCodeBlock));
+           OnPropertyChanged(nameof(CopyableMarkdownCodeBlockText));
+       }
 
        partial void OnIsMarkdownFallbackStickyChanged(bool value) => RefreshMarkdownRenderMode();
 

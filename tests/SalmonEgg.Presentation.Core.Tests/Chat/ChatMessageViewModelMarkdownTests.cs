@@ -86,4 +86,28 @@ public sealed class ChatMessageViewModelMarkdownTests
         Assert.False(vm.ShouldRenderMarkdown);
         Assert.True(vm.ShouldRenderPlainText);
     }
+
+    [Fact]
+    public void CopyableMarkdownCodeBlockText_ReturnsFirstClosedFenceForMarkdownMessage()
+    {
+        var vm = ChatMessageViewModel.CreateFromTextContent(
+            "m-copy",
+            new TextContentBlock("```csharp\nvar done = true;\n```\n\n```text\nsecond\n```"),
+            isOutgoing: false);
+
+        Assert.True(vm.HasCopyableMarkdownCodeBlock);
+        Assert.Equal("var done = true;", vm.CopyableMarkdownCodeBlockText);
+    }
+
+    [Fact]
+    public void CopyableMarkdownCodeBlockText_IsEmptyForPlainOrFallbackMessage()
+    {
+        var vm = ChatMessageViewModel.CreateFromTextContent(
+            "m-copy-empty",
+            new TextContentBlock("```csharp\nvar partial = true;"),
+            isOutgoing: false);
+
+        Assert.False(vm.HasCopyableMarkdownCodeBlock);
+        Assert.Equal(string.Empty, vm.CopyableMarkdownCodeBlockText);
+    }
 }

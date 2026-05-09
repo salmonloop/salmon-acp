@@ -46,14 +46,46 @@
                                    Text="{x:Bind TextContent, Mode=OneWay}"
                                    TextWrapping="Wrap"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   LineHeight="22"
+                                   LineStackingStrategy="BlockLineHeight"
                                    IsTextSelectionEnabled="True"/>
 
                         <controls:MarkdownTextPresenter x:Name="IncomingMarkdownPresenter"
                                                         x:Load="{x:Bind ShouldRenderMarkdown, Mode=OneWay}"
                                                         Text="{x:Bind TextContent, Mode=OneWay}"
-                                                        MessageViewModel="{x:Bind}"
+                                                        ShouldRenderMarkdown="{x:Bind ShouldRenderMarkdown, Mode=OneWay}"
+                                                        RenderFailureSink="{x:Bind}"
                                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                        LinkForeground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                        CodeBlockBackground="{ThemeResource ControlFillColorSecondaryBrush}"
+                                                        CodeBlockForeground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                        CodeBlockBorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                                        InlineCodeBackground="{ThemeResource ControlFillColorTertiaryBrush}"
+                                                        InlineCodeForeground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                        InlineCodeBorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                                        QuoteBackground="{ThemeResource ControlFillColorSecondaryBrush}"
+                                                        QuoteForeground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        QuoteBorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                                        TableBorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                                                         IsTextSelectionEnabled="True"/>
+
+                        <Button x:Name="IncomingMarkdownCopyCodeButton"
+                                x:Uid="ChatMarkdownCopyCodeButton"
+                                x:Load="{x:Bind HasCopyableMarkdownCodeBlock, Mode=OneWay}"
+                                CommandParameter="{x:Bind CopyableMarkdownCodeBlockText, Mode=OneWay}"
+                                Click="OnCopyTextClick"
+                                AutomationProperties.AutomationId="ChatMessage.CopyCodeButton"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Width="32"
+                                Height="32"
+                                MinWidth="32"
+                                Padding="0"
+                                Margin="8,0,0,0"
+                                Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                            <SymbolIcon Symbol="Copy" />
+                        </Button>
                     </Grid>
                 </StackPanel>
             </Border>

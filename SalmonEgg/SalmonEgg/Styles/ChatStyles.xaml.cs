@@ -21,6 +21,16 @@ public sealed partial class ChatStyles : ResourceDictionary
         TryCopyText(text);
     }
 
+    public void OnCopyTextClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { CommandParameter: string text } || string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        TryCopyText(text);
+    }
+
     private static void TryCopyText(string text)
     {
         try

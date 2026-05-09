@@ -733,6 +733,12 @@
   <data name="ChatMessageCopyMenu.Text" xml:space="preserve">
     <value>复制消息</value>
   </data>
+  <data name="ChatMarkdownCopyCodeButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>复制代码</value>
+  </data>
+  <data name="ChatMarkdownCopyCodeButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>复制代码</value>
+  </data>
   <data name="DataStorage_ClearCacheDialog.Title" xml:space="preserve">
     <value>清理缓存</value>
   </data>

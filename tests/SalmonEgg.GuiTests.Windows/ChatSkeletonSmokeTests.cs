@@ -137,13 +137,46 @@ public sealed class ChatSkeletonSmokeTests
 
         Assert.Contains(
             visibleTexts,
-            text => text.Contains("```csharp", StringComparison.Ordinal)
-                    && text.Contains("var partial = true;", StringComparison.Ordinal));
+            text => text.Contains("var done = true;", StringComparison.Ordinal)
+                    && !text.Contains("```", StringComparison.Ordinal));
 
         Assert.Contains(
             visibleTexts,
-            text => text.Contains("var done = true;", StringComparison.Ordinal)
-                    && !text.Contains("```", StringComparison.Ordinal));
+            text => text.Contains("Reading sample", StringComparison.Ordinal));
+        Assert.Contains(
+            visibleTexts,
+            text => text.Contains("inline code", StringComparison.Ordinal));
+        Assert.Contains(
+            visibleTexts,
+            text => text.Contains("A quoted note should use the quote treatment.", StringComparison.Ordinal));
+        Assert.Contains(
+            visibleTexts,
+            text => text.Contains("alpha", StringComparison.Ordinal));
+        Assert.Contains(
+            visibleTexts,
+            text => text.Contains("beta", StringComparison.Ordinal));
+
+        var copyCodeButton = session.FindByAutomationId("ChatMessage.CopyCodeButton", TimeSpan.FromSeconds(8));
+        Assert.Contains(
+            copyCodeButton.Name,
+            new[] { "Copy code", "复制代码" },
+            StringComparer.Ordinal);
+
+        if (messagesList.Patterns.Scroll.IsSupported)
+        {
+            var scroll = messagesList.Patterns.Scroll.Pattern;
+            if (scroll.VerticallyScrollable.Value)
+            {
+                scroll.SetScrollPercent(-1d, 0d);
+                Thread.Sleep(250);
+            }
+        }
+
+        var topVisibleTexts = session.GetVisibleTexts(messagesList);
+        Assert.Contains(
+            topVisibleTexts,
+            text => text.Contains("```csharp", StringComparison.Ordinal)
+                    && text.Contains("var partial = true;", StringComparison.Ordinal));
     }
 
     [SkippableFact]

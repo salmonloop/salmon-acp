@@ -947,6 +947,31 @@ internal sealed class GuiAppDataScope : IDisposable
                             contentType = "text",
                             textContent = "```csharp\nvar done = true;\n```",
                             isOutgoing = false
+                        },
+                        new
+                        {
+                            id = "md-rich-1",
+                            timestamp = timestamp.AddSeconds(3),
+                            contentType = "text",
+                            textContent = string.Join(
+                                "\n",
+                                "## Reading sample",
+                                "",
+                                "This paragraph checks ordinary markdown reading rhythm with `inline code` inside a longer sentence.",
+                                "",
+                                "- first list item",
+                                "- second list item",
+                                "",
+                                "> A quoted note should use the quote treatment.",
+                                "",
+                                "| key | value |",
+                                "| --- | --- |",
+                                "| alpha | beta |",
+                                "",
+                                "```json",
+                                "{\"status\":\"ok\",\"count\":2}",
+                                "```"),
+                            isOutgoing = false
                         }
                     }
                 }

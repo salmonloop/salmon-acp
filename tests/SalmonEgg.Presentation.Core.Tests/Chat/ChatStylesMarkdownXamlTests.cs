@@ -34,10 +34,43 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.Contains("xmlns:controls=\"using:SalmonEgg.Controls\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<controls:MarkdownTextPresenter", xaml, StringComparison.Ordinal);
-        Assert.Contains("MessageViewModel=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShouldRenderMarkdown=\"{x:Bind ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RenderFailureSink=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageViewModel=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Load=\"{x:Bind ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Load=\"{x:Bind ShouldRenderPlainText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"IncomingToolCallPill\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MessageTemplate_MarkdownReadingTypographyUsesThemeResources()
+    {
+        var xaml = LoadChatStylesXaml();
+
+        Assert.Contains("LinkForeground=\"{ThemeResource AccentTextFillColorPrimaryBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CodeBlockBackground=\"{ThemeResource ControlFillColorSecondaryBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CodeBlockBorderBrush=\"{ThemeResource ControlStrokeColorDefaultBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("InlineCodeBackground=\"{ThemeResource ControlFillColorTertiaryBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("QuoteForeground=\"{ThemeResource TextFillColorSecondaryBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("QuoteBorderBrush=\"{ThemeResource AccentFillColorDefaultBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TableBorderBrush=\"{ThemeResource ControlStrokeColorDefaultBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("LineHeight=\"22\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("#", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MessageTemplate_CodeBlockCopyButtonIsViewModelDrivenAndLocalized()
+    {
+        var xaml = LoadChatStylesXaml();
+
+        Assert.Contains("x:Name=\"IncomingMarkdownCopyCodeButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Uid=\"ChatMarkdownCopyCodeButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Load=\"{x:Bind HasCopyableMarkdownCodeBlock, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CommandParameter=\"{x:Bind CopyableMarkdownCodeBlockText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnCopyTextClick\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ChatMessage.CopyCodeButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<SymbolIcon Symbol=\"Copy\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"OnCopyCodeBlockClick\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,6 +137,19 @@ public sealed class ChatStylesMarkdownXamlTests
         Assert.DoesNotContain("ChatMessageCopyMenu.Content", resources, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("en")]
+    [InlineData("en-US")]
+    [InlineData("zh-Hans")]
+    public void ChatMarkdownCopyCodeButton_UsesLocalizedTooltipAndAutomationName(string localeFolder)
+    {
+        var resources = LoadResourcesResw(localeFolder);
+
+        Assert.Contains("ChatMarkdownCopyCodeButton.ToolTipService.ToolTip", resources, StringComparison.Ordinal);
+        Assert.Contains("ChatMarkdownCopyCodeButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name", resources, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatMarkdownCopyCodeButton.Content", resources, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void MarkdownTextPresenter_DoesNotEagerlyAttachBothWindowsVariants()
     {
@@ -111,6 +157,22 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.DoesNotContain("Children.Add(_nonSelectableMarkdown);", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Children.Add(_selectableMarkdown);", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MarkdownTextPresenter_CentralizesMarkdownReadingTypography()
+    {
+        var source = LoadRepoFile("SalmonEgg", "SalmonEgg", "Controls", "MarkdownTextPresenter.cs");
+
+        Assert.Contains("ApplyMarkdownTypography", source, StringComparison.Ordinal);
+        Assert.Contains("MarkdownThemes", source, StringComparison.Ordinal);
+        Assert.Contains("IRenderFailureSink", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatMessageViewModel", source, StringComparison.Ordinal);
+        Assert.Contains("CodeBlockBackgroundProperty", source, StringComparison.Ordinal);
+        Assert.Contains("InlineCodeBackgroundProperty", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteBorderBrushProperty", source, StringComparison.Ordinal);
+        Assert.Contains("ParagraphLineHeight = 22", source, StringComparison.Ordinal);
+        Assert.Contains("UseListExtras = true", source, StringComparison.Ordinal);
     }
 
     private static string LoadChatStylesXaml()
