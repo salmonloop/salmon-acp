@@ -8,7 +8,7 @@ public sealed class AcpConnectionSettingsXamlTests
     public void AcpConnectionSettingsPage_PathMappingsEditor_UsesViewModelDrivenBindings()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AcpConnectionSettingsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Settings\AcpConnectionSettingsPage.xaml");
 
         // Assert
         Assert.Contains("ItemsSource=\"{x:Bind ViewModel.PathMappingRows, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
@@ -22,7 +22,7 @@ public sealed class AcpConnectionSettingsXamlTests
     public void AcpConnectionSettingsPage_PathMappingsEditor_ExposesStableAutomationIds()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AcpConnectionSettingsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Settings\AcpConnectionSettingsPage.xaml");
 
         // Assert
         Assert.Contains("AutomationProperties.AutomationId=\"Acp.PathMappings.Section\"", xaml, StringComparison.Ordinal);
