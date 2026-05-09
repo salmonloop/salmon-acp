@@ -583,8 +583,16 @@ namespace SalmonEgg.Application.Services.Chat
                 if (string.IsNullOrEmpty(_currentSessionId))
                     return null;
 
-                // TODO: Modes should be cached from response or requested via separate protocol call if available.
-                return null;
+                var session = _sessionManager.GetSession(_currentSessionId);
+                if (session == null || session.Mode.AvailableModes == null || session.Mode.AvailableModes.Count == 0)
+                    return null;
+
+                return session.Mode.AvailableModes.Select(m => new SalmonEgg.Domain.Models.Protocol.SessionMode
+                {
+                    Id = m.Id,
+                    Name = m.Name,
+                    Description = m.Description
+                }).ToList();
             }
             catch (Exception ex)
             {
