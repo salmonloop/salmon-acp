@@ -295,6 +295,18 @@ public sealed class ChatSkeletonSmokeTests
         var finalPercent = observedPercents[^1];
         var viewportState = session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
         var viewportDebug = session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        var minObservedPercent = observedPercents.Min();
+        var maxUpwardRebound = observedPercents
+            .Zip(observedPercents.Skip(1), (previous, current) => current - previous)
+            .DefaultIfEmpty(0d)
+            .Max();
+
+        Assert.True(
+            minObservedPercent >= 12d,
+            $"Expected mid-list scroll percent sequence not to snap near start, observed minimum {minObservedPercent:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Observed percents=[{string.Join(", ", observedPercents.Select(value => value.ToString("0.##")))}]. Visible=[{string.Join(" | ", observedVisibleMessages)}].");
+        Assert.True(
+            maxUpwardRebound <= 18d,
+            $"Expected descending mid-list scroll sequence not to rebound upward by more than 18 percent, observed rebound {maxUpwardRebound:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Observed percents=[{string.Join(", ", observedPercents.Select(value => value.ToString("0.##")))}]. Visible=[{string.Join(" | ", observedVisibleMessages)}].");
         Assert.True(
             finalPercent >= 20d && finalPercent <= 46d,
             $"Expected final scroll percent near 33, actual {finalPercent:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Observed percents=[{string.Join(", ", observedPercents.Select(value => value.ToString("0.##")))}]. Visible=[{string.Join(" | ", observedVisibleMessages)}].");

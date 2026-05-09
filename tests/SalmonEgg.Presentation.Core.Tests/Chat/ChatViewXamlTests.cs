@@ -127,8 +127,10 @@ public sealed class ChatViewXamlTests
         Assert.Contains("TryApplyPendingProjectionRestore();", miniChatViewCode, StringComparison.Ordinal);
         Assert.Contains("private void OnMessagesListViewportChanged", chatViewCode, StringComparison.Ordinal);
         Assert.Contains("private void OnMessagesListViewportChanged", miniChatViewCode, StringComparison.Ordinal);
-        Assert.Contains("private void SchedulePendingProjectionRestoreRetry()", chatViewCode, StringComparison.Ordinal);
-        Assert.Contains("private void SchedulePendingProjectionRestoreRetry()", miniChatViewCode, StringComparison.Ordinal);
+        Assert.Contains("TranscriptProjectionRestoreController", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("TranscriptProjectionRestoreController", miniChatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("private void SchedulePendingProjectionRestoreRetry()", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("private void SchedulePendingProjectionRestoreRetry()", miniChatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryExpandOlderTranscriptWindowAtTop()", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryExpandOlderTranscriptWindowAtTop()", miniChatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryExpandOlderRenderedTranscriptWindow", chatViewCode, StringComparison.Ordinal);

@@ -624,6 +624,60 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void TranscriptProjectionRestoreState_IsOwnedBySingleUiController()
+    {
+        var controllerCode = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Transcript\TranscriptProjectionRestoreController.cs");
+        Assert.Contains("private TranscriptProjectionRestoreToken? _pendingToken;", controllerCode, StringComparison.Ordinal);
+        Assert.Contains("public TranscriptProjectionRestoreResult TryApply(", controllerCode, StringComparison.Ordinal);
+        Assert.Contains("public bool TryScheduleRetry(", controllerCode, StringComparison.Ordinal);
+
+        foreach (var path in new[]
+        {
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"
+        })
+        {
+            var code = LoadFile(path);
+
+            Assert.Contains("TranscriptProjectionRestoreController", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreToken", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreConversationId", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreGeneration", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreAttemptCount", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreResolvedIndex", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreRequestedMaterializationIndex", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("_pendingRestoreRetryScheduled", code, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void TranscriptProjectionRestoreContract_IsAnchorOnly()
+    {
+        var contractsCode = LoadFile(@"src\SalmonEgg.Presentation.Core\Utilities\TranscriptViewportContracts.cs");
+        var hostContractCode = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ITranscriptViewportHost.cs");
+        var listViewHostCode = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ListViewTranscriptViewportHost.cs");
+
+        Assert.Contains("string ProjectionItemKey);", contractsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("OffsetHint", contractsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryGetRelativeOffsetWithinItem", hostContractCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryGetRelativeOffsetWithinItem", listViewHostCode, StringComparison.Ordinal);
+
+        foreach (var path in new[]
+        {
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"
+        })
+        {
+            var code = LoadFile(path);
+
+            Assert.Contains("CreateViewportProjectionRestoreToken(ViewModel.MessageHistory[firstVisibleIndex])", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("OffsetHint", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("TryGetRelativeOffsetWithinItem", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("TrySetVerticalOffset", code, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void ChatViewCodeBehind_WarmAndOverlayResumeActivateCoordinatorInsteadOfRedetach()
     {
         var code = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");

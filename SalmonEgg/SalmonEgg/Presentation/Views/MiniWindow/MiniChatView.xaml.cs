@@ -38,13 +38,7 @@ public sealed partial class MiniChatView : Page
     private bool _scrollToBottomScheduled;
     private int _scrollScheduleGeneration;
     private int _scheduledScrollRequestVersion;
-    private TranscriptProjectionRestoreToken? _pendingRestoreToken;
-    private string? _pendingRestoreConversationId;
-    private int _pendingRestoreGeneration = -1;
-    private int _pendingRestoreAttemptCount;
-    private int _pendingRestoreResolvedIndex = -1;
-    private int _pendingRestoreRequestedMaterializationIndex = -1;
-    private bool _pendingRestoreRetryScheduled;
+    private readonly TranscriptProjectionRestoreController _projectionRestoreController = new(MaxRestoreAttempts);
     private readonly Microsoft.UI.Xaml.Input.KeyEventHandler _messagesListHandledKeyDownHandler;
     private readonly PointerEventHandler _messagesListHandledPointerPressedHandler;
     private readonly PointerEventHandler _messagesListHandledPointerWheelChangedHandler;
@@ -373,7 +367,7 @@ public sealed partial class MiniChatView : Page
 
     private void RegisterUserViewportIntent()
     {
-        if (_pendingRestoreToken is not null)
+        if (_projectionRestoreController.HasPending)
         {
             AbandonPendingProjectionRestore("UserInterrupted");
         }
@@ -661,157 +655,72 @@ public sealed partial class MiniChatView : Page
 
     private void QueueProjectionOwnedRestore(TranscriptProjectionRestoreToken token, int generation)
     {
-        _pendingRestoreToken = token;
-        _pendingRestoreConversationId = token.ConversationId;
-        _pendingRestoreGeneration = generation;
-        _pendingRestoreAttemptCount = 0;
-        _pendingRestoreResolvedIndex = -1;
+        _projectionRestoreController.Queue(token, generation);
         _suspendAutoScrollTracking = true;
         _scrollToBottomScheduled = false;
         TryApplyPendingProjectionRestore();
     }
 
-    private void SchedulePendingProjectionRestoreRetry()
-    {
-        if (_pendingRestoreRetryScheduled)
-        {
-            return;
-        }
-
-        _pendingRestoreRetryScheduled = true;
-        _ = SchedulePendingProjectionRestoreRetryAsync();
-    }
-
-    private async System.Threading.Tasks.Task SchedulePendingProjectionRestoreRetryAsync()
-    {
-        await System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(16)).ConfigureAwait(false);
-        _ = DispatcherQueue.TryEnqueue(() =>
-        {
-            _pendingRestoreRetryScheduled = false;
-            TryApplyPendingProjectionRestore();
-        });
-    }
-
     private void TryApplyPendingProjectionRestore()
     {
-        _pendingRestoreRetryScheduled = false;
-        if (_pendingRestoreToken is not { } token
-            || _transcriptViewportHost is null
-            || !_isLoaded)
+        if (_transcriptViewportHost is null || !_isLoaded)
         {
             return;
         }
 
-        if (!string.Equals(CurrentViewportConversationId, token.ConversationId, StringComparison.Ordinal)
-            || _scrollScheduleGeneration != _pendingRestoreGeneration)
-        {
-            AbandonPendingProjectionRestore("RestoreContextChanged");
-            return;
-        }
-
-        var index = ResolvePendingProjectionRestoreIndex(token);
-        if (index < 0 || index >= ViewModel.MessageHistory.Count)
-        {
-            ReportPendingProjectionRestoreUnavailable("ProjectionItemMissing");
-            return;
-        }
-
-        if (!_transcriptViewportHost.HasRealizedItem(index))
-        {
-            if (_pendingRestoreRequestedMaterializationIndex == index)
-            {
-                if (++_pendingRestoreAttemptCount >= MaxRestoreAttempts)
-                {
-                    ReportPendingProjectionRestoreUnavailable("ProjectionItemNotMaterialized");
-                    return;
-                }
-
-                SchedulePendingProjectionRestoreRetry();
-                return;
-            }
-
-            if (++_pendingRestoreAttemptCount >= MaxRestoreAttempts)
-            {
-                ReportPendingProjectionRestoreUnavailable("ProjectionItemNotMaterialized");
-                return;
-            }
-
-            _pendingRestoreRequestedMaterializationIndex = index;
-            _transcriptViewportHost.ScrollItemIntoView(index);
-            SchedulePendingProjectionRestoreRetry();
-            return;
-        }
-
-        _pendingRestoreRequestedMaterializationIndex = -1;
-        ConfirmPendingProjectionRestore(token);
-    }
-
-    private int ResolvePendingProjectionRestoreIndex(TranscriptProjectionRestoreToken token)
-    {
-        if (_pendingRestoreResolvedIndex >= 0
-            && _pendingRestoreResolvedIndex < ViewModel.MessageHistory.Count
-            && string.Equals(
-                ViewModel.MessageHistory[_pendingRestoreResolvedIndex].ProjectionItemKey,
-                token.ProjectionItemKey,
-                StringComparison.Ordinal))
-        {
-            return _pendingRestoreResolvedIndex;
-        }
-
-        _pendingRestoreResolvedIndex = ResolveProjectionRestoreIndex(token);
-        return _pendingRestoreResolvedIndex;
-    }
-
-    private void ConfirmPendingProjectionRestore(TranscriptProjectionRestoreToken token)
-    {
-        var generation = _pendingRestoreGeneration;
-        ClearPendingProjectionRestore();
-        ReleaseAutoScrollTracking();
-        ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.RestoreConfirmed(
-            token.ConversationId,
-            generation,
-            token)));
-    }
-
-    private void ReportPendingProjectionRestoreUnavailable(string reason)
-    {
-        var conversationId = _pendingRestoreConversationId ?? CurrentViewportConversationId;
-        var generation = _pendingRestoreGeneration;
-        ClearPendingProjectionRestore();
-        ReleaseAutoScrollTracking();
-        ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.RestoreUnavailable(
-            conversationId,
-            generation,
-            reason)));
+        ApplyProjectionRestoreResult(_projectionRestoreController.TryApply(
+            _transcriptViewportHost,
+            ViewModel.MessageHistory.Count,
+            CurrentViewportConversationId,
+            _scrollScheduleGeneration,
+            ResolveProjectionRestoreIndex));
     }
 
     private void AbandonPendingProjectionRestore(string reason)
     {
-        if (_pendingRestoreToken is null)
-        {
-            ClearPendingProjectionRestore();
-            return;
-        }
-
-        var conversationId = _pendingRestoreConversationId ?? CurrentViewportConversationId;
-        var generation = _pendingRestoreGeneration;
-        ClearPendingProjectionRestore();
-        ReleaseAutoScrollTracking();
-        ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.RestoreAbandoned(
-            conversationId,
-            generation,
-            reason)));
+        ApplyProjectionRestoreResult(_projectionRestoreController.Abandon(CurrentViewportConversationId, reason));
     }
 
     private void ClearPendingProjectionRestore()
     {
-        _pendingRestoreToken = null;
-        _pendingRestoreConversationId = null;
-        _pendingRestoreGeneration = -1;
-        _pendingRestoreAttemptCount = 0;
-        _pendingRestoreResolvedIndex = -1;
-        _pendingRestoreRequestedMaterializationIndex = -1;
-        _pendingRestoreRetryScheduled = false;
+        _projectionRestoreController.Clear();
+    }
+
+    private void ApplyProjectionRestoreResult(TranscriptProjectionRestoreResult result)
+    {
+        switch (result.Kind)
+        {
+            case TranscriptProjectionRestoreResultKind.Retry:
+                _projectionRestoreController.TryScheduleRetry(DispatcherQueue, TryApplyPendingProjectionRestore);
+                break;
+
+            case TranscriptProjectionRestoreResultKind.Confirmed:
+                if (result.Token is { } token)
+                {
+                    ReleaseAutoScrollTracking();
+                    ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.RestoreConfirmed(
+                        token.ConversationId,
+                        result.Generation,
+                        token)));
+                }
+                break;
+
+            case TranscriptProjectionRestoreResultKind.Unavailable:
+                ReleaseAutoScrollTracking();
+                ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.RestoreUnavailable(
+                    result.ConversationId ?? CurrentViewportConversationId,
+                    result.Generation,
+                    result.Reason ?? "RestoreUnavailable")));
+                break;
+
+            case TranscriptProjectionRestoreResultKind.Abandoned:
+                ReleaseAutoScrollTracking();
+                ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.RestoreAbandoned(
+                    result.ConversationId ?? CurrentViewportConversationId,
+                    result.Generation,
+                    result.Reason ?? "RestoreAbandoned")));
+                break;
+        }
     }
 
     private bool TryIssueTranscriptScrollRequest()
@@ -1203,7 +1112,7 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (_pendingRestoreToken is not null)
+        if (_projectionRestoreController.HasPending)
         {
             AbandonPendingProjectionRestore("UserInterrupted");
         }
