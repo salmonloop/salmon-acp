@@ -220,12 +220,12 @@ public sealed class XamlComplianceTests
             "private void OnMessagesListUnloaded",
             "private void OnMessagesListLayoutUpdated");
 
-        Assert.Contains("MessagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);", unloadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);", unloadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);", unloadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesScrollViewer?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesScrollViewer?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesScrollViewer?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesScrollViewer?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);", unloadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesScrollViewer?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);", unloadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesScrollViewer?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);", unloadSection, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -653,14 +653,19 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void TranscriptViewportHost_ContainsListViewSpecificViewportTraversal()
+    public void TranscriptViewportHost_UsesItemsRepeaterAndScrollViewerAsSingleViewportBoundary()
     {
-        var host = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ListViewTranscriptViewportHost.cs");
+        var host = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ItemsRepeaterTranscriptViewportHost.cs");
 
-        Assert.Contains("ContainerFromIndex(", host, StringComparison.Ordinal);
-        Assert.Contains("ScrollIntoView(", host, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewerViewportMonitor.SetIsEnabled(_listView, true);", host, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewerViewportMonitor.GetAttachedScrollViewer", host, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer", host, StringComparison.Ordinal);
+        Assert.Contains("ItemsRepeater", host, StringComparison.Ordinal);
+        Assert.Contains(".ViewChanged +=", host, StringComparison.Ordinal);
+        Assert.Contains(".TryGetElement(index)", host, StringComparison.Ordinal);
+        Assert.Contains(".ChangeView(null, verticalOffset, null, true)", host, StringComparison.Ordinal);
+        Assert.DoesNotContain("ListView", host, StringComparison.Ordinal);
+        Assert.DoesNotContain("ContainerFromIndex(", host, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScrollIntoView(", host, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScrollViewerViewportMonitor", host, StringComparison.Ordinal);
     }
 
     [Fact]

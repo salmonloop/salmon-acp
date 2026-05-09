@@ -10,7 +10,7 @@ public interface ITranscriptViewportHost : IDisposable
 
     bool TryGetRelativeOffsetWithinItem(int index, out double offset);
 
-    void ScrollItemIntoView(object item);
+    void ScrollItemIntoView(int index);
 
     bool TryGetVerticalOffset(out double verticalOffset);
 

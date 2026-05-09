@@ -3,6 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:vm="using:SalmonEgg.Presentation.ViewModels.Chat"
       xmlns:converters="using:SalmonEgg.Presentation.Converters"
+      xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       mc:Ignorable="d"
@@ -23,7 +24,7 @@
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="MiniTitleBarContent.Padding" Value="12,0" />
-                        <Setter Target="MessagesList.Padding" Value="12" />
+                        <Setter Target="MessagesViewportPadding.Padding" Value="12" />
                         <Setter Target="InputBorder.Padding" Value="12,10,12,16" />
                     </VisualState.Setters>
                 </VisualState>
@@ -34,7 +35,7 @@
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="MiniTitleBarContent.Padding" Value="16,0" />
-                        <Setter Target="MessagesList.Padding" Value="16" />
+                        <Setter Target="MessagesViewportPadding.Padding" Value="16" />
                         <Setter Target="InputBorder.Padding" Value="16,10,16,16" />
                     </VisualState.Setters>
                 </VisualState>
@@ -101,18 +102,30 @@
         </Border>
 
         <!-- Messages -->
-        <ListView x:Name="MessagesList"
-                  Grid.Row="1"
-                  ItemsSource="{x:Bind TranscriptItemsSource, Mode=OneWay}"
-                  ItemTemplateSelector="{StaticResource MessageTemplateSelector}"
-                  Padding="12"
-                  SelectionMode="None"
-                  HorizontalAlignment="Stretch"
-                  MinWidth="0"
-                  Loaded="OnMessagesListLoaded"
-                  Unloaded="OnMessagesListUnloaded"
-                  PointerReleased="OnMessagesListPointerReleased"
-                  LayoutUpdated="OnMessagesListLayoutUpdated" />
+        <ScrollViewer x:Name="MessagesScrollViewer"
+                      Grid.Row="1"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      IsTabStop="True"
+                      HorizontalAlignment="Stretch"
+                      MinWidth="0"
+                      Loaded="OnMessagesListLoaded"
+                      Unloaded="OnMessagesListUnloaded"
+                      PointerReleased="OnMessagesListPointerReleased"
+                      LayoutUpdated="OnMessagesListLayoutUpdated">
+            <Border x:Name="MessagesViewportPadding"
+                    Padding="12">
+                <muxc:ItemsRepeater x:Name="MessagesRepeater"
+                                   ItemsSource="{x:Bind TranscriptItemsSource, Mode=OneWay}"
+                                   ItemTemplate="{StaticResource MessageTemplateSelector}"
+                                   HorizontalAlignment="Stretch"
+                                   MinWidth="0">
+                    <muxc:ItemsRepeater.Layout>
+                        <muxc:StackLayout />
+                    </muxc:ItemsRepeater.Layout>
+                </muxc:ItemsRepeater>
+            </Border>
+        </ScrollViewer>
 
         <!-- Turn Status Bar -->
         <Border Grid.Row="2"

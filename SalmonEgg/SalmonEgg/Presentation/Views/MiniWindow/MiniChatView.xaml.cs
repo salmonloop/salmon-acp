@@ -161,40 +161,31 @@ public sealed partial class MiniChatView : Page
 
     private void OnMessagesListLoaded(object sender, RoutedEventArgs e)
     {
-        ConfigureWindowsTranscriptListView();
         DisposeTranscriptViewportHost();
-        _transcriptViewportHost = MessagesList is null ? null : new ListViewTranscriptViewportHost(MessagesList);
+        _transcriptViewportHost = MessagesScrollViewer is null || MessagesRepeater is null
+            ? null
+            : new ItemsRepeaterTranscriptViewportHost(MessagesScrollViewer, MessagesRepeater, MessagesViewportPadding);
         if (_transcriptViewportHost is not null)
         {
             _transcriptViewportHost.ViewportChanged += OnMessagesListViewportChanged;
         }
 
         _isMessagesListLoaded = true;
-        MessagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);
-        MessagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);
-        MessagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);
+        MessagesScrollViewer?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);
+        MessagesScrollViewer?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);
+        MessagesScrollViewer?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);
         ResumeViewportCoordinatorAfterOverlayIfNeeded();
         TryApplyPendingProjectionRestore();
         TryIssueTranscriptScrollRequest();
         TryRefreshViewportCoordinatorFromView();
     }
 
-    private void ConfigureWindowsTranscriptListView()
-    {
-#if WINDOWS
-        if (MessagesList is not null)
-        {
-            MessagesList.ShowsScrollingPlaceholders = false;
-        }
-#endif
-    }
-
     private void OnMessagesListUnloaded(object sender, RoutedEventArgs e)
     {
         DisposeTranscriptViewportHost();
-        MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);
-        MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);
-        MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);
+        MessagesScrollViewer?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);
+        MessagesScrollViewer?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);
+        MessagesScrollViewer?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);
         _isMessagesListLoaded = false;
     }
 
@@ -389,9 +380,9 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (MessagesList is not null)
+        if (MessagesScrollViewer is not null)
         {
-            _ = MessagesList.Focus(FocusState.Programmatic);
+            _ = MessagesScrollViewer.Focus(FocusState.Programmatic);
         }
 
         if (IsListViewportAtBottom())
@@ -409,9 +400,9 @@ public sealed partial class MiniChatView : Page
 
     private void RegisterUserViewportAttachIntent()
     {
-        if (MessagesList is not null)
+        if (MessagesScrollViewer is not null)
         {
-            _ = MessagesList.Focus(FocusState.Programmatic);
+            _ = MessagesScrollViewer.Focus(FocusState.Programmatic);
         }
 
         _attachToBottomIntentPending = true;
@@ -757,7 +748,7 @@ public sealed partial class MiniChatView : Page
             }
 
             _pendingRestoreRequestedMaterializationIndex = index;
-            _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory[index]);
+            _transcriptViewportHost.ScrollItemIntoView(index);
             SchedulePendingProjectionRestoreRetry();
             return;
         }
@@ -940,7 +931,7 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory[^1]);
+        _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory.Count - 1);
     }
 
     private void RequestScrollToBottom()
@@ -949,7 +940,7 @@ public sealed partial class MiniChatView : Page
         {
             if (ViewModel.MessageHistory.Count > 0)
             {
-                _transcriptViewportHost?.ScrollItemIntoView(ViewModel.MessageHistory[^1]);
+                _transcriptViewportHost?.ScrollItemIntoView(ViewModel.MessageHistory.Count - 1);
             }
         }
         catch
@@ -1171,7 +1162,7 @@ public sealed partial class MiniChatView : Page
             || !_isLoaded
             || !ViewModel.IsSessionActive
             || !_isMessagesListLoaded
-            || MessagesList is null
+            || MessagesScrollViewer is null
             || string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId)
             || ViewModel.MessageHistory.Count <= 0)
         {
@@ -1235,9 +1226,9 @@ public sealed partial class MiniChatView : Page
         {
             _attachToBottomIntentPending = true;
             _pointerScrollReleasePending = false;
-            if (MessagesList is not null)
+            if (MessagesScrollViewer is not null)
             {
-                _ = MessagesList.Focus(FocusState.Programmatic);
+                _ = MessagesScrollViewer.Focus(FocusState.Programmatic);
             }
 
             return;
@@ -1250,9 +1241,9 @@ public sealed partial class MiniChatView : Page
 
         _pointerScrollIntentPending = true;
         _pointerScrollReleasePending = false;
-        if (MessagesList is not null)
+        if (MessagesScrollViewer is not null)
         {
-            _ = MessagesList.Focus(FocusState.Programmatic);
+            _ = MessagesScrollViewer.Focus(FocusState.Programmatic);
         }
     }
 

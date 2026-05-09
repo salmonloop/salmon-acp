@@ -57,4 +57,5 @@ public class MessageTemplateSelector : DataTemplateSelector
             _ => null
         };
     }
+
 }
