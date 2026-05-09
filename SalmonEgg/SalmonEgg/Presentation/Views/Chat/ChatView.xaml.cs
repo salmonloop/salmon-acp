@@ -17,6 +17,7 @@ public sealed partial class ChatView : Page
 {
         public ChatShellViewModel ShellViewModel { get; }
         public ChatViewModel ViewModel => ShellViewModel.Chat;
+        public ListViewTranscriptItemsSource MessagesItemsSource { get; } = new();
         public ShellLayoutViewModel LayoutVM => ShellViewModel.ShellLayout;
         public UiMotion Motion => UiMotion.Current;
         private bool _isViewLoaded;
@@ -111,6 +112,7 @@ public sealed partial class ChatView : Page
                 }
                 ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
                 ViewModel.ProjectionRestoreReady -= OnProjectionRestoreReady;
+                MessagesItemsSource.Detach();
                 _isTrackingMessages = false;
             }
         }
@@ -127,6 +129,7 @@ public sealed partial class ChatView : Page
                     }
 
                     _trackedMessageHistory = ViewModel.MessageHistory;
+                    MessagesItemsSource.Attach(ViewModel.MessageHistory);
                     _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
                 }
 
@@ -134,6 +137,7 @@ public sealed partial class ChatView : Page
             }
 
             _trackedMessageHistory = ViewModel.MessageHistory;
+            MessagesItemsSource.Attach(ViewModel.MessageHistory);
             _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
             ViewModel.PropertyChanged += OnViewModelPropertyChanged;
             ViewModel.ProjectionRestoreReady += OnProjectionRestoreReady;

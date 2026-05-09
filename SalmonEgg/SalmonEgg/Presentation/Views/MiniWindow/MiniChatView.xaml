@@ -104,7 +104,7 @@
         <ListView x:Name="MessagesList"
                   Grid.Row="1"
                   AutomationProperties.AutomationId="ChatView.MessagesList"
-                  ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}"
+                  ItemsSource="{x:Bind MessagesItemsSource, Mode=OneWay}"
                   ItemTemplateSelector="{StaticResource MessageTemplateSelector}"
                   Padding="12"
                   SelectionMode="None"

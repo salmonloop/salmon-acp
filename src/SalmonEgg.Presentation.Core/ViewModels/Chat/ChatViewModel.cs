@@ -193,6 +193,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private string? _visibleTranscriptConversationId;
     private string? _activeVoiceInputRequestId;
     private string _voiceInputBasePrompt = string.Empty;
+    private readonly object _pendingUiProjectionSync = new();
+    private ChatUiProjection? _pendingUiProjection;
+    private int _pendingUiProjectionSequence;
+    private bool _uiProjectionDrainScheduled;
 
     /// <summary>
     /// Local conversation binding connects a stable UI ConversationId to a transient ACP RemoteSessionId.
@@ -1073,32 +1077,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
         try
         {
-            var projectionSequence = Interlocked.Increment(ref _storeProjectionSequence);
             var latestConnectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
             var projection = CreateProjection(state, latestConnectionState);
-            var projectionTask = PostToUiAsync(() =>
-            {
-                if (token.IsCancellationRequested || _disposed)
-                {
-                    return;
-                }
-
-                if (projectionSequence != Volatile.Read(ref _storeProjectionSequence))
-                {
-                    return;
-                }
-
-                if (!ShouldApplyStoreProjection(
-                        projection,
-                        _conversationActivationOrchestrator.CurrentActivationVersion))
-                {
-                    return;
-                }
-
-                ApplyStoreProjection(projection);
-            });
-
-            await AwaitUiProjectionAsync(projectionTask, token).ConfigureAwait(false);
+            QueueLatestUiProjection(projection, token, ct);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
         {
@@ -1472,6 +1453,87 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     /// </summary>
     private Task PostToUiAsync(Action action) => _uiDispatcher.EnqueueAsync(action);
     private Task PostToUiAsync(Func<Task> function) => _uiDispatcher.EnqueueAsync(function);
+
+    private void QueueLatestUiProjection(
+        ChatUiProjection projection,
+        CancellationToken lifetimeToken,
+        CancellationToken subscriptionToken)
+    {
+        var projectionSequence = Interlocked.Increment(ref _storeProjectionSequence);
+        var shouldScheduleDrain = false;
+
+        lock (_pendingUiProjectionSync)
+        {
+            _pendingUiProjection = projection;
+            _pendingUiProjectionSequence = projectionSequence;
+            if (_uiProjectionDrainScheduled)
+            {
+                return;
+            }
+
+            _uiProjectionDrainScheduled = true;
+            shouldScheduleDrain = true;
+        }
+
+        if (!shouldScheduleDrain)
+        {
+            return;
+        }
+
+        _uiDispatcher.Enqueue(() => DrainLatestUiProjection(lifetimeToken, subscriptionToken));
+    }
+
+    private void DrainLatestUiProjection(
+        CancellationToken lifetimeToken,
+        CancellationToken subscriptionToken)
+    {
+        while (true)
+        {
+            ChatUiProjection? projection;
+            int projectionSequence;
+            lock (_pendingUiProjectionSync)
+            {
+                projection = _pendingUiProjection;
+                _pendingUiProjection = null;
+                projectionSequence = _pendingUiProjectionSequence;
+            }
+
+            if (projection is null)
+            {
+                lock (_pendingUiProjectionSync)
+                {
+                    if (_pendingUiProjection is null)
+                    {
+                        _uiProjectionDrainScheduled = false;
+                        return;
+                    }
+                }
+
+                continue;
+            }
+
+            if (lifetimeToken.IsCancellationRequested
+                || subscriptionToken.IsCancellationRequested
+                || _disposed)
+            {
+                continue;
+            }
+
+            if (projectionSequence != Volatile.Read(ref _storeProjectionSequence))
+            {
+                continue;
+            }
+
+            if (!ShouldApplyStoreProjection(
+                    projection,
+                    _conversationActivationOrchestrator.CurrentActivationVersion))
+            {
+                continue;
+            }
+
+            ApplyStoreProjection(projection);
+        }
+    }
 
     private static Task AwaitUiProjectionAsync(Task task, CancellationToken cancellationToken)
         => cancellationToken.CanBeCanceled

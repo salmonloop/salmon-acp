@@ -21,7 +21,7 @@ namespace SalmonEgg.Presentation.Core.Tests.Chat;
 public partial class ChatViewModelTests
 {
     [Fact]
-    public async Task ApplyProjection_WhenSessionChanges_ReusesMessageHistory()
+    public async Task ApplyProjection_WhenSessionChanges_ReplacesMessageHistory()
     {
         await using var fixture = CreateViewModel();
         await fixture.ViewModel.RestoreAsync();
@@ -60,7 +60,7 @@ public partial class ChatViewModelTests
             ]
         });
 
-        Assert.Same(originalHistory, fixture.ViewModel.MessageHistory);
+        Assert.NotSame(originalHistory, fixture.ViewModel.MessageHistory);
         Assert.Collection(
             fixture.ViewModel.MessageHistory,
             message =>
@@ -244,7 +244,7 @@ public partial class ChatViewModelTests
 public sealed class ChatTranscriptProjectionCoordinatorUnitTests
 {
     [Fact]
-    public async Task ApplyProjection_WhenSessionChanges_ReusesCollectionAndSavesPreviewOnce()
+    public async Task ApplyProjection_WhenSessionChanges_ReplacesCollectionAndSavesPreviewOnce()
     {
         var previewStore = new Mock<IConversationPreviewStore>();
         previewStore.Setup(store => store.SaveAsync(It.IsAny<ConversationPreviewSnapshot>(), default))
@@ -270,7 +270,8 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
             {
                 owner = hasVisibleTranscript ? conversationId : conversationId;
                 return true;
-            });
+            },
+            value => history = value);
 
         coordinator.ApplyProjection(
             context,
@@ -300,7 +301,7 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
             ],
             isHydrating: false);
 
-        Assert.Same(originalHistory, history);
+        Assert.NotSame(originalHistory, history);
         Assert.Collection(
             history,
             message =>

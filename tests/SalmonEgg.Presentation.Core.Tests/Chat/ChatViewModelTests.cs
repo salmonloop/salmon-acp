@@ -16692,6 +16692,49 @@ public partial class ChatViewModelTests
         Assert.Equal("message-0", fixture.ViewModel.MessageHistory[0].Id);
         Assert.Equal("message-200", fixture.ViewModel.MessageHistory[^1].Id);
     }
+
+    [Fact]
+    public async Task StoreProjection_WhenManyUpdatesArriveBeforeUiDrain_CoalescesToSinglePendingUiApply()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+        syncContext.RunAll();
+
+        var baselinePendingCount = syncContext.PendingCount;
+
+        ValueTask lastUpdateTask = ValueTask.CompletedTask;
+        for (var index = 0; index < 20; index++)
+        {
+            var conversationId = "conv-coalesce";
+            var messageId = $"message-{index}";
+            lastUpdateTask = fixture.UpdateStateAsync(state => state with
+            {
+                HydratedConversationId = conversationId,
+                Transcript =
+                [
+                    new ConversationMessageSnapshot
+                    {
+                        Id = messageId,
+                        ContentType = "text",
+                        TextContent = $"Message {index}",
+                        Timestamp = new DateTime(2026, 5, 10, 0, 0, 0, DateTimeKind.Utc).AddSeconds(index)
+                    }
+                ]
+            });
+        }
+
+        await WaitForConditionAsync(() => Task.FromResult(syncContext.PendingCount > baselinePendingCount));
+        Assert.Equal(
+            baselinePendingCount + 1,
+            syncContext.PendingCount);
+        await syncContext.RunUntilCompletedAsync(lastUpdateTask.AsTask());
+
+        Assert.Equal("conv-coalesce", fixture.ViewModel.CurrentSessionId);
+        Assert.Single(fixture.ViewModel.MessageHistory);
+        Assert.Equal("message-19", fixture.ViewModel.MessageHistory[0].Id);
+        Assert.Equal("Message 19", fixture.ViewModel.MessageHistory[0].TextContent);
+    }
 }
 
 

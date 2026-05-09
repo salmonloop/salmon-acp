@@ -17,6 +17,7 @@ public sealed partial class MiniChatView : Page
 {
     public ChatShellViewModel ShellViewModel { get; }
     public ChatViewModel ViewModel => ShellViewModel.Chat;
+    public ListViewTranscriptItemsSource MessagesItemsSource { get; } = new();
     private bool _isLoaded;
     private bool _isMessagesListLoaded;
     private bool _isTrackingViewModel;
@@ -180,6 +181,7 @@ public sealed partial class MiniChatView : Page
                 }
 
                 _trackedMessageHistory = ViewModel.MessageHistory;
+                MessagesItemsSource.Attach(ViewModel.MessageHistory);
                 _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
             }
 
@@ -187,6 +189,7 @@ public sealed partial class MiniChatView : Page
         }
 
         _trackedMessageHistory = ViewModel.MessageHistory;
+        MessagesItemsSource.Attach(ViewModel.MessageHistory);
         _trackedMessageHistory.CollectionChanged += OnMessageHistoryChanged;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.ProjectionRestoreReady += OnProjectionRestoreReady;
@@ -208,6 +211,7 @@ public sealed partial class MiniChatView : Page
 
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         ViewModel.ProjectionRestoreReady -= OnProjectionRestoreReady;
+        MessagesItemsSource.Detach();
         _isTrackingViewModel = false;
     }
 

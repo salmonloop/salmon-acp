@@ -137,8 +137,8 @@ public sealed class ChatViewXamlTests
         Assert.DoesNotContain("TryExpandOlderRenderedTranscriptWindow", miniChatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", miniChatViewCode, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind MessagesItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind MessagesItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n        {\r\n            var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n            TryApplyPendingProjectionRestore();", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n    {\r\n        var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n        TryApplyPendingProjectionRestore();", miniChatViewCode, StringComparison.Ordinal);
     }
@@ -174,8 +174,14 @@ public sealed class ChatViewXamlTests
         Assert.Contains("<ItemsStackPanel", chatViewXaml, StringComparison.Ordinal);
         Assert.Contains("<ItemsStackPanel", miniChatViewXaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.MessagesList\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind MessagesItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind MessagesItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ListViewTranscriptItemsSource", LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ListViewTranscriptItemsSource.cs"), StringComparison.Ordinal);
+        Assert.Contains("IItemsRangeInfo", LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ListViewTranscriptItemsSource.cs"), StringComparison.Ordinal);
+        Assert.Contains("MessagesItemsSource.Attach(ViewModel.MessageHistory);", LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs"), StringComparison.Ordinal);
+        Assert.Contains("MessagesItemsSource.Attach(ViewModel.MessageHistory);", LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"), StringComparison.Ordinal);
+        Assert.Contains("MessagesItemsSource.Detach();", LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs"), StringComparison.Ordinal);
+        Assert.Contains("MessagesItemsSource.Detach();", LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"), StringComparison.Ordinal);
         Assert.Contains("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
         Assert.Contains("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
         Assert.Contains("SelectionMode=\"None\"", chatViewXaml, StringComparison.Ordinal);
