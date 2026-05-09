@@ -213,6 +213,46 @@ public sealed class ChatSkeletonSmokeTests
     }
 
     [SkippableFact]
+    public void LocalSession_WithLargeVariableHeightTranscript_ScrollPercentDoesNotSnapToStart()
+    {
+        using var appData = GuiAppDataScope.CreateDeterministicVariableHeightTranscriptData(messageCount: 400);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-variable-height-session-01", TimeSpan.FromSeconds(15));
+        session.ActivateElement(sessionItem);
+
+        var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+        Assert.True(
+            WaitForViewportState(session, "bottom", TimeSpan.FromSeconds(10)),
+            $"Transcript viewport did not settle to bottom before variable-height scroll scenario. State='{session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'.");
+
+        Assert.True(messagesList.Patterns.Scroll.IsSupported, "Messages ListView must expose the native ScrollPattern.");
+        var scroll = messagesList.Patterns.Scroll.Pattern;
+        Assert.True(scroll.VerticallyScrollable.Value, "Messages ListView should be vertically scrollable for the large transcript.");
+
+        var observedPercents = new List<double>();
+        var observedVisibleMessages = new List<string>();
+        foreach (var targetPercent in new[] { 80d, 74d, 68d, 62d, 56d, 50d, 44d, 38d, 33d })
+        {
+            scroll.SetScrollPercent(-1d, targetPercent);
+            Thread.Sleep(250);
+            observedPercents.Add(scroll.VerticalScrollPercent.Value);
+            observedVisibleMessages.Add(string.Join(
+                ",",
+                session.GetVisibleTexts(messagesList)
+                    .Where(text => text.Contains("GUI variable message", StringComparison.Ordinal))
+                    .Take(3)));
+        }
+
+        var finalPercent = observedPercents[^1];
+        var viewportState = session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        var viewportDebug = session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        Assert.True(
+            finalPercent >= 20d && finalPercent <= 46d,
+            $"Expected final scroll percent near 33, actual {finalPercent:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Observed percents=[{string.Join(", ", observedPercents.Select(value => value.ToString("0.##")))}]. Visible=[{string.Join(" | ", observedVisibleMessages)}].");
+    }
+
+    [SkippableFact]
     public void MarkdownSession_AfterDiscoverRoundTrip_RetainsRenderedCodeAndDoesNotCrash()
     {
         using var appData = GuiAppDataScope.CreateDeterministicMarkdownRenderData();

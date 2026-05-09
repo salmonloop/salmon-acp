@@ -2,7 +2,6 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chatVm="using:SalmonEgg.Presentation.ViewModels.Chat"
-    xmlns:behaviors="using:SalmonEgg.Presentation.Behaviors"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:controls="using:SalmonEgg.Controls"
     xmlns:models="using:SalmonEgg.Presentation.Models"
@@ -150,7 +149,6 @@
                     <controls:ResponsiveContentHost.Child>
                         <ListView x:Name="MessagesList"
                                   AutomationProperties.AutomationId="ChatView.MessagesList"
-                                  behaviors:ScrollViewerViewportMonitor.IsEnabled="True"
                                   ItemsSource="{x:Bind TranscriptItemsSource, Mode=OneWay}"
                                   ItemTemplateSelector="{StaticResource MessageTemplateSelector}"
                                   Padding="20"

@@ -76,7 +76,7 @@ public sealed class TranscriptViewportCoordinator
             var detachedState = existing with
             {
                 Mode = hasRestoreToken
-                    ? TranscriptViewportState.DetachedPendingRestore
+                    ? TranscriptViewportState.DetachedRestoring
                     : TranscriptViewportState.DetachedByUser,
                 LastActivationGeneration = evt.Generation,
                 RestorePending = false,
@@ -87,10 +87,13 @@ public sealed class TranscriptViewportCoordinator
                 evt,
                 detachedState,
                 isAutoFollowAttached: false,
-                TranscriptViewportCommandKind.None,
                 hasRestoreToken
-                    ? "WarmReturnPendingRestore"
-                    : "WarmReturnPreserveDetached");
+                    ? TranscriptViewportCommandKind.RequestRestore
+                    : TranscriptViewportCommandKind.None,
+                hasRestoreToken
+                    ? "WarmReturnDispatchRestore"
+                    : "WarmReturnPreserveDetached",
+                restoreToken: existing.RestoreToken);
         }
 
         return Transition(

@@ -5,7 +5,7 @@ namespace SalmonEgg.Presentation.Core.Tests.Chat;
 public sealed class ChatMarkdownRenderPolicyTests
 {
     [Theory]
-    [InlineData("text", false, "hello", ChatMarkdownRenderMode.MarkdownReady)]
+    [InlineData("text", false, "hello", ChatMarkdownRenderMode.PlainStreaming)]
     [InlineData("text", true, "hello", ChatMarkdownRenderMode.PlainStreaming)]
     [InlineData("tool_call", false, "hello", ChatMarkdownRenderMode.PlainStreaming)]
     public void Resolve_AppliesScopeRules(
@@ -38,6 +38,20 @@ public sealed class ChatMarkdownRenderPolicyTests
     {
         const string text = "```csharp\nvar a = 1;\n```";
 
+        var mode = ChatMarkdownRenderPolicy.Resolve("text", false, text, isFallbackSticky: false);
+
+        Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, mode);
+    }
+
+    [Theory]
+    [InlineData("# heading")]
+    [InlineData("- item")]
+    [InlineData("> quote")]
+    [InlineData("Use `code` here")]
+    [InlineData("**bold** text")]
+    [InlineData("[label](https://example.com)")]
+    public void Resolve_WhenMarkdownSyntaxExists_SwitchesToMarkdownReady(string text)
+    {
         var mode = ChatMarkdownRenderPolicy.Resolve("text", false, text, isFallbackSticky: false);
 
         Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, mode);

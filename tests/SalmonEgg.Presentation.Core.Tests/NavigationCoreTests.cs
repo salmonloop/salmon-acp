@@ -527,6 +527,56 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void ChatViewsCodeBehind_NativeViewportMovementUsesSharedDetachedRoute()
+    {
+        foreach (var path in new[]
+        {
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"
+        })
+        {
+            var code = LoadFile(path);
+            var refreshSection = ExtractSection(
+                code,
+                "private void TryRefreshViewportCoordinatorFromView",
+                "private void ApplyViewportCommand");
+            var helperSection = ExtractSection(
+                code,
+                "private bool ShouldDetachForNativeViewportMovement",
+                "private void ApplyViewportCommand");
+
+            Assert.Contains("if (ShouldDetachForNativeViewportMovement(fact))", refreshSection, StringComparison.Ordinal);
+            Assert.Contains("RegisterUserViewportDetachment();", refreshSection, StringComparison.Ordinal);
+            Assert.Contains("_viewportCoordinator.IsAutoFollowAttached", helperSection, StringComparison.Ordinal);
+            Assert.Contains("!_transcriptScrollSettler.HasPendingWork", helperSection, StringComparison.Ordinal);
+            Assert.Contains("!fact.IsProgrammaticScrollInFlight", helperSection, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void ChatViewsCodeBehind_UseTranscriptViewportHostInsteadOfDirectListViewViewportApis()
+    {
+        foreach (var path in new[]
+        {
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"
+        })
+        {
+            var code = LoadFile(path);
+
+            Assert.Contains("ITranscriptViewportHost", code, StringComparison.Ordinal);
+            Assert.Contains("ListViewTranscriptViewportHost", code, StringComparison.Ordinal);
+            Assert.Contains("ConfigureWindowsTranscriptListView", code, StringComparison.Ordinal);
+            Assert.Contains("MessagesList.ShowsScrollingPlaceholders = false;", code, StringComparison.Ordinal);
+            Assert.Contains("#if WINDOWS", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("ContainerFromIndex(", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("ScrollIntoView(", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("ScrollViewerViewportMonitor.", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("RegisterPropertyChangedCallback(", code, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void ChatViewCodeBehind_WarmAndOverlayResumeActivateCoordinatorInsteadOfRedetach()
     {
         var code = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");

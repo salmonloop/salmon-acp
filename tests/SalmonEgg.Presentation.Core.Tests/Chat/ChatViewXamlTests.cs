@@ -151,7 +151,6 @@ public sealed class ChatViewXamlTests
         var coreCollectionCode = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Chat\Transcript\ChatTranscriptVirtualizedMessageCollection.cs");
         var chatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
         var miniChatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
-
         Assert.Contains("IItemsRangeInfo", adapterCode, StringComparison.Ordinal);
         Assert.Contains("RangesChanged(ItemIndexRange visibleRange, IReadOnlyList<ItemIndexRange> trackedItems)", adapterCode, StringComparison.Ordinal);
         Assert.Contains("_rangeCache.ApplyRequiredRanges(ConvertRange(visibleRange), trackedRanges);", adapterCode, StringComparison.Ordinal);
@@ -161,6 +160,14 @@ public sealed class ChatViewXamlTests
         Assert.DoesNotContain("_source.ApplyRequiredRanges", adapterCode, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ListView x:Name=\"MessagesList\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ListView x:Name=\"MessagesList\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowsScrollingPlaceholders", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowsScrollingPlaceholders", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScrollViewerViewportMonitor", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScrollViewerViewportMonitor", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<muxc:ItemsRepeater", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<muxc:ItemsRepeater", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("public void ApplyRequiredRanges", coreCollectionCode, StringComparison.Ordinal);
         Assert.DoesNotContain("Microsoft.UI.Xaml", coreCollectionCode, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemIndexRange", coreCollectionCode, StringComparison.Ordinal);

@@ -129,6 +129,44 @@ internal sealed class GuiAppDataScope : IDisposable
         return scope;
     }
 
+    public static GuiAppDataScope CreateDeterministicVariableHeightTranscriptData(int messageCount = 400)
+    {
+        if (messageCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(messageCount));
+        }
+
+        GuiTestGate.RequireEnabled();
+        WindowsGuiAppSession.StopAllRunningInstances();
+
+        var appDataRoot = ResolveAppDataRoot();
+        var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
+        var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
+        var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
+        var projectRootPath = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", "variable-height-project-1");
+
+        var scope = new GuiAppDataScope(
+            appDataRoot,
+            appYamlPath,
+            conversationsPath,
+            serverYamlPath: null,
+            secondaryServerYamlPath: null,
+            File.Exists(appYamlPath) ? File.ReadAllBytes(appYamlPath) : null,
+            File.Exists(appYamlPath),
+            File.Exists(conversationsPath) ? File.ReadAllBytes(conversationsPath) : null,
+            File.Exists(conversationsPath),
+            originalServerYaml: null,
+            serverYamlExisted: false,
+            originalSecondaryServerYaml: null,
+            secondaryServerYamlExisted: false,
+            projectRootPath,
+            previousGuiAppDataRootOverride);
+
+        scope.SeedVariableHeightTranscript(messageCount);
+        return scope;
+    }
+
     public static GuiAppDataScope CreateDeterministicMarkdownRenderData()
     {
         GuiTestGate.RequireEnabled();
@@ -574,6 +612,19 @@ internal sealed class GuiAppDataScope : IDisposable
             Encoding.UTF8);
     }
 
+    private void SeedVariableHeightTranscript(int messageCount)
+    {
+        Directory.CreateDirectory(_configDirectory);
+        Directory.CreateDirectory(_conversationsDirectory);
+        Directory.CreateDirectory(_projectRootPath);
+
+        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        File.WriteAllText(
+            _conversationsPath,
+            BuildVariableHeightConversationsJson(_projectRootPath, messageCount),
+            Encoding.UTF8);
+    }
+
     public void TriggerBackgroundRemoteAgentUpdate(string remoteSessionId, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remoteSessionId);
@@ -805,6 +856,62 @@ internal sealed class GuiAppDataScope : IDisposable
         };
 
         return JsonSerializer.Serialize(document);
+    }
+
+    private static string BuildVariableHeightConversationsJson(string projectRootPath, int messageCount)
+    {
+        var timestamp = new DateTimeOffset(2026, 05, 08, 10, 00, 00, TimeSpan.Zero);
+        var messages = Enumerable.Range(1, messageCount)
+            .Select(messageIndex => new
+            {
+                id = $"vh-{messageIndex}",
+                timestamp = timestamp.AddSeconds(messageIndex),
+                contentType = "text",
+                textContent = BuildVariableHeightMessageText(messageIndex),
+                isOutgoing = messageIndex % 3 == 0
+            })
+            .Cast<object>()
+            .ToArray();
+
+        var document = new
+        {
+            version = 1,
+            lastActiveConversationId = (string?)null,
+            conversations = new object[]
+            {
+                new
+                {
+                    conversationId = "gui-variable-height-session-01",
+                    displayName = "GUI Variable Height Session 01",
+                    createdAt = timestamp,
+                    lastUpdatedAt = timestamp.AddSeconds(messageCount),
+                    cwd = projectRootPath,
+                    messages
+                }
+            }
+        };
+
+        return JsonSerializer.Serialize(document);
+    }
+
+    private static string BuildVariableHeightMessageText(int messageIndex)
+    {
+        if (messageIndex % 11 == 0)
+        {
+            return string.Join(
+                Environment.NewLine,
+                Enumerable.Range(1, 18)
+                    .Select(line => $"GUI variable message {messageIndex:000} expanded line {line:00} with enough text to wrap inside the transcript viewport"));
+        }
+
+        if (messageIndex % 5 == 0)
+        {
+            return $"GUI variable message {messageIndex:000} medium content " + string.Join(
+                " ",
+                Enumerable.Repeat("wrap-segment", 30));
+        }
+
+        return $"GUI variable message {messageIndex:000}";
     }
 
     private static string BuildMarkdownRenderConversationsJson(string projectRootPath)

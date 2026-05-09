@@ -5,13 +5,12 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using SalmonEgg.Presentation.Behaviors;
 using SalmonEgg.Presentation.Collections;
 using SalmonEgg.Presentation.Models;
+using SalmonEgg.Presentation.Transcript;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
-using Windows.Foundation;
 
 namespace SalmonEgg.Presentation.Views.Chat;
 
@@ -52,10 +51,10 @@ public sealed partial class ChatView : Page
         private bool _pendingRestoreRetryScheduled;
         private string _transcriptViewportAutomationState = "inactive";
         private INotifyCollectionChanged? _trackedMessageHistory;
-        private long _messagesListViewportTokenCallback;
         private readonly Microsoft.UI.Xaml.Input.KeyEventHandler _messagesListHandledKeyDownHandler;
         private readonly PointerEventHandler _messagesListHandledPointerPressedHandler;
         private readonly PointerEventHandler _messagesListHandledPointerWheelChangedHandler;
+        private ITranscriptViewportHost? _transcriptViewportHost;
         private bool _isSessionHeaderLayoutHooked;
         private const double SessionHeaderMediumWidthThreshold = 720;
         private const double SessionHeaderWideWidthThreshold = 1080;
@@ -123,6 +122,7 @@ public sealed partial class ChatView : Page
             _pointerScrollReleasePending = false;
             _scrollToBottomScheduled = false;
             _activeTranscriptScrollGeneration = -1;
+            DisposeTranscriptViewportHost();
             ClearPendingProjectionRestore();
             UnhookSessionHeaderLayoutState();
             ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.ColdEnter);
@@ -210,10 +210,17 @@ public sealed partial class ChatView : Page
 
         private void OnMessagesListLoaded(object sender, RoutedEventArgs e)
         {
+            ConfigureWindowsTranscriptListView();
+            DisposeTranscriptViewportHost();
+            _transcriptViewportHost = MessagesList is null ? null : new ListViewTranscriptViewportHost(MessagesList);
+            if (_transcriptViewportHost is not null)
+            {
+                _transcriptViewportHost.ViewportChanged += OnMessagesListViewportChanged;
+            }
+
             MessagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);
             MessagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);
             MessagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);
-            RegisterViewportMonitor();
             ResumeViewportCoordinatorAfterOverlayIfNeeded();
             BeginLayoutLoadingIfPendingMessages();
             TryApplyPendingProjectionRestore();
@@ -222,12 +229,22 @@ public sealed partial class ChatView : Page
             UpdateTranscriptViewportAutomationState();
         }
 
+        private void ConfigureWindowsTranscriptListView()
+        {
+#if WINDOWS
+            if (MessagesList is not null)
+            {
+                MessagesList.ShowsScrollingPlaceholders = false;
+            }
+#endif
+        }
+
         private void OnMessagesListUnloaded(object sender, RoutedEventArgs e)
         {
+            DisposeTranscriptViewportHost();
             MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);
             MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);
             MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);
-            UnregisterViewportMonitor();
             UpdateTranscriptViewportAutomationState();
         }
 
@@ -256,32 +273,19 @@ public sealed partial class ChatView : Page
             UpdateTranscriptViewportAutomationState();
         }
 
-        private void RegisterViewportMonitor()
+        private void DisposeTranscriptViewportHost()
         {
-            if (MessagesList is null || _messagesListViewportTokenCallback != 0)
+            if (_transcriptViewportHost is null)
             {
                 return;
             }
 
-            _messagesListViewportTokenCallback = MessagesList.RegisterPropertyChangedCallback(
-                ScrollViewerViewportMonitor.ViewportChangeTokenProperty,
-                OnMessagesListViewportChanged);
+            _transcriptViewportHost.ViewportChanged -= OnMessagesListViewportChanged;
+            _transcriptViewportHost.Dispose();
+            _transcriptViewportHost = null;
         }
 
-        private void UnregisterViewportMonitor()
-        {
-            if (MessagesList is null || _messagesListViewportTokenCallback == 0)
-            {
-                return;
-            }
-
-            MessagesList.UnregisterPropertyChangedCallback(
-                ScrollViewerViewportMonitor.ViewportChangeTokenProperty,
-                _messagesListViewportTokenCallback);
-            _messagesListViewportTokenCallback = 0;
-        }
-
-        private void OnMessagesListViewportChanged(DependencyObject sender, DependencyProperty dp)
+        private void OnMessagesListViewportChanged(object? sender, EventArgs e)
         {
             TryApplyPendingProjectionRestore();
             TryRefreshViewportCoordinatorFromView();
@@ -451,13 +455,14 @@ public sealed partial class ChatView : Page
 
         private TranscriptProjectionRestoreToken? TryCaptureProjectionRestoreToken()
         {
-            if (MessagesList is null || ViewModel.MessageHistory.Count <= 0)
+            if (_transcriptViewportHost is null || ViewModel.MessageHistory.Count <= 0)
             {
                 return null;
             }
 
-            var firstVisibleIndex = ResolveFirstVisibleIndex();
-            if (firstVisibleIndex < 0 || firstVisibleIndex >= ViewModel.MessageHistory.Count)
+            if (!_transcriptViewportHost.TryGetFirstVisibleIndex(ViewModel.MessageHistory.Count, out var firstVisibleIndex)
+                || firstVisibleIndex < 0
+                || firstVisibleIndex >= ViewModel.MessageHistory.Count)
             {
                 return null;
             }
@@ -465,43 +470,7 @@ public sealed partial class ChatView : Page
             var message = ViewModel.MessageHistory[firstVisibleIndex];
             return ViewModel.CreateViewportProjectionRestoreToken(
                 message,
-                ResolveRelativeOffsetWithinAnchor(firstVisibleIndex));
-        }
-
-        private int ResolveFirstVisibleIndex()
-        {
-            if (MessagesList is null)
-            {
-                return -1;
-            }
-
-            for (var index = 0; index < ViewModel.MessageHistory.Count; index++)
-            {
-                if (MessagesList.ContainerFromIndex(index) is not ListViewItem container)
-                {
-                    continue;
-                }
-
-                var anchor = container.ContentTemplateRoot as FrameworkElement ?? container;
-                var relativeOrigin = anchor.TransformToVisual(MessagesList).TransformPoint(default);
-                if (relativeOrigin.Y + anchor.ActualHeight >= 0)
-                {
-                    return index;
-                }
-            }
-
-            return -1;
-        }
-
-        private double ResolveRelativeOffsetWithinAnchor(int index)
-        {
-            if (MessagesList?.ContainerFromIndex(index) is not ListViewItem container)
-            {
-                return 0d;
-            }
-
-            var anchor = container.ContentTemplateRoot as FrameworkElement ?? container;
-            return anchor.TransformToVisual(MessagesList).TransformPoint(default).Y;
+                _transcriptViewportHost.TryGetRelativeOffsetWithinItem(firstVisibleIndex, out var offset) ? offset : 0d);
         }
 
         private int ResolveProjectionRestoreIndex(TranscriptProjectionRestoreToken token)
@@ -540,7 +509,7 @@ public sealed partial class ChatView : Page
         private void TryRefreshViewportCoordinatorFromView(bool? lastItemContainerGenerated = null)
         {
             if (!_isViewLoaded
-                || MessagesList is null
+                || _transcriptViewportHost is null
                 || ViewModel.IsActivationOverlayVisible
                 || !ViewModel.IsSessionActive
                 || string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId))
@@ -570,6 +539,12 @@ public sealed partial class ChatView : Page
                 }
             }
 
+            if (ShouldDetachForNativeViewportMovement(fact))
+            {
+                RegisterUserViewportDetachment();
+                return;
+            }
+
             if (_pointerScrollIntentPending)
             {
                 if (!fact.IsAtBottom)
@@ -592,11 +567,43 @@ public sealed partial class ChatView : Page
                 }
             }
 
+            RefreshDetachedViewportRestoreToken(fact);
             ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.ViewportFactChanged(
                 CurrentViewportConversationId,
                 _scrollScheduleGeneration,
                 fact)));
         }
+
+        private void RefreshDetachedViewportRestoreToken(TranscriptViewportFact fact)
+        {
+            if (_viewportCoordinator.State != TranscriptViewportState.DetachedByUser
+                || fact.IsProgrammaticScrollInFlight
+                || !fact.HasItems
+                || !fact.IsReady
+                || fact.IsAtBottom
+                || TryCaptureProjectionRestoreToken() is not { } restoreToken)
+            {
+                return;
+            }
+
+            var currentToken = _viewportCoordinator.GetConversationState(CurrentViewportConversationId)?.RestoreToken;
+            if (currentToken == restoreToken)
+            {
+                return;
+            }
+
+            ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.UserDetached(
+                CurrentViewportConversationId,
+                _scrollScheduleGeneration,
+                restoreToken)));
+        }
+
+        private bool ShouldDetachForNativeViewportMovement(TranscriptViewportFact fact)
+            => _viewportCoordinator.IsAutoFollowAttached
+                && !_transcriptScrollSettler.HasPendingWork
+                && fact.HasItems
+                && !fact.IsAtBottom
+                && !fact.IsProgrammaticScrollInFlight;
 
         private void ApplyViewportCommand(TranscriptViewportCommand command)
         {
@@ -704,11 +711,11 @@ public sealed partial class ChatView : Page
         private void TryApplyPendingProjectionRestore()
         {
             _pendingRestoreRetryScheduled = false;
-            if (_pendingRestoreToken is not { } token
-                || MessagesList is null
-                || !_isViewLoaded)
-            {
-                return;
+        if (_pendingRestoreToken is not { } token
+            || _transcriptViewportHost is null
+            || !_isViewLoaded)
+        {
+            return;
             }
 
             if (!string.Equals(CurrentViewportConversationId, token.ConversationId, StringComparison.Ordinal)
@@ -725,7 +732,7 @@ public sealed partial class ChatView : Page
                 return;
             }
 
-            if (MessagesList.ContainerFromIndex(index) is not ListViewItem)
+            if (!_transcriptViewportHost.HasRealizedItem(index))
             {
                 if (_pendingRestoreRequestedMaterializationIndex == index)
                 {
@@ -746,22 +753,22 @@ public sealed partial class ChatView : Page
                 }
 
                 _pendingRestoreRequestedMaterializationIndex = index;
-                MessagesList.ScrollIntoView(ViewModel.MessageHistory[index]);
+                _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory[index]);
                 SchedulePendingProjectionRestoreRetry();
                 return;
             }
 
             _pendingRestoreRequestedMaterializationIndex = -1;
-            var currentRelativeOffset = ResolveRelativeOffsetWithinAnchor(index);
+            var currentRelativeOffset = _transcriptViewportHost.TryGetRelativeOffsetWithinItem(index, out var relativeOffset)
+                ? relativeOffset
+                : 0d;
             if (Math.Abs(currentRelativeOffset - token.OffsetHint) <= 1d)
             {
                 ConfirmPendingProjectionRestore(token);
                 return;
             }
 
-            var verticalOffset = ScrollViewerViewportMonitor.GetVerticalOffset(MessagesList);
-            var scrollViewer = ScrollViewerViewportMonitor.GetAttachedScrollViewer(MessagesList);
-            if (verticalOffset < 0 || scrollViewer is null)
+            if (!_transcriptViewportHost.TryGetVerticalOffset(out var verticalOffset))
             {
                 if (++_pendingRestoreAttemptCount >= MaxRestoreAttempts)
                 {
@@ -795,7 +802,16 @@ public sealed partial class ChatView : Page
             }
 
             _pendingRestoreRequestedVerticalOffset = targetVerticalOffset;
-            scrollViewer.ChangeView(null, targetVerticalOffset, null, true);
+            if (!_transcriptViewportHost.TrySetVerticalOffset(targetVerticalOffset))
+            {
+                if (++_pendingRestoreAttemptCount >= MaxRestoreAttempts)
+                {
+                    ReportPendingProjectionRestoreUnavailable("ScrollViewerUnavailable");
+                }
+
+                return;
+            }
+
             SchedulePendingProjectionRestoreRetry();
         }
 
@@ -870,9 +886,9 @@ public sealed partial class ChatView : Page
 
         private void RequestScrollToBottom()
         {
-            if (MessagesList != null && ViewModel.MessageHistory.Count > 0)
+            if (_transcriptViewportHost is not null && ViewModel.MessageHistory.Count > 0)
             {
-                MessagesList.ScrollIntoView(ViewModel.MessageHistory.Last());
+                _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory.Last());
             }
         }
 
@@ -1044,7 +1060,7 @@ public sealed partial class ChatView : Page
         private bool CanIssueTranscriptScrollRequest()
         {
             return _isViewLoaded
-                && MessagesList is not null
+                && _transcriptViewportHost is not null
                 && !ViewModel.IsActivationOverlayVisible
                 && ViewModel.IsSessionActive
                 && ViewModel.MessageHistory.Count > 0
@@ -1053,7 +1069,7 @@ public sealed partial class ChatView : Page
 
         private void IssueNativeTranscriptScrollRequest()
         {
-            if (MessagesList is null || ViewModel.MessageHistory.Count <= 0)
+            if (_transcriptViewportHost is null || ViewModel.MessageHistory.Count <= 0)
             {
                 return;
             }
@@ -1080,17 +1096,17 @@ public sealed partial class ChatView : Page
 
         private bool HasLastItemContainerGenerated(int itemCount)
         {
-            if (MessagesList is null || itemCount <= 0)
+            if (_transcriptViewportHost is null || itemCount <= 0)
             {
                 return false;
             }
 
-            return MessagesList.ContainerFromIndex(itemCount - 1) is not null;
+            return _transcriptViewportHost.HasRealizedItem(itemCount - 1);
         }
 
         private bool IsListViewportAtBottom()
         {
-            if (MessagesList is null)
+            if (_transcriptViewportHost is null)
             {
                 return false;
             }
@@ -1101,33 +1117,7 @@ public sealed partial class ChatView : Page
                 return true;
             }
 
-            var monitoredScrollableHeight = ScrollViewerViewportMonitor.GetScrollableHeight(MessagesList);
-            if (monitoredScrollableHeight >= 0)
-            {
-                var monitoredVerticalOffset = ScrollViewerViewportMonitor.GetVerticalOffset(MessagesList);
-                return monitoredScrollableHeight - monitoredVerticalOffset <= GetBottomViewportTolerance();
-            }
-
-            if (!HasLastItemContainerGenerated(itemCount))
-            {
-                return false;
-            }
-
-            if (MessagesList.ContainerFromIndex(itemCount - 1) is not ListViewItem lastItemContainer)
-            {
-                return false;
-            }
-
-            var anchor = lastItemContainer.ContentTemplateRoot as FrameworkElement ?? lastItemContainer;
-            Point relativeOrigin = anchor.TransformToVisual(MessagesList).TransformPoint(default);
-            var lastItemBottom = relativeOrigin.Y + anchor.ActualHeight;
-            var viewportBottom = MessagesList.ActualHeight - BottomThreshold;
-            return lastItemBottom <= viewportBottom + BottomGeometryTolerance;
-        }
-
-        private double GetBottomViewportTolerance()
-        {
-            return BottomThreshold + BottomGeometryTolerance + (MessagesList?.Padding.Bottom ?? 0);
+            return _transcriptViewportHost.IsAtBottom(itemCount, BottomThreshold, BottomGeometryTolerance);
         }
 
         private bool TryAdvanceTranscriptSettleFromLayout(bool? lastItemContainerGenerated = null)
@@ -1169,21 +1159,12 @@ public sealed partial class ChatView : Page
 
         private bool IsLastItemVisiblyAtBottom(int itemCount)
         {
-            if (MessagesList is null || itemCount <= 0)
+            if (_transcriptViewportHost is null || itemCount <= 0)
             {
                 return false;
             }
 
-            if (MessagesList.ContainerFromIndex(itemCount - 1) is not ListViewItem lastItemContainer)
-            {
-                return false;
-            }
-
-            var anchor = lastItemContainer.ContentTemplateRoot as FrameworkElement ?? lastItemContainer;
-            Point relativeOrigin = anchor.TransformToVisual(MessagesList).TransformPoint(default);
-            var lastItemBottom = relativeOrigin.Y + anchor.ActualHeight;
-            var viewportBottom = MessagesList.ActualHeight - BottomThreshold;
-            return lastItemBottom <= viewportBottom + BottomGeometryTolerance;
+            return _transcriptViewportHost.IsLastItemVisiblyAtBottom(itemCount, BottomThreshold, BottomGeometryTolerance);
         }
 
         private TranscriptScrollDecision ReportTranscriptSettleObservation(TranscriptScrollSettleObservation observation)
@@ -1438,8 +1419,8 @@ public sealed partial class ChatView : Page
                 TranscriptViewportState.Settling => "pending",
                 TranscriptViewportState.Following => "bottom",
                 TranscriptViewportState.DetachedByUser => "not_bottom",
-                TranscriptViewportState.DetachedPendingRestore => "not_bottom",
-                TranscriptViewportState.DetachedRestoring => "not_bottom",
+                TranscriptViewportState.DetachedPendingRestore => "pending",
+                TranscriptViewportState.DetachedRestoring => "pending",
                 TranscriptViewportState.Suspended => "loading",
                 _ => "untracked",
             };

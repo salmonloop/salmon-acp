@@ -32,7 +32,7 @@ public sealed class ChatTranscriptVirtualizedMessageCollectionTests
     }
 
     [Fact]
-    public void RangeCache_ProjectsTrackedRangesAndPrunesUntrackedCache()
+    public void RangeCache_ProjectsTrackedRangesAndPrunesItemsOutsideNativeRanges()
     {
         var projectedIndexes = new List<int>();
         var transcript = BuildTranscript(100);
@@ -163,6 +163,31 @@ public sealed class ChatTranscriptVirtualizedMessageCollectionTests
         _ = sut[3];
 
         Assert.Equal([3, 3], projectedIndexes);
+    }
+
+    [Fact]
+    public void RangeCache_PruneChangedItems_DropsItemsWhoseSourceProjectionChanged()
+    {
+        var source = new ChatTranscriptVirtualizedMessageCollection();
+        source.Reset("conv-1", BuildTranscript(10), Project, MatchesSnapshot);
+        var sut = new ChatTranscriptRangeCache(source);
+
+        var original = sut[3];
+        var changedTranscript = BuildTranscript(10).SetItem(
+            3,
+            new ConversationMessageSnapshot
+            {
+                Id = "message-3",
+                Timestamp = new DateTime(2026, 5, 8, 0, 0, 0, DateTimeKind.Utc).AddSeconds(3),
+                ContentType = "text",
+                TextContent = "Changed"
+            });
+        source.Reset("conv-1", changedTranscript, Project, MatchesSnapshot);
+
+        sut.PruneChangedItems();
+
+        Assert.NotSame(original, sut[3]);
+        Assert.Equal("Changed", sut[3].TextContent);
     }
 
     [Fact]

@@ -7,9 +7,8 @@ using Microsoft.UI.Xaml.Input;
 #if WINDOWS
 using Microsoft.UI;
 #endif
-using Windows.Foundation;
-using SalmonEgg.Presentation.Behaviors;
 using SalmonEgg.Presentation.Collections;
+using SalmonEgg.Presentation.Transcript;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
@@ -42,7 +41,6 @@ public sealed partial class MiniChatView : Page
     private bool _scrollToBottomScheduled;
     private int _scrollScheduleGeneration;
     private int _scheduledScrollRequestVersion;
-    private long _messagesListViewportTokenCallback;
     private TranscriptProjectionRestoreToken? _pendingRestoreToken;
     private string? _pendingRestoreConversationId;
     private int _pendingRestoreGeneration = -1;
@@ -54,6 +52,7 @@ public sealed partial class MiniChatView : Page
     private readonly Microsoft.UI.Xaml.Input.KeyEventHandler _messagesListHandledKeyDownHandler;
     private readonly PointerEventHandler _messagesListHandledPointerPressedHandler;
     private readonly PointerEventHandler _messagesListHandledPointerWheelChangedHandler;
+    private ITranscriptViewportHost? _transcriptViewportHost;
 #if WINDOWS
     private Microsoft.UI.Xaml.Controls.TitleBar? _nativeTitleBarControl;
 #endif
@@ -154,7 +153,7 @@ public sealed partial class MiniChatView : Page
         _pointerScrollReleasePending = false;
         _scrollToBottomScheduled = false;
         _activeTranscriptScrollGeneration = -1;
-        UnregisterViewportMonitor();
+        DisposeTranscriptViewportHost();
         ClearPendingProjectionRestore();
         ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.ColdEnter);
         DetachViewModelTracking();
@@ -162,23 +161,40 @@ public sealed partial class MiniChatView : Page
 
     private void OnMessagesListLoaded(object sender, RoutedEventArgs e)
     {
+        ConfigureWindowsTranscriptListView();
+        DisposeTranscriptViewportHost();
+        _transcriptViewportHost = MessagesList is null ? null : new ListViewTranscriptViewportHost(MessagesList);
+        if (_transcriptViewportHost is not null)
+        {
+            _transcriptViewportHost.ViewportChanged += OnMessagesListViewportChanged;
+        }
+
         _isMessagesListLoaded = true;
         MessagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);
         MessagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);
         MessagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);
-        RegisterViewportMonitor();
         ResumeViewportCoordinatorAfterOverlayIfNeeded();
         TryApplyPendingProjectionRestore();
         TryIssueTranscriptScrollRequest();
         TryRefreshViewportCoordinatorFromView();
     }
 
+    private void ConfigureWindowsTranscriptListView()
+    {
+#if WINDOWS
+        if (MessagesList is not null)
+        {
+            MessagesList.ShowsScrollingPlaceholders = false;
+        }
+#endif
+    }
+
     private void OnMessagesListUnloaded(object sender, RoutedEventArgs e)
     {
+        DisposeTranscriptViewportHost();
         MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);
         MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);
         MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);
-        UnregisterViewportMonitor();
         _isMessagesListLoaded = false;
     }
 
@@ -342,32 +358,19 @@ public sealed partial class MiniChatView : Page
         }
     }
 
-    private void RegisterViewportMonitor()
+    private void DisposeTranscriptViewportHost()
     {
-        if (MessagesList is null || _messagesListViewportTokenCallback != 0)
+        if (_transcriptViewportHost is null)
         {
             return;
         }
 
-        _messagesListViewportTokenCallback = MessagesList.RegisterPropertyChangedCallback(
-            ScrollViewerViewportMonitor.ViewportChangeTokenProperty,
-            OnMessagesListViewportChanged);
+        _transcriptViewportHost.ViewportChanged -= OnMessagesListViewportChanged;
+        _transcriptViewportHost.Dispose();
+        _transcriptViewportHost = null;
     }
 
-    private void UnregisterViewportMonitor()
-    {
-        if (MessagesList is null || _messagesListViewportTokenCallback == 0)
-        {
-            return;
-        }
-
-        MessagesList.UnregisterPropertyChangedCallback(
-            ScrollViewerViewportMonitor.ViewportChangeTokenProperty,
-            _messagesListViewportTokenCallback);
-        _messagesListViewportTokenCallback = 0;
-    }
-
-    private void OnMessagesListViewportChanged(DependencyObject sender, DependencyProperty dp)
+    private void OnMessagesListViewportChanged(object? sender, EventArgs e)
     {
         TryApplyPendingProjectionRestore();
         TryRefreshViewportCoordinatorFromView();
@@ -455,13 +458,14 @@ public sealed partial class MiniChatView : Page
 
     private TranscriptProjectionRestoreToken? TryCaptureProjectionRestoreToken()
     {
-        if (MessagesList is null || ViewModel.MessageHistory.Count <= 0)
+        if (_transcriptViewportHost is null || ViewModel.MessageHistory.Count <= 0)
         {
             return null;
         }
 
-        var firstVisibleIndex = ResolveFirstVisibleIndex();
-        if (firstVisibleIndex < 0 || firstVisibleIndex >= ViewModel.MessageHistory.Count)
+        if (!_transcriptViewportHost.TryGetFirstVisibleIndex(ViewModel.MessageHistory.Count, out var firstVisibleIndex)
+            || firstVisibleIndex < 0
+            || firstVisibleIndex >= ViewModel.MessageHistory.Count)
         {
             return null;
         }
@@ -469,43 +473,7 @@ public sealed partial class MiniChatView : Page
         var message = ViewModel.MessageHistory[firstVisibleIndex];
         return ViewModel.CreateViewportProjectionRestoreToken(
             message,
-            ResolveRelativeOffsetWithinAnchor(firstVisibleIndex));
-    }
-
-    private int ResolveFirstVisibleIndex()
-    {
-        if (MessagesList is null)
-        {
-            return -1;
-        }
-
-        for (var index = 0; index < ViewModel.MessageHistory.Count; index++)
-        {
-            if (MessagesList.ContainerFromIndex(index) is not ListViewItem container)
-            {
-                continue;
-            }
-
-            var anchor = container.ContentTemplateRoot as FrameworkElement ?? container;
-            var relativeOrigin = anchor.TransformToVisual(MessagesList).TransformPoint(default);
-            if (relativeOrigin.Y + anchor.ActualHeight >= 0)
-            {
-                return index;
-            }
-        }
-
-        return -1;
-    }
-
-    private double ResolveRelativeOffsetWithinAnchor(int index)
-    {
-        if (MessagesList?.ContainerFromIndex(index) is not ListViewItem container)
-        {
-            return 0d;
-        }
-
-        var anchor = container.ContentTemplateRoot as FrameworkElement ?? container;
-        return anchor.TransformToVisual(MessagesList).TransformPoint(default).Y;
+            _transcriptViewportHost.TryGetRelativeOffsetWithinItem(firstVisibleIndex, out var offset) ? offset : 0d);
     }
 
     private int ResolveProjectionRestoreIndex(TranscriptProjectionRestoreToken token)
@@ -544,7 +512,7 @@ public sealed partial class MiniChatView : Page
     {
         if (!_isLoaded
             || !_isMessagesListLoaded
-            || MessagesList is null
+            || _transcriptViewportHost is null
             || ViewModel.IsActivationOverlayVisible
             || !ViewModel.IsSessionActive
             || string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId))
@@ -557,6 +525,7 @@ public sealed partial class MiniChatView : Page
             IsReady: lastItemContainerGenerated ?? HasLastItemContainerGenerated(ViewModel.MessageHistory.Count),
             IsAtBottom: IsListViewportAtBottom(),
             IsProgrammaticScrollInFlight: _suspendAutoScrollTracking || _scrollToBottomScheduled || _activeTranscriptScrollGeneration >= 0);
+
         if (IsViewportDetachedByUser()
             && _attachToBottomIntentPending
             && !fact.IsProgrammaticScrollInFlight)
@@ -572,6 +541,12 @@ public sealed partial class MiniChatView : Page
                 _attachToBottomIntentPending = false;
                 _pointerScrollReleasePending = false;
             }
+        }
+
+        if (ShouldDetachForNativeViewportMovement(fact))
+        {
+            RegisterUserViewportDetachment();
+            return;
         }
 
         if (_pointerScrollIntentPending)
@@ -596,11 +571,43 @@ public sealed partial class MiniChatView : Page
             }
         }
 
+        RefreshDetachedViewportRestoreToken(fact);
         ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.ViewportFactChanged(
             CurrentViewportConversationId,
             _scrollScheduleGeneration,
             fact)));
     }
+
+    private void RefreshDetachedViewportRestoreToken(TranscriptViewportFact fact)
+    {
+        if (_viewportCoordinator.State != TranscriptViewportState.DetachedByUser
+            || fact.IsProgrammaticScrollInFlight
+            || !fact.HasItems
+            || !fact.IsReady
+            || fact.IsAtBottom
+            || TryCaptureProjectionRestoreToken() is not { } restoreToken)
+        {
+            return;
+        }
+
+        var currentToken = _viewportCoordinator.GetConversationState(CurrentViewportConversationId)?.RestoreToken;
+        if (currentToken == restoreToken)
+        {
+            return;
+        }
+
+        ApplyViewportCommand(_viewportCoordinator.Handle(new TranscriptViewportEvent.UserDetached(
+            CurrentViewportConversationId,
+            _scrollScheduleGeneration,
+            restoreToken)));
+    }
+
+    private bool ShouldDetachForNativeViewportMovement(TranscriptViewportFact fact)
+        => _viewportCoordinator.IsAutoFollowAttached
+            && !_transcriptScrollSettler.HasPendingWork
+            && fact.HasItems
+            && !fact.IsAtBottom
+            && !fact.IsProgrammaticScrollInFlight;
 
     private void ApplyViewportCommand(TranscriptViewportCommand command)
     {
@@ -709,7 +716,7 @@ public sealed partial class MiniChatView : Page
     {
         _pendingRestoreRetryScheduled = false;
         if (_pendingRestoreToken is not { } token
-            || MessagesList is null
+            || _transcriptViewportHost is null
             || !_isLoaded)
         {
             return;
@@ -729,7 +736,7 @@ public sealed partial class MiniChatView : Page
             return;
         }
 
-        if (MessagesList.ContainerFromIndex(index) is not ListViewItem)
+        if (!_transcriptViewportHost.HasRealizedItem(index))
         {
             if (_pendingRestoreRequestedMaterializationIndex == index)
             {
@@ -750,22 +757,22 @@ public sealed partial class MiniChatView : Page
             }
 
             _pendingRestoreRequestedMaterializationIndex = index;
-            MessagesList.ScrollIntoView(ViewModel.MessageHistory[index]);
+            _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory[index]);
             SchedulePendingProjectionRestoreRetry();
             return;
         }
 
         _pendingRestoreRequestedMaterializationIndex = -1;
-        var currentRelativeOffset = ResolveRelativeOffsetWithinAnchor(index);
+        var currentRelativeOffset = _transcriptViewportHost.TryGetRelativeOffsetWithinItem(index, out var relativeOffset)
+            ? relativeOffset
+            : 0d;
         if (Math.Abs(currentRelativeOffset - token.OffsetHint) <= 1d)
         {
             ConfirmPendingProjectionRestore(token);
             return;
         }
 
-        var verticalOffset = ScrollViewerViewportMonitor.GetVerticalOffset(MessagesList);
-        var scrollViewer = ScrollViewerViewportMonitor.GetAttachedScrollViewer(MessagesList);
-        if (verticalOffset < 0 || scrollViewer is null)
+        if (!_transcriptViewportHost.TryGetVerticalOffset(out var verticalOffset))
         {
             if (++_pendingRestoreAttemptCount >= MaxRestoreAttempts)
             {
@@ -799,7 +806,16 @@ public sealed partial class MiniChatView : Page
         }
 
         _pendingRestoreRequestedVerticalOffset = targetVerticalOffset;
-        scrollViewer.ChangeView(null, targetVerticalOffset, null, true);
+        if (!_transcriptViewportHost.TrySetVerticalOffset(targetVerticalOffset))
+        {
+            if (++_pendingRestoreAttemptCount >= MaxRestoreAttempts)
+            {
+                ReportPendingProjectionRestoreUnavailable("ScrollViewerUnavailable");
+            }
+
+            return;
+        }
+
         SchedulePendingProjectionRestoreRetry();
     }
 
@@ -910,7 +926,7 @@ public sealed partial class MiniChatView : Page
     {
         return _isLoaded
             && _isMessagesListLoaded
-            && MessagesList is not null
+            && _transcriptViewportHost is not null
             && !ViewModel.IsActivationOverlayVisible
             && ViewModel.IsSessionActive
             && ViewModel.MessageHistory.Count > 0
@@ -919,12 +935,12 @@ public sealed partial class MiniChatView : Page
 
     private void IssueNativeTranscriptScrollRequest()
     {
-        if (MessagesList is null || ViewModel.MessageHistory.Count <= 0)
+        if (_transcriptViewportHost is null || ViewModel.MessageHistory.Count <= 0)
         {
             return;
         }
 
-        MessagesList.ScrollIntoView(ViewModel.MessageHistory[^1]);
+        _transcriptViewportHost.ScrollItemIntoView(ViewModel.MessageHistory[^1]);
     }
 
     private void RequestScrollToBottom()
@@ -933,7 +949,7 @@ public sealed partial class MiniChatView : Page
         {
             if (ViewModel.MessageHistory.Count > 0)
             {
-                MessagesList.ScrollIntoView(ViewModel.MessageHistory[^1]);
+                _transcriptViewportHost?.ScrollItemIntoView(ViewModel.MessageHistory[^1]);
             }
         }
         catch
@@ -981,12 +997,13 @@ public sealed partial class MiniChatView : Page
             return false;
         }
 
-        return MessagesList.ContainerFromIndex(itemCount - 1) is not null;
+        return _transcriptViewportHost is not null
+            && _transcriptViewportHost.HasRealizedItem(itemCount - 1);
     }
 
     private bool IsListViewportAtBottom()
     {
-        if (!_isMessagesListLoaded || MessagesList is null)
+        if (!_isMessagesListLoaded || _transcriptViewportHost is null)
         {
             return false;
         }
@@ -997,28 +1014,7 @@ public sealed partial class MiniChatView : Page
             return true;
         }
 
-        var monitoredScrollableHeight = ScrollViewerViewportMonitor.GetScrollableHeight(MessagesList);
-        if (monitoredScrollableHeight >= 0)
-        {
-            var monitoredVerticalOffset = ScrollViewerViewportMonitor.GetVerticalOffset(MessagesList);
-            return monitoredScrollableHeight - monitoredVerticalOffset <= GetBottomViewportTolerance();
-        }
-
-        if (MessagesList.ContainerFromIndex(itemCount - 1) is not ListViewItem lastItemContainer)
-        {
-            return false;
-        }
-
-        var anchor = lastItemContainer.ContentTemplateRoot as FrameworkElement ?? lastItemContainer;
-        Point relativeOrigin = anchor.TransformToVisual(MessagesList).TransformPoint(default);
-        var lastItemBottom = relativeOrigin.Y + anchor.ActualHeight;
-        var viewportBottom = MessagesList.ActualHeight - BottomThreshold;
-        return lastItemBottom <= viewportBottom + BottomGeometryTolerance;
-    }
-
-    private double GetBottomViewportTolerance()
-    {
-        return BottomThreshold + BottomGeometryTolerance + (MessagesList?.Padding.Bottom ?? 0);
+        return _transcriptViewportHost.IsAtBottom(itemCount, BottomThreshold, BottomGeometryTolerance);
     }
 
     private bool TryAdvanceTranscriptSettleFromLayout(bool? lastItemContainerGenerated = null)

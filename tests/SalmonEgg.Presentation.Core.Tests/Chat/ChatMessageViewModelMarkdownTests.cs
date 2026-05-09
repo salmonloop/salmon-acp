@@ -32,6 +32,32 @@ public sealed class ChatMessageViewModelMarkdownTests
     }
 
     [Fact]
+    public void AssistantPlainText_UsesPlainStreaming()
+    {
+        var vm = ChatMessageViewModel.CreateFromTextContent(
+            "m-plain",
+            new TextContentBlock("hello"),
+            isOutgoing: false);
+
+        Assert.Equal(ChatMarkdownRenderMode.PlainStreaming, vm.MarkdownRenderMode);
+        Assert.False(vm.ShouldRenderMarkdown);
+        Assert.True(vm.ShouldRenderPlainText);
+    }
+
+    [Fact]
+    public void AssistantInlineMarkdown_UsesMarkdownReady()
+    {
+        var vm = ChatMessageViewModel.CreateFromTextContent(
+            "m-inline",
+            new TextContentBlock("Use `code` here"),
+            isOutgoing: false);
+
+        Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, vm.MarkdownRenderMode);
+        Assert.True(vm.ShouldRenderMarkdown);
+        Assert.False(vm.ShouldRenderPlainText);
+    }
+
+    [Fact]
     public void OutgoingText_AlwaysUsesPlainStreaming()
     {
         var vm = ChatMessageViewModel.CreateFromTextContent(

@@ -57,6 +57,7 @@ public sealed class ChatTranscriptRangeCache
         IReadOnlyList<TranscriptVirtualizationRange> trackedRanges)
     {
         var ranges = BuildValidRanges(visibleRange, trackedRanges);
+        PruneOutsideRanges(ranges);
         foreach (var range in ranges)
         {
             for (var index = range.FirstIndex; index <= range.LastIndex; index++)
@@ -64,8 +65,6 @@ public sealed class ChatTranscriptRangeCache
                 _ = this[index];
             }
         }
-
-        PruneCacheOutside(ranges);
     }
 
     public bool IsItemCached(int index) => _cache.ContainsKey(index);
@@ -94,6 +93,30 @@ public sealed class ChatTranscriptRangeCache
         {
             array.SetValue(this[itemIndex], index + itemIndex);
         }
+    }
+
+    private void PruneOutsideRanges(IReadOnlyList<TranscriptVirtualizationRange> ranges)
+    {
+        foreach (var index in _cache.Keys.ToArray())
+        {
+            if (!IsInAnyRange(index, ranges))
+            {
+                _cache.Remove(index);
+            }
+        }
+    }
+
+    private static bool IsInAnyRange(int index, IReadOnlyList<TranscriptVirtualizationRange> ranges)
+    {
+        foreach (var range in ranges)
+        {
+            if (range.Contains(index))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private List<TranscriptVirtualizationRange> BuildValidRanges(
@@ -130,14 +153,4 @@ public sealed class ChatTranscriptRangeCache
         }
     }
 
-    private void PruneCacheOutside(IReadOnlyList<TranscriptVirtualizationRange> ranges)
-    {
-        foreach (var index in _cache.Keys.ToArray())
-        {
-            if (!ranges.Any(range => range.Contains(index)))
-            {
-                _cache.Remove(index);
-            }
-        }
-    }
 }

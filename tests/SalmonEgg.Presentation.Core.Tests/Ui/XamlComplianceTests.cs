@@ -653,6 +653,17 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void TranscriptViewportHost_ContainsListViewSpecificViewportTraversal()
+    {
+        var host = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ListViewTranscriptViewportHost.cs");
+
+        Assert.Contains("ContainerFromIndex(", host, StringComparison.Ordinal);
+        Assert.Contains("ScrollIntoView(", host, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewerViewportMonitor.SetIsEnabled(_listView, true);", host, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewerViewportMonitor.GetAttachedScrollViewer", host, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AgentProfileEditor_InteractiveTextsExposeLocalizationUids()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AgentProfileEditorPage.xaml");
