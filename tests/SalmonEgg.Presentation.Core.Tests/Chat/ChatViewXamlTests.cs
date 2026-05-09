@@ -161,6 +161,23 @@ public sealed class ChatViewXamlTests
     }
 
     [Fact]
+    public void ChatTranscriptViewport_ViewCodeUsesSharedControllerInsteadOfOwningOrchestrator()
+    {
+        var chatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
+        var miniChatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
+        var controllerCode = LoadText(@"src\SalmonEgg.Presentation.Core\Utilities\TranscriptViewportController.cs");
+
+        Assert.Contains("TranscriptViewportController", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("TranscriptViewportController", miniChatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TranscriptViewportOrchestrator", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TranscriptViewportOrchestrator", miniChatViewCode, StringComparison.Ordinal);
+        Assert.Contains("TranscriptViewportOrchestrator", controllerCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.UI.Xaml", controllerCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScrollViewer", controllerCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ListView", controllerCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
     [Trait("Suite", "Smoke")]
     public void ChatTranscriptVirtualization_UsesNativeListViewBindingWithoutUiTypesInCore()
     {

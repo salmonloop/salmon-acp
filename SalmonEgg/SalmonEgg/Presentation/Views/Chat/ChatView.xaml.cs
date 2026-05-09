@@ -22,7 +22,7 @@ public sealed partial class ChatView : Page
         public UiMotion Motion => UiMotion.Current;
         private bool _isViewLoaded;
         private bool _isTrackingMessages;
-        private readonly TranscriptViewportOrchestrator _viewportOrchestrator = new();
+        private readonly TranscriptViewportController _viewportController = new();
         private const double BottomThreshold = 10;
         private const double BottomGeometryTolerance = 2;
         private const int MaxRestoreAttempts = 8;
@@ -58,20 +58,21 @@ public sealed partial class ChatView : Page
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             _isViewLoaded = true;
-            _viewportOrchestrator.StartLifecycleGeneration();
             _restoreDetachedViewportAfterOverlay = false;
             _restoreDetachedViewportConversationId = null;
             _resumeViewportCoordinatorAfterOverlayPending = false;
-            _viewportOrchestrator.ResetInteractionState();
             ClearPendingProjectionRestore();
-            ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.ColdEnter);
             _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
+            _viewportController.Load(
+                CurrentViewportConversationId,
+                ViewModel.IsSessionActive,
+                _wasOverlayVisible,
+                ViewModel.MessageHistory.Count > 0);
             if (_wasOverlayVisible)
             {
                 _resumeViewportCoordinatorAfterOverlayPending = true;
-                InvalidateViewportCoordinator();
+                ApplyViewportActions(_viewportController.SuspendForOverlay());
             }
-            BeginTranscriptSettleRound();
             EnsureMessageTracking();
             BeginLayoutLoadingIfPendingMessages();
             TryIssueTranscriptScrollRequest();
@@ -90,18 +91,14 @@ public sealed partial class ChatView : Page
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             AbandonPendingProjectionRestore("ViewUnloaded");
-            InvalidateViewportCoordinator();
+            ApplyViewportActions(_viewportController.Unload());
             _isViewLoaded = false;
-            _viewportOrchestrator.StartLifecycleGeneration();
             _restoreDetachedViewportAfterOverlay = false;
             _restoreDetachedViewportConversationId = null;
             _resumeViewportCoordinatorAfterOverlayPending = false;
-            _viewportOrchestrator.ResetInteractionState();
-            _viewportOrchestrator.ResetScheduledScrollState();
             DisposeTranscriptViewportHost();
             ClearPendingProjectionRestore();
             UnhookSessionHeaderLayoutState();
-            ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.ColdEnter);
             UpdateTranscriptViewportAutomationState();
             if (_isTrackingMessages)
             {
@@ -154,33 +151,12 @@ public sealed partial class ChatView : Page
 
             ResumeViewportCoordinatorAfterOverlayIfNeeded();
 
-            if (ViewModel.IsSessionActive
-                && ViewModel.MessageHistory.Count > 0
-                && !_viewportOrchestrator.HasPendingSettle
-                && !IsViewportDetachedByUser())
-            {
-                BeginTranscriptSettleRound();
-            }
-
             BeginLayoutLoadingIfPendingMessages();
             TryApplyPendingProjectionRestore();
-
-            if (_viewportOrchestrator.HasPendingSettle && IsViewportDetachedByUser())
-            {
-                AbortTranscriptSettleRound();
-                RefreshLayoutLoadingState();
-                return;
-            }
-
-            if (TryIssueTranscriptScrollRequest())
-            {
-                return;
-            }
-
-            ApplyViewportCommand(_viewportOrchestrator.Handle(
-                _viewportOrchestrator.CreateTranscriptAppendedEvent(
-                    CurrentViewportConversationId,
-                    e.NewItems?.Count ?? 0)));
+            ApplyViewportActions(_viewportController.OnMessagesAppended(
+                e.NewItems?.Count ?? 0,
+                CreateViewportViewState()));
+            RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
 
             UpdateTranscriptViewportAutomationState();
         }
@@ -237,23 +213,11 @@ public sealed partial class ChatView : Page
             var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);
             RefreshLayoutLoadingState(lastItemContainerGenerated);
 
-            if (_viewportOrchestrator.HasPendingSettle && IsViewportDetachedByUser())
-            {
-                AbortTranscriptSettleRound();
-                RefreshLayoutLoadingState(lastItemContainerGenerated);
-                TryRefreshViewportCoordinatorFromView(lastItemContainerGenerated);
-                UpdateTranscriptViewportAutomationState();
-                return;
-            }
-
-            if (_viewportOrchestrator.HasPendingSettle)
-            {
-                TryAdvanceTranscriptSettleFromLayout(lastItemContainerGenerated);
-                TryIssueTranscriptScrollRequest();
-            }
-
             TryApplyPendingProjectionRestore();
-            TryRefreshViewportCoordinatorFromView(lastItemContainerGenerated);
+            ApplyViewportActions(_viewportController.OnViewportChanged(
+                CreateViewportViewState(lastItemContainerGenerated),
+                TryCaptureProjectionRestoreToken()));
+            RefreshLayoutLoadingState(lastItemContainerGenerated);
             UpdateTranscriptViewportAutomationState();
         }
 
@@ -261,7 +225,7 @@ public sealed partial class ChatView : Page
         {
             if (IsViewportDetachedByUser())
             {
-                _viewportOrchestrator.MarkDetachedViewportInteractionStarted();
+                _viewportController.MarkDetachedViewportInteractionStarted();
                 FocusTranscriptScroller();
                 return;
             }
@@ -271,17 +235,17 @@ public sealed partial class ChatView : Page
                 AbandonPendingProjectionRestore("UserInterrupted");
             }
 
-            _viewportOrchestrator.MarkUserScrollIntentStarted();
+            _viewportController.MarkUserScrollIntentStarted();
             FocusTranscriptScroller();
         }
 
         private void OnMessagesListPointerReleased(object sender, PointerRoutedEventArgs e)
         {
-            _viewportOrchestrator.MarkUserScrollIntentCompleted();
-            var releaseGeneration = _viewportOrchestrator.Generation;
+            _viewportController.MarkUserScrollIntentCompleted();
+            var releaseGeneration = _viewportController.Generation;
             _ = DispatcherQueue.TryEnqueue(() =>
             {
-                if (releaseGeneration != _viewportOrchestrator.Generation
+                if (releaseGeneration != _viewportController.Generation
                     || ViewModel.IsActivationOverlayVisible)
                 {
                     return;
@@ -327,7 +291,8 @@ public sealed partial class ChatView : Page
 
             if (IsViewportDetachedByUser())
             {
-                RegisterUserViewportAttachIntent();
+                FocusTranscriptScroller();
+                ApplyViewportActions(_viewportController.OnUserViewportIntent(CreateViewportViewState()));
                 UpdateTranscriptViewportAutomationState();
                 return;
             }
@@ -336,53 +301,18 @@ public sealed partial class ChatView : Page
 
             if (IsListViewportAtBottom())
             {
-                _viewportOrchestrator.MarkUserScrollIntentStarted();
-                StopInitialScrollForManualInteraction();
+                ApplyViewportActions(_viewportController.OnUserViewportDetachIntent(
+                    CreateViewportViewState(),
+                    TryCaptureProjectionRestoreToken()));
                 UpdateTranscriptViewportAutomationState();
                 return;
             }
 
-            RegisterUserViewportDetachment();
+            ApplyViewportActions(_viewportController.OnUserViewportDetachIntent(
+                CreateViewportViewState(),
+                TryCaptureProjectionRestoreToken()));
+            RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
             UpdateTranscriptViewportAutomationState();
-        }
-
-        private void RegisterUserViewportAttachIntent()
-        {
-            FocusTranscriptScroller();
-            _viewportOrchestrator.MarkAttachToBottomIntent();
-            if (IsListViewportAtBottom())
-            {
-                RegisterUserViewportAttachment();
-            }
-        }
-
-        private void RegisterUserViewportDetachment()
-        {
-            _viewportOrchestrator.ClearAttachIntentOnly();
-            AbandonPendingProjectionRestore("UserInterrupted");
-
-            TranscriptViewportCommand command;
-            if (TryCaptureProjectionRestoreToken() is { } restoreToken)
-            {
-                command = _viewportOrchestrator.Handle(
-                    _viewportOrchestrator.CreateUserDetachedEvent(CurrentViewportConversationId, restoreToken));
-            }
-            else
-            {
-                command = _viewportOrchestrator.Handle(
-                    _viewportOrchestrator.CreateUserIntentScrollEvent(CurrentViewportConversationId));
-            }
-
-            ApplyViewportCommand(command);
-            StopInitialScrollForManualInteraction();
-        }
-
-        private void RegisterUserViewportAttachment()
-        {
-            _viewportOrchestrator.ClearAttachIntent();
-            AbandonPendingProjectionRestore("UserAttached");
-            ApplyViewportCommand(_viewportOrchestrator.Handle(
-                _viewportOrchestrator.CreateUserAttachedEvent(CurrentViewportConversationId)));
         }
 
         private TranscriptProjectionRestoreToken? TryCaptureProjectionRestoreToken()
@@ -407,17 +337,7 @@ public sealed partial class ChatView : Page
 
         private void OnProjectionRestoreReady(object? sender, ProjectionRestoreReadyEventArgs e)
         {
-            if (!_isViewLoaded
-                || !ViewModel.IsSessionActive
-                || string.IsNullOrWhiteSpace(e.ConversationId))
-            {
-                return;
-            }
-
-            ApplyViewportCommand(_viewportOrchestrator.Handle(
-                _viewportOrchestrator.CreateProjectionReadyEvent(
-                    e.ConversationId,
-                    e.ProjectionEpoch)));
+            ApplyViewportActions(_viewportController.OnProjectionReady(e.ConversationId, e.ProjectionEpoch));
             TryApplyPendingProjectionRestore();
             UpdateTranscriptViewportAutomationState();
         }
@@ -433,77 +353,84 @@ public sealed partial class ChatView : Page
                 return;
             }
 
-            var fact = new TranscriptViewportFact(
-                HasItems: ViewModel.MessageHistory.Count > 0,
-                IsReady: lastItemContainerGenerated ?? HasLastItemContainerGenerated(ViewModel.MessageHistory.Count),
+            ApplyViewportActions(_viewportController.OnViewportChanged(
+                CreateViewportViewState(lastItemContainerGenerated),
+                TryCaptureProjectionRestoreToken()));
+        }
+
+        private TranscriptViewportViewState CreateViewportViewState(bool? lastItemContainerGenerated = null)
+        {
+            var messageCount = ViewModel.MessageHistory.Count;
+            var hasMessages = messageCount > 0;
+            return new TranscriptViewportViewState(
+                IsViewReady: _isViewLoaded
+                    && _transcriptViewportHost is not null
+                    && !ViewModel.IsActivationOverlayVisible
+                    && ViewModel.IsSessionActive
+                    && !string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId),
+                IsViewportReady: hasMessages && (lastItemContainerGenerated ?? HasLastItemContainerGenerated(messageCount)),
+                HasMessages: hasMessages,
                 IsAtBottom: IsListViewportAtBottom(),
-                IsProgrammaticScrollInFlight: _viewportOrchestrator.IsProgrammaticScrollInFlight);
-            var observation = _viewportOrchestrator.ObserveViewportFact(
+                IsLastItemVisibleAtBottom: hasMessages && IsLastItemVisiblyAtBottom(messageCount));
+        }
+
+        private void ApplyViewportActions(IReadOnlyList<TranscriptViewportControllerAction> actions)
+        {
+            foreach (var action in actions)
+            {
+                ApplyViewportAction(action);
+            }
+        }
+
+        private void ApplyViewportAction(TranscriptViewportControllerAction action)
+        {
+            switch (action.Kind)
+            {
+                case TranscriptViewportControllerActionKind.ScrollLastMessageIntoView:
+                    if (action.ScrollRequestToken.Generation >= 0)
+                    {
+                        IssueNativeTranscriptScrollRequest(action.ScrollRequestToken);
+                    }
+                    else
+                    {
+                        RequestScrollToBottom();
+                    }
+                    break;
+
+                case TranscriptViewportControllerActionKind.RequestRestore:
+                    if (action.RestoreToken is { } restoreToken)
+                    {
+                        QueueProjectionOwnedRestore(restoreToken, action.Generation);
+                    }
+                    break;
+
+                case TranscriptViewportControllerActionKind.StopProgrammaticScroll:
+                    ClearPendingProjectionRestore();
+                    break;
+
+                case TranscriptViewportControllerActionKind.AutoFollowDetached:
+                    ClearPendingProjectionRestore();
+                    break;
+
+                case TranscriptViewportControllerActionKind.AutoFollowAttached:
+                    ClearPendingProjectionRestore();
+                    break;
+            }
+        }
+
+        private void ActivateViewportForCurrentSession(TranscriptViewportActivationKind activationKind)
+        {
+            ApplyViewportActions(_viewportController.ActivateCurrentConversation(
                 CurrentViewportConversationId,
-                fact,
-                TryCaptureProjectionRestoreToken());
-            ApplyViewportCommand(observation.Command);
-        }
-
-        private void ApplyViewportCommand(TranscriptViewportCommand command)
-        {
-            switch (command.Kind)
-            {
-                case TranscriptViewportCommandKind.IssueScrollToBottom:
-                    ScheduleScrollToBottom();
-                    break;
-
-                case TranscriptViewportCommandKind.RequestRestore:
-                    if (command.RestoreToken is { } restoreToken)
-                    {
-                        QueueProjectionOwnedRestore(restoreToken, command.Generation);
-                    }
-                    break;
-
-                case TranscriptViewportCommandKind.StopProgrammaticScroll:
-                    _viewportOrchestrator.StopProgrammaticScroll();
-                    ClearPendingProjectionRestore();
-                    if (_viewportOrchestrator.HasPendingSettle)
-                    {
-                        AbortTranscriptSettleRound();
-                    }
-                    break;
-
-                case TranscriptViewportCommandKind.MarkAutoFollowDetached:
-                    _viewportOrchestrator.ClearAttachIntentOnly();
-                    _viewportOrchestrator.ClearScrollToBottomScheduled();
-                    ClearPendingProjectionRestore();
-                    break;
-
-                case TranscriptViewportCommandKind.MarkAutoFollowAttached:
-                    _viewportOrchestrator.ClearAttachIntentOnly();
-                    ClearPendingProjectionRestore();
-                    break;
-            }
-        }
-
-        private void ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind activationKind)
-        {
-            ApplyViewportCommand(_viewportOrchestrator.Activate(
-                _isViewLoaded && ViewModel.IsSessionActive
-                    ? CurrentViewportConversationId
-                    : string.Empty,
+                ViewModel.IsSessionActive,
+                ViewModel.IsActivationOverlayVisible,
+                ViewModel.MessageHistory.Count > 0,
                 activationKind));
-        }
-
-        private void InvalidateViewportCoordinator()
-        {
-            if (string.IsNullOrWhiteSpace(CurrentViewportConversationId))
-            {
-                return;
-            }
-
-            ApplyViewportCommand(_viewportOrchestrator.InvalidateContext(CurrentViewportConversationId));
         }
 
         private bool IsViewportDetachedByUser()
         {
-            return _viewportOrchestrator.State is TranscriptViewportState.DetachedByUser
+            return _viewportController.State is TranscriptViewportState.DetachedByUser
                 or TranscriptViewportState.DetachedPendingRestore
                 or TranscriptViewportState.DetachedRestoring;
         }
@@ -513,7 +440,7 @@ public sealed partial class ChatView : Page
         private void QueueProjectionOwnedRestore(TranscriptProjectionRestoreToken token, int generation)
         {
             _projectionRestoreController.Queue(token, generation);
-            _viewportOrchestrator.MarkProjectionRestoreQueued();
+            _viewportController.MarkProjectionRestoreQueued();
             TryApplyPendingProjectionRestore();
         }
 
@@ -528,7 +455,7 @@ public sealed partial class ChatView : Page
                 _transcriptViewportHost,
                 ViewModel.MessageHistory.Count,
                 CurrentViewportConversationId,
-                _viewportOrchestrator.Generation,
+                _viewportController.Generation,
                 ResolveProjectionRestoreIndex));
         }
 
@@ -553,31 +480,22 @@ public sealed partial class ChatView : Page
                 case TranscriptProjectionRestoreResultKind.Confirmed:
                     if (result.Token is { } token)
                     {
-                        ReleaseAutoScrollTracking();
-                        ApplyViewportCommand(_viewportOrchestrator.Handle(
-                            _viewportOrchestrator.CreateRestoreConfirmedEvent(
-                                token.ConversationId,
-                                result.Generation,
-                                token)));
+                        ApplyViewportActions(_viewportController.OnRestoreConfirmed(token, result.Generation));
                     }
                     break;
 
                 case TranscriptProjectionRestoreResultKind.Unavailable:
-                    ReleaseAutoScrollTracking();
-                    ApplyViewportCommand(_viewportOrchestrator.Handle(
-                        _viewportOrchestrator.CreateRestoreUnavailableEvent(
-                            result.ConversationId ?? CurrentViewportConversationId,
-                            result.Generation,
-                            result.Reason ?? "RestoreUnavailable")));
+                    ApplyViewportActions(_viewportController.OnRestoreUnavailable(
+                        result.ConversationId ?? CurrentViewportConversationId,
+                        result.Generation,
+                        result.Reason ?? "RestoreUnavailable"));
                     break;
 
                 case TranscriptProjectionRestoreResultKind.Abandoned:
-                    ReleaseAutoScrollTracking();
-                    ApplyViewportCommand(_viewportOrchestrator.Handle(
-                        _viewportOrchestrator.CreateRestoreAbandonedEvent(
-                            result.ConversationId ?? CurrentViewportConversationId,
-                            result.Generation,
-                            result.Reason ?? "RestoreAbandoned")));
+                    ApplyViewportActions(_viewportController.OnRestoreAbandoned(
+                        result.ConversationId ?? CurrentViewportConversationId,
+                        result.Generation,
+                        result.Reason ?? "RestoreAbandoned"));
                     break;
             }
         }
@@ -592,31 +510,6 @@ public sealed partial class ChatView : Page
             }
         }
 
-        private void ScheduleScrollToBottom()
-        {
-            if (!_viewportOrchestrator.TryBeginScrollToBottomSchedule(ViewModel.CurrentSessionId, out var scheduleToken))
-            {
-                return;
-            }
-
-            if (!DispatcherQueue.TryEnqueue(() =>
-                {
-                    _viewportOrchestrator.ReleaseScrollToBottomSchedule(scheduleToken);
-                    if (!_isViewLoaded
-                        || !ViewModel.IsSessionActive
-                        || ViewModel.MessageHistory.Count <= 0
-                        || !_viewportOrchestrator.CanExecuteScrollToBottomSchedule(scheduleToken, ViewModel.CurrentSessionId))
-                    {
-                        return;
-                    }
-
-                    RequestScrollToBottom();
-                }))
-            {
-                _viewportOrchestrator.ReleaseScrollToBottomSchedule(scheduleToken);
-            }
-        }
-
         private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(ChatViewModel.CurrentSessionId))
@@ -625,7 +518,7 @@ public sealed partial class ChatView : Page
                 _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
                 if (!IsViewportDetachedByUser())
                 {
-                    BeginTranscriptSettleRound();
+                    TryIssueTranscriptScrollRequest();
                 }
                 BeginLayoutLoadingIfPendingMessages();
                 TryIssueTranscriptScrollRequest();
@@ -635,7 +528,7 @@ public sealed partial class ChatView : Page
 
             if (e.PropertyName == nameof(ChatViewModel.IsSessionActive))
             {
-                if (_viewportOrchestrator.State is TranscriptViewportState.DetachedPendingRestore
+                if (_viewportController.State is TranscriptViewportState.DetachedPendingRestore
                     or TranscriptViewportState.DetachedRestoring)
                 {
                     BeginLayoutLoadingIfPendingMessages();
@@ -649,7 +542,7 @@ public sealed partial class ChatView : Page
                 _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
                 if (!IsViewportDetachedByUser())
                 {
-                    BeginTranscriptSettleRound();
+                    TryIssueTranscriptScrollRequest();
                 }
                 BeginLayoutLoadingIfPendingMessages();
                 TryIssueTranscriptScrollRequest();
@@ -660,7 +553,7 @@ public sealed partial class ChatView : Page
             if (e.PropertyName == nameof(ChatViewModel.MessageHistory))
             {
                 EnsureMessageTracking();
-                if (_viewportOrchestrator.State is TranscriptViewportState.DetachedPendingRestore
+                if (_viewportController.State is TranscriptViewportState.DetachedPendingRestore
                     or TranscriptViewportState.DetachedRestoring)
                 {
                     BeginLayoutLoadingIfPendingMessages();
@@ -673,7 +566,7 @@ public sealed partial class ChatView : Page
                 ResetAutoScrollStateForConversationChange();
                 if (!IsViewportDetachedByUser())
                 {
-                    BeginTranscriptSettleRound();
+                    TryIssueTranscriptScrollRequest();
                 }
                 BeginLayoutLoadingIfPendingMessages();
                 TryIssueTranscriptScrollRequest();
@@ -705,7 +598,7 @@ public sealed partial class ChatView : Page
             ViewModel.IsLayoutLoading = InitialLayoutLoadingPolicy.ShouldKeepLoading(
                 isSessionActive: ViewModel.IsSessionActive,
                 messageCount: ViewModel.MessageHistory.Count,
-                hasPendingInitialScroll: _viewportOrchestrator.HasPendingSettle,
+                hasPendingInitialScroll: _viewportController.HasPendingSettle,
                 lastItemContainerGenerated: lastItemContainerGenerated,
                 isHydrating: ViewModel.IsHydrating,
                 isRemoteHydrationPending: ViewModel.IsRemoteHydrationPending);
@@ -714,52 +607,18 @@ public sealed partial class ChatView : Page
 
         private bool TryIssueTranscriptScrollRequest()
         {
-            var decision = _viewportOrchestrator.TryIssueScrollRequest(
-                ViewModel.CurrentSessionId,
-                hasMessages: ViewModel.MessageHistory.Count > 0,
-                isReady: CanIssueTranscriptScrollRequest());
-
-            switch (decision.Action)
-            {
-                case TranscriptScrollAction.IssueScrollRequest:
-                    IssueNativeTranscriptScrollRequest();
-                    RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
-                    TryRefreshViewportCoordinatorFromView();
-                    UpdateTranscriptViewportAutomationState();
-                    return true;
-
-                case TranscriptScrollAction.Completed:
-                case TranscriptScrollAction.Aborted:
-                case TranscriptScrollAction.Exhausted:
-                    ReleaseAutoScrollTracking();
-                    RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
-                    TryRefreshViewportCoordinatorFromView();
-                    UpdateTranscriptViewportAutomationState();
-                    return false;
-
-                default:
-                    return false;
-            }
+            var actions = _viewportController.OnViewportChanged(CreateViewportViewState());
+            ApplyViewportActions(actions);
+            RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
+            UpdateTranscriptViewportAutomationState();
+            return actions.Count > 0;
         }
 
-        private bool CanIssueTranscriptScrollRequest()
+        private void IssueNativeTranscriptScrollRequest(TranscriptScrollRequestToken requestToken)
         {
-            return _isViewLoaded
-                && _transcriptViewportHost is not null
-                && !ViewModel.IsActivationOverlayVisible
-                && ViewModel.IsSessionActive
-                && ViewModel.MessageHistory.Count > 0
-                && !string.IsNullOrWhiteSpace(ViewModel.CurrentSessionId);
-        }
-
-        private void IssueNativeTranscriptScrollRequest()
-        {
-            if (_transcriptViewportHost is null || ViewModel.MessageHistory.Count <= 0)
-            {
-                return;
-            }
-
-            if (!_viewportOrchestrator.TryCaptureActiveScrollRequestToken(ViewModel.CurrentSessionId, out var requestToken))
+            if (_transcriptViewportHost is null
+                || ViewModel.MessageHistory.Count <= 0
+                || !_viewportController.MatchesActiveScrollRequest(requestToken))
             {
                 return;
             }
@@ -771,7 +630,7 @@ public sealed partial class ChatView : Page
                 if (!_isViewLoaded
                     || _transcriptViewportHost is null
                     || ViewModel.MessageHistory.Count <= 0
-                    || !_viewportOrchestrator.MatchesActiveScrollRequest(requestToken, ViewModel.CurrentSessionId))
+                    || !_viewportController.MatchesActiveScrollRequest(requestToken))
                 {
                     return;
                 }
@@ -788,13 +647,13 @@ public sealed partial class ChatView : Page
                 if (!_isViewLoaded
                     || _transcriptViewportHost is null
                     || ViewModel.MessageHistory.Count <= 0
-                    || !_viewportOrchestrator.MatchesActiveScrollRequest(requestToken, ViewModel.CurrentSessionId))
+                    || !_viewportController.MatchesActiveScrollRequest(requestToken))
                 {
                     return;
                 }
 
                 var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);
-                TryAdvanceTranscriptSettleFromLayout(lastItemContainerGenerated);
+                ObserveActiveTranscriptScrollFromLayout(lastItemContainerGenerated);
                 TryIssueTranscriptScrollRequest();
                 TryRefreshViewportCoordinatorFromView(lastItemContainerGenerated);
                 UpdateTranscriptViewportAutomationState();
@@ -827,36 +686,11 @@ public sealed partial class ChatView : Page
             return _transcriptViewportHost.IsAtBottom(itemCount, BottomThreshold, BottomGeometryTolerance);
         }
 
-        private bool TryAdvanceTranscriptSettleFromLayout(bool? lastItemContainerGenerated = null)
+        private bool ObserveActiveTranscriptScrollFromLayout(bool? lastItemContainerGenerated = null)
         {
-            if (!_viewportOrchestrator.HasActiveScrollGeneration)
-            {
-                return false;
-            }
-
-            var observation = ResolveTranscriptScrollObservation(lastItemContainerGenerated);
-            return ApplyTranscriptSettleDecision(
-                ReportTranscriptSettleObservation(observation),
-                HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
-        }
-
-        private TranscriptScrollSettleObservation ResolveTranscriptScrollObservation(bool? lastItemContainerGenerated = null)
-        {
-            var itemCount = ViewModel.MessageHistory.Count;
-            if (itemCount <= 0)
-            {
-                return TranscriptScrollSettleObservation.NotReadyYet;
-            }
-
-            var hasLastItemContainer = lastItemContainerGenerated ?? HasLastItemContainerGenerated(itemCount);
-            if (!hasLastItemContainer)
-            {
-                return TranscriptScrollSettleObservation.NotReadyYet;
-            }
-
-            return IsListViewportAtBottom() && IsLastItemVisiblyAtBottom(itemCount)
-                ? TranscriptScrollSettleObservation.AtBottom
-                : TranscriptScrollSettleObservation.ReadyButNotAtBottom;
+            var actions = _viewportController.OnActiveScrollObservation(CreateViewportViewState(lastItemContainerGenerated));
+            ApplyViewportActions(actions);
+            return actions.Count > 0;
         }
 
         private bool IsLastItemVisiblyAtBottom(int itemCount)
@@ -869,66 +703,9 @@ public sealed partial class ChatView : Page
             return _transcriptViewportHost.IsLastItemVisiblyAtBottom(itemCount, BottomThreshold, BottomGeometryTolerance);
         }
 
-        private TranscriptScrollDecision ReportTranscriptSettleObservation(TranscriptScrollSettleObservation observation)
-        {
-            if (!_viewportOrchestrator.HasActiveScrollGeneration)
-            {
-                return default;
-            }
-
-            return _viewportOrchestrator.ReportSettled(ViewModel.CurrentSessionId, observation);
-        }
-
-        private bool ApplyTranscriptSettleDecision(TranscriptScrollDecision decision, bool lastItemContainerGenerated)
-        {
-            switch (decision.Action)
-            {
-                case TranscriptScrollAction.IssueScrollRequest:
-                    IssueNativeTranscriptScrollRequest();
-                    RefreshLayoutLoadingState(lastItemContainerGenerated);
-                    UpdateTranscriptViewportAutomationState();
-                    return true;
-
-                case TranscriptScrollAction.Completed:
-                case TranscriptScrollAction.Aborted:
-                case TranscriptScrollAction.Exhausted:
-                    ReleaseAutoScrollTracking();
-                    RefreshLayoutLoadingState(lastItemContainerGenerated);
-                    UpdateTranscriptViewportAutomationState();
-                    return true;
-
-                default:
-                    return false;
-            }
-        }
-
-        private void StopInitialScrollForManualInteraction()
-        {
-            _viewportOrchestrator.StopInitialScrollForManualInteraction();
-
-            if (!_viewportOrchestrator.HasPendingSettle)
-            {
-                UpdateTranscriptViewportAutomationState();
-                return;
-            }
-
-            ApplyTranscriptSettleDecision(
-                _viewportOrchestrator.AbortSettleForUserInteraction(),
-                HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
-            RefreshLayoutLoadingState();
-            UpdateTranscriptViewportAutomationState();
-        }
-
-        private void ReleaseAutoScrollTracking()
-        {
-            _viewportOrchestrator.ReleaseAutoScrollTracking();
-        }
-
         private void ResetAutoScrollStateForConversationChange()
         {
             AbandonPendingProjectionRestore("ConversationChanged");
-            InvalidateViewportCoordinator();
-            _viewportOrchestrator.ResetForConversationChange();
             ClearPendingProjectionRestore();
             if (ViewModel.IsActivationOverlayVisible)
             {
@@ -947,8 +724,11 @@ public sealed partial class ChatView : Page
             _restoreDetachedViewportAfterOverlay = false;
             _restoreDetachedViewportConversationId = null;
             _resumeViewportCoordinatorAfterOverlayPending = false;
-            _viewportOrchestrator.ClearUserScrollIntent();
-            ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.WarmReturn);
+            ApplyViewportActions(_viewportController.OnConversationChanged(
+                CurrentViewportConversationId,
+                ViewModel.IsSessionActive,
+                ViewModel.IsActivationOverlayVisible,
+                ViewModel.MessageHistory.Count > 0));
             UpdateTranscriptViewportAutomationState();
         }
 
@@ -965,9 +745,8 @@ public sealed partial class ChatView : Page
                     _restoreDetachedViewportAfterOverlay = true;
                     _restoreDetachedViewportConversationId = CurrentViewportConversationId;
                 }
-                _viewportOrchestrator.ResetInteractionState();
                 _resumeViewportCoordinatorAfterOverlayPending = true;
-                InvalidateViewportCoordinator();
+                ApplyViewportActions(_viewportController.SuspendForOverlay());
                 UpdateTranscriptViewportAutomationState();
                 return;
             }
@@ -1003,11 +782,11 @@ public sealed partial class ChatView : Page
 
             _restoreDetachedViewportAfterOverlay = false;
             _restoreDetachedViewportConversationId = null;
-            ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.OverlayResume);
+            ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);
 
             if (!IsViewportDetachedByUser())
             {
-                BeginTranscriptSettleRound();
+                TryIssueTranscriptScrollRequest();
             }
             RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
             TryIssueTranscriptScrollRequest();
@@ -1034,27 +813,15 @@ public sealed partial class ChatView : Page
                     return;
                 }
 
-                ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.WarmReturn);
+                ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);
                 if (!IsViewportDetachedByUser())
                 {
-                    BeginTranscriptSettleRound();
+                    TryIssueTranscriptScrollRequest();
                 }
                 TryIssueTranscriptScrollRequest();
                 TryRefreshViewportCoordinatorFromView();
                 UpdateTranscriptViewportAutomationState();
             });
-        }
-
-        private void BeginTranscriptSettleRound()
-        {
-            _viewportOrchestrator.BeginSettleRound(ViewModel.CurrentSessionId);
-        }
-
-        private void AbortTranscriptSettleRound()
-        {
-            ApplyTranscriptSettleDecision(
-                _viewportOrchestrator.AbortSettleForUserInteraction(),
-                HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
         }
 
         private void UpdateTranscriptViewportAutomationState()
@@ -1082,8 +849,8 @@ public sealed partial class ChatView : Page
                 return;
             }
 
-            var transition = _viewportOrchestrator.LastTransition;
-            var debug = $"state={state};coord={_viewportOrchestrator.State};attached={_viewportOrchestrator.IsAutoFollowAttached};current={CurrentViewportConversationId};generation={_viewportOrchestrator.Generation};transition={(transition?.Reason ?? "<none>")};attachPending={_viewportOrchestrator.AttachToBottomIntentPending};scrollIntentPending={_viewportOrchestrator.UserScrollIntentPending};scrollIntentCompleted={_viewportOrchestrator.UserScrollIntentCompleted};restoreConversation={_projectionRestoreController.PendingConversationId ?? "<none>"};restoreGeneration={_projectionRestoreController.PendingGeneration}";
+            var transition = _viewportController.LastTransition;
+            var debug = $"state={state};coord={_viewportController.State};attached={_viewportController.IsAutoFollowAttached};current={CurrentViewportConversationId};generation={_viewportController.Generation};transition={(transition?.Reason ?? "<none>")};attachPending={_viewportController.AttachToBottomIntentPending};scrollIntentPending={_viewportController.UserScrollIntentPending};scrollIntentCompleted={_viewportController.UserScrollIntentCompleted};restoreConversation={_projectionRestoreController.PendingConversationId ?? "<none>"};restoreGeneration={_projectionRestoreController.PendingGeneration}";
             TranscriptViewportDebugProbe.Text = debug;
             AutomationProperties.SetName(TranscriptViewportDebugProbe, debug);
         }
@@ -1105,7 +872,7 @@ public sealed partial class ChatView : Page
                 return "empty";
             }
 
-            return _viewportOrchestrator.State switch
+            return _viewportController.State switch
             {
                 TranscriptViewportState.Idle => "untracked",
                 TranscriptViewportState.Settling => "pending",
