@@ -263,9 +263,7 @@ public partial class ChatViewModel
                 token));
     }
 
-    public TranscriptProjectionRestoreToken? CreateViewportProjectionRestoreToken(
-        ChatMessageViewModel message,
-        double offsetHint)
+    public TranscriptProjectionRestoreToken? CreateViewportProjectionRestoreToken(ChatMessageViewModel message)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -280,8 +278,7 @@ public partial class ChatViewModel
         return new TranscriptProjectionRestoreToken(
             CurrentSessionId,
             _currentRestoreProjectionEpoch,
-            message.ProjectionItemKey,
-            offsetHint);
+            message.ProjectionItemKey);
     }
 
     public async ValueTask<IReadOnlyList<ConversationMessageSnapshot>> GetCurrentSessionTranscriptSnapshotAsync(

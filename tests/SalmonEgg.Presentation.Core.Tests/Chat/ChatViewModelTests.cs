@@ -8589,12 +8589,12 @@ public partial class ChatViewModelTests
 
         var message = Assert.Single(fixture.ViewModel.MessageHistory);
         Assert.Equal("msg:agent-0042", message.ProjectionItemKey);
-        var token = fixture.ViewModel.CreateViewportProjectionRestoreToken(message, 14d);
+        var token = fixture.ViewModel.CreateViewportProjectionRestoreToken(message);
         Assert.NotNull(token);
         Assert.Equal("conv-a", token!.Value.ConversationId);
         Assert.Equal(1, token.Value.ProjectionEpoch);
         Assert.Equal("msg:agent-0042", token.Value.ProjectionItemKey);
-        Assert.Equal(14d, token.Value.OffsetHint);
+        Assert.Equal(message.ProjectionItemKey, token.Value.ProjectionItemKey);
     }
 
     [Fact]

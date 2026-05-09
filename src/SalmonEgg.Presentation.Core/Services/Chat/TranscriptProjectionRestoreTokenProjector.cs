@@ -25,8 +25,7 @@ public sealed class TranscriptProjectionRestoreTokenProjector
     public TranscriptProjectionRestoreProjection Project(
         string conversationId,
         IReadOnlyList<ConversationMessageSnapshot> transcript,
-        int firstVisibleIndex,
-        double relativeOffsetWithinItem)
+        int firstVisibleIndex)
     {
         ArgumentNullException.ThrowIfNull(transcript);
 
@@ -49,8 +48,7 @@ public sealed class TranscriptProjectionRestoreTokenProjector
             Token: new TranscriptProjectionRestoreToken(
                 conversationId,
                 ProjectionEpoch: projectionEpoch,
-                ProjectionItemKey: projectionItemKey,
-                OffsetHint: relativeOffsetWithinItem),
+                ProjectionItemKey: projectionItemKey),
             ProjectionEpoch: projectionEpoch,
             IsReady: true);
     }

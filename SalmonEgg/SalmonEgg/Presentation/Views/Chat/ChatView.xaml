@@ -5,7 +5,6 @@
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:controls="using:SalmonEgg.Controls"
     xmlns:models="using:SalmonEgg.Presentation.Models"
-    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Background="Transparent"
@@ -148,30 +147,32 @@
                                                 x:Load="{x:Bind ViewModel.ShouldLoadTranscriptSurface, Mode=OneWay}"
                                                 Visibility="{x:Bind ViewModel.ShouldShowTranscriptSurface, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <controls:ResponsiveContentHost.Child>
-                        <ScrollViewer x:Name="MessagesScrollViewer"
-                                      AutomationProperties.AutomationId="ChatView.MessagesList"
-                                      HorizontalScrollBarVisibility="Disabled"
-                                      VerticalScrollBarVisibility="Auto"
-                                      IsTabStop="True"
-                                      HorizontalAlignment="Stretch"
-                                      MinWidth="0"
-                                      Loaded="OnMessagesListLoaded"
-                                      Unloaded="OnMessagesListUnloaded"
-                                      PointerReleased="OnMessagesListPointerReleased"
-                                      LayoutUpdated="OnMessagesListLayoutUpdated">
-                            <Border x:Name="MessagesViewportPadding"
-                                    Padding="20">
-                                <muxc:ItemsRepeater x:Name="MessagesRepeater"
-                                                   ItemsSource="{x:Bind TranscriptItemsSource, Mode=OneWay}"
-                                                   ItemTemplate="{StaticResource MessageTemplateSelector}"
-                                                   HorizontalAlignment="Stretch"
-                                                   MinWidth="0">
-                                    <muxc:ItemsRepeater.Layout>
-                                        <muxc:StackLayout />
-                                    </muxc:ItemsRepeater.Layout>
-                                </muxc:ItemsRepeater>
-                            </Border>
-                        </ScrollViewer>
+                        <ListView x:Name="MessagesList"
+                                  AutomationProperties.AutomationId="ChatView.MessagesList"
+                                  ItemsSource="{x:Bind ViewModel.MessageHistory, Mode=OneWay}"
+                                  ItemTemplateSelector="{StaticResource MessageTemplateSelector}"
+                                  Padding="20"
+                                  SelectionMode="None"
+                                  HorizontalAlignment="Stretch"
+                                  MinWidth="0"
+                                  Loaded="OnMessagesListLoaded"
+                                  Unloaded="OnMessagesListUnloaded"
+                                  PointerReleased="OnMessagesListPointerReleased"
+                                  LayoutUpdated="OnMessagesListLayoutUpdated">
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Vertical" />
+                                </ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="IsTabStop" Value="False" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
                     </controls:ResponsiveContentHost.Child>
                 </controls:ResponsiveContentHost>
 

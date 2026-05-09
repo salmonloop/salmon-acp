@@ -257,11 +257,26 @@ public sealed class ChatSkeletonSmokeTests
         var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
         Assert.True(
             WaitForViewportState(session, "bottom", TimeSpan.FromSeconds(10)),
-            $"Transcript viewport did not settle to bottom before variable-height scroll scenario. State='{session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'.");
+            $"Transcript viewport did not settle to bottom before variable-height scroll scenario. State='{session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'. Debug='{session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'. Visible=[{string.Join(" | ", session.GetVisibleTexts(messagesList).Where(text => text.Contains("GUI variable message", StringComparison.Ordinal)).Take(6))}].");
 
         Assert.True(messagesList.Patterns.Scroll.IsSupported, "Messages ListView must expose the native ScrollPattern.");
         var scroll = messagesList.Patterns.Scroll.Pattern;
         Assert.True(scroll.VerticallyScrollable.Value, "Messages ListView should be vertically scrollable for the large transcript.");
+
+        session.ClickElement(messagesList);
+        for (var detachAttempt = 0; detachAttempt < 6; detachAttempt++)
+        {
+            session.ScrollWheel(120);
+            Thread.Sleep(150);
+            if (string.Equals(session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)), "not_bottom", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+        }
+
+        Assert.True(
+            WaitForViewportState(session, "not_bottom", TimeSpan.FromSeconds(5)),
+            $"Transcript viewport did not detach before variable-height scroll percent scenario. State='{session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'.");
 
         var observedPercents = new List<double>();
         var observedVisibleMessages = new List<string>();
@@ -283,6 +298,96 @@ public sealed class ChatSkeletonSmokeTests
         Assert.True(
             finalPercent >= 20d && finalPercent <= 46d,
             $"Expected final scroll percent near 33, actual {finalPercent:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Observed percents=[{string.Join(", ", observedPercents.Select(value => value.ToString("0.##")))}]. Visible=[{string.Join(" | ", observedVisibleMessages)}].");
+    }
+
+    [SkippableFact]
+    public void LocalSession_WithMarkdownHeavyTranscript_CanManuallyScrollToLastMessage()
+    {
+        const int MessageCount = 180;
+        var finalMessageText = $"GUI markdown heavy bottom sentinel {MessageCount:000}";
+        using var appData = GuiAppDataScope.CreateDeterministicMarkdownHeavyTranscriptData(MessageCount);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-markdown-heavy-session-01", TimeSpan.FromSeconds(15));
+        session.ActivateElement(sessionItem);
+
+        var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+        Assert.True(messagesList.Patterns.Scroll.IsSupported, "Transcript scroll surface must expose the native ScrollPattern.");
+        var scroll = messagesList.Patterns.Scroll.Pattern;
+        Assert.True(scroll.VerticallyScrollable.Value, "Markdown-heavy transcript should be vertically scrollable.");
+
+        IReadOnlyList<string> visibleTexts = [];
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            scroll.SetScrollPercent(-1d, 100d);
+            Thread.Sleep(350);
+
+            visibleTexts = session.GetVisibleTexts(messagesList);
+            if (visibleTexts.Any(text => text.Contains(finalMessageText, StringComparison.Ordinal)))
+            {
+                return;
+            }
+        }
+
+        var viewportState = session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        var viewportDebug = session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        Assert.Fail(
+            $"Expected the final markdown message '{finalMessageText}' to be reachable at scroll percent 100. ActualPercent={scroll.VerticalScrollPercent.Value:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Visible=[{string.Join(" | ", visibleTexts.Take(12))}].");
+    }
+
+    [SkippableFact]
+    public void LocalSession_WithMarkdownHeavyTranscript_AutoSettleReachesLastMessage()
+    {
+        const int MessageCount = 180;
+        var finalMessageText = $"GUI markdown heavy bottom sentinel {MessageCount:000}";
+        using var appData = GuiAppDataScope.CreateDeterministicMarkdownHeavyTranscriptData(MessageCount);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-markdown-heavy-session-01", TimeSpan.FromSeconds(15));
+        session.ActivateElement(sessionItem);
+
+        var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+        var settledToBottom = WaitForViewportState(session, "bottom", TimeSpan.FromSeconds(12));
+        var visibleTexts = session.GetVisibleTexts(messagesList);
+        var finalMessageVisible = visibleTexts.Any(text => text.Contains(finalMessageText, StringComparison.Ordinal));
+
+        Assert.True(
+            settledToBottom && finalMessageVisible,
+            $"Markdown-heavy transcript did not auto-settle to the final message. settledToBottom={settledToBottom}. finalVisible={finalMessageVisible}. State='{session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'. Debug='{session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>"}'. Visible=[{string.Join(" | ", visibleTexts.Take(12))}].");
+    }
+
+    [SkippableFact]
+    public void LocalSession_WithTallLastMessage_CanReachNativeBottom()
+    {
+        const int MessageCount = 80;
+        var finalMessageText = $"GUI tall last bottom sentinel {MessageCount:000}";
+        using var appData = GuiAppDataScope.CreateDeterministicTallLastMessageTranscriptData(MessageCount);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-tall-last-message-session-01", TimeSpan.FromSeconds(15));
+        session.ActivateElement(sessionItem);
+
+        var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
+        Assert.True(messagesList.Patterns.Scroll.IsSupported, "Transcript ListView must expose the native ScrollPattern.");
+        var scroll = messagesList.Patterns.Scroll.Pattern;
+        Assert.True(scroll.VerticallyScrollable.Value, "Tall final message transcript should be vertically scrollable.");
+
+        IReadOnlyList<string> visibleTexts = [];
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            scroll.SetScrollPercent(-1d, 100d);
+            Thread.Sleep(350);
+            visibleTexts = session.GetVisibleTexts(messagesList);
+            if (visibleTexts.Any(text => text.Contains(finalMessageText, StringComparison.Ordinal)))
+            {
+                return;
+            }
+        }
+
+        var viewportState = session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        var viewportDebug = session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+        Assert.Fail(
+            $"Expected the native ListView bottom to reveal '{finalMessageText}'. ActualPercent={scroll.VerticalScrollPercent.Value:0.##}. State='{viewportState}'. Debug='{viewportDebug}'. Visible=[{string.Join(" | ", visibleTexts.Take(12))}].");
     }
 
     [SkippableFact]

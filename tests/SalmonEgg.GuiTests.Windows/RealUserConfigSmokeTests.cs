@@ -11,6 +11,87 @@ namespace SalmonEgg.GuiTests.Windows;
 public sealed partial class RealUserConfigSmokeTests
 {
     [SkippableFact]
+    public void AuditVisibleRealSessions_TranscriptAutoBottomAndLastMessages()
+    {
+        GuiTestGate.RequireEnabled();
+
+        var candidates = LoadRealTranscriptAuditCandidates()
+            .Where(candidate => candidate.MessageCount > 0)
+            .OrderByDescending(candidate => candidate.MarkdownLikeMessageCount)
+            .ThenByDescending(candidate => candidate.MessageCount)
+            .ToArray();
+        Skip.If(candidates.Length == 0, "No real conversations with local transcript messages were found in the current SalmonEgg app data.");
+
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var findings = new List<string>();
+        var checkedCount = 0;
+        var visibleCount = 0;
+
+        foreach (var candidate in candidates)
+        {
+            if (checkedCount >= 60)
+            {
+                break;
+            }
+
+            var sessionAutomationId = SessionAutomationId(candidate.ConversationId);
+            var sessionItem = session.TryFindByAutomationId(sessionAutomationId, TimeSpan.FromMilliseconds(800));
+            if (sessionItem is null)
+            {
+                continue;
+            }
+
+            visibleCount++;
+            checkedCount++;
+            session.ActivateElement(sessionItem);
+            var messagesList = session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(12));
+            if (messagesList is null)
+            {
+                findings.Add($"{candidate.ConversationId}: messages list missing after activation. messageCount={candidate.MessageCount} markdownLike={candidate.MarkdownLikeMessageCount}");
+                continue;
+            }
+
+            _ = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(20));
+            _ = WaitForViewportState(session, "bottom", TimeSpan.FromSeconds(12));
+            Thread.Sleep(500);
+
+            var state = session.TryGetElementName("ChatView.TranscriptViewportState", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+            var debug = session.TryGetElementName("ChatView.TranscriptViewportDebug", TimeSpan.FromMilliseconds(200)) ?? "<missing>";
+            var autoVisibleTexts = session.GetVisibleTexts(messagesList);
+            var autoScrollPercent = TryGetVerticalScrollPercent(messagesList);
+
+            var isVerticallyScrollable = messagesList.Patterns.Scroll.IsSupported
+                && messagesList.Patterns.Scroll.Pattern.VerticallyScrollable.Value;
+            if (isVerticallyScrollable)
+            {
+                messagesList.Patterns.Scroll.Pattern.SetScrollPercent(-1d, 100d);
+                Thread.Sleep(700);
+            }
+
+            var manualVisibleTexts = session.GetVisibleTexts(messagesList);
+            var manualScrollPercent = TryGetVerticalScrollPercent(messagesList);
+            var manualRevealedNewBottomText = manualVisibleTexts
+                .Except(autoVisibleTexts, StringComparer.Ordinal)
+                .Take(5)
+                .ToArray();
+
+            if (!string.Equals(state, "bottom", StringComparison.OrdinalIgnoreCase)
+                || (isVerticallyScrollable && autoScrollPercent is < 98d)
+                || (isVerticallyScrollable && manualScrollPercent is < 98d)
+                || manualRevealedNewBottomText.Length > 0)
+            {
+                findings.Add(
+                    $"{candidate.ConversationId}: display='{candidate.DisplayName}'; state={state}; autoPercent={(autoScrollPercent?.ToString("0.##") ?? "<unsupported>")}; manualPercent={(manualScrollPercent?.ToString("0.##") ?? "<unsupported>")}; localMessageCount={candidate.MessageCount}; markdownLike={candidate.MarkdownLikeMessageCount}; manualRevealed=[{string.Join(" | ", manualRevealedNewBottomText)}]; debug={debug}; autoVisible=[{string.Join(" | ", autoVisibleTexts.TakeLast(10))}]; manualVisible=[{string.Join(" | ", manualVisibleTexts.TakeLast(10))}]");
+            }
+        }
+
+        Skip.If(visibleCount == 0, $"No real transcript candidates were visible in the left navigation. CandidateCount={candidates.Length}.");
+        Assert.True(
+            findings.Count == 0,
+            $"Real transcript audit found {findings.Count} problematic session(s) out of {checkedCount} checked visible session(s):{Environment.NewLine}{string.Join(Environment.NewLine, findings)}");
+    }
+
+    [SkippableFact]
     public void SelectSpecificRemoteBoundSession_ByConversationId_CompletesSlowLoadWithoutCrashing()
     {
         GuiTestGate.RequireEnabled();
@@ -53,6 +134,46 @@ public sealed partial class RealUserConfigSmokeTests
         Assert.True(
             headerStillVisible && overlayStillHidden,
             $"Conversation {conversationId} stopped rendering stably after the loading overlay cleared. headerStillVisible={headerStillVisible} overlayStillHidden={overlayStillHidden}");
+    }
+
+    [SkippableFact]
+    public void SelectSpecificRemoteBoundSession_AfterWarmSourceSession_CompletesWithoutCrashing()
+    {
+        GuiTestGate.RequireEnabled();
+
+        var sourceConversationId = Environment.GetEnvironmentVariable("SALMONEGG_GUI_SOURCE_CONVERSATION_ID");
+        var targetConversationId = Environment.GetEnvironmentVariable("SALMONEGG_GUI_TARGET_CONVERSATION_ID");
+        Skip.If(string.IsNullOrWhiteSpace(sourceConversationId), "Set SALMONEGG_GUI_SOURCE_CONVERSATION_ID to the warm source conversation id.");
+        Skip.If(string.IsNullOrWhiteSpace(targetConversationId), "Set SALMONEGG_GUI_TARGET_CONVERSATION_ID to the target conversation id.");
+        Skip.If(
+            string.Equals(sourceConversationId, targetConversationId, StringComparison.Ordinal),
+            "Source and target conversations must be different.");
+
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var sourceItem = session.FindByAutomationId(SessionAutomationId(sourceConversationId!), TimeSpan.FromSeconds(10));
+        session.ActivateElement(sourceItem);
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(15)),
+            $"Source conversation header did not appear for {sourceConversationId}.");
+
+        var targetItem = session.FindByAutomationId(SessionAutomationId(targetConversationId!), TimeSpan.FromSeconds(10));
+        session.ActivateElement(targetItem);
+
+        var targetHeaderVisible = session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(30));
+        Assert.True(targetHeaderVisible, $"Target conversation header did not appear for {targetConversationId}.");
+
+        var transcriptVisible = WaitUntil(
+            () => CountVisibleTranscriptText(session.TryFindByAutomationId("ChatView.MessagesList", TimeSpan.FromMilliseconds(150))) > 0,
+            TimeSpan.FromSeconds(120),
+            TimeSpan.FromMilliseconds(250));
+        Assert.True(transcriptVisible, $"Target conversation {targetConversationId} never projected visible transcript content.");
+
+        Thread.Sleep(8000);
+
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionNameButton", TimeSpan.FromSeconds(4)),
+            $"Target conversation {targetConversationId} stopped rendering stably after source-to-target activation.");
     }
 
     [SkippableFact]
@@ -2325,6 +2446,88 @@ public sealed partial class RealUserConfigSmokeTests
         string ConversationId,
         int LocalMessageCount,
         DateTimeOffset LastUpdatedAtUtc);
+
+    private sealed record RealTranscriptAuditCandidate(
+        string ConversationId,
+        string DisplayName,
+        int MessageCount,
+        int MarkdownLikeMessageCount);
+
+    private static IReadOnlyList<RealTranscriptAuditCandidate> LoadRealTranscriptAuditCandidates()
+    {
+        var conversationsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SalmonEgg",
+            "conversations",
+            "conversations.v1.json");
+        if (!File.Exists(conversationsPath))
+        {
+            return [];
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(conversationsPath));
+        if (!document.RootElement.TryGetProperty("conversations", out var conversationsElement)
+            || conversationsElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var candidates = new List<RealTranscriptAuditCandidate>();
+        foreach (var conversationElement in conversationsElement.EnumerateArray())
+        {
+            var conversationId = ReadJsonString(conversationElement, "conversationId");
+            if (string.IsNullOrWhiteSpace(conversationId))
+            {
+                continue;
+            }
+
+            var messages = conversationElement.TryGetProperty("messages", out var messagesElement)
+                && messagesElement.ValueKind == JsonValueKind.Array
+                    ? messagesElement.EnumerateArray()
+                        .Select(message => ReadJsonString(message, "textContent"))
+                        .Where(text => !string.IsNullOrWhiteSpace(text))
+                        .Cast<string>()
+                        .ToArray()
+                    : [];
+
+            candidates.Add(new RealTranscriptAuditCandidate(
+                conversationId,
+                FirstUsableVisibleLabel(ReadJsonString(conversationElement, "displayName"), conversationId),
+                messages.Length,
+                messages.Count(IsMarkdownLike)));
+        }
+
+        return candidates;
+    }
+
+    private static bool IsMarkdownLike(string text)
+        => text.Contains("```", StringComparison.Ordinal)
+            || text.Contains("| ---", StringComparison.Ordinal)
+            || text.Contains("\n- ", StringComparison.Ordinal)
+            || text.Contains("\n#", StringComparison.Ordinal)
+            || text.Contains("`", StringComparison.Ordinal);
+
+    private static string? ReadJsonString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String
+                ? property.GetString()
+                : null;
+    }
+
+    private static double? TryGetVerticalScrollPercent(AutomationElement element)
+    {
+        try
+        {
+            return element.Patterns.Scroll.IsSupported
+                ? element.Patterns.Scroll.Pattern.VerticalScrollPercent.Value
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static class RealUserConfigProbe
     {

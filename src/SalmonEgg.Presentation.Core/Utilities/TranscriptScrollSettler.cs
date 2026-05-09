@@ -20,6 +20,8 @@ public readonly record struct TranscriptScrollDecision(TranscriptScrollAction Ac
 
 public sealed class TranscriptScrollSettler
 {
+    public const int DefaultMaxReadyButNotBottomFailures = 32;
+
     private readonly int _maxReadyButNotBottomFailures;
     private TranscriptScrollSettlerState _state = TranscriptScrollSettlerState.Idle;
     private string? _sessionId;
@@ -27,7 +29,7 @@ public sealed class TranscriptScrollSettler
     private int _activeRequestGeneration = -1;
     private int _readyButNotBottomFailures;
 
-    public TranscriptScrollSettler(int maxReadyButNotBottomFailures = 8)
+    public TranscriptScrollSettler(int maxReadyButNotBottomFailures = DefaultMaxReadyButNotBottomFailures)
     {
         if (maxReadyButNotBottomFailures <= 0)
         {
@@ -102,6 +104,12 @@ public sealed class TranscriptScrollSettler
 
             case TranscriptScrollSettleObservation.ReadyButNotAtBottom:
                 _readyButNotBottomFailures++;
+                if (_readyButNotBottomFailures >= _maxReadyButNotBottomFailures)
+                {
+                    TransitionToIdle();
+                    return Decision(TranscriptScrollAction.Exhausted);
+                }
+
                 _state = TranscriptScrollSettlerState.Pending;
                 return Decision(TranscriptScrollAction.None);
 

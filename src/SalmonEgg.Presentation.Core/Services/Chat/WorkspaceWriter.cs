@@ -352,8 +352,7 @@ public sealed class WorkspaceWriter : IWorkspaceWriter, IDisposable
         var restoreProjection = _restoreTokenProjector.Project(
             conversationId,
             transcript,
-            firstVisibleIndex: transcript.Length - 1,
-            relativeOffsetWithinItem: 0d);
+            firstVisibleIndex: transcript.Length - 1);
 
         return new ConversationWorkspaceSnapshot(
             conversationId,

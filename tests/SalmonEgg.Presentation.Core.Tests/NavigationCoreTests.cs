@@ -239,12 +239,12 @@ public sealed class NavigationCoreTests
             "private void OnMessagesListUnloaded",
             "private void OnMessagesListLayoutUpdated");
 
-        Assert.Contains("MessagesScrollViewer?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesScrollViewer?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesScrollViewer?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesScrollViewer?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);", unloadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesScrollViewer?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);", unloadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesScrollViewer?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);", unloadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);", unloadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);", unloadSection, StringComparison.Ordinal);
+        Assert.Contains("MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);", unloadSection, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -550,11 +550,52 @@ public sealed class NavigationCoreTests
             Assert.Contains("_viewportCoordinator.IsAutoFollowAttached", helperSection, StringComparison.Ordinal);
             Assert.Contains("!_transcriptScrollSettler.HasPendingWork", helperSection, StringComparison.Ordinal);
             Assert.Contains("!fact.IsProgrammaticScrollInFlight", helperSection, StringComparison.Ordinal);
+            Assert.Contains("(_pointerScrollIntentPending || _pointerScrollReleasePending || _attachToBottomIntentPending)", helperSection, StringComparison.Ordinal);
         }
     }
 
     [Fact]
-    public void ChatViewsCodeBehind_UseItemsRepeaterTranscriptViewportHostInsteadOfDirectListViewViewportApis()
+    public void ChatViewsCodeBehind_TranscriptSettleRequiresNativeViewportAndLastItemAtBottom()
+    {
+        foreach (var path in new[]
+        {
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"
+        })
+        {
+            var code = LoadFile(path);
+            var observationSection = ExtractSection(
+                code,
+                "private TranscriptScrollSettleObservation ResolveTranscriptScrollObservation",
+                "private TranscriptScrollDecision ReportTranscriptSettleObservation");
+
+            Assert.Contains("IsListViewportAtBottom() && IsLastItemVisiblyAtBottom(itemCount)", observationSection, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void ChatViewsCodeBehind_TranscriptSettleAdvancesFromNativeViewportChanges()
+    {
+        foreach (var path in new[]
+        {
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs"
+        })
+        {
+            var code = LoadFile(path);
+            var viewportChangedSection = ExtractSection(
+                code,
+                "private void OnMessagesListViewportChanged",
+                "private void OnMessagesListPointerPressed");
+
+            Assert.Contains("if (_transcriptScrollSettler.HasPendingWork)", viewportChangedSection, StringComparison.Ordinal);
+            Assert.Contains("TryAdvanceTranscriptSettleFromLayout(lastItemContainerGenerated);", viewportChangedSection, StringComparison.Ordinal);
+            Assert.Contains("TryIssueTranscriptScrollRequest();", viewportChangedSection, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void ChatViewsCodeBehind_UseListViewTranscriptViewportHostWithoutItemsRepeaterViewportApis()
     {
         foreach (var path in new[]
         {
@@ -565,17 +606,20 @@ public sealed class NavigationCoreTests
             var code = LoadFile(path);
 
             Assert.Contains("ITranscriptViewportHost", code, StringComparison.Ordinal);
-            Assert.Contains("ItemsRepeaterTranscriptViewportHost", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("ListViewTranscriptViewportHost", code, StringComparison.Ordinal);
+            Assert.Contains("ListViewTranscriptViewportHost", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("ItemsRepeaterTranscriptViewportHost", code, StringComparison.Ordinal);
             Assert.DoesNotContain("ConfigureWindowsTranscriptListView", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("ShowsScrollingPlaceholders", code, StringComparison.Ordinal);
+            if (code.Contains("ShowsScrollingPlaceholders", StringComparison.Ordinal))
+            {
+                Assert.Contains("#if WINDOWS", code, StringComparison.Ordinal);
+                Assert.Contains("MessagesList.ShowsScrollingPlaceholders = false;", code, StringComparison.Ordinal);
+            }
             Assert.DoesNotContain("ContainerFromIndex(", code, StringComparison.Ordinal);
             Assert.DoesNotContain("ScrollIntoView(", code, StringComparison.Ordinal);
             Assert.DoesNotContain("ScrollViewerViewportMonitor.", code, StringComparison.Ordinal);
             Assert.DoesNotContain("RegisterPropertyChangedCallback(", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("MessagesList is null", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("MessagesList?.", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("MessagesList.", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("MessagesScrollViewer", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("MessagesRepeater", code, StringComparison.Ordinal);
         }
     }
 

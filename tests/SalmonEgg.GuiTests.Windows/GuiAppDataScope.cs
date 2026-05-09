@@ -200,6 +200,82 @@ internal sealed class GuiAppDataScope : IDisposable
         return scope;
     }
 
+    public static GuiAppDataScope CreateDeterministicMarkdownHeavyTranscriptData(int messageCount = 180)
+    {
+        if (messageCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(messageCount));
+        }
+
+        GuiTestGate.RequireEnabled();
+        WindowsGuiAppSession.StopAllRunningInstances();
+
+        var appDataRoot = ResolveAppDataRoot();
+        var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
+        var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
+        var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
+        var projectRootPath = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", "markdown-heavy-project-1");
+
+        var scope = new GuiAppDataScope(
+            appDataRoot,
+            appYamlPath,
+            conversationsPath,
+            serverYamlPath: null,
+            secondaryServerYamlPath: null,
+            File.Exists(appYamlPath) ? File.ReadAllBytes(appYamlPath) : null,
+            File.Exists(appYamlPath),
+            File.Exists(conversationsPath) ? File.ReadAllBytes(conversationsPath) : null,
+            File.Exists(conversationsPath),
+            originalServerYaml: null,
+            serverYamlExisted: false,
+            originalSecondaryServerYaml: null,
+            secondaryServerYamlExisted: false,
+            projectRootPath,
+            previousGuiAppDataRootOverride);
+
+        scope.SeedMarkdownHeavyTranscript(messageCount);
+        return scope;
+    }
+
+    public static GuiAppDataScope CreateDeterministicTallLastMessageTranscriptData(int messageCount = 80)
+    {
+        if (messageCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(messageCount));
+        }
+
+        GuiTestGate.RequireEnabled();
+        WindowsGuiAppSession.StopAllRunningInstances();
+
+        var appDataRoot = ResolveAppDataRoot();
+        var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
+        var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
+        var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
+        var projectRootPath = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", "tall-last-message-project-1");
+
+        var scope = new GuiAppDataScope(
+            appDataRoot,
+            appYamlPath,
+            conversationsPath,
+            serverYamlPath: null,
+            secondaryServerYamlPath: null,
+            File.Exists(appYamlPath) ? File.ReadAllBytes(appYamlPath) : null,
+            File.Exists(appYamlPath),
+            File.Exists(conversationsPath) ? File.ReadAllBytes(conversationsPath) : null,
+            File.Exists(conversationsPath),
+            originalServerYaml: null,
+            serverYamlExisted: false,
+            originalSecondaryServerYaml: null,
+            secondaryServerYamlExisted: false,
+            projectRootPath,
+            previousGuiAppDataRootOverride);
+
+        scope.SeedTallLastMessageTranscript(messageCount);
+        return scope;
+    }
+
     public static GuiAppDataScope CreateDeterministicToolCallData()
     {
         GuiTestGate.RequireEnabled();
@@ -625,6 +701,30 @@ internal sealed class GuiAppDataScope : IDisposable
             Encoding.UTF8);
     }
 
+    private void SeedMarkdownHeavyTranscript(int messageCount)
+    {
+        Directory.CreateDirectory(_configDirectory);
+        Directory.CreateDirectory(_conversationsDirectory);
+        Directory.CreateDirectory(_projectRootPath);
+        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        File.WriteAllText(
+            _conversationsPath,
+            BuildMarkdownHeavyConversationsJson(_projectRootPath, messageCount),
+            Encoding.UTF8);
+    }
+
+    private void SeedTallLastMessageTranscript(int messageCount)
+    {
+        Directory.CreateDirectory(_configDirectory);
+        Directory.CreateDirectory(_conversationsDirectory);
+        Directory.CreateDirectory(_projectRootPath);
+        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        File.WriteAllText(
+            _conversationsPath,
+            BuildTallLastMessageConversationsJson(_projectRootPath, messageCount),
+            Encoding.UTF8);
+    }
+
     public void TriggerBackgroundRemoteAgentUpdate(string remoteSessionId, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remoteSessionId);
@@ -912,6 +1012,132 @@ internal sealed class GuiAppDataScope : IDisposable
         }
 
         return $"GUI variable message {messageIndex:000}";
+    }
+
+    private static string BuildMarkdownHeavyConversationsJson(string projectRootPath, int messageCount)
+    {
+        var timestamp = new DateTimeOffset(2026, 05, 09, 10, 00, 00, TimeSpan.Zero);
+        var messages = Enumerable.Range(1, messageCount)
+            .Select(messageIndex => new
+            {
+                id = $"md-heavy-{messageIndex}",
+                timestamp = timestamp.AddSeconds(messageIndex),
+                contentType = "text",
+                textContent = BuildMarkdownHeavyMessageText(messageIndex),
+                isOutgoing = messageIndex % 4 == 0
+            })
+            .Cast<object>()
+            .ToArray();
+
+        var document = new
+        {
+            version = 1,
+            lastActiveConversationId = (string?)null,
+            conversations = new object[]
+            {
+                new
+                {
+                    conversationId = "gui-markdown-heavy-session-01",
+                    displayName = "GUI Markdown Heavy Session 01",
+                    createdAt = timestamp,
+                    lastUpdatedAt = timestamp.AddSeconds(messageCount),
+                    cwd = projectRootPath,
+                    messages
+                }
+            }
+        };
+
+        return JsonSerializer.Serialize(document);
+    }
+
+    private static string BuildTallLastMessageConversationsJson(string projectRootPath, int messageCount)
+    {
+        var timestamp = new DateTimeOffset(2026, 05, 09, 11, 00, 00, TimeSpan.Zero);
+        var messages = Enumerable.Range(1, messageCount)
+            .Select(messageIndex => new
+            {
+                id = $"tall-last-{messageIndex}",
+                timestamp = timestamp.AddSeconds(messageIndex),
+                contentType = "text",
+                textContent = messageIndex == messageCount
+                    ? BuildTallLastMessageText(messageIndex)
+                    : $"GUI tall last prelude message {messageIndex:000}",
+                isOutgoing = messageIndex % 4 == 0
+            })
+            .Cast<object>()
+            .ToArray();
+
+        var document = new
+        {
+            version = 1,
+            lastActiveConversationId = (string?)null,
+            conversations = new object[]
+            {
+                new
+                {
+                    conversationId = "gui-tall-last-message-session-01",
+                    displayName = "GUI Tall Last Message Session 01",
+                    createdAt = timestamp,
+                    lastUpdatedAt = timestamp.AddSeconds(messageCount),
+                    cwd = projectRootPath,
+                    messages
+                }
+            }
+        };
+
+        return JsonSerializer.Serialize(document);
+    }
+
+    private static string BuildTallLastMessageText(int messageIndex)
+    {
+        var lines = new List<string>
+        {
+            $"GUI tall last message start {messageIndex:000}",
+            string.Empty,
+        };
+        lines.AddRange(Enumerable.Range(1, 80)
+            .Select(line => $"Tall final markdown line {line:000}: enough text to make the final message exceed the viewport and require true native bottom scrolling."));
+        lines.Add($"GUI tall last bottom sentinel {messageIndex:000}");
+        return string.Join("\n", lines);
+    }
+
+    private static string BuildMarkdownHeavyMessageText(int messageIndex)
+    {
+        if (messageIndex > 176)
+        {
+            return $"GUI markdown heavy bottom sentinel {messageIndex:000}";
+        }
+
+        if (messageIndex % 9 == 0)
+        {
+            return string.Join(
+                "\n",
+                $"### GUI markdown heavy message {messageIndex:000}",
+                "",
+                "This paragraph contains **bold text**, `inline code`, and enough prose to wrap across several lines in the transcript viewport.",
+                "",
+                "- first bullet with enough text to wrap inside the message bubble",
+                "- second bullet with more content for variable-height layout",
+                "",
+                "```json",
+                $"{{\"message\":{messageIndex},\"status\":\"ok\"}}",
+                "```");
+        }
+
+        if (messageIndex % 5 == 0)
+        {
+            return string.Join(
+                "\n",
+                $"GUI markdown heavy message {messageIndex:000}",
+                "",
+                "> Quoted markdown block with wrapped content for viewport measurement.",
+                "",
+                "| key | value |",
+                "| --- | --- |",
+                $"| message | {messageIndex:000} |");
+        }
+
+        return $"GUI markdown heavy message {messageIndex:000}";
     }
 
     private static string BuildMarkdownRenderConversationsJson(string projectRootPath)

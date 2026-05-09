@@ -1,0 +1,202 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using SalmonEgg.Presentation.ViewModels.Chat.Transcript;
+using Windows.Foundation;
+
+namespace SalmonEgg.Presentation.Transcript;
+
+public sealed class ListViewTranscriptViewportHost : ITranscriptViewportHost
+{
+    private readonly ListViewBase _listView;
+    private readonly Func<TranscriptVirtualizationRange?>? _visibleRangeProvider;
+    private readonly SortedSet<int> _realizedIndices = new();
+    private bool _viewportChangedQueued;
+
+    public ListViewTranscriptViewportHost(
+        ListViewBase listView,
+        Func<TranscriptVirtualizationRange?>? visibleRangeProvider = null)
+    {
+        _listView = listView ?? throw new ArgumentNullException(nameof(listView));
+        _visibleRangeProvider = visibleRangeProvider;
+        _listView.ContainerContentChanging += OnContainerContentChanging;
+        _listView.SizeChanged += OnSizeChanged;
+    }
+
+    public event EventHandler? ViewportChanged;
+
+    public bool HasRealizedItem(int index) => index >= 0 && _listView.ContainerFromIndex(index) is not null;
+
+    public bool TryGetFirstVisibleIndex(int itemCount, out int index)
+    {
+        index = -1;
+        if (itemCount <= 0)
+        {
+            return false;
+        }
+
+        var range = _visibleRangeProvider?.Invoke() is { Length: > 0 } visibleRange
+            ? ClampRange(visibleRange, itemCount)
+            : new TranscriptVirtualizationRange(0, itemCount);
+
+        return TryGetFirstVisibleIndexInRange(range, out index);
+    }
+
+    private bool TryGetFirstVisibleIndexInRange(TranscriptVirtualizationRange range, out int index)
+    {
+        index = -1;
+        var firstPartiallyVisibleIndex = -1;
+        var fullyVisibleTop = _listView.Padding.Top;
+        foreach (var candidate in _realizedIndices.GetViewBetween(range.FirstIndex, range.LastIndex))
+        {
+            if (!TryGetContainerAnchor(candidate, out var anchor))
+            {
+                continue;
+            }
+
+            var relativeOrigin = anchor.TransformToVisual(_listView).TransformPoint(default);
+            if (relativeOrigin.Y + anchor.ActualHeight < 0)
+            {
+                continue;
+            }
+
+            firstPartiallyVisibleIndex = firstPartiallyVisibleIndex < 0
+                ? candidate
+                : firstPartiallyVisibleIndex;
+            if (relativeOrigin.Y >= fullyVisibleTop)
+            {
+                index = candidate;
+                return true;
+            }
+        }
+
+        index = firstPartiallyVisibleIndex;
+        return index >= 0;
+    }
+
+    public void ScrollItemIntoView(
+        int index,
+        TranscriptItemScrollAlignment alignment = TranscriptItemScrollAlignment.Default)
+    {
+        if (index < 0 || index >= _listView.Items.Count)
+        {
+            return;
+        }
+
+        var item = _listView.Items[index];
+        if (item is null)
+        {
+            return;
+        }
+
+        _listView.ScrollIntoView(item, ToNativeAlignment(alignment));
+    }
+
+    public bool IsAtBottom(int itemCount, double bottomThreshold, double bottomGeometryTolerance)
+    {
+        if (itemCount <= 0)
+        {
+            return true;
+        }
+
+        return IsLastItemVisiblyAtBottom(itemCount, bottomThreshold, bottomGeometryTolerance);
+    }
+
+    public bool IsLastItemVisiblyAtBottom(int itemCount, double bottomThreshold, double bottomGeometryTolerance)
+    {
+        if (itemCount <= 0 || !TryGetContainerAnchor(itemCount - 1, out var anchor))
+        {
+            return false;
+        }
+
+        Point relativeOrigin = anchor.TransformToVisual(_listView).TransformPoint(default);
+        var itemTop = relativeOrigin.Y;
+        var itemBottom = itemTop + anchor.ActualHeight;
+        var viewportTop = _listView.Padding.Top;
+        var viewportBottom = _listView.ActualHeight - bottomThreshold - _listView.Padding.Bottom;
+        if (itemBottom <= viewportBottom + bottomGeometryTolerance)
+        {
+            return true;
+        }
+
+        var availableViewportHeight = viewportBottom - viewportTop;
+        return anchor.ActualHeight <= availableViewportHeight + bottomGeometryTolerance
+            && itemTop >= viewportTop - bottomGeometryTolerance
+            && itemTop < viewportBottom;
+    }
+
+    public void Dispose()
+    {
+        _listView.ContainerContentChanging -= OnContainerContentChanging;
+        _listView.SizeChanged -= OnSizeChanged;
+        _viewportChangedQueued = false;
+    }
+
+    private bool TryGetContainerAnchor(int index, out FrameworkElement anchor)
+    {
+        anchor = null!;
+        if (_listView.ContainerFromIndex(index) is not ListViewItem container)
+        {
+            return false;
+        }
+
+        anchor = container.ContentTemplateRoot as FrameworkElement ?? container;
+        return true;
+    }
+
+    private static TranscriptVirtualizationRange ClampRange(TranscriptVirtualizationRange range, int itemCount)
+    {
+        if (itemCount <= 0 || range.Length <= 0)
+        {
+            return new TranscriptVirtualizationRange(0, 0);
+        }
+
+        var first = Math.Clamp(range.FirstIndex, 0, itemCount - 1);
+        var last = Math.Clamp(range.LastIndex, first, itemCount - 1);
+        return new TranscriptVirtualizationRange(first, last - first + 1);
+    }
+
+    private static ScrollIntoViewAlignment ToNativeAlignment(TranscriptItemScrollAlignment alignment)
+        => alignment == TranscriptItemScrollAlignment.Leading
+            ? ScrollIntoViewAlignment.Leading
+            : ScrollIntoViewAlignment.Default;
+
+    private void OnContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.ItemIndex >= 0)
+        {
+            if (args.InRecycleQueue)
+            {
+                _realizedIndices.Remove(args.ItemIndex);
+            }
+            else
+            {
+                _realizedIndices.Add(args.ItemIndex);
+            }
+        }
+
+        QueueViewportChanged();
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        QueueViewportChanged();
+    }
+
+    private void QueueViewportChanged()
+    {
+        if (_viewportChangedQueued)
+        {
+            return;
+        }
+
+        _viewportChangedQueued = true;
+        if (!_listView.DispatcherQueue.TryEnqueue(() =>
+            {
+                _viewportChangedQueued = false;
+                ViewportChanged?.Invoke(this, EventArgs.Empty);
+            }))
+        {
+            _viewportChangedQueued = false;
+        }
+    }
+}

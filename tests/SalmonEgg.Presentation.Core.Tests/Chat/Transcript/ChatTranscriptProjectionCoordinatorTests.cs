@@ -445,12 +445,60 @@ public sealed class ChatTranscriptProjectionCoordinatorUnitTests
         Assert.Equal("message-95", history[^1].Id);
     }
 
+    [Fact]
+    public void ApplyProjection_WhenSameSessionUpdatesExistingTranscript_KeepsVirtualizedSourceStable()
+    {
+        var previewStore = new Mock<IConversationPreviewStore>();
+        var coordinator = new ChatTranscriptProjectionCoordinator(previewStore.Object);
+        var originalHistory = new ChatTranscriptVirtualizedMessageCollection();
+        originalHistory.Reset(
+            "conv-1",
+            ImmutableList.Create(new ConversationMessageSnapshot
+            {
+                Id = "message-0",
+                Timestamp = new DateTime(2026, 5, 3, 0, 0, 0, DateTimeKind.Utc),
+                ContentType = "text",
+                TextContent = "draft"
+            }),
+            CreateProjectedMessage,
+            MatchesSnapshot);
+        _ = originalHistory[0];
+        var history = originalHistory;
+        var replaced = false;
+        var context = CreateContext(
+            () => history,
+            static (_, _) => false,
+            value =>
+            {
+                replaced = true;
+                history = value;
+            });
+
+        coordinator.ApplyProjection(
+            context,
+            "conv-1",
+            ImmutableList.Create(new ConversationMessageSnapshot
+            {
+                Id = "message-0",
+                Timestamp = new DateTime(2026, 5, 3, 0, 0, 0, DateTimeKind.Utc),
+                ContentType = "text",
+                TextContent = "streamed"
+            }),
+            sessionChanged: false);
+
+        Assert.False(replaced);
+        Assert.Same(originalHistory, history);
+        Assert.Equal("streamed", history[0].TextContent);
+    }
+
     private static ChatTranscriptProjectionContext CreateContext(
         Func<ChatTranscriptVirtualizedMessageCollection> getHistory,
-        Func<string?, bool, bool> updateVisibleTranscriptConversationId)
+        Func<string?, bool, bool> updateVisibleTranscriptConversationId,
+        Action<ChatTranscriptVirtualizedMessageCollection>? setHistory = null)
         => new()
         {
             GetMessageHistory = getHistory,
+            SetMessageHistory = setHistory ?? (_ => { }),
             FromSnapshot = CreateProjectedMessage,
             MatchesSnapshot = MatchesSnapshot,
             GetProjectionItemKey = SalmonEgg.Presentation.Core.Services.Chat.TranscriptProjectionRestoreTokenProjector.CreateProjectionItemKey,

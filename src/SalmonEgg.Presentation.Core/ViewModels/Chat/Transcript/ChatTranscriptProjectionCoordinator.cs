@@ -109,11 +109,25 @@ internal sealed class ChatTranscriptProjectionCoordinator
     {
         var history = context.GetMessageHistory();
         var previousCount = history.Count;
-        history.Reset(
-            conversationId,
-            transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty,
-            context.FromSnapshot,
-            context.MatchesSnapshot);
+        var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        if (history.CanApplyInPlace(conversationId, messages))
+        {
+            history.Reset(
+                conversationId,
+                messages,
+                context.FromSnapshot,
+                context.MatchesSnapshot);
+        }
+        else
+        {
+            history = ChatTranscriptVirtualizedMessageCollection.Create(
+                conversationId,
+                messages,
+                context.FromSnapshot,
+                context.MatchesSnapshot);
+            context.SetMessageHistory(history);
+        }
+
         var transcriptOwnerChanged = context.UpdateVisibleTranscriptConversationId(conversationId, history.Count > 0);
         if (previousCount != history.Count || transcriptOwnerChanged)
         {

@@ -1,5 +1,11 @@
 namespace SalmonEgg.Presentation.Transcript;
 
+public enum TranscriptItemScrollAlignment
+{
+    Default = 0,
+    Leading = 1,
+}
+
 public interface ITranscriptViewportHost : IDisposable
 {
     event EventHandler? ViewportChanged;
@@ -8,13 +14,7 @@ public interface ITranscriptViewportHost : IDisposable
 
     bool TryGetFirstVisibleIndex(int itemCount, out int index);
 
-    bool TryGetRelativeOffsetWithinItem(int index, out double offset);
-
-    void ScrollItemIntoView(int index);
-
-    bool TryGetVerticalOffset(out double verticalOffset);
-
-    bool TrySetVerticalOffset(double verticalOffset);
+    void ScrollItemIntoView(int index, TranscriptItemScrollAlignment alignment = TranscriptItemScrollAlignment.Default);
 
     bool IsAtBottom(int itemCount, double bottomThreshold, double bottomGeometryTolerance);
 

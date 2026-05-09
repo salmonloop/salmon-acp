@@ -895,6 +895,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         _transcriptProjectionContext = new ChatTranscriptProjectionContext
         {
             GetMessageHistory = () => MessageHistory,
+            SetMessageHistory = history => MessageHistory = history,
             FromSnapshot = CreateProjectedMessageFromSnapshot,
             MatchesSnapshot = MatchesSnapshot,
             GetProjectionItemKey = GetProjectionItemKey,

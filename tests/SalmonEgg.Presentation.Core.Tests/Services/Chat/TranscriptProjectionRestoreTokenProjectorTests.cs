@@ -17,8 +17,8 @@ public sealed class TranscriptProjectionRestoreTokenProjectorTests
             Message("agent-002", "second"));
         var grownTranscript = baseTranscript.Add(Message("agent-003", "third"));
 
-        var before = sut.Project("conv-a", baseTranscript, firstVisibleIndex: 1, relativeOffsetWithinItem: 12d);
-        var after = sut.Project("conv-a", grownTranscript, firstVisibleIndex: 1, relativeOffsetWithinItem: 12d);
+        var before = sut.Project("conv-a", baseTranscript, firstVisibleIndex: 1);
+        var after = sut.Project("conv-a", grownTranscript, firstVisibleIndex: 1);
 
         Assert.True(before.IsReady);
         Assert.True(after.IsReady);
@@ -35,8 +35,7 @@ public sealed class TranscriptProjectionRestoreTokenProjectorTests
         var projection = sut.Project(
             "conv-a",
             ImmutableList<ConversationMessageSnapshot>.Empty,
-            firstVisibleIndex: -1,
-            relativeOffsetWithinItem: 0d);
+            firstVisibleIndex: -1);
 
         Assert.False(projection.IsReady);
         Assert.Null(projection.Token);
@@ -77,7 +76,7 @@ public sealed class TranscriptProjectionRestoreTokenProjectorTests
             Message(string.Empty, "first"),
             Message(null, "fallback"));
 
-        var projection = sut.Project("conv-a", transcript, firstVisibleIndex: 1, relativeOffsetWithinItem: 3d);
+        var projection = sut.Project("conv-a", transcript, firstVisibleIndex: 1);
 
         Assert.True(projection.IsReady);
         Assert.NotNull(projection.Token);

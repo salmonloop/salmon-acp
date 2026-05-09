@@ -11,8 +11,7 @@ public sealed class TranscriptViewportCoordinatorTests
         var token = new TranscriptProjectionRestoreToken(
             ConversationId: "conv-a",
             ProjectionEpoch: 7,
-            ProjectionItemKey: "msg:agent-0042",
-            OffsetHint: 18d);
+            ProjectionItemKey: "msg:agent-0042");
 
         sut.Handle(new TranscriptViewportEvent.SessionActivated("conv-a", 1, TranscriptViewportActivationKind.ColdEnter));
         sut.Handle(new TranscriptViewportEvent.UserDetached("conv-a", 1, token));
@@ -31,7 +30,7 @@ public sealed class TranscriptViewportCoordinatorTests
     public void ProjectionReady_DispatchesRequestRestoreForPendingDetachedConversation()
     {
         var sut = new TranscriptViewportCoordinator();
-        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042", 18d);
+        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042");
 
         sut.Handle(new TranscriptViewportEvent.SessionActivated("conv-a", 1, TranscriptViewportActivationKind.ColdEnter));
         sut.Handle(new TranscriptViewportEvent.UserDetached("conv-a", 1, token));
@@ -49,7 +48,7 @@ public sealed class TranscriptViewportCoordinatorTests
     public void RestoreConfirmed_ReturnsConversationToDetachedStateAfterRestore()
     {
         var sut = new TranscriptViewportCoordinator();
-        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042", 18d);
+        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042");
 
         sut.Handle(new TranscriptViewportEvent.SessionActivated("conv-a", 1, TranscriptViewportActivationKind.ColdEnter));
         sut.Handle(new TranscriptViewportEvent.UserDetached("conv-a", 1, token));
@@ -68,7 +67,7 @@ public sealed class TranscriptViewportCoordinatorTests
     public void RestoreUnavailable_LeavesConversationDetachedWithoutBottomRecovery()
     {
         var sut = new TranscriptViewportCoordinator();
-        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042", 18d);
+        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042");
 
         sut.Handle(new TranscriptViewportEvent.SessionActivated("conv-a", 1, TranscriptViewportActivationKind.ColdEnter));
         sut.Handle(new TranscriptViewportEvent.UserDetached("conv-a", 1, token));
@@ -87,7 +86,7 @@ public sealed class TranscriptViewportCoordinatorTests
     public void RestoreAbandoned_LeavesConversationDetachedWithoutBottomRecovery()
     {
         var sut = new TranscriptViewportCoordinator();
-        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042", 18d);
+        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042");
 
         sut.Handle(new TranscriptViewportEvent.SessionActivated("conv-a", 1, TranscriptViewportActivationKind.ColdEnter));
         sut.Handle(new TranscriptViewportEvent.UserDetached("conv-a", 1, token));
@@ -106,7 +105,7 @@ public sealed class TranscriptViewportCoordinatorTests
     public void ProjectionReady_WithStaleGeneration_IsIgnoredAndPreservesPendingRestore()
     {
         var sut = new TranscriptViewportCoordinator();
-        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042", 18d);
+        var token = new TranscriptProjectionRestoreToken("conv-a", 7, "msg:agent-0042");
 
         sut.Handle(new TranscriptViewportEvent.SessionActivated("conv-a", 1, TranscriptViewportActivationKind.ColdEnter));
         sut.Handle(new TranscriptViewportEvent.UserDetached("conv-a", 1, token));

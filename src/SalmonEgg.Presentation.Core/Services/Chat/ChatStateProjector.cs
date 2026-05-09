@@ -80,8 +80,7 @@ public sealed class ChatStateProjector : IChatStateProjector
         var restoreProjection = _restoreTokenProjector.Project(
             conversationId: hydratedConversationId ?? string.Empty,
             transcript,
-            firstVisibleIndex: transcript.Count > 0 ? transcript.Count - 1 : -1,
-            relativeOffsetWithinItem: 0d);
+            firstVisibleIndex: transcript.Count > 0 ? transcript.Count - 1 : -1);
 
         return new ChatUiProjection(
             HydratedConversationId: hydratedConversationId,

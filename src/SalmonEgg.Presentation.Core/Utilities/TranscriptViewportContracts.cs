@@ -29,8 +29,7 @@ public readonly record struct TranscriptViewportTransition(
 public readonly record struct TranscriptProjectionRestoreToken(
     string ConversationId,
     long ProjectionEpoch,
-    string ProjectionItemKey,
-    double OffsetHint);
+    string ProjectionItemKey);
 
 public enum TranscriptViewportActivationKind
 {

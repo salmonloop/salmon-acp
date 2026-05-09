@@ -7,6 +7,8 @@ internal sealed class ChatTranscriptProjectionContext
 {
     public required Func<ChatTranscriptVirtualizedMessageCollection> GetMessageHistory { get; init; }
 
+    public required Action<ChatTranscriptVirtualizedMessageCollection> SetMessageHistory { get; init; }
+
     public required Func<ConversationMessageSnapshot, int, ChatMessageViewModel> FromSnapshot { get; init; }
 
     public required Func<ChatMessageViewModel, ConversationMessageSnapshot, bool> MatchesSnapshot { get; init; }

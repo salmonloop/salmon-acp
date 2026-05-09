@@ -84,6 +84,27 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
         set => throw new NotSupportedException();
     }
 
+    public static ChatTranscriptVirtualizedMessageCollection Create(
+        string? conversationId,
+        IImmutableList<ConversationMessageSnapshot> transcript,
+        Func<ConversationMessageSnapshot, int, ChatMessageViewModel> projector,
+        Func<ChatMessageViewModel, ConversationMessageSnapshot, bool> matchesSnapshot)
+    {
+        var collection = new ChatTranscriptVirtualizedMessageCollection();
+        collection.ReplaceWithoutNotifications(conversationId, transcript, projector, matchesSnapshot);
+        return collection;
+    }
+
+    public bool CanApplyInPlace(
+        string? conversationId,
+        IImmutableList<ConversationMessageSnapshot> transcript)
+    {
+        var messages = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        var sameConversation = string.Equals(_conversationId, conversationId, StringComparison.Ordinal);
+        return sameConversation
+            && messages.Count >= _transcript.Count;
+    }
+
     public void Reset(
         string? conversationId,
         IImmutableList<ConversationMessageSnapshot> transcript,
@@ -98,7 +119,7 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
         var oldTranscript = _transcript;
         var sameConversation = string.Equals(_conversationId, conversationId, StringComparison.Ordinal);
         var unchangedTranscript = sameConversation && ReferenceEquals(oldTranscript, messages);
-        var shouldAppend = CanPublishAppend(oldTranscript, messages, sameConversation);
+        var addedCount = Math.Max(0, messages.Count - oldCount);
 
         _conversationId = conversationId;
         _transcript = messages;
@@ -110,20 +131,32 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
             return;
         }
 
-        PruneChangedCachedItems(oldTranscript, messages, sameConversation);
-        if (shouldAppend)
+        PublishChangedCachedItems(oldTranscript, messages, sameConversation);
+        if (addedCount > 0)
         {
-            RaiseAppend(oldCount, messages.Count - oldCount);
-        }
-        else
-        {
-            RaiseReset();
+            RaiseAppend(oldCount, addedCount);
         }
 
         if (oldCount != messages.Count)
         {
             OnPropertyChanged(nameof(Count));
         }
+    }
+
+    private void ReplaceWithoutNotifications(
+        string? conversationId,
+        IImmutableList<ConversationMessageSnapshot> transcript,
+        Func<ConversationMessageSnapshot, int, ChatMessageViewModel> projector,
+        Func<ChatMessageViewModel, ConversationMessageSnapshot, bool> matchesSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(projector);
+        ArgumentNullException.ThrowIfNull(matchesSnapshot);
+
+        _conversationId = conversationId;
+        _transcript = transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty;
+        _projector = projector;
+        _matchesSnapshot = matchesSnapshot;
+        _cache.Clear();
     }
 
     public int IndexOf(ChatMessageViewModel item)
@@ -152,6 +185,27 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
                 {
                     return index;
                 }
+            }
+        }
+
+        return -1;
+    }
+
+    public int IndexOfProjectionItemKey(string projectionItemKey)
+    {
+        if (string.IsNullOrWhiteSpace(projectionItemKey))
+        {
+            return -1;
+        }
+
+        for (var index = 0; index < _transcript.Count; index++)
+        {
+            if (string.Equals(
+                    projectionItemKey,
+                    TranscriptProjectionRestoreTokenProjector.CreateProjectionItemKey(_transcript[index], index),
+                    StringComparison.Ordinal))
+            {
+                return index;
             }
         }
 
@@ -231,7 +285,7 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
         return _matchesSnapshot(item, _transcript[index]);
     }
 
-    private void PruneChangedCachedItems(
+    private void PublishChangedCachedItems(
         IImmutableList<ConversationMessageSnapshot> oldTranscript,
         IImmutableList<ConversationMessageSnapshot> newTranscript,
         bool sameConversation)
@@ -244,19 +298,26 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
 
         foreach (var entry in _cache.ToArray())
         {
-            if (entry.Key >= newTranscript.Count
-                || entry.Key >= oldTranscript.Count
-                || !_matchesSnapshot(entry.Value, newTranscript[entry.Key]))
+            if (entry.Key >= newTranscript.Count || entry.Key >= oldTranscript.Count)
             {
                 _cache.Remove(entry.Key);
+                continue;
+            }
+
+            if (!_matchesSnapshot(entry.Value, newTranscript[entry.Key]))
+            {
+                var oldItem = entry.Value;
+                var newItem = CreateItem(entry.Key);
+                _cache[entry.Key] = newItem;
+                CollectionChanged?.Invoke(
+                    this,
+                    new NotifyCollectionChangedEventArgs(
+                        NotifyCollectionChangedAction.Replace,
+                        newItem,
+                        oldItem,
+                        entry.Key));
             }
         }
-    }
-
-    private void RaiseReset()
-    {
-        CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-        OnPropertyChanged("Item[]");
     }
 
     private void RaiseAppend(int startIndex, int count)
@@ -274,68 +335,6 @@ public sealed class ChatTranscriptVirtualizedMessageCollection :
                 new ProjectedRangeList(this, startIndex, count),
                 startIndex));
         OnPropertyChanged("Item[]");
-    }
-
-    private static bool CanPublishAppend(
-        IImmutableList<ConversationMessageSnapshot> oldTranscript,
-        IImmutableList<ConversationMessageSnapshot> newTranscript,
-        bool sameConversation)
-    {
-        if (!sameConversation || oldTranscript.Count <= 0 || newTranscript.Count <= oldTranscript.Count)
-        {
-            return false;
-        }
-
-        for (var index = 0; index < oldTranscript.Count; index++)
-        {
-            if (!SnapshotsHaveSameStableProjection(oldTranscript[index], newTranscript[index]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool SnapshotsHaveSameStableProjection(
-        ConversationMessageSnapshot left,
-        ConversationMessageSnapshot right)
-        => string.Equals(left.Id, right.Id, StringComparison.Ordinal)
-            && left.Timestamp == right.Timestamp
-            && left.IsOutgoing == right.IsOutgoing
-            && string.Equals(left.ContentType ?? string.Empty, right.ContentType ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.Title ?? string.Empty, right.Title ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.TextContent ?? string.Empty, right.TextContent ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.ImageData ?? string.Empty, right.ImageData ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.ImageMimeType ?? string.Empty, right.ImageMimeType ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.AudioData ?? string.Empty, right.AudioData ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.AudioMimeType ?? string.Empty, right.AudioMimeType ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(left.ToolCallId, right.ToolCallId, StringComparison.Ordinal)
-            && left.ToolCallKind == right.ToolCallKind
-            && left.ToolCallStatus == right.ToolCallStatus
-            && string.Equals(left.ToolCallJson, right.ToolCallJson, StringComparison.Ordinal)
-            && ToolCallContentSnapshots.SequenceEquals(left.ToolCallContent, right.ToolCallContent)
-            && ToolCallContentSnapshots.LocationsSequenceEquals(left.ToolCallLocations, right.ToolCallLocations)
-            && string.Equals(left.ModeId, right.ModeId, StringComparison.Ordinal)
-            && PlanEntriesHaveSameStableProjection(left.PlanEntry, right.PlanEntry);
-
-    private static bool PlanEntriesHaveSameStableProjection(
-        ConversationPlanEntrySnapshot? left,
-        ConversationPlanEntrySnapshot? right)
-    {
-        if (left is null && right is null)
-        {
-            return true;
-        }
-
-        if (left is null || right is null)
-        {
-            return false;
-        }
-
-        return string.Equals(left.Content ?? string.Empty, right.Content ?? string.Empty, StringComparison.Ordinal)
-            && left.Status == right.Status
-            && left.Priority == right.Priority;
     }
 
     private void OnPropertyChanged(string propertyName)

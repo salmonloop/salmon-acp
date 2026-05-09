@@ -135,46 +135,38 @@ public sealed class ChatViewXamlTests
         Assert.DoesNotContain("TryExpandOlderRenderedTranscriptWindow", miniChatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMaterializeRenderedTranscriptProjectionItem", miniChatViewCode, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n        {\r\n            var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n            TryApplyPendingProjectionRestore();", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("OnMessagesListLayoutUpdated(object? sender, object e)\r\n    {\r\n        var lastItemContainerGenerated = HasLastItemContainerGenerated(ViewModel.MessageHistory.Count);\r\n        TryApplyPendingProjectionRestore();", miniChatViewCode, StringComparison.Ordinal);
     }
 
     [Fact]
     [Trait("Suite", "Smoke")]
-    public void ChatTranscriptVirtualization_UsesNativeRangeInfoAdapterWithoutUiTypesInCore()
+    public void ChatTranscriptVirtualization_UsesNativeListViewBindingWithoutUiTypesInCore()
     {
-        var adapterCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Collections\ChatTranscriptItemsSourceAdapter.cs");
         var coreCollectionCode = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Chat\Transcript\ChatTranscriptVirtualizedMessageCollection.cs");
         var chatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
         var miniChatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");
-        Assert.Contains("IItemsRangeInfo", adapterCode, StringComparison.Ordinal);
-        Assert.Contains("RangesChanged(ItemIndexRange visibleRange, IReadOnlyList<ItemIndexRange> trackedItems)", adapterCode, StringComparison.Ordinal);
-        Assert.Contains("_rangeCache.ApplyRequiredRanges(ConvertRange(visibleRange), trackedRanges);", adapterCode, StringComparison.Ordinal);
-        Assert.Contains("new ChatTranscriptRangeCache(_source)", adapterCode, StringComparison.Ordinal);
-        Assert.Contains("e.Action == NotifyCollectionChangedAction.Reset", adapterCode, StringComparison.Ordinal);
-        Assert.Contains("_rangeCache?.Clear();", adapterCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("_source.ApplyRequiredRanges", adapterCode, StringComparison.Ordinal);
-        Assert.Contains("<ScrollViewer x:Name=\"MessagesScrollViewer\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("<ScrollViewer x:Name=\"MessagesScrollViewer\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ListView x:Name=\"MessagesList\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ListView x:Name=\"MessagesList\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ItemsPanelTemplate>", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ItemsPanelTemplate>", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ItemsStackPanel", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("<ItemsStackPanel", miniChatViewXaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatView.MessagesList\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("<muxc:ItemsRepeater x:Name=\"MessagesRepeater\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("<muxc:ItemsRepeater x:Name=\"MessagesRepeater\"", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{x:Bind TranscriptItemsSource, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemTemplate=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemTemplate=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("<muxc:StackLayout />", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("<muxc:StackLayout />", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<ListView x:Name=\"MessagesList\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<ListView x:Name=\"MessagesList\"", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemContainerStyle", chatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemContainerStyle", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectionMode=", chatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectionMode=", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.MessageHistory, Mode=OneWay}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionMode=\"None\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionMode=\"None\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ScrollViewer x:Name=\"MessagesScrollViewer\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ScrollViewer x:Name=\"MessagesScrollViewer\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<muxc:ItemsRepeater", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<muxc:ItemsRepeater", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<muxc:StackLayout", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<muxc:StackLayout", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowsScrollingPlaceholders", chatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowsScrollingPlaceholders", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ScrollViewerViewportMonitor", chatViewXaml, StringComparison.Ordinal);
