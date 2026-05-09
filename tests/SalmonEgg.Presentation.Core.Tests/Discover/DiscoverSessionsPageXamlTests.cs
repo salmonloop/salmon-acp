@@ -8,7 +8,7 @@ public sealed class DiscoverSessionsPageXamlTests
     public void DiscoverSessionsPage_AffinityPreview_UsesViewModelDrivenBindings()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Discover\DiscoverSessionsPage.xaml");
 
         // Assert
         Assert.Contains("Text=\"{x:Bind ProjectAffinityBadgeText, Mode=OneTime}\"", xaml, StringComparison.Ordinal);
@@ -20,7 +20,7 @@ public sealed class DiscoverSessionsPageXamlTests
     public void DiscoverSessionsPage_AffinityPreview_DoesNotHardcodeResolverFallbackText()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Discover\DiscoverSessionsPage.xaml");
 
         // Assert
         Assert.DoesNotContain("Needs mapping", xaml, StringComparison.Ordinal);
@@ -31,7 +31,7 @@ public sealed class DiscoverSessionsPageXamlTests
     public void DiscoverSessionsPage_ResponsivePaneVisibility_IsViewModelDriven()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Discover\DiscoverSessionsPage.xaml");
 
         // Assert
         Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowProfilesPane, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
@@ -43,7 +43,7 @@ public sealed class DiscoverSessionsPageXamlTests
     public void DiscoverSessionsPage_AdaptiveLayout_UsesNativeStates_AndAvoidsOpacityHack()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Discover\DiscoverSessionsPage.xaml");
 
         // Assert
         Assert.Contains("AdaptiveTrigger", xaml, StringComparison.Ordinal);
@@ -55,7 +55,7 @@ public sealed class DiscoverSessionsPageXamlTests
     public void DiscoverSessionsPage_HeaderBindsToLocalSelectedProfileProjection()
     {
         // Arrange
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Discover\DiscoverSessionsPage.xaml");
 
         // Assert
         Assert.Contains("Text=\"{x:Bind ViewModel.SelectedProfile.Name, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
@@ -67,7 +67,7 @@ public sealed class DiscoverSessionsPageXamlTests
     [Fact]
     public void DiscoverSessionsPage_ExposesStableAutomationIds_ForGuiSmoke()
     {
-        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var xaml = LoadFile(@"SalmonEgg/SalmonEgg/Presentation\Views\Discover\DiscoverSessionsPage.xaml");
 
         Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.ProfilesList\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.SessionsList\"", xaml, StringComparison.Ordinal);
