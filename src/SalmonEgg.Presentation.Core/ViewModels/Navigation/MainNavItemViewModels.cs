@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Session;
+using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
@@ -88,6 +89,7 @@ public sealed partial class ProjectNavItemViewModel : MainNavItemViewModel
 public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
 {
     private readonly IUiInteractionService _ui;
+    private readonly IPlatformShellService _shell;
     private readonly IChatSessionCatalog _chatSessionCatalog;
 
     public string SessionId { get; }
@@ -95,6 +97,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
 
     private string _title = string.Empty;
     private string _relativeTimeText = string.Empty;
+    private string? _remoteSessionId;
     private bool _hasUnreadAttention;
 
     public string Title
@@ -107,6 +110,18 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
     {
         get => _relativeTimeText;
         set => SetProperty(ref _relativeTimeText, value);
+    }
+
+    public string? RemoteSessionId
+    {
+        get => _remoteSessionId;
+        set
+        {
+            if (SetProperty(ref _remoteSessionId, value))
+            {
+                CopySessionIdCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
 
     public bool HasUnreadAttention
@@ -131,6 +146,7 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
     public IAsyncRelayCommand MoveCommand { get; }
     public IAsyncRelayCommand RenameCommand { get; }
     public IAsyncRelayCommand ArchiveCommand { get; }
+    public IAsyncRelayCommand CopySessionIdCommand { get; }
 
     public SessionNavItemViewModel(
         string sessionId,
@@ -142,19 +158,49 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         INavigationPaneState navigationState,
         IUiDispatcher uiDispatcher,
         bool isPlaceholder = false)
+        : this(
+            sessionId,
+            remoteSessionId: null,
+            projectId,
+            title,
+            relativeTimeText,
+            ui,
+            NoOpPlatformShellService.Instance,
+            chatSessionCatalog,
+            navigationState,
+            uiDispatcher,
+            isPlaceholder)
+    {
+    }
+
+    public SessionNavItemViewModel(
+        string sessionId,
+        string? remoteSessionId,
+        string projectId,
+        string title,
+        string relativeTimeText,
+        IUiInteractionService ui,
+        IPlatformShellService shell,
+        IChatSessionCatalog chatSessionCatalog,
+        INavigationPaneState navigationState,
+        IUiDispatcher uiDispatcher,
+        bool isPlaceholder = false)
         : base(navigationState, uiDispatcher)
     {
         SessionId = sessionId;
+        _remoteSessionId = remoteSessionId;
         ProjectId = projectId;
         Title = title;
         RelativeTimeText = relativeTimeText;
         _ui = ui;
+        _shell = shell ?? throw new ArgumentNullException(nameof(shell));
         _chatSessionCatalog = chatSessionCatalog ?? throw new ArgumentNullException(nameof(chatSessionCatalog));
         IsPlaceholder = isPlaceholder;
 
         MoveCommand = new AsyncRelayCommand(MoveAsync, CanMove);
         RenameCommand = new AsyncRelayCommand(RenameAsync, CanRename);
         ArchiveCommand = new AsyncRelayCommand(ArchiveAsync, CanArchive);
+        CopySessionIdCommand = new AsyncRelayCommand(CopySessionIdAsync, CanCopySessionId);
     }
 
     private bool CanMove()
@@ -165,6 +211,19 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
 
     private bool CanArchive()
         => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
+
+    private bool CanCopySessionId()
+        => !IsPlaceholder && !string.IsNullOrWhiteSpace(RemoteSessionId);
+
+    private async Task CopySessionIdAsync()
+    {
+        if (!CanCopySessionId())
+        {
+            return;
+        }
+
+        _ = await _shell.CopyToClipboardAsync(RemoteSessionId!).ConfigureAwait(true);
+    }
 
     private async Task ArchiveAsync()
     {
@@ -255,4 +314,19 @@ public sealed partial class MoreSessionsNavItemViewModel : MainNavItemViewModel
         _count = remainingCount;
         ShowMoreCommand = showMoreCommand;
     }
+}
+
+internal sealed class NoOpPlatformShellService : IPlatformShellService
+{
+    public static NoOpPlatformShellService Instance { get; } = new();
+
+    private NoOpPlatformShellService()
+    {
+    }
+
+    public Task OpenFolderAsync(string path) => Task.CompletedTask;
+
+    public Task OpenFileAsync(string path) => Task.CompletedTask;
+
+    public Task<bool> CopyToClipboardAsync(string text) => Task.FromResult(false);
 }

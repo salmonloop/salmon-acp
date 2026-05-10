@@ -664,6 +664,7 @@ public sealed class MainNavigationViewModelSelectionTests
             var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
             var session = Assert.Single(project.Children.OfType<SessionNavItemViewModel>());
             Assert.Equal("session-remote", session.SessionId);
+            Assert.Equal("remote-1", session.RemoteSessionId);
         }
         finally
         {

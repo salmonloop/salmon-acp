@@ -36,6 +36,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly INavigationProjectPreferences _projectPreferences;
     private readonly IUiInteractionService _ui;
     private readonly INavigationCoordinator _navigationCoordinator;
+    private readonly IPlatformShellService _shell;
     private readonly ILogger<MainNavigationViewModel> _logger;
     private readonly INavigationPaneState _navigationState;
     private readonly IShellLayoutMetricsSink _metricsSink;
@@ -110,7 +111,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         IConversationCatalogReadModel conversationCatalogPresenter,
         IProjectAffinityResolver projectAffinityResolver,
         IUiDispatcher uiDispatcher,
-        IStringLocalizer<CoreStrings> localizer)
+        IStringLocalizer<CoreStrings> localizer,
+        IPlatformShellService? shell = null)
         : this(
             conversationCatalog,
             projectPreferences,
@@ -128,7 +130,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 uiDispatcher),
             projectAffinityResolver,
             uiDispatcher,
-            localizer)
+            localizer,
+            shell)
     {
     }
 
@@ -146,12 +149,14 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         IConversationCatalogDisplayReadModel conversationCatalogPresenter,
         IProjectAffinityResolver projectAffinityResolver,
         IUiDispatcher uiDispatcher,
-        IStringLocalizer<CoreStrings> localizer)
+        IStringLocalizer<CoreStrings> localizer,
+        IPlatformShellService? shell = null)
     {
         _chatSessionCatalogActions = conversationCatalog as IChatSessionCatalog ?? new ChatViewModelSessionCatalogAdapter(conversationCatalog);
         _projectPreferences = projectPreferences ?? throw new ArgumentNullException(nameof(projectPreferences));
         _ui = ui ?? throw new ArgumentNullException(nameof(ui));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
+        _shell = shell ?? NoOpPlatformShellService.Instance;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationState = navigationState ?? throw new ArgumentNullException(nameof(navigationState));
         _metricsSink = metricsSink ?? throw new ArgumentNullException(nameof(metricsSink));
@@ -347,10 +352,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         return new SessionNavItemViewModel(
             sessionId: "__loading__",
+            remoteSessionId: null,
             projectId: UnclassifiedProjectId,
             title: "加载中…",
             relativeTimeText: string.Empty,
             ui: _ui,
+            shell: _shell,
             chatSessionCatalog: _chatSessionCatalogActions,
             navigationState: _navigationState,
             uiDispatcher: _uiDispatcher,
@@ -605,6 +612,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 {
                     sessionVm = existingSvm;
                     sessionVm.Title = title;
+                    sessionVm.RemoteSessionId = session.RemoteSessionId;
                     sessionVm.RelativeTimeText = relative;
                     sessionVm.HasUnreadAttention = session.HasUnreadAttention;
                 }
@@ -619,6 +627,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                     // Note: We don't dispose here because we are re-inserting it at a new position
                     projectVm.Children.Remove(sessionVm);
                     sessionVm.Title = title;
+                    sessionVm.RemoteSessionId = session.RemoteSessionId;
                     sessionVm.RelativeTimeText = relative;
                     sessionVm.HasUnreadAttention = session.HasUnreadAttention;
                 }
@@ -626,10 +635,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 {
                     sessionVm = new SessionNavItemViewModel(
                             sessionId: session.ConversationId,
+                            remoteSessionId: session.RemoteSessionId,
                             projectId: projectVm.ProjectId,
                             title: title,
                             relativeTimeText: relative,
                             ui: _ui,
+                            shell: _shell,
                             chatSessionCatalog: _chatSessionCatalogActions,
                             navigationState: _navigationState,
                             uiDispatcher: _uiDispatcher);
@@ -882,10 +893,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 var relative = NavTimeFormatter.ToRelativeText(session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt);
                 var vm = new SessionNavItemViewModel(
                     sessionId: session.ConversationId,
+                    remoteSessionId: session.RemoteSessionId,
                     projectId: projectVm.ProjectId,
                     title: title,
                     relativeTimeText: relative,
                     ui: _ui,
+                    shell: _shell,
                     chatSessionCatalog: _chatSessionCatalogActions,
                     navigationState: _navigationState,
                     uiDispatcher: _uiDispatcher);
@@ -946,10 +959,12 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             var relative = NavTimeFormatter.ToRelativeText(s.LastUpdatedAt == default ? s.CreatedAt : s.LastUpdatedAt);
             var vm = new SessionNavItemViewModel(
                 sessionId: s.ConversationId,
+                remoteSessionId: s.RemoteSessionId,
                 projectId: projectId,
                 title: title,
                 relativeTimeText: relative,
                 ui: _ui,
+                shell: _shell,
                 chatSessionCatalog: _chatSessionCatalogActions,
                 navigationState: _navigationState,
                 uiDispatcher: _uiDispatcher);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
+using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Services;
@@ -13,6 +14,36 @@ namespace SalmonEgg.Presentation.Core.Tests.Navigation;
 
 public sealed class SessionNavItemViewModelTests
 {
+    [Fact]
+    public async Task CopySessionIdCommand_CopiesAcpSessionId_NotLocalConversationId()
+    {
+        var shell = new RecordingPlatformShellService();
+        var item = CreateItem(
+            new RecordingUiInteractionService(),
+            new RecordingChatSessionCatalog([]),
+            remoteSessionId: "remote-session-42",
+            shell: shell);
+
+        await item.CopySessionIdCommand.ExecuteAsync(null);
+
+        Assert.Equal("remote-session-42", shell.LastCopiedText);
+    }
+
+    [Fact]
+    public async Task CopySessionIdCommand_WithoutAcpSessionId_DoesNotWriteClipboard()
+    {
+        var shell = new RecordingPlatformShellService();
+        var item = CreateItem(
+            new RecordingUiInteractionService(),
+            new RecordingChatSessionCatalog([]),
+            remoteSessionId: null,
+            shell: shell);
+
+        await item.CopySessionIdCommand.ExecuteAsync(null);
+
+        Assert.Null(shell.LastCopiedText);
+    }
+
     [Fact]
     public async Task MoveCommand_PicksTargetAndMovesConversation()
     {
@@ -91,13 +122,17 @@ public sealed class SessionNavItemViewModelTests
 
     private static SessionNavItemViewModel CreateItem(
         IUiInteractionService ui,
-        IChatSessionCatalog chatSessionCatalog)
+        IChatSessionCatalog chatSessionCatalog,
+        string? remoteSessionId = null,
+        IPlatformShellService? shell = null)
         => new(
             sessionId: "session-1",
+            remoteSessionId: remoteSessionId,
             projectId: "project-1",
             title: "Session 1",
             relativeTimeText: "刚刚",
             ui: ui,
+            shell: shell ?? new RecordingPlatformShellService(),
             chatSessionCatalog: chatSessionCatalog,
             navigationState: new FakeNavigationPaneState(), uiDispatcher: new SalmonEgg.Presentation.Core.Tests.Threading.ImmediateUiDispatcher());
 
@@ -195,6 +230,21 @@ public sealed class SessionNavItemViewModelTests
         public void MoveConversationToProject(string conversationId, string projectId)
         {
             LastMoveRequest = (conversationId, projectId);
+        }
+    }
+
+    private sealed class RecordingPlatformShellService : IPlatformShellService
+    {
+        public string? LastCopiedText { get; private set; }
+
+        public Task OpenFolderAsync(string path) => Task.CompletedTask;
+
+        public Task OpenFileAsync(string path) => Task.CompletedTask;
+
+        public Task<bool> CopyToClipboardAsync(string text)
+        {
+            LastCopiedText = text;
+            return Task.FromResult(true);
         }
     }
 }

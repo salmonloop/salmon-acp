@@ -619,6 +619,9 @@
   <data name="StartAgentSelector.AutomationProperties.Name" xml:space="preserve">
     <value>New session agent selector</value>
   </data>
+  <data name="SessionNavCopySessionIdItem.Text" xml:space="preserve">
+    <value>Copy ACP Session ID</value>
+  </data>
   <data name="SessionNavArchiveItem.Text" xml:space="preserve">
     <value>Archive...</value>
   </data>

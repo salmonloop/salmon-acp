@@ -195,6 +195,9 @@
                                         AutomationProperties.AutomationId="MainNav.Session.Context.Rename"
                                         Click="OnSessionRenameMenuItemClick"
                                         CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="SessionNavCopySessionIdItem"
+                                        AutomationProperties.AutomationId="MainNav.Session.Context.CopySessionId"
+                                        Command="{x:Bind CopySessionIdCommand}" />
                     </MenuFlyout>
                 </NavigationViewItem.ContextFlyout>
             </NavigationViewItem>

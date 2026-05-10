@@ -562,6 +562,9 @@
   <data name="ProjectNavNewSessionItem.Text" xml:space="preserve">
     <value>新建会话</value>
   </data>
+  <data name="SessionNavCopySessionIdItem.Text" xml:space="preserve">
+    <value>复制 ACP Session ID</value>
+  </data>
   <data name="SessionNavArchiveItem.Text" xml:space="preserve">
     <value>归档…</value>
   </data>
