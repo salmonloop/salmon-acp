@@ -86,13 +86,18 @@ public sealed class LocalTerminalPanelSessionViewModel : ObservableObject
 
         var normalizedPath = currentWorkingDirectory.TrimEnd(
             Path.DirectorySeparatorChar,
-            Path.AltDirectorySeparatorChar);
+            Path.AltDirectorySeparatorChar,
+            '\\',
+            '/');
         if (normalizedPath.Length == 0)
         {
             return DefaultDisplayTitle;
         }
 
-        var fileName = Path.GetFileName(normalizedPath);
+        var lastSeparatorIndex = normalizedPath.LastIndexOfAny(['\\', '/']);
+        var fileName = lastSeparatorIndex >= 0
+            ? normalizedPath[(lastSeparatorIndex + 1)..]
+            : normalizedPath;
         return string.IsNullOrWhiteSpace(fileName)
             ? normalizedPath
             : fileName;
