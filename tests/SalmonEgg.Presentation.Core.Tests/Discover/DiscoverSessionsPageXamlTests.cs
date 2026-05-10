@@ -75,6 +75,16 @@ public sealed class DiscoverSessionsPageXamlTests
         Assert.Contains("AutomationProperties.AutomationId=\"DiscoverSessions.ImportButton\"", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DiscoverSessionsPage_CodeBehind_AvoidsDoubleDrivingProfileSelectionAndDetailOpen()
+    {
+        var codeBehind = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml.cs");
+
+        Assert.Contains("var wasAlreadySelected = ReferenceEquals(ViewModel.SelectedProfile, profile);", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("if (!wasAlreadySelected)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("if (wasAlreadySelected && ViewModel.OpenProfileDetailsCommand.CanExecute(null))", codeBehind, StringComparison.Ordinal);
+    }
+
     private static string LoadFile(string relativePath)
     {
         var root = FindRepoRoot();

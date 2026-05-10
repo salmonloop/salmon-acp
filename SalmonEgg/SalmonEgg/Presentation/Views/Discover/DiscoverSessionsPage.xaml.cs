@@ -43,12 +43,13 @@ public sealed partial class DiscoverSessionsPage : Page
             return;
         }
 
-        if (!ReferenceEquals(ViewModel.SelectedProfile, profile))
+        var wasAlreadySelected = ReferenceEquals(ViewModel.SelectedProfile, profile);
+        if (!wasAlreadySelected)
         {
             ViewModel.SelectedProfile = profile;
         }
 
-        if (ViewModel.OpenProfileDetailsCommand.CanExecute(null))
+        if (wasAlreadySelected && ViewModel.OpenProfileDetailsCommand.CanExecute(null))
         {
             ViewModel.OpenProfileDetailsCommand.Execute(null);
         }
