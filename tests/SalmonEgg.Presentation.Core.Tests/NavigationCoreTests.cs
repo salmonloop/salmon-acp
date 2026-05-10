@@ -79,8 +79,8 @@ public sealed class NavigationCoreTests
     public void CoreStrings_ProvidesEnglishSettingsNavigationLabel()
     {
         var root = FindRepoRoot();
-        var en = File.ReadAllText(Path.Combine(root, @"src\SalmonEgg.Presentation.Core\Resources\CoreStrings.en.resx"));
-        var enUs = File.ReadAllText(Path.Combine(root, @"src\SalmonEgg.Presentation.Core\Resources\CoreStrings.en-US.resx"));
+        var en = File.ReadAllText(Path.Combine(root, NormalizeRelativePath(@"src\SalmonEgg.Presentation.Core\Resources\CoreStrings.en.resx")));
+        var enUs = File.ReadAllText(Path.Combine(root, NormalizeRelativePath(@"src\SalmonEgg.Presentation.Core\Resources\CoreStrings.en-US.resx")));
 
         Assert.Contains("<data name=\"Nav_Settings\"", en, StringComparison.Ordinal);
         Assert.Contains("<value>Settings</value>", en, StringComparison.Ordinal);
@@ -834,7 +834,7 @@ public sealed class NavigationCoreTests
     private static string LoadFile(string relativePath)
     {
         var root = FindRepoRoot();
-        return File.ReadAllText(Path.Combine(root, relativePath));
+        return File.ReadAllText(Path.Combine(root, NormalizeRelativePath(relativePath)));
     }
 
     private static string ExtractSection(string content, string startMarker, string? endMarker = null)
@@ -868,4 +868,7 @@ public sealed class NavigationCoreTests
 
         throw new DirectoryNotFoundException("Repository root (SalmonEgg.sln) not found.");
     }
+
+    private static string NormalizeRelativePath(string relativePath)
+        => relativePath.Replace('\\', Path.DirectorySeparatorChar);
 }

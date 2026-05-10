@@ -52,5 +52,12 @@ public sealed class ToolCallPillComplianceTests
     }
 
     private static string GetRepoPath(string relativePath)
-        => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", relativePath));
+        => Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            relativePath.Replace('\\', Path.DirectorySeparatorChar)));
 }

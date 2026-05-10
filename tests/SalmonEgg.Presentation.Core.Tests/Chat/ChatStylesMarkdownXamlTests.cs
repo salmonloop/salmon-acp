@@ -108,10 +108,10 @@ public sealed class ChatStylesMarkdownXamlTests
         var chatViewXaml = LoadRepoFile("SalmonEgg", "SalmonEgg", "Presentation", "Views", "Chat", "ChatView.xaml");
         var miniChatViewXaml = LoadRepoFile("SalmonEgg", "SalmonEgg", "Presentation", "Views", "MiniWindow", "MiniChatView.xaml");
 
-        Assert.Contains("ItemTemplate=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemTemplate=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemTemplateSelector=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemTemplate=\"{StaticResource MessageTemplateSelector}\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemTemplate=\"{StaticResource MessageTemplateSelector}\"", miniChatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemTemplate=\"{StaticResource MessageTemplate}\"", chatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemTemplate=\"{StaticResource MessageTemplate}\"", miniChatViewXaml, StringComparison.Ordinal);
     }

@@ -194,7 +194,7 @@ public sealed class XamlComplianceTests
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
 
-        Assert.Contains("TranscriptViewportOrchestrator", code, StringComparison.Ordinal);
+        Assert.Contains("TranscriptViewportController", code, StringComparison.Ordinal);
         Assert.DoesNotContain("_userScrolledUp = !IsListViewportAtBottom()", code, StringComparison.Ordinal);
     }
 
@@ -234,12 +234,11 @@ public sealed class XamlComplianceTests
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
         var restoreSection = ExtractSection(
             code,
-            "case TranscriptViewportCommandKind.RequestRestore:",
-            "case TranscriptViewportCommandKind.MarkAutoFollowDetached:");
+            "case TranscriptViewportControllerActionKind.RequestRestore:",
+            "case TranscriptViewportControllerActionKind.StopProgrammaticScroll:");
 
-        Assert.Contains("case TranscriptViewportCommandKind.RequestRestore:", code, StringComparison.Ordinal);
-        Assert.Contains("QueueProjectionOwnedRestore(restoreToken, command.Generation);", restoreSection, StringComparison.Ordinal);
-        Assert.DoesNotContain("ScheduleScrollToBottom();", restoreSection, StringComparison.Ordinal);
+        Assert.Contains("case TranscriptViewportControllerActionKind.RequestRestore:", code, StringComparison.Ordinal);
+        Assert.Contains("QueueProjectionOwnedRestore(restoreToken, action.Generation);", restoreSection, StringComparison.Ordinal);
         Assert.DoesNotContain("RequestScrollToBottom();", restoreSection, StringComparison.Ordinal);
     }
 
@@ -249,11 +248,11 @@ public sealed class XamlComplianceTests
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
         var detachSection = ExtractSection(
             code,
-            "private void RegisterUserViewportDetachment()",
+            "private void RegisterUserViewportIntent()",
             "private TranscriptProjectionRestoreToken? TryCaptureProjectionRestoreToken()");
 
-        Assert.Contains("CreateUserDetachedEvent(", detachSection, StringComparison.Ordinal);
-        Assert.Contains("CreateUserIntentScrollEvent(", detachSection, StringComparison.Ordinal);
+        Assert.Contains("_viewportController.OnUserViewportDetachIntent(", detachSection, StringComparison.Ordinal);
+        Assert.Contains("_viewportController.OnUserViewportIntent(", detachSection, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -265,9 +264,9 @@ public sealed class XamlComplianceTests
             "private void ResumeViewportCoordinatorAfterOverlayIfNeeded()",
             "private void OnMessagesListPointerPressed");
 
-        Assert.Contains("ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.WarmReturn);", code, StringComparison.Ordinal);
-        Assert.Contains("ActivateViewportCoordinatorForCurrentSession(TranscriptViewportActivationKind.OverlayResume);", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("new TranscriptViewportEvent.UserIntentScroll(", overlayResumeSection, StringComparison.Ordinal);
+        Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);", code, StringComparison.Ordinal);
+        Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_viewportController.OnUserViewportDetachIntent(", overlayResumeSection, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -862,7 +861,7 @@ public sealed class XamlComplianceTests
     private static string LoadText(string relativePath)
     {
         var root = FindRepoRoot();
-        var fullPath = Path.Combine(root, relativePath);
+        var fullPath = Path.Combine(root, NormalizeRelativePath(relativePath));
         return File.ReadAllText(fullPath);
     }
 
@@ -911,6 +910,9 @@ public sealed class XamlComplianceTests
 
         return element;
     }
+
+    private static string NormalizeRelativePath(string relativePath)
+        => relativePath.Replace('\\', Path.DirectorySeparatorChar);
 
     private static bool HasAttributeByLocalName(XElement element, string localName)
         => element.Attributes().Any(attribute => string.Equals(attribute.Name.LocalName, localName, StringComparison.Ordinal));

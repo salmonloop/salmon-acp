@@ -33,7 +33,7 @@ public sealed class AcpConnectionSettingsXamlTests
     private static string LoadFile(string relativePath)
     {
         var root = FindRepoRoot();
-        return File.ReadAllText(Path.Combine(root, relativePath));
+        return File.ReadAllText(Path.Combine(root, NormalizeRelativePath(relativePath)));
     }
 
     private static string FindRepoRoot()
@@ -51,4 +51,7 @@ public sealed class AcpConnectionSettingsXamlTests
 
         throw new DirectoryNotFoundException("Repository root (SalmonEgg.sln) not found.");
     }
+
+    private static string NormalizeRelativePath(string relativePath)
+        => relativePath.Replace('\\', Path.DirectorySeparatorChar);
 }

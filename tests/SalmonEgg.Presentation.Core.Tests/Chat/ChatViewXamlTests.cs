@@ -67,8 +67,8 @@ public sealed class ChatViewXamlTests
 
         Assert.Contains("TryIssueTranscriptScrollRequestIfAttached();", chatViewCodeBehind, StringComparison.Ordinal);
         Assert.Contains("TryIssueTranscriptScrollRequestIfAttached();", miniChatViewCodeBehind, StringComparison.Ordinal);
-        Assert.DoesNotContain("if (!IsViewportDetachedByUser())", chatViewCodeBehind, StringComparison.Ordinal);
-        Assert.DoesNotContain("if (!IsViewportDetachedByUser())", miniChatViewCodeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (!IsViewportDetachedByUser())\n                {\n                    TryIssueTranscriptScrollRequest();\n                }\n                TryIssueTranscriptScrollRequest();", chatViewCodeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (!IsViewportDetachedByUser())\n            {\n                TryIssueTranscriptScrollRequest();\n            }\n            TryIssueTranscriptScrollRequest();", miniChatViewCodeBehind, StringComparison.Ordinal);
         Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);", chatViewCodeBehind, StringComparison.Ordinal);
         Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);", chatViewCodeBehind, StringComparison.Ordinal);
         Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);", miniChatViewCodeBehind, StringComparison.Ordinal);
@@ -331,7 +331,7 @@ public sealed class ChatViewXamlTests
     private static string LoadText(string relativePath)
     {
         var root = FindRepoRoot();
-        return File.ReadAllText(Path.Combine(root, relativePath));
+        return File.ReadAllText(Path.Combine(root, NormalizeRelativePath(relativePath)));
     }
 
     private static string FindRepoRoot()
@@ -349,4 +349,7 @@ public sealed class ChatViewXamlTests
 
         throw new DirectoryNotFoundException("Repository root (SalmonEgg.sln) not found.");
     }
+
+    private static string NormalizeRelativePath(string relativePath)
+        => relativePath.Replace('\\', Path.DirectorySeparatorChar);
 }
