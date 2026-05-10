@@ -159,6 +159,8 @@ public sealed class OutgoingUserMessageProjector
             ToolCallKind = snapshot.ToolCallKind,
             ToolCallStatus = snapshot.ToolCallStatus,
             ToolCallJson = snapshot.ToolCallJson,
+            ToolCallRawInputJson = snapshot.ToolCallRawInputJson,
+            ToolCallRawOutputJson = snapshot.ToolCallRawOutputJson,
             ToolCallContent = snapshot.ToolCallContent is null ? null : new List<ToolCallContent>(snapshot.ToolCallContent),
             ToolCallLocations = ToolCallContentSnapshots.CloneLocations(snapshot.ToolCallLocations),
             PlanEntry = snapshot.PlanEntry is null

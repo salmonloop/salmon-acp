@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SalmonEgg.Domain.Models.Content;
 using SalmonEgg.Domain.Models.Plan;
@@ -79,6 +80,21 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         [NotifyPropertyChangedFor(nameof(HasToolCallJson))]
         [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private string? _toolCallJson;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasToolCallRawInput))]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
+        private string? _toolCallRawInputJson;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasToolCallRawOutput))]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
+        private string? _toolCallRawOutputJson;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasToolCallDetails))]
+        [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
+        private IReadOnlyList<ToolCallDetailItem> _toolCallDetailItems = Array.Empty<ToolCallDetailItem>();
 
         [ObservableProperty]
         private IReadOnlyList<ToolCallContent>? _toolCallContent;
@@ -191,9 +207,12 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
                 ToolCallKind = kind,
                 ToolCallStatus = status,
                 ToolCallJson = toolCallJson,
+                ToolCallRawInputJson = rawInput,
+                ToolCallRawOutputJson = rawOutput,
                 Timestamp = DateTime.Now
             };
 
+            viewModel.RefreshToolCallDetails();
             viewModel.UpdateToolCallState();
             return viewModel;
         }
@@ -284,6 +303,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
                || HasToolCallJson
                || ToolCallKind is not null
                || ToolCallStatus is not null
+               || HasToolCallDetails
                || HasTitle);
 
 
@@ -311,6 +331,9 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
        };
 
        public bool HasToolCallJson => !string.IsNullOrWhiteSpace(ToolCallJson);
+       public bool HasToolCallRawInput => !string.IsNullOrWhiteSpace(ToolCallRawInputJson);
+       public bool HasToolCallRawOutput => !string.IsNullOrWhiteSpace(ToolCallRawOutputJson);
+       public bool HasToolCallDetails => ToolCallDetailItems.Count > 0;
 
        public void MarkMarkdownRenderFailed()
        {
@@ -350,7 +373,170 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
             IsToolCallCancelled = ToolCallStatus == Domain.Models.Tool.ToolCallStatus.Cancelled;
         }
 
+        private void RefreshToolCallDetails()
+        {
+            ToolCallDetailItems = ToolCallDetailProjector.Project(
+                ToolCallRawInputJson,
+                ToolCallRawOutputJson,
+                ToolCallContent,
+                ToolCallLocations,
+                ToolCallJson);
+        }
+
+        partial void OnToolCallJsonChanged(string? value) => RefreshToolCallDetails();
+        partial void OnToolCallRawInputJsonChanged(string? value) => RefreshToolCallDetails();
+        partial void OnToolCallRawOutputJsonChanged(string? value) => RefreshToolCallDetails();
+        partial void OnToolCallContentChanged(IReadOnlyList<ToolCallContent>? value) => RefreshToolCallDetails();
+        partial void OnToolCallLocationsChanged(IReadOnlyList<ToolCallLocation>? value) => RefreshToolCallDetails();
         partial void OnToolCallStatusChanged(Domain.Models.Tool.ToolCallStatus? value) => UpdateToolCallState();
+    }
+
+    public sealed record ToolCallDetailItem(string? Label, string Value, ToolCallDetailKind Kind = ToolCallDetailKind.Text)
+    {
+        public bool HasLabel => !string.IsNullOrWhiteSpace(Label);
+
+        public string DisplayText => HasLabel ? $"{Label}: {Value}" : Value;
+    }
+
+    public enum ToolCallDetailKind
+    {
+        Text,
+        Diff,
+        Terminal,
+        Location
+    }
+
+    internal static class ToolCallDetailProjector
+    {
+        public static IReadOnlyList<ToolCallDetailItem> Project(
+            string? rawInputJson,
+            string? rawOutputJson,
+            IReadOnlyList<ToolCallContent>? content,
+            IReadOnlyList<ToolCallLocation>? locations,
+            string? legacyPayloadJson = null)
+        {
+            var items = new List<ToolCallDetailItem>();
+
+            AppendJson(items, rawInputJson ?? legacyPayloadJson, prefix: null);
+            AppendJson(items, rawOutputJson, prefix: "output");
+            AppendContent(items, content);
+            AppendLocations(items, locations);
+
+            return items;
+        }
+
+        private static void AppendJson(List<ToolCallDetailItem> items, string? json, string? prefix)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                AppendJsonElement(items, document.RootElement, prefix);
+            }
+            catch (JsonException)
+            {
+                items.Add(new ToolCallDetailItem(prefix, json.Trim()));
+            }
+        }
+
+        private static void AppendJsonElement(List<ToolCallDetailItem> items, JsonElement element, string? prefix)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        var label = string.IsNullOrWhiteSpace(prefix)
+                            ? property.Name
+                            : $"{prefix}.{property.Name}";
+                        AppendJsonElement(items, property.Value, label);
+                    }
+
+                    break;
+                case JsonValueKind.Array:
+                    var index = 0;
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        AppendJsonElement(items, item, $"{prefix ?? "item"}[{index}]");
+                        index++;
+                    }
+
+                    break;
+                case JsonValueKind.String:
+                    items.Add(new ToolCallDetailItem(prefix, element.GetString() ?? string.Empty));
+                    break;
+                case JsonValueKind.Null:
+                case JsonValueKind.Undefined:
+                    break;
+                default:
+                    items.Add(new ToolCallDetailItem(prefix, element.GetRawText()));
+                    break;
+            }
+        }
+
+        private static void AppendContent(List<ToolCallDetailItem> items, IReadOnlyList<ToolCallContent>? content)
+        {
+            if (content is null)
+            {
+                return;
+            }
+
+            foreach (var item in content)
+            {
+                switch (item)
+                {
+                    case ContentToolCallContent { Content: TextContentBlock textBlock } when !string.IsNullOrWhiteSpace(textBlock.Text):
+                        items.Add(new ToolCallDetailItem(null, textBlock.Text.Trim()));
+                        break;
+                    case ContentToolCallContent { Content: ResourceLinkContentBlock resourceLink } when !string.IsNullOrWhiteSpace(resourceLink.Uri):
+                        items.Add(new ToolCallDetailItem("resource", resourceLink.Uri, ToolCallDetailKind.Location));
+                        break;
+                    case DiffToolCallContent diff:
+                        if (!string.IsNullOrWhiteSpace(diff.Path))
+                        {
+                            items.Add(new ToolCallDetailItem("path", diff.Path, ToolCallDetailKind.Diff));
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(diff.OldText))
+                        {
+                            items.Add(new ToolCallDetailItem("oldText", diff.OldText, ToolCallDetailKind.Diff));
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(diff.NewText))
+                        {
+                            items.Add(new ToolCallDetailItem("newText", diff.NewText, ToolCallDetailKind.Diff));
+                        }
+
+                        break;
+                    case TerminalToolCallContent terminal when !string.IsNullOrWhiteSpace(terminal.TerminalId):
+                        items.Add(new ToolCallDetailItem("terminalId", terminal.TerminalId, ToolCallDetailKind.Terminal));
+                        break;
+                }
+            }
+        }
+
+        private static void AppendLocations(List<ToolCallDetailItem> items, IReadOnlyList<ToolCallLocation>? locations)
+        {
+            if (locations is null)
+            {
+                return;
+            }
+
+            foreach (var location in locations)
+            {
+                if (string.IsNullOrWhiteSpace(location.Path))
+                {
+                    continue;
+                }
+
+                var value = location.Line is null ? location.Path : $"{location.Path}:{location.Line}";
+                items.Add(new ToolCallDetailItem("location", value, ToolCallDetailKind.Location));
+            }
+        }
     }
 
     /// <summary>

@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using SalmonEgg.Domain.Models.Content;
 using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using Windows.ApplicationModel.Resources;
@@ -40,11 +38,8 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
     public static readonly DependencyProperty RawPayloadProperty =
         DependencyProperty.Register(nameof(RawPayload), typeof(string), typeof(ToolCallPill), new PropertyMetadata(string.Empty, OnDisplayInputChanged));
 
-    public static readonly DependencyProperty ToolCallContentProperty =
-        DependencyProperty.Register(nameof(ToolCallContent), typeof(IReadOnlyList<ToolCallContent>), typeof(ToolCallPill), new PropertyMetadata(null, OnDisplayInputChanged));
-
-    public static readonly DependencyProperty ToolCallLocationsProperty =
-        DependencyProperty.Register(nameof(ToolCallLocations), typeof(IReadOnlyList<ToolCallLocation>), typeof(ToolCallPill), new PropertyMetadata(null, OnDisplayInputChanged));
+    public static readonly DependencyProperty DetailItemsProperty =
+        DependencyProperty.Register(nameof(DetailItems), typeof(IReadOnlyList<ToolCallDetailItem>), typeof(ToolCallPill), new PropertyMetadata(null, OnDisplayInputChanged));
 
     public static readonly DependencyProperty PendingPermissionRequestProperty =
         DependencyProperty.Register(nameof(PendingPermissionRequest), typeof(PermissionRequestViewModel), typeof(ToolCallPill), new PropertyMetadata(null, OnPermissionInputChanged));
@@ -62,10 +57,6 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         DependencyProperty.Register(nameof(IsCancelled), typeof(bool), typeof(ToolCallPill), new PropertyMetadata(false, OnVisualStateInputChanged));
 
     public event PropertyChangedEventHandler? PropertyChanged;
-
-    public ObservableCollection<ToolCallDisplayItem> DisplayItems { get; } = new();
-
-    public ObservableCollection<ToolCallLocationDisplayItem> LocationItems { get; } = new();
 
     public string ToolTitle
     {
@@ -91,16 +82,10 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         set => SetValue(RawPayloadProperty, value);
     }
 
-    public IReadOnlyList<ToolCallContent>? ToolCallContent
+    public IReadOnlyList<ToolCallDetailItem>? DetailItems
     {
-        get => (IReadOnlyList<ToolCallContent>?)GetValue(ToolCallContentProperty);
-        set => SetValue(ToolCallContentProperty, value);
-    }
-
-    public IReadOnlyList<ToolCallLocation>? ToolCallLocations
-    {
-        get => (IReadOnlyList<ToolCallLocation>?)GetValue(ToolCallLocationsProperty);
-        set => SetValue(ToolCallLocationsProperty, value);
+        get => (IReadOnlyList<ToolCallDetailItem>?)GetValue(DetailItemsProperty);
+        set => SetValue(DetailItemsProperty, value);
     }
 
     public PermissionRequestViewModel? PendingPermissionRequest
@@ -141,9 +126,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
 
     public string PermissionHeaderText => ResolveResourceString("ToolCallPillPermissionHeader", "Approval required");
 
-    public bool HasDisplayItems => DisplayItems.Count > 0;
-
-    public bool HasLocationItems => LocationItems.Count > 0;
+    public bool HasDisplayItems => DetailItems?.Count > 0;
 
     public bool HasPendingPermissionRequest => PendingPermissionRequest != null;
 
@@ -155,7 +138,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
 
     public bool HasRejectPermissionOption => RejectPermissionOption != null;
 
-    public bool HasInlineContent => HasPendingPermissionRequest || HasDisplayItems || HasLocationItems;
+    public bool HasInlineContent => HasPendingPermissionRequest || HasDisplayItems;
 
     public bool IsExpanded
     {
@@ -259,7 +242,6 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(PermissionHeaderText));
         OnPropertyChanged(nameof(HasDisplayItems));
-        OnPropertyChanged(nameof(HasLocationItems));
         OnPropertyChanged(nameof(HasPendingPermissionRequest));
         OnPropertyChanged(nameof(AllowPermissionOption));
         OnPropertyChanged(nameof(RejectPermissionOption));
@@ -355,194 +337,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
 
     private void UpdateDisplayProjection()
     {
-        DisplayItems.Clear();
-        LocationItems.Clear();
-
-        AppendStructuredContentItems(ToolCallContent);
-        AppendLocationItems(ToolCallLocations);
-
-        if (DisplayItems.Count == 0)
-        {
-            AppendRawPayloadItems(RawPayload);
-        }
-
         NotifyInlineContentChanged();
-    }
-
-    private void AppendStructuredContentItems(IReadOnlyList<ToolCallContent>? content)
-    {
-        if (content is null)
-        {
-            return;
-        }
-
-        foreach (var item in content)
-        {
-            switch (item)
-            {
-                case ContentToolCallContent { Content: TextContentBlock textBlock }:
-                    AddTextItem(textBlock.Text);
-                    break;
-                case ContentToolCallContent { Content: ResourceLinkContentBlock resourceLink }:
-                    AddLocationItem(resourceLink.Uri, null);
-                    break;
-                case DiffToolCallContent diff:
-                    AddDiffItem(diff.Path, diff.OldText, diff.NewText);
-                    break;
-                case TerminalToolCallContent terminal:
-                    AddTerminalItem(terminal.TerminalId, string.Empty);
-                    break;
-            }
-        }
-    }
-
-    private void AppendRawPayloadItems(string? rawPayload)
-    {
-        if (string.IsNullOrWhiteSpace(rawPayload))
-        {
-            return;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(rawPayload);
-            AppendJsonElement(document.RootElement);
-        }
-        catch (JsonException)
-        {
-            AddTextItem(rawPayload);
-        }
-    }
-
-    private void AppendJsonElement(JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Array:
-                foreach (var item in element.EnumerateArray())
-                {
-                    AppendJsonElement(item);
-                }
-                break;
-            case JsonValueKind.Object:
-                AppendJsonObject(element);
-                break;
-            default:
-                AddTextItem(element.GetRawText());
-                break;
-        }
-    }
-
-    private void AppendJsonObject(JsonElement element)
-    {
-        var type = TryGetString(element, "type");
-        switch (type)
-        {
-            case "content":
-                if (element.TryGetProperty("content", out var content))
-                {
-                    AppendContentBlockJson(content);
-                }
-                return;
-            case "diff":
-                AddDiffItem(
-                    TryGetString(element, "path"),
-                    TryGetString(element, "oldText", "old_text"),
-                    TryGetString(element, "newText", "new_text"));
-                return;
-            case "terminal":
-                AddTerminalItem(
-                    TryGetString(element, "terminalId", "terminal_id"),
-                    TryGetString(element, "output"));
-                return;
-        }
-
-        if (element.TryGetProperty("locations", out var locations) && locations.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var location in locations.EnumerateArray())
-            {
-                AddLocationItem(TryGetString(location, "path"), TryGetInt(location, "line"));
-            }
-        }
-
-        AddTextItem(SummarizePlainText(element.GetRawText()));
-    }
-
-    private void AppendContentBlockJson(JsonElement content)
-    {
-        var contentType = TryGetString(content, "type");
-        switch (contentType)
-        {
-            case "text":
-                AddTextItem(TryGetString(content, "text"));
-                break;
-            case "resource_link":
-            case "resource":
-                AddLocationItem(TryGetString(content, "uri"), null);
-                break;
-            default:
-                AddTextItem(SummarizePlainText(content.GetRawText()));
-                break;
-        }
-    }
-
-    private void AppendLocationItems(IReadOnlyList<ToolCallLocation>? locations)
-    {
-        if (locations is null)
-        {
-            return;
-        }
-
-        foreach (var location in locations)
-        {
-            AddLocationItem(location.Path, location.Line);
-        }
-    }
-
-    private void AddTextItem(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
-        DisplayItems.Add(ToolCallDisplayItem.CreateText(text.Trim()));
-    }
-
-    private void AddDiffItem(string? path, string? oldText, string? newText)
-    {
-        if (string.IsNullOrWhiteSpace(path)
-            && string.IsNullOrWhiteSpace(oldText)
-            && string.IsNullOrWhiteSpace(newText))
-        {
-            return;
-        }
-
-        DisplayItems.Add(ToolCallDisplayItem.CreateDiff(path, oldText, newText));
-    }
-
-    private void AddTerminalItem(string? terminalId, string? output)
-    {
-        if (string.IsNullOrWhiteSpace(terminalId) && string.IsNullOrWhiteSpace(output))
-        {
-            return;
-        }
-
-        DisplayItems.Add(ToolCallDisplayItem.CreateTerminal(terminalId, output));
-    }
-
-    private void AddLocationItem(string? path, int? line)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        LocationItems.Add(new ToolCallLocationDisplayItem
-        {
-            Path = path,
-            Line = line
-        });
     }
 
     private PermissionOptionViewModel? FindPermissionOption(string kindPrefix)
@@ -644,24 +439,6 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             return property.ValueKind == JsonValueKind.String
                 ? property.GetString()
                 : property.GetRawText();
-        }
-
-        return null;
-    }
-
-    private static int? TryGetInt(JsonElement root, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            if (!root.TryGetProperty(propertyName, out var property))
-            {
-                continue;
-            }
-
-            if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value))
-            {
-                return value;
-            }
         }
 
         return null;
@@ -787,88 +564,4 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             }
         }
     }
-}
-
-public sealed class ToolCallContentTemplateSelector : DataTemplateSelector
-{
-    public DataTemplate? TextTemplate { get; set; }
-
-    public DataTemplate? DiffTemplate { get; set; }
-
-    public DataTemplate? TerminalTemplate { get; set; }
-
-    protected override DataTemplate? SelectTemplateCore(object item)
-    {
-        return item is ToolCallDisplayItem displayItem
-            ? displayItem.Kind switch
-            {
-                ToolCallDisplayKind.Diff => DiffTemplate,
-                ToolCallDisplayKind.Terminal => TerminalTemplate,
-                _ => TextTemplate
-            }
-            : TextTemplate;
-    }
-}
-
-public sealed class ToolCallLocationDisplayItem
-{
-    public string Path { get; set; } = string.Empty;
-
-    public int? Line { get; set; }
-
-    public string DisplayText => Line is null ? Path : $"{Path}:{Line}";
-}
-
-public sealed class ToolCallDisplayItem
-{
-    public ToolCallDisplayKind Kind { get; set; }
-
-    public string? Text { get; set; }
-
-    public string? Path { get; set; }
-
-    public string? OldText { get; set; }
-
-    public string? NewText { get; set; }
-
-    public string? TerminalId { get; set; }
-
-    public static ToolCallDisplayItem CreateText(string text)
-        => new()
-        {
-            Kind = ToolCallDisplayKind.Text,
-            Text = text
-        };
-
-    public static ToolCallDisplayItem CreateDiff(string? path, string? oldText, string? newText)
-        => new()
-        {
-            Kind = ToolCallDisplayKind.Diff,
-            Path = path,
-            OldText = oldText,
-            NewText = newText
-        };
-
-    public static ToolCallDisplayItem CreateTerminal(string? terminalId, string? output)
-        => new()
-        {
-            Kind = ToolCallDisplayKind.Terminal,
-            Text = output,
-            TerminalId = terminalId
-        };
-
-    public bool HasPath => !string.IsNullOrWhiteSpace(Path);
-
-    public bool HasOldText => !string.IsNullOrWhiteSpace(OldText);
-
-    public bool HasNewText => !string.IsNullOrWhiteSpace(NewText);
-
-    public bool HasTerminalId => !string.IsNullOrWhiteSpace(TerminalId);
-}
-
-public enum ToolCallDisplayKind
-{
-    Text,
-    Diff,
-    Terminal
 }

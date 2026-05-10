@@ -1781,6 +1781,8 @@ public partial class ChatViewModel
             ToolCallKind = toolCall.Kind,
             ToolCallStatus = toolCall.Status,
             ToolCallJson = ResolveToolCallPayload(toolCall.RawInput, toolCall.Content),
+            ToolCallRawInputJson = TryGetRawJson(toolCall.RawInput),
+            ToolCallRawOutputJson = TryGetRawJson(toolCall.RawOutput),
             ToolCallContent = ToolCallContentSnapshots.CloneList(toolCall.Content),
             ToolCallLocations = ToolCallContentSnapshots.CloneLocations(toolCall.Locations)
         };
@@ -1831,6 +1833,8 @@ public partial class ChatViewModel
                 ToolCallKind = toolCallStatusUpdate.Kind ?? existing.ToolCallKind,
                 ToolCallStatus = toolCallStatusUpdate.Status ?? existing.ToolCallStatus,
                 ToolCallJson = ResolveToolCallPayload(toolCallStatusUpdate.RawInput, toolCallStatusUpdate.Content) ?? existing.ToolCallJson,
+                ToolCallRawInputJson = TryGetRawJson(toolCallStatusUpdate.RawInput) ?? existing.ToolCallRawInputJson,
+                ToolCallRawOutputJson = TryGetRawJson(toolCallStatusUpdate.RawOutput) ?? existing.ToolCallRawOutputJson,
                 ToolCallContent = toolCallStatusUpdate.Content is not null
                     ? ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content)
                     : existing.ToolCallContent,
@@ -1858,6 +1862,8 @@ public partial class ChatViewModel
             ToolCallKind = toolCallStatusUpdate.Kind,
             ToolCallStatus = toolCallStatusUpdate.Status,
             ToolCallJson = ResolveToolCallPayload(toolCallStatusUpdate.RawInput, toolCallStatusUpdate.Content),
+            ToolCallRawInputJson = TryGetRawJson(toolCallStatusUpdate.RawInput),
+            ToolCallRawOutputJson = TryGetRawJson(toolCallStatusUpdate.RawOutput),
             ToolCallContent = ToolCallContentSnapshots.CloneList(toolCallStatusUpdate.Content),
             ToolCallLocations = ToolCallContentSnapshots.CloneLocations(toolCallStatusUpdate.Locations)
         };
@@ -1997,6 +2003,8 @@ public partial class ChatViewModel
                 ToolCallKind = existing.ToolCallKind,
                 ToolCallStatus = Domain.Models.Tool.ToolCallStatus.Cancelled,
                 ToolCallJson = existing.ToolCallJson,
+                ToolCallRawInputJson = existing.ToolCallRawInputJson,
+                ToolCallRawOutputJson = existing.ToolCallRawOutputJson,
                 ToolCallContent = CloneToolCallContentList(existing.ToolCallContent),
                 ToolCallLocations = CloneToolCallLocationList(existing.ToolCallLocations),
                 PlanEntry = ClonePlanEntrySnapshot(existing.PlanEntry),

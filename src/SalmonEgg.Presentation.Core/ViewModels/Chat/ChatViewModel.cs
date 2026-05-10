@@ -1740,6 +1740,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ToolCallKind = vm.ToolCallKind,
             ToolCallStatus = vm.ToolCallStatus,
             ToolCallJson = vm.ToolCallJson,
+            ToolCallRawInputJson = vm.ToolCallRawInputJson,
+            ToolCallRawOutputJson = vm.ToolCallRawOutputJson,
             ToolCallContent = CloneToolCallContentList(vm.ToolCallContent),
             ToolCallLocations = CloneToolCallLocationList(vm.ToolCallLocations),
             PlanEntry = vm.PlanEntry != null
@@ -1798,6 +1800,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ToolCallKind = s.ToolCallKind,
             ToolCallStatus = s.ToolCallStatus,
             ToolCallJson = s.ToolCallJson,
+            ToolCallRawInputJson = s.ToolCallRawInputJson,
+            ToolCallRawOutputJson = s.ToolCallRawOutputJson,
             ToolCallContent = CloneToolCallContentList(s.ToolCallContent),
             ToolCallLocations = CloneToolCallLocationList(s.ToolCallLocations),
             ModeId = s.ModeId
@@ -1835,6 +1839,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             && viewModel.ToolCallKind == snapshot.ToolCallKind
             && viewModel.ToolCallStatus == snapshot.ToolCallStatus
             && string.Equals(viewModel.ToolCallJson, snapshot.ToolCallJson, StringComparison.Ordinal)
+            && string.Equals(viewModel.ToolCallRawInputJson, snapshot.ToolCallRawInputJson, StringComparison.Ordinal)
+            && string.Equals(viewModel.ToolCallRawOutputJson, snapshot.ToolCallRawOutputJson, StringComparison.Ordinal)
             && ToolCallContentSnapshots.SequenceEquals(viewModel.ToolCallContent, snapshot.ToolCallContent)
             && ToolCallContentSnapshots.LocationsSequenceEquals(viewModel.ToolCallLocations, snapshot.ToolCallLocations)
             && string.Equals(viewModel.ModeId, snapshot.ModeId, StringComparison.Ordinal)
@@ -1877,6 +1883,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ToolCallKind = snapshot.ToolCallKind,
             ToolCallStatus = snapshot.ToolCallStatus,
             ToolCallJson = snapshot.ToolCallJson,
+            ToolCallRawInputJson = snapshot.ToolCallRawInputJson,
+            ToolCallRawOutputJson = snapshot.ToolCallRawOutputJson,
             ToolCallContent = CloneToolCallContentList(snapshot.ToolCallContent),
             ToolCallLocations = CloneToolCallLocationList(snapshot.ToolCallLocations),
             PlanEntry = ClonePlanEntrySnapshot(snapshot.PlanEntry),

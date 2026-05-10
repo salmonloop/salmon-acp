@@ -111,4 +111,41 @@ public sealed class ChatMessageViewModelToolCallTests
 
         Assert.True(vm.HasPendingPermissionRequest);
     }
+
+    [Fact]
+    public void ToolCallRawInput_ProjectsReadableParameterDetails()
+    {
+        var vm = ChatMessageViewModel.CreateFromToolCall(
+            id: "tool-6",
+            toolCallId: "call-6",
+            rawInput: "{\"path\":\"C:/repo/appsettings.json\",\"query\":\"Logging\",\"arguments\":{\"line\":12}}",
+            rawOutput: null,
+            kind: ToolCallKind.Read,
+            status: ToolCallStatus.Completed,
+            title: "Read configuration");
+
+        var visibleDetails = vm.ToolCallDetailItems.Select(item => item.DisplayText).ToArray();
+
+        Assert.Contains("path: C:/repo/appsettings.json", visibleDetails);
+        Assert.Contains("query: Logging", visibleDetails);
+        Assert.Contains("arguments.line: 12", visibleDetails);
+        Assert.DoesNotContain(visibleDetails, text => text.Contains("ToolCallDisplayItem", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ToolCallRawInputAndRawOutput_RemainSeparateProtocolFields()
+    {
+        var vm = ChatMessageViewModel.CreateFromToolCall(
+            id: "tool-7",
+            toolCallId: "call-7",
+            rawInput: "{\"command\":\"dotnet test\"}",
+            rawOutput: "{\"exitCode\":0}",
+            kind: ToolCallKind.Execute,
+            status: ToolCallStatus.Completed,
+            title: "Run tests");
+
+        Assert.Equal("{\"command\":\"dotnet test\"}", vm.ToolCallRawInputJson);
+        Assert.Equal("{\"exitCode\":0}", vm.ToolCallRawOutputJson);
+        Assert.Equal("{\"command\":\"dotnet test\"}", vm.ToolCallJson);
+    }
 }

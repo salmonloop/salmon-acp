@@ -58,11 +58,9 @@ public interface IAcpSessionCommandOrchestrator
 
 public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrator
 {
-    private readonly ILogger<AcpSessionCommandOrchestrator> _logger;
-
     public AcpSessionCommandOrchestrator(ILogger<AcpSessionCommandOrchestrator> logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(logger);
     }
 
     public async Task<AcpRemoteSessionResult> EnsureRemoteSessionAsync(
@@ -236,25 +234,6 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
             var response = await chatService.SendPromptAsync(promptParams, cancellationToken).ConfigureAwait(false);
             return new AcpPromptDispatchResult(promptParams.SessionId, response, RetriedAfterSessionRecovery: false);
         }
-        catch (Exception ex) when (AcpErrorClassifier.IsRemoteSessionNotFound(ex))
-        {
-            _logger.LogWarning(ex, "Remote session {RemoteSessionId} not found. Attempting recovery...", remoteSessionId);
-            await ClearBindingForCurrentConversationAsync(sink).ConfigureAwait(false);
-            var recreated = await ensureRemoteSessionAsync(
-                sink,
-                authenticateAsync,
-                static () => { },
-                cancellationToken).ConfigureAwait(false);
-            var retryParams = new SessionPromptParams(
-                recreated.RemoteSessionId,
-                promptParams.Prompt,
-                promptParams.MaxTokens,
-                promptParams.StopSequences,
-                promptParams.MessageId);
-
-            var response = await chatService.SendPromptAsync(retryParams, cancellationToken).ConfigureAwait(false);
-            return new AcpPromptDispatchResult(retryParams.SessionId, response, RetriedAfterSessionRecovery: true);
-        }
     }
 
     public async Task CancelPromptAsync(
@@ -303,21 +282,6 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
             throw new InvalidOperationException(
                 $"Failed to update conversation binding ({result.Status}): {result.ErrorMessage ?? "UnknownError"}");
         }
-    }
-
-    private static async Task ClearBindingForCurrentConversationAsync(IAcpChatCoordinatorSink sink)
-    {
-        if (string.IsNullOrWhiteSpace(sink.CurrentSessionId))
-        {
-            return;
-        }
-
-        await sink.ConversationBindingCommands
-            .UpdateBindingAsync(
-                sink.CurrentSessionId!,
-                remoteSessionId: null,
-                sink.SelectedProfileId)
-            .ConfigureAwait(false);
     }
 
     private static IChatService RequireReadyChatService(IAcpChatCoordinatorSink sink)

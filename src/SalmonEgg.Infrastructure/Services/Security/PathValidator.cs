@@ -207,14 +207,21 @@ namespace SalmonEgg.Infrastructure.Services.Security
                 return false;
             }
 
-            try
+            var trimmed = path.Trim();
+            if (trimmed.StartsWith("/", StringComparison.Ordinal))
             {
-                return Path.IsPathRooted(path);
+                return true;
             }
-            catch
+
+            if (trimmed.StartsWith(@"\\", StringComparison.Ordinal))
             {
-                return false;
+                return true;
             }
+
+            return trimmed.Length >= 3
+                && char.IsLetter(trimmed[0])
+                && trimmed[1] == ':'
+                && (trimmed[2] == '\\' || trimmed[2] == '/');
         }
 
         /// <summary>

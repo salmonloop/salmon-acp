@@ -199,6 +199,10 @@ namespace SalmonEgg.Domain.Models.Conversation
 
         public string? ToolCallJson { get; set; }
 
+        public string? ToolCallRawInputJson { get; set; }
+
+        public string? ToolCallRawOutputJson { get; set; }
+
         public List<ToolCallContent>? ToolCallContent { get; set; }
 
         public List<ToolCallLocation>? ToolCallLocations { get; set; }

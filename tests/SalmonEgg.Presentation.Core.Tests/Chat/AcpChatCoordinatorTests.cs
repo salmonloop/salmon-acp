@@ -1320,7 +1320,7 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
-    public async Task DispatchPromptToRemoteSessionAsync_RemoteSessionNotFound_RecreatesSessionAndRetriesOnce()
+    public async Task DispatchPromptToRemoteSessionAsync_RemoteSessionNotFound_DoesNotCreateReplacementSession()
     {
         var service = CreateChatService();
         var sink = new FakeSink
@@ -1330,12 +1330,12 @@ public sealed class AcpChatCoordinatorTests
             IsInitialized = true,
             IsSessionActive = true,
             CurrentSessionId = "local-1",
+            CurrentRemoteSessionId = "remote-stale",
             ActiveSessionCwd = @"C:\repo\demo",
             SelectedProfileId = "profile-1"
         };
         var factory = new Mock<IAcpChatServiceFactory>();
         var logger = new Mock<ILogger<AcpChatCoordinator>>();
-        var first = true;
         var promptMessageId = "client-msg-retry";
         var sentPrompts = new List<SessionPromptParams>();
 
@@ -1343,11 +1343,7 @@ public sealed class AcpChatCoordinatorTests
             .Setup(x => x.SendPromptAsync(It.IsAny<SessionPromptParams>(), It.IsAny<CancellationToken>()))
             .Returns<SessionPromptParams, CancellationToken>((p, _) => {
                 sentPrompts.Add(p);
-                if (first) {
-                    first = false;
-                    throw new AcpException(JsonRpcErrorCode.ResourceNotFound, "Not found");
-                }
-                return Task.FromResult(new SessionPromptResponse());
+                throw new AcpException(JsonRpcErrorCode.ResourceNotFound, "Not found");
             });
 
         service
@@ -1357,15 +1353,16 @@ public sealed class AcpChatCoordinatorTests
         var sut = new AcpChatCoordinator(factory.Object, logger.Object);
         IAcpConnectionCommands commands = sut;
 
-        var result = await commands.DispatchPromptToRemoteSessionAsync("remote-stale", "hi", promptMessageId, sink, _ => Task.FromResult(true));
+        var ex = await Assert.ThrowsAsync<AcpException>(() =>
+            commands.DispatchPromptToRemoteSessionAsync("remote-stale", "hi", promptMessageId, sink, _ => Task.FromResult(true)));
 
-        Assert.True(result.RetriedAfterSessionRecovery);
-        Assert.Equal("remote-new", result.RemoteSessionId);
-        Assert.Equal(2, sentPrompts.Count);
+        Assert.Equal(JsonRpcErrorCode.ResourceNotFound, ex.ErrorCode);
+        Assert.Single(sentPrompts);
         Assert.Equal("client-msg-retry", sentPrompts[0].MessageId);
-        Assert.Equal("client-msg-retry", sentPrompts[1].MessageId);
-        service.Verify(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()), Times.Once);
-        service.Verify(x => x.SendPromptAsync(It.Is<SessionPromptParams>(p => p.SessionId == "remote-new"), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal("remote-stale", sentPrompts[0].SessionId);
+        Assert.Equal("remote-stale", sink.CurrentRemoteSessionId);
+        Assert.Equal(0, sink.BindingCommands.ClearCalls);
+        service.Verify(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()), Times.Never);
     }
 
     [Fact]

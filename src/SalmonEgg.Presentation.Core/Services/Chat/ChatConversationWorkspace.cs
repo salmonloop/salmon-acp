@@ -1165,6 +1165,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             ToolCallKind = source.ToolCallKind,
             ToolCallStatus = source.ToolCallStatus,
             ToolCallJson = source.ToolCallJson,
+            ToolCallRawInputJson = source.ToolCallRawInputJson,
+            ToolCallRawOutputJson = source.ToolCallRawOutputJson,
             ToolCallContent = ToolCallContentSnapshots.CloneList(source.ToolCallContent),
             ToolCallLocations = ToolCallContentSnapshots.CloneLocations(source.ToolCallLocations),
             PlanEntry = source.PlanEntry is null ? null : ClonePlanEntry(source.PlanEntry),

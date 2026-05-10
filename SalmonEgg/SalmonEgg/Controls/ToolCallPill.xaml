@@ -5,90 +5,23 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:SalmonEgg.Controls"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:chatVm="using:SalmonEgg.Presentation.ViewModels.Chat"
     xmlns:models="using:SalmonEgg.Presentation.Models"
     mc:Ignorable="d">
 
     <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
-        <DataTemplate x:Key="ToolCallTextContentTemplate" x:DataType="controls:ToolCallDisplayItem">
+        <DataTemplate x:Key="ToolCallDetailItemTemplate" x:DataType="chatVm:ToolCallDetailItem">
             <TextBlock
-                Text="{x:Bind Text, Mode=OneWay}"
+                Text="{x:Bind DisplayText, Mode=OneWay}"
                 Style="{StaticResource BodyTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                 TextWrapping="Wrap"
                 IsTextSelectionEnabled="True" />
         </DataTemplate>
 
-        <DataTemplate x:Key="ToolCallDiffContentTemplate" x:DataType="controls:ToolCallDisplayItem">
-            <Grid RowSpacing="4">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock
-                    Grid.Row="0"
-                    Text="{x:Bind Path, Mode=OneWay}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    TextTrimming="CharacterEllipsis"
-                    Visibility="{x:Bind HasPath, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <TextBlock
-                    Grid.Row="1"
-                    Text="{x:Bind OldText, Mode=OneWay}"
-                    FontFamily="Consolas, 'Courier New', Monospace"
-                    FontSize="12"
-                    TextWrapping="Wrap"
-                    IsTextSelectionEnabled="True"
-                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                    Visibility="{x:Bind HasOldText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <TextBlock
-                    Grid.Row="2"
-                    Text="{x:Bind NewText, Mode=OneWay}"
-                    FontFamily="Consolas, 'Courier New', Monospace"
-                    FontSize="12"
-                    TextWrapping="Wrap"
-                    IsTextSelectionEnabled="True"
-                    Foreground="{ThemeResource SystemFillColorSuccessBrush}"
-                    Visibility="{x:Bind HasNewText, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate x:Key="ToolCallTerminalContentTemplate" x:DataType="controls:ToolCallDisplayItem">
-            <Border
-                Background="{ThemeResource ControlFillColorTertiaryBrush}"
-                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="12">
-                <StackPanel Spacing="4">
-                    <TextBlock
-                        Text="{x:Bind TerminalId, Mode=OneWay}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Visibility="{x:Bind HasTerminalId, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
-                    <TextBlock
-                        Text="{x:Bind Text, Mode=OneWay}"
-                        FontFamily="Consolas, 'Courier New', Monospace"
-                        FontSize="12"
-                        TextWrapping="Wrap"
-                        IsTextSelectionEnabled="True"
-                        Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                </StackPanel>
-            </Border>
-        </DataTemplate>
-
-        <controls:ToolCallContentTemplateSelector
-            x:Key="ToolCallContentTemplateSelector"
-            TextTemplate="{StaticResource ToolCallTextContentTemplate}"
-            DiffTemplate="{StaticResource ToolCallDiffContentTemplate}"
-            TerminalTemplate="{StaticResource ToolCallTerminalContentTemplate}" />
     </UserControl.Resources>
 
     <Border
@@ -329,23 +262,10 @@
                     </StackPanel>
 
                     <ItemsControl
-                        ItemsSource="{x:Bind DisplayItems, Mode=OneWay}"
-                        ItemTemplateSelector="{StaticResource ToolCallContentTemplateSelector}"
+                        ItemsSource="{x:Bind DetailItems, Mode=OneWay}"
+                        ItemTemplate="{StaticResource ToolCallDetailItemTemplate}"
                         Visibility="{x:Bind HasDisplayItems, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <ItemsControl
-                        ItemsSource="{x:Bind LocationItems, Mode=OneWay}"
-                        Visibility="{x:Bind HasLocationItems, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="controls:ToolCallLocationDisplayItem">
-                                <HyperlinkButton
-                                    Content="{x:Bind DisplayText, Mode=OneWay}"
-                                    Padding="0"
-                                    FontSize="12"
-                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

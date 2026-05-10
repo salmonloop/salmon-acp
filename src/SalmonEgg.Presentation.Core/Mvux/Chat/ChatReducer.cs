@@ -551,6 +551,8 @@ public static class ChatReducer
             ToolCallKind = source.ToolCallKind,
             ToolCallStatus = source.ToolCallStatus,
             ToolCallJson = source.ToolCallJson,
+            ToolCallRawInputJson = source.ToolCallRawInputJson,
+            ToolCallRawOutputJson = source.ToolCallRawOutputJson,
             ToolCallContent = ToolCallContentSnapshots.CloneList(source.ToolCallContent),
             ToolCallLocations = ToolCallContentSnapshots.CloneLocations(source.ToolCallLocations),
             PlanEntry = source.PlanEntry is null
