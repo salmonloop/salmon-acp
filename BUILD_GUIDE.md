@@ -24,6 +24,9 @@ run.bat desktop
 
 # 方式 2: 直接运行
 ./run.sh
+
+# 方式 3: Headless GUI（Xvfb 虚拟屏）
+./run-headless.sh
 ```
 
 ## 详细构建步骤
@@ -97,6 +100,20 @@ run.bat
 > 工具链锁定：Windows SDK 10.0.26100.0，signtool 来自 SDK 10.0.22621.0。
 > Workload manifest：CI 应与 `global.json` 中的 .NET SDK patch 保持一致；当前仓库锁定 10.0.202，本地允许最新 patch manifest。
 > 验证口径：`dotnet build -f net10.0-windows10.0.26100.0` 不是本仓库的权威 WinUI 3 / MSIX 门禁；Windows 原生包请以 `build.bat msix` 或 `.tools/run-winui3-msix.ps1 -SkipInstall` 为准。`dotnet build` 主要用于 Core/Skia/Desktop/Wasm 验证。
+
+#### Linux Headless Desktop
+在没有物理显示器或桌面会话的 Linux 环境中，可以通过 `Xvfb` 提供虚拟 X11 屏幕，再运行 Uno Skia Desktop 目标：
+
+```bash
+./run-headless.sh
+```
+
+可选环境变量：
+
+- `DISPLAY_NUMBER`：指定虚拟显示编号，默认 `99`
+- `XVFB_SCREEN`：指定 `Xvfb` 屏幕参数，默认 `0 1920x1080x24`
+
+如果当前 shell 已经设置了 `DISPLAY`，脚本会复用现有 X server，而不会再次启动 `Xvfb`。
 
 #### Visual Studio 调试（推荐 / 官方）
 在 `SalmonEgg.sln` 中将 `SalmonEgg` 设为启动项目，然后在工具栏的启动配置下拉列表中选择目标平台对应的 Launch Profile 即可按 F5 调试：
