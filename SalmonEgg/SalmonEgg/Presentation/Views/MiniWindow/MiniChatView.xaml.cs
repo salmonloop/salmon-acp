@@ -232,11 +232,7 @@ public sealed partial class MiniChatView : Page
         {
             ResetAutoScrollStateForConversationChange();
             _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
-            if (!IsViewportDetachedByUser())
-            {
-                TryIssueTranscriptScrollRequest();
-            }
-            TryIssueTranscriptScrollRequest();
+            TryIssueTranscriptScrollRequestIfAttached();
             return;
         }
 
@@ -252,11 +248,7 @@ public sealed partial class MiniChatView : Page
 
             ResetAutoScrollStateForConversationChange();
             _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
-            if (!IsViewportDetachedByUser())
-            {
-                TryIssueTranscriptScrollRequest();
-            }
-            TryIssueTranscriptScrollRequest();
+            TryIssueTranscriptScrollRequestIfAttached();
             return;
         }
 
@@ -272,11 +264,7 @@ public sealed partial class MiniChatView : Page
             }
 
             ResetAutoScrollStateForConversationChange();
-            if (!IsViewportDetachedByUser())
-            {
-                TryIssueTranscriptScrollRequest();
-            }
-            TryIssueTranscriptScrollRequest();
+            TryIssueTranscriptScrollRequestIfAttached();
             return;
         }
 
@@ -528,6 +516,14 @@ public sealed partial class MiniChatView : Page
         var actions = _viewportController.OnViewportChanged(CreateViewportViewState());
         ApplyViewportActions(actions);
         return actions.Count > 0;
+    }
+
+    private void TryIssueTranscriptScrollRequestIfAttached()
+    {
+        if (!IsViewportDetachedByUser())
+        {
+            TryIssueTranscriptScrollRequest();
+        }
     }
 
     private void IssueNativeTranscriptScrollRequest(TranscriptScrollRequestToken requestToken)

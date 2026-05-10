@@ -516,12 +516,8 @@ public sealed partial class ChatView : Page
             {
                 ResetAutoScrollStateForConversationChange();
                 _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
-                if (!IsViewportDetachedByUser())
-                {
-                    TryIssueTranscriptScrollRequest();
-                }
+                TryIssueTranscriptScrollRequestIfAttached();
                 BeginLayoutLoadingIfPendingMessages();
-                TryIssueTranscriptScrollRequest();
                 UpdateTranscriptViewportAutomationState();
                 return;
             }
@@ -540,12 +536,8 @@ public sealed partial class ChatView : Page
 
                 ResetAutoScrollStateForConversationChange();
                 _wasOverlayVisible = ViewModel.IsActivationOverlayVisible;
-                if (!IsViewportDetachedByUser())
-                {
-                    TryIssueTranscriptScrollRequest();
-                }
+                TryIssueTranscriptScrollRequestIfAttached();
                 BeginLayoutLoadingIfPendingMessages();
-                TryIssueTranscriptScrollRequest();
                 UpdateTranscriptViewportAutomationState();
                 return;
             }
@@ -564,12 +556,8 @@ public sealed partial class ChatView : Page
                 }
 
                 ResetAutoScrollStateForConversationChange();
-                if (!IsViewportDetachedByUser())
-                {
-                    TryIssueTranscriptScrollRequest();
-                }
+                TryIssueTranscriptScrollRequestIfAttached();
                 BeginLayoutLoadingIfPendingMessages();
-                TryIssueTranscriptScrollRequest();
                 UpdateTranscriptViewportAutomationState();
                 return;
             }
@@ -612,6 +600,14 @@ public sealed partial class ChatView : Page
             RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
             UpdateTranscriptViewportAutomationState();
             return actions.Count > 0;
+        }
+
+        private void TryIssueTranscriptScrollRequestIfAttached()
+        {
+            if (!IsViewportDetachedByUser())
+            {
+                TryIssueTranscriptScrollRequest();
+            }
         }
 
         private void IssueNativeTranscriptScrollRequest(TranscriptScrollRequestToken requestToken)

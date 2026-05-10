@@ -60,6 +60,18 @@ public sealed class ChatViewXamlTests
     }
 
     [Fact]
+    public void ChatViewsCodeBehind_SessionDrivenAutoScrollUsesAttachedOnlyHelper()
+    {
+        var chatViewCodeBehind = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
+        var miniChatViewCodeBehind = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml.cs");
+
+        Assert.Contains("TryIssueTranscriptScrollRequestIfAttached();", chatViewCodeBehind, StringComparison.Ordinal);
+        Assert.Contains("TryIssueTranscriptScrollRequestIfAttached();", miniChatViewCodeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (!IsViewportDetachedByUser())", chatViewCodeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (!IsViewportDetachedByUser())", miniChatViewCodeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChatViewXaml_SessionHeader_UsesNativeButtonAndSharedWidthContractForReadOnlyAndEditStates()
     {
         var xaml = LoadChatViewXaml();
