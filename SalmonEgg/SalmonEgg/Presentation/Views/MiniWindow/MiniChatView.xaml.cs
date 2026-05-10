@@ -692,12 +692,7 @@ public sealed partial class MiniChatView : Page
         _restoreDetachedViewportAfterOverlay = false;
         _restoreDetachedViewportConversationId = null;
         ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);
-
-        if (!IsViewportDetachedByUser())
-        {
-            TryIssueTranscriptScrollRequest();
-        }
-        TryIssueTranscriptScrollRequest();
+        TryIssueTranscriptScrollRequestIfAttached();
         TryRefreshViewportCoordinatorFromView();
     }
 
@@ -722,12 +717,7 @@ public sealed partial class MiniChatView : Page
             }
 
             ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);
-            if (!IsViewportDetachedByUser())
-            {
-                TryIssueTranscriptScrollRequest();
-            }
-
-            TryIssueTranscriptScrollRequest();
+            TryIssueTranscriptScrollRequestIfAttached();
             TryRefreshViewportCoordinatorFromView();
         });
     }

@@ -69,6 +69,10 @@ public sealed class ChatViewXamlTests
         Assert.Contains("TryIssueTranscriptScrollRequestIfAttached();", miniChatViewCodeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("if (!IsViewportDetachedByUser())", chatViewCodeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("if (!IsViewportDetachedByUser())", miniChatViewCodeBehind, StringComparison.Ordinal);
+        Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);", chatViewCodeBehind, StringComparison.Ordinal);
+        Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);", chatViewCodeBehind, StringComparison.Ordinal);
+        Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);", miniChatViewCodeBehind, StringComparison.Ordinal);
+        Assert.Contains("ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);", miniChatViewCodeBehind, StringComparison.Ordinal);
     }
 
     [Fact]

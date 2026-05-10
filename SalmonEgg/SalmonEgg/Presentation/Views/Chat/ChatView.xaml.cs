@@ -779,13 +779,8 @@ public sealed partial class ChatView : Page
             _restoreDetachedViewportAfterOverlay = false;
             _restoreDetachedViewportConversationId = null;
             ActivateViewportForCurrentSession(TranscriptViewportActivationKind.OverlayResume);
-
-            if (!IsViewportDetachedByUser())
-            {
-                TryIssueTranscriptScrollRequest();
-            }
+            TryIssueTranscriptScrollRequestIfAttached();
             RefreshLayoutLoadingState(HasLastItemContainerGenerated(ViewModel.MessageHistory.Count));
-            TryIssueTranscriptScrollRequest();
             UpdateTranscriptViewportAutomationState();
         }
 
@@ -810,11 +805,7 @@ public sealed partial class ChatView : Page
                 }
 
                 ActivateViewportForCurrentSession(TranscriptViewportActivationKind.WarmReturn);
-                if (!IsViewportDetachedByUser())
-                {
-                    TryIssueTranscriptScrollRequest();
-                }
-                TryIssueTranscriptScrollRequest();
+                TryIssueTranscriptScrollRequestIfAttached();
                 TryRefreshViewportCoordinatorFromView();
                 UpdateTranscriptViewportAutomationState();
             });
