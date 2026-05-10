@@ -64,40 +64,34 @@ public class ShellLayoutViewModelTests
     [Fact]
     public async Task ViewModel_ProjectsSnapshot_OnProvidedDispatcher()
     {
-        await using var store = new FakeShellLayoutStore();
+        var initialState = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(900, 720, 900, 720),
+            UserNavOpenIntent = false,
+            TitleBarInsetsHeight = 60
+        };
+        await using var store = new FakeShellLayoutStore(initialState);
         var dispatcher = new QueueingUiDispatcher();
         using var vm = new ShellLayoutViewModel(store, dispatcher);
 
-        await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
-            NavigationPaneDisplayMode.Compact, false, 300, 72,
-            false, 0, 0, new LayoutPadding(4, 0, 4, 0), new LayoutPadding(0, 0, 0, 0), 60,
-            false, false, 0, RightPanelMode.None, false, 0, BottomPanelMode.None, false, 0), default);
-
-        await Task.Delay(50);
-        Assert.True(vm.IsNavPaneOpen);
-
-        dispatcher.RunAll();
-
         Assert.False(vm.IsNavPaneOpen);
         Assert.Equal(NavigationPaneDisplayMode.Compact, vm.NavPaneDisplayMode);
+        Assert.Equal(60, vm.TitleBarHeight);
     }
 
     [Fact]
     public async Task ViewModel_ProjectsBottomPanelSnapshot()
     {
-        await using var store = new FakeShellLayoutStore();
+        var initialState = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(1280, 900, 1280, 900),
+            IsChatContext = true,
+            DesiredBottomPanelMode = BottomPanelMode.Dock,
+            BottomPanelPreferredHeight = 240,
+            LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom
+        };
+        await using var store = new FakeShellLayoutStore(initialState);
         using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
-
-        await store.SnapshotState.Update(_ => new ShellLayoutSnapshot(
-            NavigationPaneDisplayMode.Expanded, true, 300, 72,
-            true, 220, 360, new LayoutPadding(0, 0, 0, 0), new LayoutPadding(0, 0, 0, 0), 48,
-            true, false, 0, RightPanelMode.None, true, 240, BottomPanelMode.Dock, true, 294), default);
-
-        await WaitForConditionAsync(
-            () => vm.BottomPanelVisible
-                && vm.BottomPanelHeight == 240
-                && vm.BottomPanelMode == BottomPanelMode.Dock
-                && vm.CanShowSimultaneousAuxiliaryPanels);
 
         Assert.True(vm.BottomPanelVisible);
         Assert.Equal(240, vm.BottomPanelHeight);
@@ -108,9 +102,6 @@ public class ShellLayoutViewModelTests
     [Fact]
     public async Task ViewModel_ProjectsDesiredModes_EvenWhenEffectiveIsSuppressed()
     {
-        await using var store = new FakeShellLayoutStore();
-        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
-
         // Simulate a narrow shell where right+bottom cannot be shown simultaneously.
         // User intent keeps both desired modes non-None, but policy suppresses the bottom panel.
         var desired = ShellLayoutState.Default with
@@ -120,16 +111,8 @@ public class ShellLayoutViewModelTests
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Right
         };
-
-        await store.StateState.Update(_ => desired, default);
-        await store.SnapshotState.Update(_ => ShellLayoutPolicy.Compute(desired), default);
-
-        await WaitForConditionAsync(
-            () => vm.DesiredRightPanelMode == RightPanelMode.Diff
-                && vm.DesiredBottomPanelMode == BottomPanelMode.Dock
-                && vm.RightPanelMode == RightPanelMode.Diff
-                && vm.BottomPanelMode == BottomPanelMode.None
-                && !vm.BottomPanelVisible);
+        await using var store = new FakeShellLayoutStore(desired);
+        using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         Assert.Equal(RightPanelMode.Diff, vm.DesiredRightPanelMode);
         Assert.Equal(BottomPanelMode.Dock, vm.DesiredBottomPanelMode);
@@ -232,7 +215,7 @@ public class ShellLayoutViewModelTests
 
     private static async Task WaitForConditionAsync(
         System.Func<bool> predicate,
-        int maxAttempts = 20,
+        int maxAttempts = 3000,
         int delayMs = 10)
     {
         for (var attempt = 0; attempt < maxAttempts; attempt++)

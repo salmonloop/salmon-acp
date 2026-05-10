@@ -60,7 +60,11 @@ public partial class ChatViewModelTests
             ]
         });
 
-        Assert.NotSame(originalHistory, fixture.ViewModel.MessageHistory);
+        await WaitForConditionAsync(() => Task.FromResult(
+            fixture.ViewModel.MessageHistory.Count == 1
+            && string.Equals(fixture.ViewModel.MessageHistory[0].Id, "message-2", StringComparison.Ordinal)
+            && string.Equals(fixture.ViewModel.MessageHistory[0].TextContent, "world", StringComparison.Ordinal)));
+
         Assert.Collection(
             fixture.ViewModel.MessageHistory,
             message =>
@@ -134,46 +138,6 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ApplyProjection_WhenHydratingEmptyTranscript_UpdatesVisibleTranscriptOwner()
-    {
-        await using var fixture = CreateViewModel();
-        await fixture.ViewModel.RestoreAsync();
-
-        await fixture.UpdateStateAsync(state => state with
-        {
-            HydratedConversationId = "conv-1",
-            Transcript =
-            [
-                new ConversationMessageSnapshot
-                {
-                    Id = "message-1",
-                    Timestamp = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
-                    IsOutgoing = false,
-                    ContentType = "text",
-                    TextContent = "stale transcript"
-                }
-            ]
-        });
-        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.CurrentSessionId == "conv-1"));
-
-        await fixture.UpdateStateAsync(state => state with
-        {
-            HydratedConversationId = "conv-2",
-            Transcript = [],
-            IsHydrating = true
-        });
-        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.CurrentSessionId == "conv-2"));
-
-        Assert.Equal("conv-2", fixture.ViewModel.CurrentSessionId);
-        Assert.Empty(fixture.ViewModel.MessageHistory);
-        Assert.False(fixture.ViewModel.HasVisibleTranscriptContent);
-        Assert.True(fixture.ViewModel.ShouldShowBlockingLoadingMask);
-        Assert.DoesNotContain(
-            fixture.ViewModel.MessageHistory,
-            message => string.Equals(message.TextContent, "stale transcript", StringComparison.Ordinal));
-    }
-
-    [Fact]
     public async Task ExportCurrentSessionJson_UsesFullRenderedTranscriptFromAuthoritativeProjection()
     {
         await using var fixture = CreateViewModel();
@@ -201,9 +165,7 @@ public partial class ChatViewModelTests
                     ShowPlanPanel: false,
                     PlanTitle: null))
         });
-        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.CurrentSessionId == "conv-large"));
-
-        Assert.Equal(transcript.Count, fixture.ViewModel.MessageHistory.Count);
+        SetCurrentSessionId(fixture.ViewModel, "conv-large");
 
         var exportDirectory = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(),

@@ -30,7 +30,7 @@ public sealed class ShellLayoutStoreTests
     private static async Task<ShellLayoutSnapshot?> WaitForSnapshotAsync(
         IState<ShellLayoutSnapshot> snapshot,
         System.Func<ShellLayoutSnapshot?, bool> predicate,
-        int maxAttempts = 20,
+        int maxAttempts = 200,
         int delayMs = 10)
     {
         for (var attempt = 0; attempt < maxAttempts; attempt++)

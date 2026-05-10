@@ -734,7 +734,8 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.Equal("remote-1", workspaceBinding.RemoteSessionId);
 
         var currentConnectionState = await connectionStore.State;
-        Assert.Equal("profile-a", currentConnectionState!.SettingsSelectedProfileId);
+        Assert.NotNull(currentConnectionState);
+        Assert.Equal("profile-a", currentConnectionState.SettingsSelectedProfileId);
     }
 
     [Fact]
@@ -1079,7 +1080,8 @@ public sealed class ConversationActivationCoordinatorTests
     {
         var state = State.Value(new object(), () => ChatConnectionState.Empty with
         {
-            ForegroundTransportProfileId = selectedProfileId
+            ForegroundTransportProfileId = selectedProfileId,
+            SettingsSelectedProfileId = selectedProfileId
         });
         return new ChatConnectionStore(state);
     }

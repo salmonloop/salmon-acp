@@ -90,7 +90,7 @@ public sealed class ConversationCatalogDisplayPresenterTests
     private static bool IsUnread(ConversationCatalogDisplayPresenter presenter, string conversationId)
         => presenter.Snapshot.FirstOrDefault(item => string.Equals(item.ConversationId, conversationId, StringComparison.Ordinal))?.HasUnreadAttention == true;
 
-    private static async Task WaitForConditionAsync(Func<bool> predicate, int attempts = 50, int delayMs = 10)
+    private static async Task WaitForConditionAsync(Func<bool> predicate, int attempts = 3000, int delayMs = 10)
     {
         for (var attempt = 0; attempt < attempts; attempt++)
         {

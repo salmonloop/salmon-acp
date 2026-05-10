@@ -387,7 +387,7 @@ public sealed class NavigationCoordinator : INavigationCoordinator
     }
 
     private static bool IsTerminalPhase(SessionActivationPhase phase)
-        => phase == SessionActivationPhase.None || phase == SessionActivationPhase.Faulted;
+        => phase is SessionActivationPhase.None or SessionActivationPhase.Hydrated or SessionActivationPhase.Faulted;
 
     private void CancelInFlightSessionActivation()
     {

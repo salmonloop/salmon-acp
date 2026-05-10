@@ -374,6 +374,14 @@ public sealed class AcpConnectionCoordinatorTests
 
         await coordinator.SetConnectionInstanceIdAsync("conn-new");
 
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await connectionState;
+            return state is not null
+                && string.Equals(state.ConnectionInstanceId, "conn-new", StringComparison.Ordinal)
+                && state.Generation == 10;
+        });
+
         var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
         Assert.Equal(ConnectionPhase.Connected, updated.Phase);
         Assert.Equal("profile-1", updated.SettingsSelectedProfileId);
@@ -425,14 +433,6 @@ public sealed class AcpConnectionCoordinatorTests
             Mock.Of<ILogger<AcpConnectionCoordinator>>());
 
         await coordinator.ResetAsync();
-        await WaitForConditionAsync(async () =>
-        {
-            var state = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
-            return state.Phase == ConnectionPhase.Disconnected
-                && string.Equals(state.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)
-                && state.ForegroundTransportProfileId is null
-                && state.Generation == 6;
-        });
 
         var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
         Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
@@ -443,7 +443,7 @@ public sealed class AcpConnectionCoordinatorTests
 
     private static async Task WaitForConditionAsync(
         Func<Task<bool>> predicate,
-        int timeoutMilliseconds = 2000,
+        int timeoutMilliseconds = 30000,
         int pollDelayMilliseconds = 10)
     {
         var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);

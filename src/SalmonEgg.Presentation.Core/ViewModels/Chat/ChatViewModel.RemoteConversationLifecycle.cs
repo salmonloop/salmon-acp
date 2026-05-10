@@ -668,6 +668,11 @@ public partial class ChatViewModel
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (!IsPendingRemoteHydrationActivation(sessionId))
+        {
+            return false;
+        }
+
         var state = await _chatStore.State ?? ChatState.Empty;
         if (!string.Equals(state.HydratedConversationId, sessionId, StringComparison.Ordinal)
             || !string.Equals(ResolvePresentedSessionConversationId(), sessionId, StringComparison.Ordinal))
@@ -690,6 +695,16 @@ public partial class ChatViewModel
         return runtimeState.Value.Phase is ConversationRuntimePhase.Selected
             or ConversationRuntimePhase.RemoteConnectionReady
             or ConversationRuntimePhase.RemoteHydrating;
+    }
+
+    private bool IsPendingRemoteHydrationActivation(string sessionId)
+    {
+        var activeActivation = _shellNavigationRuntimeState?.ActiveSessionActivation;
+        return activeActivation is not null
+            && activeActivation.Matches(sessionId)
+            && activeActivation.Phase is SessionActivationPhase.Selected
+                or SessionActivationPhase.RemoteConnectionReady
+                or SessionActivationPhase.RemoteHydrationPending;
     }
 
     private bool HasCompetingInFlightConversationActivation(ChatState state, string targetConversationId)
