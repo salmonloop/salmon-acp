@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
+using FlaUI.Core.WindowsAPI;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.AutomationElements;
 using Xunit;

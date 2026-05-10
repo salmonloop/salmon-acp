@@ -844,7 +844,7 @@ public partial class ChatViewModel
 
         SendPromptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSendPromptUi));
-        RefreshSlashCommandFilter();
+        RefreshSlashStateFromPrompt();
     }
 
     partial void OnIsPromptInFlightChanged(bool value)

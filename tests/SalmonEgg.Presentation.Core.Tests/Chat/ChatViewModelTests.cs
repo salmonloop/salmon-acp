@@ -32,6 +32,7 @@ using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Services.Chat.Slash;
 using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
 using SalmonEgg.Presentation.Models.Navigation;
@@ -62,7 +63,8 @@ public partial class ChatViewModelTests
         IConversationPreviewStore? previewStore = null,
         IShellNavigationRuntimeState? shellNavigationRuntimeState = null,
         LocalTerminalPanelCoordinator? localTerminalPanelCoordinator = null,
-        IAcpConnectionSessionRegistry? connectionSessionRegistry = null)
+        IAcpConnectionSessionRegistry? connectionSessionRegistry = null,
+        ISlashCommandSource? localSlashCommandSource = null)
     {
         var state = State.Value(new object(), () => ChatState.Empty);
         var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
@@ -196,7 +198,8 @@ public partial class ChatViewModelTests
                 voiceInputService: voiceInputService,
                 localTerminalPanelCoordinator: localTerminalPanelCoordinator,
                 conversationCatalogFacade: conversationCatalogFacade,
-                connectionSessionRegistry: connectionSessionRegistry);
+                connectionSessionRegistry: connectionSessionRegistry,
+                localSlashCommandSource: localSlashCommandSource);
             conversationCatalogFacade.SetPanelCleanup(viewModel);
             return new ViewModelFixture(
                 viewModel,

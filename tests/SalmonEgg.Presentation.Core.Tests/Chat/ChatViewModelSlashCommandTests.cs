@@ -1,5 +1,13 @@
+using System.Collections.Immutable;
 using System.Linq;
+using Moq;
+using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models.Conversation;
+using SalmonEgg.Domain.Models.Protocol;
+using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Mvux.Chat;
+using SalmonEgg.Presentation.Core.Services.Chat.Slash;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using Xunit;
 
@@ -8,133 +16,178 @@ namespace SalmonEgg.Presentation.Core.Tests.Chat;
 public partial class ChatViewModelTests
 {
     [Fact]
-    public async Task CurrentPrompt_WhenSlashPrefixEntered_FiltersCommandsAndSelectsFirstMatch()
+    public async Task CurrentPrompt_WhenSlashPrefixEntered_ShowsMatchingCommandsAndSelectsFirstMatch()
     {
-        await using var fixture = await CreateSlashCommandViewModelAsync();
-        var viewModel = fixture.ViewModel;
+        await using var harness = await CreateSlashHarnessAsync();
+        await harness.PushRemoteSlashCommandsAsync(
+            new ConversationAvailableCommandSnapshot("plan", "Planning command", "goal"),
+            new ConversationAvailableCommandSnapshot("prompt", "Prompt command", "text"),
+            new ConversationAvailableCommandSnapshot("status", "Status command", "scope"));
 
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "plan",
-            Description = "Planning command",
-            InputHint = "goal"
-        });
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "prompt",
-            Description = "Prompt command",
-            InputHint = "text"
-        });
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "status",
-            Description = "Status command",
-            InputHint = "scope"
-        });
+        harness.ViewModel.CurrentPrompt = "/p";
 
-        viewModel.CurrentPrompt = "/p";
-
-        Assert.True(viewModel.ShowSlashCommands);
-        Assert.Equal(new[] { "plan", "prompt" }, viewModel.FilteredSlashCommands.Select(static command => command.Name).ToArray());
-        Assert.Equal("plan", viewModel.SelectedSlashCommand?.Name);
-        Assert.Equal("lan ", viewModel.SlashGhostSuffix);
+        Assert.True(harness.ViewModel.ShowSlashCommands);
+        Assert.Equal(new[] { "plan", "prompt" }, harness.ViewModel.FilteredSlashCommands.Select(static command => command.Name).ToArray());
+        Assert.Equal("plan", harness.ViewModel.SelectedSlashCommand?.Name);
+        Assert.Equal("lan ", harness.ViewModel.SlashGhostSuffix);
     }
 
     [Fact]
     public async Task TryMoveSlashSelection_WhenVisible_UpdatesSelectionWithinBounds()
     {
-        await using var fixture = await CreateSlashCommandViewModelAsync();
-        var viewModel = fixture.ViewModel;
+        await using var harness = await CreateSlashHarnessAsync();
+        await harness.PushRemoteSlashCommandsAsync(
+            new ConversationAvailableCommandSnapshot("plan", "Planning command", "goal"),
+            new ConversationAvailableCommandSnapshot("prompt", "Prompt command", "text"));
 
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "plan",
-            Description = "Planning command",
-            InputHint = "goal"
-        });
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "prompt",
-            Description = "Prompt command",
-            InputHint = "text"
-        });
-        viewModel.CurrentPrompt = "/p";
+        harness.ViewModel.CurrentPrompt = "/p";
 
-        Assert.True(viewModel.TryMoveSlashSelection(1));
-        Assert.Equal("prompt", viewModel.SelectedSlashCommand?.Name);
-        Assert.Equal("rompt ", viewModel.SlashGhostSuffix);
+        Assert.True(harness.ViewModel.TryMoveSlashSelection(1));
+        Assert.Equal("prompt", harness.ViewModel.SelectedSlashCommand?.Name);
+        Assert.Equal("rompt ", harness.ViewModel.SlashGhostSuffix);
 
-        Assert.True(viewModel.TryMoveSlashSelection(1));
-        Assert.Equal("prompt", viewModel.SelectedSlashCommand?.Name);
+        Assert.True(harness.ViewModel.TryMoveSlashSelection(1));
+        Assert.Equal("prompt", harness.ViewModel.SelectedSlashCommand?.Name);
 
-        Assert.True(viewModel.TryMoveSlashSelection(-5));
-        Assert.Equal("plan", viewModel.SelectedSlashCommand?.Name);
+        Assert.True(harness.ViewModel.TryMoveSlashSelection(-5));
+        Assert.Equal("plan", harness.ViewModel.SelectedSlashCommand?.Name);
     }
 
     [Fact]
-    public async Task TryAcceptSelectedSlashCommand_WhenSelectionExists_CompletesPromptAndClosesMenu()
+    public async Task TryAcceptSelectedSlashCommand_WhenSelectionExists_CompletesPromptAndClosesTopLevelSuggestions()
     {
-        await using var fixture = await CreateSlashCommandViewModelAsync();
-        var viewModel = fixture.ViewModel;
+        await using var harness = await CreateSlashHarnessAsync();
+        await harness.PushRemoteSlashCommandsAsync(
+            new ConversationAvailableCommandSnapshot("plan", "Planning command", "goal"),
+            new ConversationAvailableCommandSnapshot("prompt", "Prompt command", "text"));
 
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "plan",
-            Description = "Planning command",
-            InputHint = "goal"
-        });
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "prompt",
-            Description = "Prompt command",
-            InputHint = "text"
-        });
-        viewModel.CurrentPrompt = "   /p next step";
-        Assert.True(viewModel.TryMoveSlashSelection(1));
+        harness.ViewModel.CurrentPrompt = "   /pr";
 
-        var accepted = viewModel.TryAcceptSelectedSlashCommand();
+        var accepted = harness.ViewModel.TryAcceptSelectedSlashCommand();
 
         Assert.True(accepted);
-        Assert.Equal("   /prompt next step", viewModel.CurrentPrompt);
-        Assert.False(viewModel.ShowSlashCommands);
-        Assert.Equal(string.Empty, viewModel.SlashGhostSuffix);
+        Assert.Equal("   /prompt ", harness.ViewModel.CurrentPrompt);
+        Assert.False(harness.ViewModel.ShowSlashCommands);
+        Assert.Equal(string.Empty, harness.ViewModel.SlashGhostSuffix);
     }
 
     [Fact]
     public async Task CurrentPrompt_WhenNotSlashPrefix_HidesCommandsAndClearsSelection()
     {
-        await using var fixture = await CreateSlashCommandViewModelAsync();
-        var viewModel = fixture.ViewModel;
+        await using var harness = await CreateSlashHarnessAsync();
+        await harness.PushRemoteSlashCommandsAsync(
+            new ConversationAvailableCommandSnapshot("plan", "Planning command", "goal"));
 
-        viewModel.AvailableSlashCommands.Add(new SlashCommandViewModel
-        {
-            Name = "plan",
-            Description = "Planning command",
-            InputHint = "goal"
-        });
-        viewModel.CurrentPrompt = "/p";
-        Assert.True(viewModel.ShowSlashCommands);
-        Assert.NotNull(viewModel.SelectedSlashCommand);
+        harness.ViewModel.CurrentPrompt = "/p";
+        Assert.True(harness.ViewModel.ShowSlashCommands);
+        Assert.NotNull(harness.ViewModel.SelectedSlashCommand);
 
-        viewModel.CurrentPrompt = "plain text";
+        harness.ViewModel.CurrentPrompt = "plain text";
 
-        Assert.False(viewModel.ShowSlashCommands);
-        Assert.Null(viewModel.SelectedSlashCommand);
-        Assert.Empty(viewModel.FilteredSlashCommands);
-        Assert.Equal(string.Empty, viewModel.SlashGhostSuffix);
+        Assert.False(harness.ViewModel.ShowSlashCommands);
+        Assert.Null(harness.ViewModel.SelectedSlashCommand);
+        Assert.Empty(harness.ViewModel.FilteredSlashCommands);
+        Assert.Equal(string.Empty, harness.ViewModel.SlashGhostSuffix);
     }
 
-    private static async Task<ViewModelFixture> CreateSlashCommandViewModelAsync()
+    [Fact]
+    public async Task CurrentPrompt_WhenLocalAndRemoteCommandsConflict_LocalCommandRemainsAuthoritative()
+    {
+        var localSource = new StaticSlashCommandSource(
+        [
+            new SlashCommandSpec
+            {
+                Name = "help",
+                Description = "Local help",
+                Source = SlashCommandSourceKind.Local
+            }
+        ]);
+
+        await using var harness = await CreateSlashHarnessAsync(localSource);
+        await harness.PushRemoteSlashCommandsAsync(
+            new ConversationAvailableCommandSnapshot("help", "Remote help", "topic"));
+
+        harness.ViewModel.CurrentPrompt = "/he";
+
+        Assert.True(harness.ViewModel.ShowSlashCommands);
+        var selected = Assert.Single(harness.ViewModel.FilteredSlashCommands);
+        Assert.Equal("help", selected.Name);
+        Assert.Equal("Local help", selected.Description);
+        Assert.True(harness.ViewModel.TryAcceptSelectedSlashCommand());
+        Assert.Equal("/help ", harness.ViewModel.CurrentPrompt);
+    }
+
+    private static async Task<SlashHarness> CreateSlashHarnessAsync(ISlashCommandSource? localSlashCommandSource = null)
     {
         var syncContext = new QueueingSynchronizationContext();
-        var fixture = CreateViewModel(syncContext);
+        var fixture = CreateViewModel(syncContext, localSlashCommandSource: localSlashCommandSource);
+        var chatService = CreateConnectedChatService();
 
-        await WaitForConditionAsync(() =>
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object));
+        await fixture.UpdateStateAsync(state => state with
         {
-            syncContext.RunAll();
-            return Task.FromResult(fixture.Preferences.IsLoaded);
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
+        syncContext.RunAll();
 
-        return fixture;
+        return new SlashHarness(fixture, syncContext, chatService);
+    }
+
+    private sealed class SlashHarness : IAsyncDisposable
+    {
+        private readonly ViewModelFixture _fixture;
+        private readonly QueueingSynchronizationContext _syncContext;
+        private readonly Mock<IChatService> _chatService;
+
+        public SlashHarness(
+            ViewModelFixture fixture,
+            QueueingSynchronizationContext syncContext,
+            Mock<IChatService> chatService)
+        {
+            _fixture = fixture;
+            _syncContext = syncContext;
+            _chatService = chatService;
+        }
+
+        public ChatViewModel ViewModel => _fixture.ViewModel;
+
+        public async Task PushRemoteSlashCommandsAsync(params ConversationAvailableCommandSnapshot[] commands)
+        {
+            _chatService.Raise(
+                service => service.SessionUpdateReceived += null,
+                new SessionUpdateEventArgs(
+                    "remote-1",
+                    new AvailableCommandsUpdate
+                    {
+                        AvailableCommands =
+                        [
+                            .. commands.Select(static command => new AvailableCommand
+                            {
+                                Name = command.Name,
+                                Description = command.Description,
+                                Input = string.IsNullOrWhiteSpace(command.InputHint)
+                                    ? null
+                                    : new AvailableCommandInput
+                                    {
+                                        Hint = command.InputHint
+                                    }
+                            })
+                        ]
+                    }));
+
+            await WaitForConditionAsync(() =>
+            {
+                _syncContext.RunAll();
+                return Task.FromResult(
+                    ViewModel.AvailableSlashCommands.Select(static command => command.Name).SequenceEqual(commands.Select(static command => command.Name)));
+            });
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _fixture.DisposeAsync();
+        }
     }
 }

@@ -31,6 +31,7 @@ using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Services.Chat.Slash;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.Core.Services;
@@ -112,6 +113,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private readonly ChatAuthenticationCoordinator _authenticationCoordinator;
     private readonly ChatSessionHeaderActionCoordinator _sessionHeaderActionCoordinator;
     private readonly ConversationCatalogFacade _conversationCatalogFacade;
+    private readonly ISlashCommandSource _localSlashCommandSource;
+    private readonly SlashCommandRegistry _slashCommandRegistry;
+    private readonly SlashInteractionCoordinator _slashInteractionCoordinator;
     private readonly IConfigurationService _configurationService;
     private readonly AppPreferencesViewModel _preferences;
     private readonly AcpProfilesViewModel _acpProfiles;
@@ -843,7 +847,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         IAcpConnectionSessionRegistry? connectionSessionRegistry = null,
         SerialAsyncWorkQueue? sessionUpdateWorkQueue = null,
         IChatUiProjectionApplicationCoordinator? chatUiProjectionApplicationCoordinator = null,
-        IConversationActivationOrchestrator? conversationActivationOrchestrator = null)
+        IConversationActivationOrchestrator? conversationActivationOrchestrator = null,
+        ISlashCommandSource? localSlashCommandSource = null)
         : base(logger)
     {
         _chatStore = chatStore ?? throw new ArgumentNullException(nameof(chatStore));
@@ -893,6 +898,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         _interactionEventBridge = new ChatInteractionEventBridge(_authoritativeRemoteSessionRouter, _terminalProjectionCoordinator);
         _authenticationCoordinator = new ChatAuthenticationCoordinator();
         _sessionHeaderActionCoordinator = new ChatSessionHeaderActionCoordinator();
+        _localSlashCommandSource = localSlashCommandSource ?? StaticSlashCommandSource.Empty;
+        _slashCommandRegistry = new SlashCommandRegistry(localCommands: _localSlashCommandSource.GetCommands(), remoteCommands: []);
+        _slashInteractionCoordinator = new SlashInteractionCoordinator(_slashCommandRegistry);
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _previewStore = previewStore ?? throw new ArgumentNullException(nameof(previewStore));
         _transcriptProjectionCoordinator = new ChatTranscriptProjectionCoordinator(_previewStore);
