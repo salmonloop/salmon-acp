@@ -1052,17 +1052,16 @@ public partial class ChatViewModel
         var remainder = afterSlash.Length >= existingToken.Length ? afterSlash[existingToken.Length..] : string.Empty;
 
         var completed = "/" + SelectedSlashCommand.Name;
-        if (!remainder.StartsWith(" "))
-        {
-            completed += " ";
-        }
+        var normalizedRemainder = string.IsNullOrWhiteSpace(remainder)
+            ? " "
+            : " " + remainder.TrimStart();
 
         if (commitWithInputPlaceholder && string.IsNullOrWhiteSpace(remainder) && !string.IsNullOrWhiteSpace(SelectedSlashCommand.InputHint))
         {
             // no-op: hint is shown in list; we don't inject it into the prompt
         }
 
-        CurrentPrompt = new string(' ', prefixWhitespaceCount) + completed + remainder.TrimStart();
+        CurrentPrompt = new string(' ', prefixWhitespaceCount) + completed + normalizedRemainder;
         ShowSlashCommands = false;
         SlashGhostSuffix = string.Empty;
         return true;

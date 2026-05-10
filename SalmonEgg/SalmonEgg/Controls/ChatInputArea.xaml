@@ -31,6 +31,7 @@
                         <ListView x:Name="SlashCommandsList"
                                   ItemsSource="{x:Bind ViewModel.FilteredSlashCommands, Mode=OneWay}"
                                   SelectedItem="{x:Bind ViewModel.SelectedSlashCommand, Mode=TwoWay}"
+                                  SelectionChanged="OnSlashCommandsListSelectionChanged"
                                   SelectionMode="Single"
                                   MaxHeight="220">
                             <ListView.ItemTemplate>

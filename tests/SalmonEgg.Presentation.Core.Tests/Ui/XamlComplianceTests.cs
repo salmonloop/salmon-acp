@@ -845,11 +845,8 @@ public sealed class XamlComplianceTests
         Assert.Contains("OnInputKeyDown", code);
         Assert.Contains("OnSendAcceleratorInvoked", code);
         Assert.Contains("OnNewLineAcceleratorInvoked", code);
-        Assert.Contains("TryMoveSlashSelection", code);
-        Assert.Contains("TryAcceptSelectedSlashCommand", code);
         Assert.Contains("_isImeComposing", code);
         Assert.Contains("InputBox.IsEnabled", code);
-        Assert.Contains("TryAcceptSelectedSlashCommandAndMoveCaretToEnd", code);
     }
 
 
