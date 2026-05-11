@@ -263,7 +263,18 @@ public partial class ChatViewModel
         var recoveryMode = AcpSessionRecoveryPolicy.Resolve(chatService.AgentCapabilities);
         if (recoveryMode == AcpSessionRecoveryMode.None)
         {
-            return true;
+            await _conversationActivationOutcomePublisher.TryPublishPhaseAsync(
+                    conversationId,
+                    activationVersion,
+                    SessionActivationPhase.Faulted,
+                    reason: "RecoveryCapabilityMissing")
+                .ConfigureAwait(false);
+            await _conversationActivationOutcomePublisher.TrySetActivationErrorAsync(
+                    conversationId,
+                    activationVersion,
+                    "Failed to load session: the connected ACP agent does not advertise remote session recovery capabilities.")
+                .ConfigureAwait(false);
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(binding.RemoteSessionId))
@@ -553,7 +564,7 @@ public partial class ChatViewModel
                         activationVersion,
                         $"Failed to load session: {ex.Message}")
                     .ConfigureAwait(false);
-                return true;
+                return false;
             }
             else
             {
@@ -1991,6 +2002,11 @@ public partial class ChatViewModel
         string remoteSessionId,
         CancellationToken cancellationToken)
     {
+        if (chatService.AgentCapabilities?.SessionCapabilities?.List is null)
+        {
+            return null;
+        }
+
         string? cursor = null;
         do
         {

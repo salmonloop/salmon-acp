@@ -5720,6 +5720,40 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task HydrateActiveConversationAsync_WhenRecoveryCapabilityIsMissing_FailsWithoutProtocolRecoveryCall()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessionManager = CreateSessionManagerWithStore();
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\demo");
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities)
+            .Returns(new AgentCapabilities(loadSession: false, sessionCapabilities: new SessionCapabilities()));
+        chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("session/load must not be called without recovery capability."));
+        chatService.Setup(service => service.ResumeSessionAsync(It.IsAny<SessionResumeParams>(), It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("session/resume must not be called without recovery capability."));
+
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object));
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+        SetCurrentSessionId(fixture.ViewModel, "conv-1");
+        SetCurrentRemoteSessionId(fixture.ViewModel, "remote-1");
+        await DispatchConnectedAsync(fixture, "profile-1");
+
+        var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
+
+        Assert.False(hydrated);
+        Assert.Contains("does not advertise remote session recovery capabilities", fixture.ViewModel.ErrorMessage, StringComparison.Ordinal);
+        chatService.Verify(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()), Times.Never);
+        chatService.Verify(service => service.ResumeSessionAsync(It.IsAny<SessionResumeParams>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task HydrateActiveConversationAsync_WhenRemoteMetadataRefreshIsSlow_DoesNotBlockSessionLoad()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -5830,6 +5864,38 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task HydrateActiveConversationAsync_WhenSessionListCapabilityIsMissing_DoesNotCallSessionList()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessionManager = CreateSessionManagerWithStore();
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\demo");
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities)
+            .Returns(new AgentCapabilities(loadSession: true, sessionCapabilities: new SessionCapabilities()));
+        chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(SessionLoadResponse.Completed);
+        chatService.Setup(service => service.ListSessionsAsync(It.IsAny<SessionListParams>(), It.IsAny<CancellationToken>()))
+            .Throws(new Xunit.Sdk.XunitException("session/list must not be called without list capability."));
+
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object));
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+        SetCurrentSessionId(fixture.ViewModel, "conv-1");
+        SetCurrentRemoteSessionId(fixture.ViewModel, "remote-1");
+        await DispatchConnectedAsync(fixture, "profile-1");
+
+        var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
+
+        Assert.True(hydrated, fixture.ViewModel.ErrorMessage);
+        chatService.Verify(service => service.ListSessionsAsync(It.IsAny<SessionListParams>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RestoreAndHydrateRemoteConversation_WhenSessionListReportsDifferentCwd_NavigationKeepsProjectGrouping()
     {
         var syncContext = new ImmediateSynchronizationContext();
@@ -5867,7 +5933,7 @@ public partial class ChatViewModelTests
         conversationStore.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ConversationDocument
             {
-                LastActiveConversationId = null,
+                LastActiveConversationId = "conv-1",
                 Conversations =
                 {
                     new ConversationRecord
@@ -6083,10 +6149,10 @@ public partial class ChatViewModelTests
             });
 
         await using var fixture = CreateViewModel(syncContext, conversationStore: conversationStore, sessionManager: sessionManager);
-        fixture.ViewModel.ReplaceChatService(chatService.Object);
         fixture.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
 
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.RestoreAsync());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object));
         sessions.Remove("conv-1");
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1")).AsTask());
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected)).AsTask());
@@ -10237,7 +10303,7 @@ public partial class ChatViewModelTests
 
         var switched = await fixture.ViewModel.SwitchConversationAsync("conv-2");
 
-        Assert.True(switched);
+        Assert.False(switched);
         await WaitForConditionAsync(async () =>
         {
             var workspaceBinding = fixture.Workspace.GetRemoteBinding("conv-2");
@@ -10362,7 +10428,7 @@ public partial class ChatViewModelTests
 
         var switched = await fixture.ViewModel.SwitchConversationAsync("conv-2");
 
-        Assert.True(switched);
+        Assert.False(switched);
         bindingCommands.Verify(x => x.UpdateBindingAsync("conv-2", null, "profile-1"), Times.Once);
 
         var workspaceBinding = fixture.Workspace.GetRemoteBinding("conv-2");

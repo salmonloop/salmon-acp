@@ -289,11 +289,22 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         var openResult = await _conversationSessionSwitcher
             .OpenDiscoveredRemoteSessionAsync(request)
             .ConfigureAwait(true);
-        if (openResult.Succeeded && !string.IsNullOrWhiteSpace(openResult.LocalConversationId))
+        if (!openResult.Succeeded || string.IsNullOrWhiteSpace(openResult.LocalConversationId))
         {
-            _runtimeState.CurrentShellContent = ShellNavigationContent.Chat;
-            _selectionSink.SetSelection(new NavigationSelectionState.Session(openResult.LocalConversationId!));
+            return openResult;
         }
+
+        if (!IsLatestActivationToken(navigationToken))
+        {
+            _logger.LogInformation(
+                "Discover remote session activation ignored stale completion. remoteSessionId={RemoteSessionId} activationVersion={ActivationVersion}",
+                request.RemoteSessionId,
+                navigationToken);
+            return new DiscoverRemoteSessionOpenResult(false, openResult.LocalConversationId, "DiscoverSessionOpenSuperseded");
+        }
+
+        _runtimeState.CurrentShellContent = ShellNavigationContent.Chat;
+        _selectionSink.SetSelection(new NavigationSelectionState.Session(openResult.LocalConversationId!));
 
         return openResult;
     }

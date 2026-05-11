@@ -285,6 +285,42 @@ public sealed class NavigationCoordinatorTests
     }
 
     [Fact]
+    public async Task ActivateDiscoveredRemoteSessionAsync_WhenSuperseded_DoesNotCommitStaleSelection()
+    {
+        var selectionStore = new ShellSelectionStateStore();
+        var preferences = CreatePreferencesWithProject();
+        var shellNavigation = new TokenAwareShellNavigationService();
+        var openCompletion = new TaskCompletionSource<DiscoverRemoteSessionOpenResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var switcher = new RecordingConversationSessionSwitcher(
+            (_, _) => Task.FromResult(true),
+            (_, _) => openCompletion.Task);
+        var discoverFacade = new Mock<IDiscoverSessionsConnectionFacade>();
+        discoverFacade.SetupGet(x => x.CurrentChatService).Returns(new FakeDiscoverChatService());
+
+        var coordinator = CreateCoordinator(
+            selectionStore,
+            switcher,
+            preferences,
+            shellNavigation,
+            discoverConnectionFacade: discoverFacade.Object);
+
+        var staleOpenTask = coordinator.ActivateDiscoveredRemoteSessionAsync(
+            new DiscoverRemoteSessionOpenRequest("remote-1", "/repo", "profile-1", "Remote"));
+
+        await WaitForConditionAsync(() => shellNavigation.FirstToken.HasValue);
+        shellNavigation.CompleteFirst(ShellNavigationResult.Success());
+        await WaitForConditionAsync(() => switcher.OpenRequests.Count == 1);
+
+        await coordinator.ActivateStartAsync();
+        openCompletion.TrySetResult(new DiscoverRemoteSessionOpenResult(true, "local-1", null));
+        var result = await staleOpenTask;
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("DiscoverSessionOpenSuperseded", result.ErrorMessage);
+        Assert.Equal(NavigationSelectionState.StartSelection, selectionStore.CurrentSelection);
+    }
+
+    [Fact]
     public async Task ShowAllSessionsForProjectAsync_PickedSession_UsesCoordinatorActivationPath()
     {
         var originalContext = SynchronizationContext.Current;
@@ -937,9 +973,9 @@ public sealed class NavigationCoordinatorTests
             await chat.ViewModel.RestoreAsync();
             chat.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
 
-            var bindResult = await chat.ViewModel.ConversationBindingCommands
-                .UpdateBindingAsync("session-2", "remote-2", "profile-1");
-            Assert.Equal(BindingUpdateStatus.Success, bindResult.Status);
+            chat.Workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+            await chat.ChatStore.Dispatch(new SetBindingSliceAction(
+                new ConversationBindingSlice("session-2", "remote-2", "profile-1")));
 
             var loadStarted = new TaskCompletionSource<SessionLoadParams>(TaskCreationOptions.RunContinuationsAsynchronously);
             var allowLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1012,9 +1048,9 @@ public sealed class NavigationCoordinatorTests
             await chat.ViewModel.RestoreAsync();
             chat.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
 
-            var bindResult = await chat.ViewModel.ConversationBindingCommands
-                .UpdateBindingAsync("session-2", "remote-2", "profile-1");
-            Assert.Equal(BindingUpdateStatus.Success, bindResult.Status);
+            chat.Workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+            await chat.ChatStore.Dispatch(new SetBindingSliceAction(
+                new ConversationBindingSlice("session-2", "remote-2", "profile-1")));
 
             var loadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var allowLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1051,12 +1087,15 @@ public sealed class NavigationCoordinatorTests
 
             var activationTask = coordinator.ActivateSessionAsync("session-2", "project-1");
 
-            Assert.True(activationTask.IsCompletedSuccessfully);
-            await activationTask;
+            await WaitForConditionAsync(() =>
+                loadStarted.Task.IsCompleted || activationTask.IsCompleted,
+                maxAttempts: 100,
+                delayMilliseconds: 20);
             Assert.NotNull(runtimeState.ActiveSessionActivation);
             Assert.Equal("session-2", runtimeState.ActiveSessionActivation!.SessionId);
 
             allowLoadCompletion.TrySetResult(null);
+            Assert.True(await activationTask);
             await WaitForConditionAsync(() =>
                 !runtimeState.IsSessionActivationInProgress,
                 maxAttempts: 100,
@@ -1085,11 +1124,18 @@ public sealed class NavigationCoordinatorTests
 
             using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object);
             await chat.ViewModel.RestoreAsync();
+            chat.Workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+                "session-2",
+                [],
+                [],
+                false,
+                null,
+                DateTime.UtcNow,
+                DateTime.UtcNow));
             chat.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
-
-            var bindResult = await chat.ViewModel.ConversationBindingCommands
-                .UpdateBindingAsync("session-2", "remote-2", "profile-1");
-            Assert.Equal(BindingUpdateStatus.Success, bindResult.Status);
+            chat.Workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+            await chat.ChatStore.Dispatch(new SetBindingSliceAction(
+                new ConversationBindingSlice("session-2", "remote-2", "profile-1")));
 
             var chatService = new Mock<IChatService>();
             chatService.SetupGet(service => service.IsConnected).Returns(true);
@@ -1141,10 +1187,9 @@ public sealed class NavigationCoordinatorTests
             using var chat = CreateChatViewModel(syncContext, preferences, sessionManager.Object, runtimeState);
             await chat.ViewModel.RestoreAsync();
             chat.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
-
-            var bindResult = await chat.ViewModel.ConversationBindingCommands
-                .UpdateBindingAsync("session-2", "remote-2", "profile-1");
-            Assert.Equal(BindingUpdateStatus.Success, bindResult.Status);
+            chat.Workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+            await chat.ChatStore.Dispatch(new SetBindingSliceAction(
+                new ConversationBindingSlice("session-2", "remote-2", "profile-1")));
             await SetConnectedProfileAsync(chat, "profile-1", "conn-1");
 
             var loadAttempts = 0;
