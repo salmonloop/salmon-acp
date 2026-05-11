@@ -100,6 +100,18 @@ public sealed class ChatMessageViewModelMarkdownTests
     }
 
     [Fact]
+    public void CopyableMarkdownCodeBlockText_SupportsClosedTildeFence()
+    {
+        var vm = ChatMessageViewModel.CreateFromTextContent(
+            "m-copy-tilde",
+            new TextContentBlock("~~~json\n{\"done\":true}\n~~~"),
+            isOutgoing: false);
+
+        Assert.True(vm.HasCopyableMarkdownCodeBlock);
+        Assert.Equal("{\"done\":true}", vm.CopyableMarkdownCodeBlockText);
+    }
+
+    [Fact]
     public void CopyableMarkdownCodeBlockText_IsEmptyForPlainOrFallbackMessage()
     {
         var vm = ChatMessageViewModel.CreateFromTextContent(

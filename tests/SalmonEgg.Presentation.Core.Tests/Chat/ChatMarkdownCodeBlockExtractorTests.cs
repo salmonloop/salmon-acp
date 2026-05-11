@@ -49,4 +49,20 @@ public sealed class ChatMarkdownCodeBlockExtractorTests
 
         Assert.Equal("first\n\nsecond", extracted);
     }
+
+    [Fact]
+    public void TryExtractFirstFencedCodeBlock_SupportsTildeFences()
+    {
+        const string markdown = """
+            ~~~json
+            {
+              "done": true
+            }
+            ~~~
+            """;
+
+        var extracted = ChatMarkdownCodeBlockExtractor.TryExtractFirstFencedCodeBlock(markdown);
+
+        Assert.Equal("{\n  \"done\": true\n}", extracted);
+    }
 }

@@ -368,7 +368,7 @@ public sealed class MarkdownTextPresenter : Grid
     {
         // Keep native selection available for ordinary markdown, but avoid mutating
         // RichTextBlock selection mode on a live control after chat re-entry.
-        return _requestedIsTextSelectionEnabled && !ContainsClosedCodeFence(text);
+        return _requestedIsTextSelectionEnabled && !ChatMarkdownFenceDetector.HasClosedFence(text);
     }
 
     private void AttachMarkdown(MarkdownTextBlockControl markdown)
@@ -544,33 +544,6 @@ public sealed class MarkdownTextPresenter : Grid
         markdown.TableMargin = new Thickness(0, 6, 0, 10);
         markdown.HorizontalRuleBrush = TableBorderBrush ?? CodeBlockBorderBrush;
 #endif
-    }
-
-    private static bool ContainsClosedCodeFence(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        var span = text.AsSpan();
-        const string fence = "```";
-        var fenceCount = 0;
-        var index = 0;
-
-        while (index <= span.Length - fence.Length)
-        {
-            if (span.Slice(index, fence.Length).SequenceEqual(fence.AsSpan()))
-            {
-                fenceCount++;
-                index += fence.Length;
-                continue;
-            }
-
-            index++;
-        }
-
-        return fenceCount >= 2;
     }
 
 #if WINDOWS

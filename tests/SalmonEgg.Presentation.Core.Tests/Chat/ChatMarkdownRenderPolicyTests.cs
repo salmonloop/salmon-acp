@@ -43,6 +43,26 @@ public sealed class ChatMarkdownRenderPolicyTests
         Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, mode);
     }
 
+    [Fact]
+    public void Resolve_WhenTildeFenceIsUnclosed_StaysPlainStreaming()
+    {
+        const string text = "~~~csharp\nvar a = 1;";
+
+        var mode = ChatMarkdownRenderPolicy.Resolve("text", false, text, isFallbackSticky: false);
+
+        Assert.Equal(ChatMarkdownRenderMode.PlainStreaming, mode);
+    }
+
+    [Fact]
+    public void Resolve_WhenTildeFenceIsClosed_SwitchesToMarkdownReady()
+    {
+        const string text = "~~~csharp\nvar a = 1;\n~~~";
+
+        var mode = ChatMarkdownRenderPolicy.Resolve("text", false, text, isFallbackSticky: false);
+
+        Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, mode);
+    }
+
     [Theory]
     [InlineData("# heading")]
     [InlineData("- item")]
