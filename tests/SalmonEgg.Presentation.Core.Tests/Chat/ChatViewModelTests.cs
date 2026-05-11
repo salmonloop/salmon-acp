@@ -595,26 +595,6 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task StopVoiceInputCommand_DoesNotCancelCallerTokenBeforeServiceStop()
-    {
-        var voiceInput = new FakeVoiceInputService
-        {
-            IsSupported = true,
-            PermissionResult = VoiceInputPermissionResult.Granted(),
-            ThrowIfStopCalledAfterCallerCancellation = true
-        };
-
-        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
-        fixture.ViewModel.IsSessionActive = true;
-
-        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
-        await fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
-
-        Assert.Null(fixture.ViewModel.VoiceInputErrorMessage);
-        Assert.Equal(1, voiceInput.StopCount);
-    }
-
-    [Fact]
     public async Task StopVoiceInputCommand_WhenStartIsStuck_CancelsActiveVoiceSessionAndClearsBusyState()
     {
         var voiceInput = new FakeVoiceInputService
@@ -631,16 +611,158 @@ public partial class ChatViewModelTests
 
         await WaitForConditionAsync(() => Task.FromResult(
             fixture.ViewModel.IsVoiceInputListening
-            && fixture.ViewModel.IsVoiceInputBusy
+            && fixture.ViewModel.IsVoiceInputTransportBusy
             && fixture.ViewModel.CanStopVoiceInput));
 
         await fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
         await startTask;
 
         Assert.False(fixture.ViewModel.IsVoiceInputListening);
-        Assert.False(fixture.ViewModel.IsVoiceInputBusy);
+        Assert.False(fixture.ViewModel.IsVoiceInputTransportBusy);
         Assert.Null(fixture.ViewModel.VoiceInputErrorMessage);
         Assert.Equal(1, voiceInput.StopCount);
+    }
+
+    [Fact]
+    public async Task StopVoiceInputCommand_ReleasesFrontSessionBeforeServiceStopCompletes()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted(),
+            DelayStopUntilReleased = true
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsConnected = true;
+        fixture.ViewModel.IsSessionActive = true;
+        fixture.ViewModel.CurrentPrompt = "draft";
+        SetCurrentSessionId(fixture.ViewModel, "conv-voice-stop");
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+        Assert.True(fixture.ViewModel.IsVoiceInputListening);
+
+        var stopTask = fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.False(fixture.ViewModel.IsVoiceInputListening);
+        Assert.False(fixture.ViewModel.ComposerState.ShowVoiceListeningStatus);
+        Assert.True(fixture.ViewModel.IsTextInputEnabled);
+        Assert.False(fixture.ViewModel.CanStartVoiceInput);
+
+        voiceInput.ReleaseStop();
+        await stopTask;
+    }
+
+    [Fact]
+    public async Task VoiceInputLateEvents_AfterUserStop_DoNotReenterVoiceMode()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted()
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsSessionActive = true;
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+        var requestId = Assert.Single(voiceInput.StartedSessionIds);
+
+        await fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+
+        voiceInput.EmitSessionEnded(new VoiceInputSessionEndedResult(requestId));
+        voiceInput.EmitFinal(new VoiceInputFinalResult(requestId, "late tail"));
+
+        Assert.False(fixture.ViewModel.IsVoiceInputListening);
+        Assert.False(fixture.ViewModel.ComposerState.ShowVoiceListeningStatus);
+    }
+
+    [Fact]
+    public async Task StopVoiceInputCommand_WhileServiceStopping_KeepsTextInteractive_ButBlocksRestart()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted(),
+            DelayStopUntilReleased = true
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsConnected = true;
+        fixture.ViewModel.IsSessionActive = true;
+        fixture.ViewModel.CurrentPrompt = "draft";
+        SetCurrentSessionId(fixture.ViewModel, "conv-voice-stop");
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        var stopTask = fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.True(fixture.ViewModel.IsTextInputEnabled);
+        Assert.False(fixture.ViewModel.CanStartVoiceInput);
+
+        voiceInput.ReleaseStop();
+        await stopTask;
+    }
+
+    [Fact]
+    public async Task StopVoiceInputCommand_WhenStartAndStopOverlap_KeepsRestartBlockedUntilStopCompletes()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted(),
+            BlockStartUntilCancellation = true,
+            DelayStopUntilReleased = true
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsConnected = true;
+        fixture.ViewModel.IsSessionActive = true;
+        SetCurrentSessionId(fixture.ViewModel, "conv-voice-stop");
+
+        var startTask = fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+
+        await WaitForConditionAsync(() => Task.FromResult(
+            fixture.ViewModel.IsVoiceInputListening
+            && fixture.ViewModel.IsVoiceInputTransportBusy
+            && fixture.ViewModel.CanStopVoiceInput));
+
+        var stopTask = fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+        await startTask;
+
+        Assert.False(fixture.ViewModel.IsVoiceInputListening);
+        Assert.True(fixture.ViewModel.IsVoiceInputTransportBusy);
+        Assert.False(fixture.ViewModel.CanStartVoiceInput);
+
+        voiceInput.ReleaseStop();
+        await stopTask;
+
+        Assert.False(fixture.ViewModel.IsVoiceInputTransportBusy);
+        Assert.True(fixture.ViewModel.CanStartVoiceInput);
+    }
+
+    [Fact]
+    public async Task StopVoiceInputCommand_WhenServiceRejectsStop_RestoresListeningAndAllowsRetry()
+    {
+        var voiceInput = new FakeVoiceInputService
+        {
+            IsSupported = true,
+            PermissionResult = VoiceInputPermissionResult.Granted(),
+            StopException = new InvalidOperationException("stop rejected")
+        };
+
+        await using var fixture = CreateViewModel(voiceInputService: voiceInput);
+        fixture.ViewModel.IsConnected = true;
+        fixture.ViewModel.IsSessionActive = true;
+        SetCurrentSessionId(fixture.ViewModel, "conv-voice-stop");
+
+        await fixture.ViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+        await fixture.ViewModel.StopVoiceInputCommand.ExecuteAsync(null);
+
+        Assert.True(fixture.ViewModel.IsVoiceInputListening);
+        Assert.True(fixture.ViewModel.CanStopVoiceInput);
+        Assert.False(fixture.ViewModel.CanStartVoiceInput);
+        Assert.Contains("stop rejected", fixture.ViewModel.VoiceInputErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -684,7 +806,7 @@ public partial class ChatViewModelTests
 
         fixture.ViewModel.IsVoiceInputSupported = true;
         fixture.ViewModel.IsVoiceInputListening = true;
-        fixture.ViewModel.IsVoiceInputBusy = true;
+        fixture.ViewModel.IsVoiceInputTransportBusy = true;
 
         Assert.Equal(ChatComposerMode.VoiceListening, fixture.ViewModel.ComposerState.Mode);
         Assert.True(fixture.ViewModel.ComposerState.ShowVoiceStopButton);
@@ -5247,9 +5369,11 @@ public partial class ChatViewModelTests
 
         public int AuthorizationHelpRequestCount { get; private set; }
 
-        public bool ThrowIfStopCalledAfterCallerCancellation { get; set; }
-
         public bool BlockStartUntilCancellation { get; set; }
+
+        public bool DelayStopUntilReleased { get; set; }
+
+        public Exception? StopException { get; set; }
 
         public List<string> StartedSessionIds { get; } = new();
 
@@ -5264,8 +5388,6 @@ public partial class ChatViewModelTests
 
         public event EventHandler<VoiceInputErrorResult>? ErrorOccurred;
 
-        private CancellationToken _lastStartCancellationToken;
-
         public Task<VoiceInputPermissionResult> EnsurePermissionAsync(CancellationToken cancellationToken = default)
         {
             PermissionRequestCount++;
@@ -5276,7 +5398,6 @@ public partial class ChatViewModelTests
         {
             StartCount++;
             IsListening = true;
-            _lastStartCancellationToken = cancellationToken;
             StartedSessionIds.Add(options.RequestId);
             return BlockStartUntilCancellation
                 ? Task.Delay(Timeout.Infinite, cancellationToken)
@@ -5285,14 +5406,20 @@ public partial class ChatViewModelTests
 
         public Task StopAsync(CancellationToken cancellationToken = default)
         {
-            if (ThrowIfStopCalledAfterCallerCancellation && _lastStartCancellationToken.IsCancellationRequested)
-            {
-                throw new ObjectDisposedException(nameof(CancellationTokenSource), "The CancellationTokenSource has been disposed.");
-            }
-
             StopCount++;
             IsListening = false;
-            return Task.CompletedTask;
+            if (StopException is not null)
+            {
+                throw StopException;
+            }
+
+            if (!DelayStopUntilReleased)
+            {
+                return Task.CompletedTask;
+            }
+
+            StopCompletion ??= new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            return StopCompletion.Task;
         }
 
         public Task<bool> TryRequestAuthorizationHelpAsync(CancellationToken cancellationToken = default)
@@ -5321,10 +5448,15 @@ public partial class ChatViewModelTests
             SessionEnded?.Invoke(this, result);
         }
 
+        public void ReleaseStop()
+            => StopCompletion?.TrySetResult(null);
+
         public void Dispose()
         {
             DisposeCount++;
         }
+
+        private TaskCompletionSource<object?>? StopCompletion { get; set; }
     }
 
     [Fact]

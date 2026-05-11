@@ -24,5 +24,11 @@ public interface IVoiceInputService : IDisposable
 
     Task StartAsync(VoiceInputSessionOptions options, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Ends the current voice-input session from the product perspective.
+    /// Implementations may continue internal cleanup after this call is issued,
+    /// but callers must not be required to keep the front-end voice session alive
+    /// while waiting for native recognizer teardown.
+    /// </summary>
     Task StopAsync(CancellationToken cancellationToken = default);
 }

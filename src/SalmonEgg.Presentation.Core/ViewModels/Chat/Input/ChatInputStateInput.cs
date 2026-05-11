@@ -4,7 +4,7 @@ public sealed record ChatInputStateInput(
     bool IsBusy,
     bool IsPromptInFlight,
     bool IsVoiceInputListening,
-    bool IsVoiceInputBusy,
+    bool IsVoiceInputTransportBusy,
     bool HasPendingAskUserRequest,
     bool ShouldShowLoadingOverlayPresenter,
     bool IsSessionActive,

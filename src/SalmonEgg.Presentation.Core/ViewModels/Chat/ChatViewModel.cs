@@ -196,6 +196,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private string? _sessionSwitchPreviewConversationId;
     private string? _visibleTranscriptConversationId;
     private string? _activeVoiceInputRequestId;
+    private string? _transportVoiceInputRequestId;
+    private VoiceInputTransportState _voiceInputTransportState;
     private string _voiceInputBasePrompt = string.Empty;
     private readonly object _pendingUiProjectionSync = new();
     private ChatUiProjection? _pendingUiProjection;
@@ -251,15 +253,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     [NotifyPropertyChangedFor(nameof(CanStartVoiceInput))]
     [NotifyPropertyChangedFor(nameof(CanStopVoiceInput))]
     private bool _isVoiceInputListening;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ComposerState))]
-    [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
-    [NotifyPropertyChangedFor(nameof(IsTextInputEnabled))]
-    [NotifyPropertyChangedFor(nameof(AreComposerToolsEnabled))]
-    [NotifyPropertyChangedFor(nameof(CanStartVoiceInput))]
-    [NotifyPropertyChangedFor(nameof(CanStopVoiceInput))]
-    private bool _isVoiceInputBusy;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ComposerState))]
@@ -588,6 +581,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     public bool IsTextInputEnabled => ResolveInputState().IsTextInputEnabled;
 
     public bool AreComposerToolsEnabled => ResolveInputState().AreComposerToolsEnabled;
+
+    // Bridge property: transport phase is the authoritative source while
+    // existing View/tests continue to consume a busy boolean.
+    public bool IsVoiceInputTransportBusy
+    {
+        get => _voiceInputTransportState != VoiceInputTransportState.Idle;
+        set => SetVoiceInputTransportState(value ? VoiceInputTransportState.Starting : VoiceInputTransportState.Idle);
+    }
 
     public bool HasPendingAskUserRequest => ResolveAskUserState().HasPendingRequest;
 

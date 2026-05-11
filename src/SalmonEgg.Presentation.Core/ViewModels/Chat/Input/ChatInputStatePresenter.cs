@@ -39,8 +39,7 @@ public sealed class ChatInputStatePresenter
         }
 
         var isSurfaceBlocked =
-            input.IsBusy
-            || input.IsVoiceInputBusy;
+            input.IsBusy;
 
         var canSendPrompt =
             !isSurfaceBlocked
@@ -52,7 +51,8 @@ public sealed class ChatInputStatePresenter
 
         var canStartVoiceInput =
             input.IsVoiceInputSupported
-            && !isSurfaceBlocked;
+            && !isSurfaceBlocked
+            && !input.IsVoiceInputTransportBusy;
 
         return new ChatComposerPresentationState(
             Mode: ChatComposerMode.Enabled,

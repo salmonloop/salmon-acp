@@ -128,7 +128,6 @@ public sealed class NativeVoiceInputService : IVoiceInputService
         ThrowIfDisposed();
 
         SpeechRecognizer? recognizer;
-        Task? sessionTask;
         string? requestId;
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -140,7 +139,6 @@ public sealed class NativeVoiceInputService : IVoiceInputService
             }
 
             recognizer = _recognizer;
-            sessionTask = _sessionTask;
             requestId = _activeRequestId;
             _stoppingRequestId = requestId;
         }
@@ -153,29 +151,17 @@ public sealed class NativeVoiceInputService : IVoiceInputService
         {
             try
             {
-                await recognizer.ContinuousRecognitionSession.StopAsync().AsTask(cancellationToken).ConfigureAwait(false);
+                await recognizer.ContinuousRecognitionSession.CancelAsync().AsTask(cancellationToken).ConfigureAwait(false);
             }
             catch
             {
-                // No-op: stop can fail when recognition already ended.
+                // No-op: cancel can race with natural completion.
             }
         }
 
         if (!string.IsNullOrWhiteSpace(requestId))
         {
             TrySignalSessionEnded(requestId);
-        }
-
-        if (sessionTask is not null)
-        {
-            try
-            {
-                await sessionTask.ConfigureAwait(false);
-            }
-            catch
-            {
-                // No-op: session errors are surfaced via ErrorOccurred.
-            }
         }
     }
 

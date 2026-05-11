@@ -321,7 +321,7 @@ public partial class ChatViewModel
             IsBusy: IsBusy,
             IsPromptInFlight: IsPromptInFlight,
             IsVoiceInputListening: IsVoiceInputListening,
-            IsVoiceInputBusy: IsVoiceInputBusy,
+            IsVoiceInputTransportBusy: IsVoiceInputTransportBusy,
             HasPendingAskUserRequest: PendingAskUserRequest is not null,
             ShouldShowLoadingOverlayPresenter: ShouldShowLoadingOverlayPresenter,
             IsSessionActive: IsSessionActive,
@@ -347,11 +347,12 @@ public partial class ChatViewModel
             return;
         }
 
-        IsVoiceInputBusy = true;
         VoiceInputErrorMessage = null;
 
         TryDisposeVoiceInputCts();
         _voiceInputCts = new CancellationTokenSource();
+        SetVoiceInputTransportState(VoiceInputTransportState.Starting);
+        string? requestId = null;
 
         try
         {
@@ -377,7 +378,8 @@ public partial class ChatViewModel
                 return;
             }
 
-            var requestId = Guid.NewGuid().ToString("N");
+            requestId = Guid.NewGuid().ToString("N");
+            _transportVoiceInputRequestId = requestId;
             _activeVoiceInputRequestId = requestId;
             _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
             IsVoiceInputListening = true;
@@ -393,20 +395,50 @@ public partial class ChatViewModel
         catch (OperationCanceledException)
         {
             // Cancellation is expected when voice input is quickly superseded.
-            IsVoiceInputListening = false;
-            _activeVoiceInputRequestId = null;
+            if (requestId is not null && IsCurrentVoiceInputRequest(requestId))
+            {
+                IsVoiceInputListening = false;
+                _activeVoiceInputRequestId = null;
+            }
+
+            if (requestId is not null
+                && IsCurrentVoiceTransportRequest(requestId)
+                && _voiceInputTransportState == VoiceInputTransportState.Starting)
+            {
+                ClearVoiceInputTransport(requestId, disposeCts: true);
+            }
         }
         catch (Exception ex)
         {
             VoiceInputErrorMessage = ex.Message;
             ShowTransientNotificationToast($"Voice input failed: {ex.Message}");
-            IsVoiceInputListening = false;
-            _activeVoiceInputRequestId = null;
-            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+            if (requestId is not null && IsCurrentVoiceInputRequest(requestId))
+            {
+                IsVoiceInputListening = false;
+                _activeVoiceInputRequestId = null;
+                _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+            }
+
+            if (requestId is not null
+                && IsCurrentVoiceTransportRequest(requestId)
+                && _voiceInputTransportState == VoiceInputTransportState.Starting)
+            {
+                ClearVoiceInputTransport(requestId, disposeCts: true);
+            }
         }
         finally
         {
-            IsVoiceInputBusy = false;
+            if (requestId is null
+                && _voiceInputTransportState == VoiceInputTransportState.Starting)
+            {
+                SetVoiceInputTransportState(VoiceInputTransportState.Idle);
+            }
+            else if (requestId is not null
+                && IsCurrentVoiceTransportRequest(requestId)
+                && _voiceInputTransportState == VoiceInputTransportState.Starting)
+            {
+                SetVoiceInputTransportState(VoiceInputTransportState.Idle);
+            }
         }
     }
 
@@ -418,10 +450,16 @@ public partial class ChatViewModel
             return;
         }
 
-        if (!IsVoiceInputBusy)
+        var requestId = _transportVoiceInputRequestId;
+        if (string.IsNullOrWhiteSpace(requestId))
         {
-            IsVoiceInputBusy = true;
+            return;
         }
+
+        SetVoiceInputTransportState(VoiceInputTransportState.Stopping);
+        IsVoiceInputListening = false;
+        _activeVoiceInputRequestId = null;
+        _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
 
         try
         {
@@ -434,6 +472,7 @@ public partial class ChatViewModel
             }
 
             await _voiceInputService.StopAsync();
+            ClearVoiceInputTransport(requestId, disposeCts: true);
         }
         catch (OperationCanceledException)
         {
@@ -441,16 +480,9 @@ public partial class ChatViewModel
         }
         catch (Exception ex)
         {
+            RestoreVoiceInputFrontSession(requestId);
             VoiceInputErrorMessage = ex.Message;
             ShowTransientNotificationToast($"Failed to stop voice input: {ex.Message}");
-        }
-        finally
-        {
-            IsVoiceInputListening = false;
-            _activeVoiceInputRequestId = null;
-            _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
-            TryDisposeVoiceInputCts();
-            IsVoiceInputBusy = false;
         }
     }
 
@@ -505,6 +537,14 @@ public partial class ChatViewModel
 
     private async Task HandleVoiceInputSessionEndedAsync(VoiceInputSessionEndedResult result)
     {
+        if (IsCurrentVoiceTransportRequest(result.RequestId))
+        {
+            await PostToUiAsync(() =>
+            {
+                ClearVoiceInputTransport(result.RequestId, disposeCts: true);
+            }).ConfigureAwait(false);
+        }
+
         if (!IsCurrentVoiceInputRequest(result.RequestId))
         {
             return;
@@ -528,6 +568,14 @@ public partial class ChatViewModel
 
     private async Task HandleVoiceInputErrorAsync(VoiceInputErrorResult result)
     {
+        if (IsCurrentVoiceTransportRequest(result.RequestId))
+        {
+            await PostToUiAsync(() =>
+            {
+                ClearVoiceInputTransport(result.RequestId, disposeCts: true);
+            }).ConfigureAwait(false);
+        }
+
         if (!IsCurrentVoiceInputRequest(result.RequestId))
         {
             return;
@@ -564,6 +612,51 @@ public partial class ChatViewModel
     private bool IsCurrentVoiceInputRequest(string requestId)
         => !string.IsNullOrWhiteSpace(requestId)
             && string.Equals(_activeVoiceInputRequestId, requestId, StringComparison.Ordinal);
+
+    private bool IsCurrentVoiceTransportRequest(string? requestId)
+        => !string.IsNullOrWhiteSpace(requestId)
+            && string.Equals(_transportVoiceInputRequestId, requestId, StringComparison.Ordinal);
+
+    private void RestoreVoiceInputFrontSession(string requestId)
+    {
+        if (!IsCurrentVoiceTransportRequest(requestId))
+        {
+            return;
+        }
+
+        SetVoiceInputTransportState(VoiceInputTransportState.Idle);
+        IsVoiceInputListening = true;
+        _activeVoiceInputRequestId = requestId;
+        _voiceInputBasePrompt = CurrentPrompt ?? string.Empty;
+    }
+
+    private void ClearVoiceInputTransport(string requestId, bool disposeCts)
+    {
+        if (!IsCurrentVoiceTransportRequest(requestId))
+        {
+            return;
+        }
+
+        _transportVoiceInputRequestId = null;
+        SetVoiceInputTransportState(VoiceInputTransportState.Idle);
+        if (disposeCts)
+        {
+            TryDisposeVoiceInputCts();
+        }
+    }
+
+    private void SetVoiceInputTransportState(VoiceInputTransportState state)
+    {
+        if (_voiceInputTransportState == state)
+        {
+            return;
+        }
+
+        _voiceInputTransportState = state;
+        SendPromptCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(IsVoiceInputTransportBusy));
+        NotifyComposerProjectionChanged();
+    }
 
     private void TryDisposeVoiceInputCts()
     {
@@ -869,12 +962,6 @@ public partial class ChatViewModel
     }
 
     partial void OnIsVoiceInputListeningChanged(bool value)
-    {
-        SendPromptCommand.NotifyCanExecuteChanged();
-        NotifyComposerProjectionChanged();
-    }
-
-    partial void OnIsVoiceInputBusyChanged(bool value)
     {
         SendPromptCommand.NotifyCanExecuteChanged();
         NotifyComposerProjectionChanged();
