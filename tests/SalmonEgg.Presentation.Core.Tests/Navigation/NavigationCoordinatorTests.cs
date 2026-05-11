@@ -230,7 +230,6 @@ public sealed class NavigationCoordinatorTests
         var preferences = CreatePreferencesWithProject();
         var shellNavigation = CreateShellNavigationService();
         var switcher = new RecordingConversationSessionSwitcher((_, _) => Task.FromResult(true));
-        var importCoordinator = new Mock<IDiscoverSessionImportCoordinator>(MockBehavior.Strict);
         var discoverFacade = new FakeDiscoverSessionsConnectionFacade
         {
             CurrentChatService = new FakeDiscoverChatService
@@ -244,8 +243,7 @@ public sealed class NavigationCoordinatorTests
             switcher,
             preferences,
             shellNavigation.Object,
-            discoverConnectionFacade: discoverFacade,
-            discoverImportCoordinator: importCoordinator.Object);
+            discoverConnectionFacade: discoverFacade);
 
         var result = await coordinator.ActivateDiscoveredRemoteSessionAsync(
             new DiscoverRemoteSessionOpenRequest("remote-1", "/repo", "profile-1", "Remote"));
@@ -253,40 +251,37 @@ public sealed class NavigationCoordinatorTests
         Assert.False(result.Succeeded);
         Assert.Equal("当前 Agent 未声明可恢复远程会话的 ACP 能力。", result.ErrorMessage);
         Assert.Empty(switcher.ActivatedSessionIds);
-        importCoordinator.VerifyNoOtherCalls();
+        Assert.Empty(switcher.OpenRequests);
     }
 
     [Fact]
-    public async Task ActivateDiscoveredRemoteSessionAsync_WhenImportAndActivationSucceed_RunsThroughNavigationOwner()
+    public async Task ActivateDiscoveredRemoteSessionAsync_WhenOpenSucceeds_RunsThroughNavigationOwner()
     {
         var selectionStore = new ShellSelectionStateStore();
         var preferences = CreatePreferencesWithProject();
         var shellNavigation = CreateShellNavigationService();
-        var switcher = new RecordingConversationSessionSwitcher((sessionId, _) => Task.FromResult(sessionId == "local-1"));
-        var importCoordinator = new Mock<IDiscoverSessionImportCoordinator>();
-        importCoordinator
-            .Setup(x => x.ImportAsync("remote-1", "/repo", "profile-1", "Remote", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DiscoverSessionImportResult(true, "local-1", null));
-
+        var expectedRequest = new DiscoverRemoteSessionOpenRequest("remote-1", "/repo", "profile-1", "Remote");
+        var switcher = new RecordingConversationSessionSwitcher(
+            (_, _) => Task.FromResult(true),
+            (request, _) => Task.FromResult(new DiscoverRemoteSessionOpenResult(true, "local-1", null)));
         var discoverFacade = new Mock<IDiscoverSessionsConnectionFacade>();
         discoverFacade.SetupGet(x => x.CurrentChatService).Returns(new FakeDiscoverChatService());
-        discoverFacade.Setup(x => x.HydrateActiveConversationAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
         var coordinator = CreateCoordinator(
             selectionStore,
             switcher,
             preferences,
             shellNavigation.Object,
-            discoverConnectionFacade: discoverFacade.Object,
-            discoverImportCoordinator: importCoordinator.Object);
+            discoverConnectionFacade: discoverFacade.Object);
 
         var result = await coordinator.ActivateDiscoveredRemoteSessionAsync(
-            new DiscoverRemoteSessionOpenRequest("remote-1", "/repo", "profile-1", "Remote"));
+            expectedRequest);
 
         Assert.True(result.Succeeded);
         Assert.Equal("local-1", result.LocalConversationId);
-        Assert.Equal(new[] { "local-1" }, switcher.ActivatedSessionIds);
-        discoverFacade.Verify(x => x.HydrateActiveConversationAsync(It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(switcher.ActivatedSessionIds);
+        Assert.Equal(new[] { expectedRequest }, switcher.OpenRequests);
+        Assert.Equal(new NavigationSelectionState.Session("local-1"), selectionStore.CurrentSelection);
     }
 
     [Fact]
@@ -1411,15 +1406,13 @@ public sealed class NavigationCoordinatorTests
         IShellNavigationService shellNavigationService,
         IShellNavigationRuntimeState? runtimeState = null,
         ILogger<NavigationCoordinator>? logger = null,
-        IDiscoverSessionsConnectionFacade? discoverConnectionFacade = null,
-        IDiscoverSessionImportCoordinator? discoverImportCoordinator = null)
+        IDiscoverSessionsConnectionFacade? discoverConnectionFacade = null)
     {
         return new NavigationCoordinator(
             selectionSink,
             runtimeState ?? new ShellNavigationRuntimeStateStore(),
             activationCoordinator,
             discoverConnectionFacade ?? new FakeDiscoverSessionsConnectionFacade(),
-            discoverImportCoordinator ?? new StubDiscoverSessionImportCoordinator(),
             new NavigationProjectSelectionStoreAdapter(preferences),
             shellNavigationService,
             logger);
@@ -1655,18 +1648,31 @@ public sealed class NavigationCoordinatorTests
     private sealed class RecordingConversationSessionSwitcher : IConversationSessionSwitcher
     {
         private readonly Func<string, CancellationToken, Task<bool>> _onActivate;
+        private readonly Func<DiscoverRemoteSessionOpenRequest, CancellationToken, Task<DiscoverRemoteSessionOpenResult>> _onOpen;
 
-        public RecordingConversationSessionSwitcher(Func<string, CancellationToken, Task<bool>> onActivate)
+        public RecordingConversationSessionSwitcher(
+            Func<string, CancellationToken, Task<bool>> onActivate,
+            Func<DiscoverRemoteSessionOpenRequest, CancellationToken, Task<DiscoverRemoteSessionOpenResult>>? onOpen = null)
         {
             _onActivate = onActivate;
+            _onOpen = onOpen ?? ((_, _) => Task.FromResult(new DiscoverRemoteSessionOpenResult(false, null, "OpenNotConfigured")));
         }
 
         public List<string> ActivatedSessionIds { get; } = new();
+        public List<DiscoverRemoteSessionOpenRequest> OpenRequests { get; } = new();
 
         public Task<bool> SwitchConversationAsync(string sessionId, CancellationToken cancellationToken = default)
         {
             ActivatedSessionIds.Add(sessionId);
             return _onActivate(sessionId, cancellationToken);
+        }
+
+        public Task<DiscoverRemoteSessionOpenResult> OpenDiscoveredRemoteSessionAsync(
+            DiscoverRemoteSessionOpenRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            OpenRequests.Add(request);
+            return _onOpen(request, cancellationToken);
         }
     }
 
@@ -1700,17 +1706,6 @@ public sealed class NavigationCoordinatorTests
         public IChatService? CurrentChatService { get; set; } = new FakeDiscoverChatService();
         public Task ConnectToProfileAsync(ServerConfiguration profile) => Task.CompletedTask;
         public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
-    }
-
-    private sealed class StubDiscoverSessionImportCoordinator : IDiscoverSessionImportCoordinator
-    {
-        public Task<DiscoverSessionImportResult> ImportAsync(
-            string remoteSessionId,
-            string? remoteSessionCwd,
-            string? profileId,
-            string? remoteSessionTitle = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(new DiscoverSessionImportResult(true, "imported-local-session", null));
     }
 
     private sealed class FakeDiscoverChatService : IChatService

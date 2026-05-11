@@ -15,7 +15,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
     private readonly IShellNavigationRuntimeState _runtimeState;
     private readonly IConversationSessionSwitcher _conversationSessionSwitcher;
     private readonly IDiscoverSessionsConnectionFacade _discoverConnectionFacade;
-    private readonly IDiscoverSessionImportCoordinator _discoverImportCoordinator;
     private readonly INavigationProjectSelectionStore _projectSelectionStore;
     private readonly IShellNavigationService _shellNavigationService;
     private readonly ILogger<NavigationCoordinator> _logger;
@@ -35,7 +34,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             runtimeState,
             conversationSessionSwitcher,
             NoOpDiscoverSessionsConnectionFacade.Instance,
-            NoOpDiscoverSessionImportCoordinator.Instance,
             projectSelectionStore,
             shellNavigationService,
             logger)
@@ -47,7 +45,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         IShellNavigationRuntimeState runtimeState,
         IConversationSessionSwitcher conversationSessionSwitcher,
         IDiscoverSessionsConnectionFacade discoverConnectionFacade,
-        IDiscoverSessionImportCoordinator discoverImportCoordinator,
         INavigationProjectSelectionStore projectSelectionStore,
         IShellNavigationService shellNavigationService,
         ILogger<NavigationCoordinator>? logger = null)
@@ -56,7 +53,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         _runtimeState = runtimeState ?? throw new ArgumentNullException(nameof(runtimeState));
         _conversationSessionSwitcher = conversationSessionSwitcher ?? throw new ArgumentNullException(nameof(conversationSessionSwitcher));
         _discoverConnectionFacade = discoverConnectionFacade ?? throw new ArgumentNullException(nameof(discoverConnectionFacade));
-        _discoverImportCoordinator = discoverImportCoordinator ?? throw new ArgumentNullException(nameof(discoverImportCoordinator));
         _projectSelectionStore = projectSelectionStore ?? throw new ArgumentNullException(nameof(projectSelectionStore));
         _shellNavigationService = shellNavigationService ?? throw new ArgumentNullException(nameof(shellNavigationService));
         _logger = logger ?? NullLogger<NavigationCoordinator>.Instance;
@@ -282,34 +278,24 @@ public sealed class NavigationCoordinator : INavigationCoordinator
             return new DiscoverRemoteSessionOpenResult(false, null, "当前 Agent 未声明可恢复远程会话的 ACP 能力。");
         }
 
-        var importResult = await _discoverImportCoordinator
-            .ImportAsync(
-                request.RemoteSessionId,
-                request.RemoteSessionCwd,
-                request.ProfileId,
-                request.RemoteSessionTitle)
-            .ConfigureAwait(false);
-        if (!importResult.Succeeded || string.IsNullOrWhiteSpace(importResult.LocalConversationId))
+        CancelInFlightSessionActivation();
+        var navigationToken = BeginActivation();
+        var navigationResult = await NavigateToChatAsync(navigationToken).ConfigureAwait(true);
+        if (!navigationResult.Succeeded || !IsLatestActivationToken(navigationToken))
         {
-            return new DiscoverRemoteSessionOpenResult(
-                false,
-                null,
-                string.IsNullOrWhiteSpace(importResult.ErrorMessage) ? "导入会话失败。" : importResult.ErrorMessage);
+            return new DiscoverRemoteSessionOpenResult(false, null, "加载会话并导入失败，请检查连接状态。");
         }
 
-        var activated = await ActivateSessionAsync(importResult.LocalConversationId!, null).ConfigureAwait(false);
-        if (!activated)
+        var openResult = await _conversationSessionSwitcher
+            .OpenDiscoveredRemoteSessionAsync(request)
+            .ConfigureAwait(true);
+        if (openResult.Succeeded && !string.IsNullOrWhiteSpace(openResult.LocalConversationId))
         {
-            return new DiscoverRemoteSessionOpenResult(false, importResult.LocalConversationId, "加载会话并导入失败，请检查连接状态。");
+            _runtimeState.CurrentShellContent = ShellNavigationContent.Chat;
+            _selectionSink.SetSelection(new NavigationSelectionState.Session(openResult.LocalConversationId!));
         }
 
-        var hydrated = await _discoverConnectionFacade.HydrateActiveConversationAsync().ConfigureAwait(false);
-        if (!hydrated)
-        {
-            return new DiscoverRemoteSessionOpenResult(false, importResult.LocalConversationId, "导入后的会话历史加载失败，请检查 ACP 连接状态。");
-        }
-
-        return new DiscoverRemoteSessionOpenResult(true, importResult.LocalConversationId, null);
+        return openResult;
     }
 
     private async Task<bool> ActivateSessionCoreAsync(SessionActivationRequest request)
@@ -642,19 +628,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         public Application.Services.Chat.IChatService? CurrentChatService => null;
         public Task ConnectToProfileAsync(Domain.Models.ServerConfiguration profile) => Task.CompletedTask;
         public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
-    }
-
-    private sealed class NoOpDiscoverSessionImportCoordinator : IDiscoverSessionImportCoordinator
-    {
-        public static NoOpDiscoverSessionImportCoordinator Instance { get; } = new();
-
-        public Task<DiscoverSessionImportResult> ImportAsync(
-            string remoteSessionId,
-            string? remoteSessionCwd,
-            string? profileId,
-            string? remoteSessionTitle = null,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(new DiscoverSessionImportResult(false, null, "DiscoverImportUnavailable"));
     }
 }
 

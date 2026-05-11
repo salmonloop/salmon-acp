@@ -1059,6 +1059,86 @@ public partial class ChatViewModel
     Task<bool> IConversationSessionSwitcher.SwitchConversationAsync(string conversationId, CancellationToken cancellationToken)
         => ActivateConversationCoreAsync(conversationId, awaitRemoteHydration: false, cancellationToken);
 
+    async Task<DiscoverRemoteSessionOpenResult> IConversationSessionSwitcher.OpenDiscoveredRemoteSessionAsync(
+        DiscoverRemoteSessionOpenRequest request,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(request.RemoteSessionId))
+        {
+            return new DiscoverRemoteSessionOpenResult(false, null, "RemoteSessionIdMissing");
+        }
+
+        var localConversationId = Guid.NewGuid().ToString("N");
+        try
+        {
+            await _sessionManager.CreateSessionAsync(localConversationId, request.RemoteSessionCwd).ConfigureAwait(false);
+            var sanitizedTitle = SessionNamePolicy.Sanitize(request.RemoteSessionTitle);
+            if (!string.IsNullOrWhiteSpace(sanitizedTitle))
+            {
+                _sessionManager.UpdateSession(
+                    localConversationId,
+                    session => session.DisplayName = sanitizedTitle,
+                    updateActivity: false);
+            }
+
+            await _conversationWorkspace.RegisterConversationAsync(
+                localConversationId,
+                createdAt: DateTime.UtcNow,
+                lastUpdatedAt: DateTime.UtcNow,
+                cancellationToken).ConfigureAwait(false);
+
+            var bindingResult = await _bindingCommands
+                .UpdateBindingAsync(localConversationId, request.RemoteSessionId.Trim(), request.ProfileId)
+                .ConfigureAwait(false);
+            if (bindingResult.Status is not BindingUpdateStatus.Success)
+            {
+                RollBackDiscoveredConversation(localConversationId);
+                return new DiscoverRemoteSessionOpenResult(
+                    false,
+                    null,
+                    bindingResult.ErrorMessage ?? $"BindingUpdateFailed:{bindingResult.Status}");
+            }
+
+            var activated = await ActivateConversationCoreAsync(
+                    localConversationId,
+                    awaitRemoteHydration: true,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return activated
+                ? new DiscoverRemoteSessionOpenResult(true, localConversationId, null)
+                : new DiscoverRemoteSessionOpenResult(false, localConversationId, "加载会话并导入失败，请检查连接状态。");
+        }
+        catch (OperationCanceledException)
+        {
+            RollBackDiscoveredConversation(localConversationId);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            RollBackDiscoveredConversation(localConversationId);
+            Logger.LogError(ex, "Failed to open discovered remote session. remoteSessionId={RemoteSessionId}", request.RemoteSessionId);
+            return new DiscoverRemoteSessionOpenResult(false, null, ex.Message);
+        }
+    }
+
+    private void RollBackDiscoveredConversation(string localConversationId)
+    {
+        if (string.IsNullOrWhiteSpace(localConversationId))
+        {
+            return;
+        }
+
+        try
+        {
+            _conversationWorkspace.DeleteConversation(localConversationId);
+        }
+        catch
+        {
+            _sessionManager.RemoveSession(localConversationId);
+        }
+    }
+
     public Task PrepareActivationAsync(
         ConversationActivationOrchestratorRequest request,
         CancellationToken cancellationToken = default)

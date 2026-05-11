@@ -12,4 +12,8 @@ namespace SalmonEgg.Presentation.Core.Services.Chat;
 public interface IConversationSessionSwitcher
 {
     Task<bool> SwitchConversationAsync(string conversationId, CancellationToken cancellationToken = default);
+
+    Task<DiscoverRemoteSessionOpenResult> OpenDiscoveredRemoteSessionAsync(
+        DiscoverRemoteSessionOpenRequest request,
+        CancellationToken cancellationToken = default);
 }
