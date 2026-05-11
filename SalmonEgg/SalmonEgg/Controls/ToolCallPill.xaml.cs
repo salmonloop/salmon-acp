@@ -17,6 +17,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
 {
     private static readonly ResourceLoader ResourceLoader = ResourceLoader.GetForViewIndependentUse();
     private bool _isExpanded;
+    private bool _hasManualExpansionOverride;
 
     public static readonly DependencyProperty ToolTitleProperty =
         DependencyProperty.Register(
@@ -143,26 +144,13 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
     public bool IsExpanded
     {
         get => _isExpanded;
-        set
-        {
-            if (_isExpanded == value)
-            {
-                return;
-            }
-
-            _isExpanded = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(PreviewMaxHeight));
-            OnPropertyChanged(nameof(InlineContentVisibility));
-            UpdateVisualStates();
-            UpdateExpansionState(true);
-        }
+        set => SetIsExpanded(value, useTransitions: true, isUserInitiated: false);
     }
 
     public double PreviewMaxHeight => IsExpanded ? double.PositiveInfinity : 120;
 
     public Visibility InlineContentVisibility =>
-        HasInlineContent && (!IsCompleted || IsExpanded)
+        ToolCallPillExpansionPolicy.ShouldShowInlineContent(HasInlineContent, IsExpanded)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -188,8 +176,8 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
 
     private void ToolCallPill_Loaded(object sender, RoutedEventArgs e)
     {
+        ApplyDefaultExpansionState(false);
         UpdateVisualStates();
-        UpdateExpansionState(false);
     }
 
     private static void OnDisplayInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -224,7 +212,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             {
                 pill.OnPropertyChanged(propertyName);
                 pill.OnPropertyChanged(nameof(InlineContentVisibility));
-                pill.UpdateExpansionState(true);
+                pill.ApplyDefaultExpansionState(true);
             }
         }
     }
@@ -250,7 +238,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
         OnPropertyChanged(nameof(HasInlineContent));
         OnPropertyChanged(nameof(PreviewMaxHeight));
         OnPropertyChanged(nameof(InlineContentVisibility));
-        UpdateExpansionState(true);
+        ApplyDefaultExpansionState(true);
     }
 
     private string ResolveToolName()
@@ -488,30 +476,56 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
 
     private bool _isHovered;
 
-    private void HeaderGrid_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    private void RootButton_Click(object sender, RoutedEventArgs e)
     {
-        IsExpanded = !IsExpanded;
+        SetIsExpanded(RootButton.IsChecked == true, useTransitions: true, isUserInitiated: true);
     }
 
-    private void HeaderGrid_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void RootButton_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         _isHovered = true;
         UpdateVisualStates();
     }
 
-    private void HeaderGrid_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void RootButton_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         _isHovered = false;
         UpdateVisualStates();
     }
 
-    private void HeaderGrid_KeyUp(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    private void ApplyDefaultExpansionState(bool useTransitions)
     {
-        if (e.Key == Windows.System.VirtualKey.Enter || e.Key == Windows.System.VirtualKey.Space)
+        if (_hasManualExpansionOverride)
         {
-            IsExpanded = !IsExpanded;
-            e.Handled = true;
+            UpdateExpansionState(useTransitions);
+            return;
         }
+
+        SetIsExpanded(
+            ToolCallPillExpansionPolicy.ResolveDefaultExpanded(IsCompleted),
+            useTransitions,
+            isUserInitiated: false);
+    }
+
+    private void SetIsExpanded(bool value, bool useTransitions, bool isUserInitiated)
+    {
+        if (isUserInitiated)
+        {
+            _hasManualExpansionOverride = true;
+        }
+
+        if (_isExpanded == value)
+        {
+            UpdateExpansionState(useTransitions);
+            return;
+        }
+
+        _isExpanded = value;
+        OnPropertyChanged(nameof(IsExpanded));
+        OnPropertyChanged(nameof(PreviewMaxHeight));
+        OnPropertyChanged(nameof(InlineContentVisibility));
+        UpdateVisualStates();
+        UpdateExpansionState(useTransitions);
     }
 
     private void UpdateExpansionState(bool useTransitions)
@@ -521,7 +535,7 @@ public sealed partial class ToolCallPill : UserControl, INotifyPropertyChanged
             return;
         }
 
-        bool shouldShow = HasInlineContent && (!IsCompleted || IsExpanded);
+        bool shouldShow = ToolCallPillExpansionPolicy.ShouldShowInlineContent(HasInlineContent, IsExpanded);
         string stateName = shouldShow ? "DetailExpandedState" : "DetailCollapsedState";
         VisualStateManager.GoToState(this, stateName, useTransitions);
     }
