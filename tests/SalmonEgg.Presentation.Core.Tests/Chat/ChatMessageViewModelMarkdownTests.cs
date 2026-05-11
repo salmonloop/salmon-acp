@@ -131,6 +131,22 @@ public sealed class ChatMessageViewModelMarkdownTests
     }
 
     [Fact]
+    public void MarkdownPresentation_UsesSingleSelectionPolicyForMarkdownMessages()
+    {
+        var inlineMarkdownVm = ChatMessageViewModel.CreateFromTextContent(
+            "m-selectable",
+            new TextContentBlock("Use `code` here"),
+            isOutgoing: false);
+        var fencedMarkdownVm = ChatMessageViewModel.CreateFromTextContent(
+            "m-nonselectable",
+            new TextContentBlock("```csharp\nvar value = 1;\n```"),
+            isOutgoing: false);
+
+        Assert.True(inlineMarkdownVm.MarkdownPresentation.AllowsNativeSelection);
+        Assert.False(fencedMarkdownVm.MarkdownPresentation.AllowsNativeSelection);
+    }
+
+    [Fact]
     public void MarkdownPresentation_WhenFallbackSticky_StaysAuthoritativeAfterTextChanges()
     {
         var vm = ChatMessageViewModel.CreateFromTextContent(

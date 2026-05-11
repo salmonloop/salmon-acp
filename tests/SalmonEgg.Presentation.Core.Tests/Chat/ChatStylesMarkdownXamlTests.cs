@@ -81,6 +81,7 @@ public sealed class ChatStylesMarkdownXamlTests
         Assert.Contains("Text=\"{x:Bind TextContent, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MarkdownPresentation.ShouldRenderMarkdown", xaml, StringComparison.Ordinal);
         Assert.Contains("MarkdownPresentation.ShouldRenderPlainText", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsTextSelectionEnabled=\"{x:Bind MarkdownPresentation.AllowsNativeSelection, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Visibility=\"{Binding ShouldRenderMarkdown", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Visibility=\"{Binding ShouldRenderPlainText", xaml, StringComparison.Ordinal);
     }
@@ -177,6 +178,7 @@ public sealed class ChatStylesMarkdownXamlTests
         Assert.Contains("QuoteBorderBrushProperty", source, StringComparison.Ordinal);
         Assert.Contains("ParagraphLineHeight = 22", source, StringComparison.Ordinal);
         Assert.Contains("UseListExtras = true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatMarkdownFenceDetector.HasClosedFence", source, StringComparison.Ordinal);
     }
 
     private static string LoadChatStylesXaml()

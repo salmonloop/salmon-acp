@@ -3,13 +3,16 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 /// <summary>
 /// Captures the markdown-related presentation state for a single chat message.
 /// </summary>
-public sealed record ChatMarkdownPresentationState(ChatMarkdownRenderMode RenderMode, string CopyableCodeBlockText)
+public sealed record ChatMarkdownPresentationState(
+    ChatMarkdownRenderMode RenderMode,
+    string CopyableCodeBlockText,
+    bool AllowsNativeSelection)
 {
     /// <summary>
     /// A reusable plain-text projection with no markdown affordances.
     /// </summary>
     public static ChatMarkdownPresentationState PlainStreaming { get; } =
-        new(ChatMarkdownRenderMode.PlainStreaming, string.Empty);
+        new(ChatMarkdownRenderMode.PlainStreaming, string.Empty, false);
 
     /// <summary>
     /// Gets a value indicating whether the message should render as markdown.
@@ -41,6 +44,7 @@ public sealed record ChatMarkdownPresentationState(ChatMarkdownRenderMode Render
 
         return new(
             renderMode,
-            ChatMarkdownCodeBlockExtractor.TryExtractFirstFencedCodeBlock(text) ?? string.Empty);
+            ChatMarkdownCodeBlockExtractor.TryExtractFirstFencedCodeBlock(text) ?? string.Empty,
+            !ChatMarkdownFenceDetector.HasClosedFence(text));
     }
 }

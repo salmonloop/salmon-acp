@@ -336,7 +336,7 @@ public sealed class MarkdownTextPresenter : Grid
 
     private MarkdownTextBlockControl ResolveMarkdownTarget(string? text)
     {
-        var target = ShouldUseSelectableMarkdown(text)
+        var target = ShouldUseSelectableMarkdown()
             ? _selectableMarkdown
             : _nonSelectableMarkdown;
 
@@ -364,11 +364,9 @@ public sealed class MarkdownTextPresenter : Grid
         AttachMarkdown(active);
     }
 
-    private bool ShouldUseSelectableMarkdown(string? text)
+    private bool ShouldUseSelectableMarkdown()
     {
-        // Keep native selection available for ordinary markdown, but avoid mutating
-        // RichTextBlock selection mode on a live control after chat re-entry.
-        return _requestedIsTextSelectionEnabled && !ChatMarkdownFenceDetector.HasClosedFence(text);
+        return _requestedIsTextSelectionEnabled;
     }
 
     private void AttachMarkdown(MarkdownTextBlockControl markdown)

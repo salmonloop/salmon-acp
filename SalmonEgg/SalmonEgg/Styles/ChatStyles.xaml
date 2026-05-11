@@ -67,7 +67,7 @@
                                                         QuoteForeground="{ThemeResource TextFillColorSecondaryBrush}"
                                                         QuoteBorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                                         TableBorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                                                        IsTextSelectionEnabled="True"/>
+                                                        IsTextSelectionEnabled="{x:Bind MarkdownPresentation.AllowsNativeSelection, Mode=OneWay}"/>
 
                         <Button x:Name="IncomingMarkdownCopyCodeButton"
                                 x:Uid="ChatMarkdownCopyCodeButton"
