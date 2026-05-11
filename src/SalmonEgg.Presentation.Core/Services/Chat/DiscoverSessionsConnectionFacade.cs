@@ -21,14 +21,11 @@ public interface IDiscoverSessionsConnectionFacade : INotifyPropertyChanged
     IChatService? CurrentChatService { get; }
 
     Task ConnectToProfileAsync(ServerConfiguration profile);
-
-    Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class DiscoverSessionsConnectionFacade : IDiscoverSessionsConnectionFacade, IDisposable
 {
     private readonly IAcpChatServiceFactory _chatServiceFactory;
-    private readonly Func<CancellationToken, Task<bool>> _hydrateActiveConversationAsync;
     private readonly ILogger<DiscoverSessionsConnectionFacade> _logger;
     private readonly object _connectSync = new();
     private CancellationTokenSource? _connectCts;
@@ -44,11 +41,9 @@ public sealed class DiscoverSessionsConnectionFacade : IDiscoverSessionsConnecti
 
     public DiscoverSessionsConnectionFacade(
         IAcpChatServiceFactory chatServiceFactory,
-        Func<CancellationToken, Task<bool>> hydrateActiveConversationAsync,
         ILogger<DiscoverSessionsConnectionFacade> logger)
     {
         _chatServiceFactory = chatServiceFactory ?? throw new ArgumentNullException(nameof(chatServiceFactory));
-        _hydrateActiveConversationAsync = hydrateActiveConversationAsync ?? throw new ArgumentNullException(nameof(hydrateActiveConversationAsync));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -150,9 +145,6 @@ public sealed class DiscoverSessionsConnectionFacade : IDiscoverSessionsConnecti
             throw;
         }
     }
-
-    public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default)
-        => _hydrateActiveConversationAsync(cancellationToken);
 
     public void Dispose()
     {

@@ -627,7 +627,6 @@ public sealed class NavigationCoordinator : INavigationCoordinator
         public string? ConnectionErrorMessage => null;
         public Application.Services.Chat.IChatService? CurrentChatService => null;
         public Task ConnectToProfileAsync(Domain.Models.ServerConfiguration profile) => Task.CompletedTask;
-        public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 }
 

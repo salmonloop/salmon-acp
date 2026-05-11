@@ -1705,7 +1705,6 @@ public sealed class NavigationCoordinatorTests
         public string? ConnectionErrorMessage => null;
         public IChatService? CurrentChatService { get; set; } = new FakeDiscoverChatService();
         public Task ConnectToProfileAsync(ServerConfiguration profile) => Task.CompletedTask;
-        public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
     }
 
     private sealed class FakeDiscoverChatService : IChatService

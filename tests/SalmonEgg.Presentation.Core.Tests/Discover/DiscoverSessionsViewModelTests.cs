@@ -1077,18 +1077,6 @@ public sealed class DiscoverSessionsViewModelTests
 
         public IChatService? CurrentChatService { get; set; } = new FakeChatService();
 
-        public bool HydrateResult { get; set; } = true;
-
-        public int HydrateCalls { get; private set; }
-
-        public SynchronizationContext? ExpectedSynchronizationContext { get; set; }
-
-        public bool RequireExpectedSynchronizationContextForHydrate { get; set; }
-
-        public bool HydrateCalledOnExpectedContext { get; private set; }
-
-        public Func<CancellationToken, Task<bool>>? OnHydrateAsync { get; set; }
-
         public async Task ConnectToProfileAsync(ServerConfiguration profile)
         {
             IsConnecting = true;
@@ -1098,24 +1086,6 @@ public sealed class DiscoverSessionsViewModelTests
             await Task.Yield();
             IsInitializing = false;
             IsConnected = true;
-        }
-
-        public Task<bool> HydrateActiveConversationAsync(CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            HydrateCalls++;
-            HydrateCalledOnExpectedContext = ReferenceEquals(SynchronizationContext.Current, ExpectedSynchronizationContext);
-            if (RequireExpectedSynchronizationContextForHydrate && !HydrateCalledOnExpectedContext)
-            {
-                return Task.FromResult(false);
-            }
-
-            if (OnHydrateAsync != null)
-            {
-                return OnHydrateAsync(cancellationToken);
-            }
-
-            return Task.FromResult(HydrateResult);
         }
 
         private void SetProperty<T>(ref T field, T value, string propertyName)
