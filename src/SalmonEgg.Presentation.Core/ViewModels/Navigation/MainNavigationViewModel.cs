@@ -603,7 +603,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             var title = string.IsNullOrWhiteSpace(session.DisplayName)
                 ? SessionNamePolicy.CreateDefault(session.ConversationId)
                 : session.DisplayName.Trim();
-            var relative = NavTimeFormatter.ToRelativeText(session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt);
+            var relative = NavTimeFormatter.ToRelativeText(session.CatalogUpdatedAt == default ? session.CreatedAt : session.CatalogUpdatedAt);
 
             SessionNavItemViewModel? sessionVm = null;
             if (childIndex < projectVm.Children.Count && projectVm.Children[childIndex] is SessionNavItemViewModel existingSvm && !existingSvm.IsPlaceholder)
@@ -727,7 +727,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             .ToDictionary(
                 g => g.Key,
                 g => g.OrderByDescending(GetNavigationSortTimestamp)
-                    .ThenByDescending(s => s.LastUpdatedAt)
+                    .ThenByDescending(s => s.CatalogUpdatedAt)
                     .ToList(),
                 StringComparer.Ordinal);
     }
@@ -852,7 +852,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 return;
             }
 
-            var timestamp = session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt;
+            var timestamp = session.CatalogUpdatedAt == default ? session.CreatedAt : session.CatalogUpdatedAt;
             var relative = NavTimeFormatter.ToRelativeText(timestamp);
             if (!string.Equals(sessionItem.RelativeTimeText, relative, StringComparison.Ordinal))
             {
@@ -890,7 +890,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                     ? SessionNamePolicy.CreateDefault(session.ConversationId)
                     : session.DisplayName.Trim();
 
-                var relative = NavTimeFormatter.ToRelativeText(session.LastUpdatedAt == default ? session.CreatedAt : session.LastUpdatedAt);
+                var relative = NavTimeFormatter.ToRelativeText(session.CatalogUpdatedAt == default ? session.CreatedAt : session.CatalogUpdatedAt);
                 var vm = new SessionNavItemViewModel(
                     sessionId: session.ConversationId,
                     remoteSessionId: session.RemoteSessionId,
@@ -945,7 +945,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         var sessions = GetConversationCatalogSnapshot()
             .Where(s => string.Equals(ResolveEffectiveProjectId(s), projectId, StringComparison.Ordinal))
             .OrderByDescending(GetNavigationSortTimestamp)
-            .ThenByDescending(s => s.LastUpdatedAt)
+            .ThenByDescending(s => s.CatalogUpdatedAt)
             .ToList();
 
         if (limit.HasValue)
@@ -956,7 +956,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         return sessions.Select(s =>
         {
             var title = string.IsNullOrWhiteSpace(s.DisplayName) ? SessionNamePolicy.CreateDefault(s.ConversationId) : s.DisplayName.Trim();
-            var relative = NavTimeFormatter.ToRelativeText(s.LastUpdatedAt == default ? s.CreatedAt : s.LastUpdatedAt);
+            var relative = NavTimeFormatter.ToRelativeText(s.CatalogUpdatedAt == default ? s.CreatedAt : s.CatalogUpdatedAt);
             var vm = new SessionNavItemViewModel(
                 sessionId: s.ConversationId,
                 remoteSessionId: s.RemoteSessionId,
@@ -990,7 +990,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         // Keep navigation order aligned with the timestamp we actually render in the UI.
         // LastAccessedAt is still meaningful for restore/recency flows, but should not reorder
         // the left nav when the conversation content itself has not changed.
-        => item.LastUpdatedAt == default ? item.CreatedAt : item.LastUpdatedAt;
+        => item.CatalogUpdatedAt == default ? item.CreatedAt : item.CatalogUpdatedAt;
 
     private string ResolveEffectiveProjectId(ConversationCatalogDisplayItem item)
         => ResolveProjectAffinity(item).EffectiveProjectId;

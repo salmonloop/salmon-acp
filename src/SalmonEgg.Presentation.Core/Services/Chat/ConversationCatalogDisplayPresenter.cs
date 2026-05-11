@@ -124,7 +124,7 @@ public sealed class ConversationCatalogDisplayPresenter : ObservableObject, ICon
                 item.DisplayName,
                 item.Cwd,
                 item.CreatedAt,
-                item.LastUpdatedAt,
+                item.CatalogUpdatedAt,
                 item.LastAccessedAt,
                 hasUnreadAttention,
                 item.RemoteSessionId,

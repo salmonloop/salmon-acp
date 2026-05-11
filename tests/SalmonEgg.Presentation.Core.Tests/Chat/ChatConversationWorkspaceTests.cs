@@ -1219,7 +1219,7 @@ public sealed class ChatConversationWorkspaceTests
 
         Assert.Equal(new[] { "session-new", "session-old" }, knownIds);
         Assert.Equal(versionBeforeBindingUpdate, workspace.ConversationListVersion);
-        Assert.Equal(oldCatalogBefore.LastUpdatedAt, oldCatalogAfter.LastUpdatedAt);
+        Assert.Equal(oldCatalogBefore.CatalogUpdatedAt, oldCatalogAfter.CatalogUpdatedAt);
         Assert.NotNull(remoteBinding);
         Assert.Equal("remote-new", remoteBinding!.RemoteSessionId);
         Assert.Equal("profile-new", remoteBinding.BoundProfileId);
@@ -1532,6 +1532,50 @@ public sealed class ChatConversationWorkspaceTests
         Assert.Equal("Original description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\one", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);
+    }
+
+    [Fact]
+    public async Task ApplySessionInfoSnapshotAsync_OlderUpdatedAt_DoesNotRegressEstablishedRemoteTimestamp()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original title",
+                UpdatedAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)
+            }));
+        workspace.UpdateRemoteBinding("session-1", "remote-1", "profile-1");
+
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Older event title",
+                UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        var snapshot = workspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(snapshot);
+        Assert.Equal(
+            new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            snapshot!.SessionInfo!.UpdatedAtUtc);
+        Assert.Equal(
+            new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            workspace.GetCatalog().Single(item => item.ConversationId == "session-1").CatalogUpdatedAt);
     }
 
     [Fact]
@@ -2266,6 +2310,68 @@ public sealed class ChatConversationWorkspaceTests
 
         Assert.Equal(versionAfterInitialUpserts + 1, workspace.ConversationListVersion);
         Assert.Equal(new[] { "session-old", "session-new" }, workspace.GetKnownConversationIds());
+    }
+
+    [Fact]
+    public async Task RemoteCatalogOrdering_PrefersAuthoritativeSessionInfoUpdatedAt_OverLocalMetadataBumps()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        await sessionManager.CreateSessionAsync("session-2", @"C:\repo\two");
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 1, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-2",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 2, 0, DateTimeKind.Utc)));
+
+        workspace.UpdateRemoteBinding("session-1", "remote-1", "profile-1");
+        workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Remote older",
+                UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 10, 0, DateTimeKind.Utc)
+            });
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-2",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Remote newer",
+                UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 20, 0, DateTimeKind.Utc)
+            });
+
+        workspace.RenameConversation("session-1", "Local rename must not reorder remote session");
+
+        Assert.Equal(new[] { "session-2", "session-1" }, workspace.GetKnownConversationIds());
+
+        var catalog = workspace.GetCatalog();
+        Assert.Equal(new[] { "session-2", "session-1" }, catalog.Select(item => item.ConversationId).ToArray());
+        Assert.Equal(
+            new DateTime(2026, 3, 1, 0, 10, 0, DateTimeKind.Utc),
+            catalog.Single(item => item.ConversationId == "session-1").CatalogUpdatedAt);
+        Assert.Equal(
+            new DateTime(2026, 3, 1, 0, 20, 0, DateTimeKind.Utc),
+            catalog.Single(item => item.ConversationId == "session-2").CatalogUpdatedAt);
     }
 
     private static ChatConversationWorkspace CreateWorkspace(

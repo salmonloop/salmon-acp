@@ -18,6 +18,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SalmonEgg.Application.Services.Chat;
+using SalmonEgg.Presentation.Core.Utilities;
 using SalmonEgg.Domain.Interfaces;
 using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Interfaces.Transport;
@@ -1983,19 +1984,7 @@ public partial class ChatViewModel
     }
 
     private static DateTime? ParseSessionUpdatedAtUtc(string? updatedAt)
-    {
-        if (string.IsNullOrWhiteSpace(updatedAt)
-            || !DateTimeOffset.TryParse(
-                updatedAt,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var parsedUpdatedAt))
-        {
-            return null;
-        }
-
-        return parsedUpdatedAt.UtcDateTime;
-    }
+        => AcpSessionTimestampPolicy.ParseUpdatedAtUtc(updatedAt);
 
     private static async Task<AgentSessionInfo?> FindRemoteSessionInfoAsync(
         IChatService chatService,

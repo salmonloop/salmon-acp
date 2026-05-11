@@ -18,7 +18,7 @@ public sealed record ConversationCatalogDisplayItem(
     string DisplayName,
     string? Cwd,
     DateTime CreatedAt,
-    DateTime LastUpdatedAt,
+    DateTime CatalogUpdatedAt,
     DateTime LastAccessedAt,
     bool HasUnreadAttention,
     string? RemoteSessionId = null,

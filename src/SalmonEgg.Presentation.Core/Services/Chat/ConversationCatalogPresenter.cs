@@ -46,7 +46,7 @@ public sealed record ConversationCatalogItem(
     string DisplayName,
     string? Cwd,
     DateTime CreatedAt,
-    DateTime LastUpdatedAt,
+    DateTime CatalogUpdatedAt,
     DateTime LastAccessedAt,
     string? RemoteSessionId = null,
     string? BoundProfileId = null,

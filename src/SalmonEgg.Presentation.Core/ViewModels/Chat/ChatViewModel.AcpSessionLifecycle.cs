@@ -18,6 +18,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SalmonEgg.Application.Services.Chat;
+using SalmonEgg.Presentation.Core.Utilities;
 using SalmonEgg.Domain.Interfaces;
 using SalmonEgg.Domain.Interfaces.Storage;
 using SalmonEgg.Domain.Interfaces.Transport;
@@ -2212,7 +2213,7 @@ public partial class ChatViewModel
             Title = normalizedTitle,
             Description = normalizedDescription,
             Cwd = normalizedCwd,
-            UpdatedAtUtc = ParseSessionUpdatedAtUtc(normalizedUpdatedAt),
+            UpdatedAtUtc = AcpSessionTimestampPolicy.ParseUpdatedAtUtc(normalizedUpdatedAt),
             Meta = normalizedMeta
         };
     }

@@ -4915,7 +4915,7 @@ public partial class ChatViewModelTests
         var expectedUpdatedAt = DateTimeOffset.Parse(updatedAt).UtcDateTime;
         var catalogItem = fixture.Workspace.GetCatalog().Single(entry => string.Equals(entry.ConversationId, conversationId, StringComparison.Ordinal));
         Assert.Equal("Renamed by agent", catalogItem.DisplayName);
-        Assert.Equal(expectedUpdatedAt, catalogItem.LastUpdatedAt);
+        Assert.Equal(expectedUpdatedAt, catalogItem.CatalogUpdatedAt);
     }
 
     [Fact]

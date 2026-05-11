@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SalmonEgg.Domain.Models.Conversation;
+using SalmonEgg.Presentation.Core.Utilities;
 
 namespace SalmonEgg.Presentation.Core.Mvux.Chat;
 
@@ -47,7 +48,7 @@ internal static class ConversationSessionInfoSnapshots
             Title = ResolveIncomingField(incoming.Title, existing?.Title),
             Description = ResolveIncomingField(incoming.Description, existing?.Description),
             Cwd = ResolveIncomingField(incoming.Cwd, existing?.Cwd),
-            UpdatedAtUtc = incoming.UpdatedAtUtc ?? existing?.UpdatedAtUtc,
+            UpdatedAtUtc = AcpSessionTimestampPolicy.ResolveLatestUpdatedAtUtc(existing?.UpdatedAtUtc, incoming.UpdatedAtUtc),
             Meta = mergedMeta.Count == 0 ? null : mergedMeta
         };
     }

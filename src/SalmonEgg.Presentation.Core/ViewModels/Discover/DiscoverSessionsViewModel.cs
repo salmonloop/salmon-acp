@@ -12,6 +12,7 @@ using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Utilities;
 using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.ViewModels.Discover;
@@ -282,13 +283,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 foreach (var session in listResponse.Sessions)
                 {
-                    var lastModified = DateTime.Now;
-                    if (!string.IsNullOrWhiteSpace(session.UpdatedAt)
-                        && DateTime.TryParse(session.UpdatedAt, out var parsed))
-                    {
-                        lastModified = parsed;
-                    }
-
                     var affinityResolution = _projectAffinityResolver.Resolve(new ProjectAffinityRequest(
                         RemoteCwd: session.Cwd,
                         BoundProfileId: profile.Id,
@@ -301,7 +295,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                         session.SessionId,
                         string.IsNullOrWhiteSpace(session.Title) ? "未命名会话" : session.Title,
                         string.IsNullOrWhiteSpace(session.Description) ? "暂无描述" : session.Description,
-                        lastModified,
+                        AcpSessionTimestampPolicy.ParseUpdatedAtUtc(session.UpdatedAt),
                         session.Cwd,
                         ResolveAffinityBadgeText(affinityResolution, projects),
                         ResolveAffinityStatusText(affinityResolution),
@@ -586,7 +580,7 @@ public sealed class DiscoverSessionItemViewModel
 
     public string Description { get; }
 
-    public DateTime LastModified { get; }
+    public DateTime? LastModified { get; }
 
     public string? SessionCwd { get; }
 
@@ -598,13 +592,13 @@ public sealed class DiscoverSessionItemViewModel
 
     public bool NeedsUserAttention { get; }
 
-    public string FormattedDate => LastModified.ToString("yyyy-MM-dd HH:mm");
+    public string FormattedDate => LastModified?.ToString("yyyy-MM-dd HH:mm") ?? string.Empty;
 
     public DiscoverSessionItemViewModel(
         string id,
         string title,
         string description,
-        DateTime lastModified,
+        DateTime? lastModified,
         string? sessionCwd = null,
         string? projectAffinityBadgeText = null,
         string? affinityStatusText = null,

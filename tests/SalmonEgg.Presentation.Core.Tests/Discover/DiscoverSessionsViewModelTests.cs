@@ -133,6 +133,52 @@ public sealed class DiscoverSessionsViewModelTests
     }
 
     [Fact]
+    public async Task RefreshSessionsAsync_WhenSessionUpdatedAtMissing_DoesNotInventCurrentTimestamp()
+    {
+        var syncContext = new CountingSynchronizationContext();
+        var originalContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var profile = CreateProfile();
+            var profilesViewModel = CreateProfilesViewModel(profile);
+            var connectionFacade = new FakeDiscoverSessionsConnectionFacade
+            {
+                CurrentChatService = new FakeChatService
+                {
+                    SessionListResponse = new SessionListResponse
+                    {
+                        Sessions =
+                        {
+                            new AgentSessionInfo
+                            {
+                                SessionId = "remote-session-1",
+                                Title = "Remote Session",
+                                Description = "Imported from ACP",
+                                Cwd = @"C:\repo\remote"
+                            }
+                        }
+                    }
+                }
+            };
+            using var viewModel = CreateViewModel(
+                profilesViewModel,
+                connectionFacade,
+                new StubNavigationCoordinator());
+
+            await viewModel.RefreshSessionsCommand.ExecuteAsync(null);
+
+            var item = Assert.Single(viewModel.AgentSessions);
+            Assert.Null(item.LastModified);
+            Assert.Equal(string.Empty, item.FormattedDate);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task RefreshSessionsAsync_WhenAgentDoesNotSupportSessionList_DoesNotInvokeListAndSetsError()
     {
         var syncContext = new CountingSynchronizationContext();

@@ -1548,7 +1548,7 @@ public sealed class MainNavigationViewModelSelectionTests
                 item.DisplayName,
                 item.Cwd,
                 item.CreatedAt,
-                item.LastUpdatedAt,
+                item.CatalogUpdatedAt,
                 item.LastAccessedAt,
                 HasUnreadAttention: false,
                 item.RemoteSessionId,

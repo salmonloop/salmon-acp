@@ -131,7 +131,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         lock (_stateGate)
         {
             return _conversationBindings.Values
-                .OrderByDescending(binding => binding.LastUpdatedAt)
+                .OrderByDescending(ResolveCatalogUpdatedAt)
+                .ThenByDescending(binding => binding.LastUpdatedAt)
                 .Select(binding => binding.ConversationId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .ToArray();
@@ -176,13 +177,14 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         lock (_stateGate)
         {
             return _conversationBindings.Values
-                .OrderByDescending(binding => binding.LastUpdatedAt)
+                .OrderByDescending(ResolveCatalogUpdatedAt)
+                .ThenByDescending(binding => binding.LastUpdatedAt)
                 .Select(binding => new ConversationCatalogItem(
                     binding.ConversationId,
                     ResolveSessionDisplayName(binding.ConversationId),
                     ResolveEstablishedConversationCwd(binding),
                     binding.CreatedAt,
-                    binding.LastUpdatedAt,
+                    ResolveCatalogUpdatedAt(binding),
                     binding.LastAccessedAt == default ? binding.LastUpdatedAt : binding.LastAccessedAt,
                     binding.RemoteSessionId,
                     binding.BoundProfileId,
@@ -809,7 +811,8 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 .ToArray();
 
             conversationStates = _conversationBindings.Values
-                .OrderByDescending(item => item.LastUpdatedAt)
+                .OrderByDescending(ResolveCatalogUpdatedAt)
+                .ThenByDescending(item => item.LastUpdatedAt)
                 .Select(binding =>
                 {
                     var shouldPersistRuntimeContent = RemoteConversationPersistencePolicy.ShouldPersistRuntimeContent(
@@ -1327,6 +1330,20 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 ? null
                 : new Dictionary<string, object?>(sessionInfo.Meta, StringComparer.Ordinal)
         };
+    }
+
+    private static DateTime ResolveCatalogUpdatedAt(ConversationBinding binding)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+
+        if (!string.IsNullOrWhiteSpace(binding.RemoteSessionId)
+            && binding.SessionInfo?.UpdatedAtUtc is DateTime remoteUpdatedAt
+            && remoteUpdatedAt != default)
+        {
+            return remoteUpdatedAt;
+        }
+
+        return binding.LastUpdatedAt == default ? binding.CreatedAt : binding.LastUpdatedAt;
     }
 
     private string? ResolveEstablishedConversationCwd(ConversationBinding binding)
