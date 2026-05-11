@@ -34,11 +34,11 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.Contains("xmlns:controls=\"using:SalmonEgg.Controls\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<controls:MarkdownTextPresenter", xaml, StringComparison.Ordinal);
-        Assert.Contains("ShouldRenderMarkdown=\"{x:Bind ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShouldRenderMarkdown=\"{x:Bind MarkdownPresentation.ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("RenderFailureSink=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageViewModel=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Load=\"{x:Bind ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Load=\"{x:Bind ShouldRenderPlainText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Load=\"{x:Bind MarkdownPresentation.ShouldRenderMarkdown, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Load=\"{x:Bind MarkdownPresentation.ShouldRenderPlainText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"IncomingToolCallPill\"", xaml, StringComparison.Ordinal);
     }
 
@@ -65,8 +65,8 @@ public sealed class ChatStylesMarkdownXamlTests
 
         Assert.Contains("x:Name=\"IncomingMarkdownCopyCodeButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Uid=\"ChatMarkdownCopyCodeButton\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Load=\"{x:Bind HasCopyableMarkdownCodeBlock, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("CommandParameter=\"{x:Bind CopyableMarkdownCodeBlockText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Load=\"{x:Bind MarkdownPresentation.HasCopyableCodeBlock, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CommandParameter=\"{x:Bind MarkdownPresentation.CopyableCodeBlockText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnCopyTextClick\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ChatMessage.CopyCodeButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<SymbolIcon Symbol=\"Copy\" />", xaml, StringComparison.Ordinal);
@@ -79,6 +79,8 @@ public sealed class ChatStylesMarkdownXamlTests
         var xaml = LoadChatStylesXaml();
 
         Assert.Contains("Text=\"{x:Bind TextContent, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MarkdownPresentation.ShouldRenderMarkdown", xaml, StringComparison.Ordinal);
+        Assert.Contains("MarkdownPresentation.ShouldRenderPlainText", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Visibility=\"{Binding ShouldRenderMarkdown", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Visibility=\"{Binding ShouldRenderPlainText", xaml, StringComparison.Ordinal);
     }

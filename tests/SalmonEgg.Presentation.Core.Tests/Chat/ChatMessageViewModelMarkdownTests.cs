@@ -13,6 +13,9 @@ public sealed class ChatMessageViewModelMarkdownTests
             new TextContentBlock("```csharp\nvar value = 1;\n```"),
             isOutgoing: false);
 
+        Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, vm.MarkdownPresentation.RenderMode);
+        Assert.True(vm.MarkdownPresentation.ShouldRenderMarkdown);
+        Assert.False(vm.MarkdownPresentation.ShouldRenderPlainText);
         Assert.Equal(ChatMarkdownRenderMode.MarkdownReady, vm.MarkdownRenderMode);
         Assert.True(vm.ShouldRenderMarkdown);
         Assert.False(vm.ShouldRenderPlainText);
@@ -95,6 +98,8 @@ public sealed class ChatMessageViewModelMarkdownTests
             new TextContentBlock("```csharp\nvar done = true;\n```\n\n```text\nsecond\n```"),
             isOutgoing: false);
 
+        Assert.Equal("var done = true;", vm.MarkdownPresentation.CopyableCodeBlockText);
+        Assert.True(vm.MarkdownPresentation.HasCopyableCodeBlock);
         Assert.True(vm.HasCopyableMarkdownCodeBlock);
         Assert.Equal("var done = true;", vm.CopyableMarkdownCodeBlockText);
     }
@@ -119,7 +124,27 @@ public sealed class ChatMessageViewModelMarkdownTests
             new TextContentBlock("```csharp\nvar partial = true;"),
             isOutgoing: false);
 
+        Assert.Equal(string.Empty, vm.MarkdownPresentation.CopyableCodeBlockText);
+        Assert.False(vm.MarkdownPresentation.HasCopyableCodeBlock);
         Assert.False(vm.HasCopyableMarkdownCodeBlock);
         Assert.Equal(string.Empty, vm.CopyableMarkdownCodeBlockText);
+    }
+
+    [Fact]
+    public void MarkdownPresentation_WhenFallbackSticky_StaysAuthoritativeAfterTextChanges()
+    {
+        var vm = ChatMessageViewModel.CreateFromTextContent(
+            "m-projection",
+            new TextContentBlock("plain text"),
+            isOutgoing: false);
+
+        vm.MarkMarkdownRenderFailed();
+        vm.TextContent = "```csharp\nConsole.WriteLine(\"ok\");\n```";
+
+        Assert.Equal(ChatMarkdownRenderMode.FallbackPlain, vm.MarkdownPresentation.RenderMode);
+        Assert.True(vm.MarkdownPresentation.ShouldRenderPlainText);
+        Assert.False(vm.MarkdownPresentation.ShouldRenderMarkdown);
+        Assert.Equal(string.Empty, vm.MarkdownPresentation.CopyableCodeBlockText);
+        Assert.False(vm.MarkdownPresentation.HasCopyableCodeBlock);
     }
 }

@@ -38,13 +38,6 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private string _textContent = string.Empty;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(ShouldRenderMarkdown))]
-        [NotifyPropertyChangedFor(nameof(ShouldRenderPlainText))]
-        [NotifyPropertyChangedFor(nameof(HasCopyableMarkdownCodeBlock))]
-        [NotifyPropertyChangedFor(nameof(CopyableMarkdownCodeBlockText))]
-        private ChatMarkdownRenderMode _markdownRenderMode = ChatMarkdownRenderMode.PlainStreaming;
-
-        [ObservableProperty]
         private bool _isMarkdownFallbackSticky;
 
         // 图片内容
@@ -134,7 +127,7 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         public ChatMessageViewModel()
         {
             Timestamp = DateTime.Now;
-            RefreshMarkdownRenderMode();
+            RefreshMarkdownPresentation();
         }
 
         public static ChatMessageViewModel CreateFromTextContent(string id, ContentBlock content, bool isOutgoing = false)
@@ -277,13 +270,28 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
 
         public bool HasTitle => !string.IsNullOrEmpty(Title);
         public bool HasTextContent => !string.IsNullOrEmpty(TextContent);
-        public bool ShouldRenderMarkdown => MarkdownRenderMode == ChatMarkdownRenderMode.MarkdownReady;
-        public bool ShouldRenderPlainText => !ShouldRenderMarkdown;
-        public string CopyableMarkdownCodeBlockText => ShouldRenderMarkdown
-           ? ChatMarkdownCodeBlockExtractor.TryExtractFirstFencedCodeBlock(TextContent) ?? string.Empty
-           : string.Empty;
-        public bool HasCopyableMarkdownCodeBlock => !string.IsNullOrEmpty(CopyableMarkdownCodeBlockText);
-       public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
+        public ChatMarkdownPresentationState MarkdownPresentation
+        {
+            get => _markdownPresentation;
+            private set
+            {
+                if (SetProperty(ref _markdownPresentation, value))
+                {
+                    OnPropertyChanged(nameof(MarkdownRenderMode));
+                    OnPropertyChanged(nameof(ShouldRenderMarkdown));
+                    OnPropertyChanged(nameof(ShouldRenderPlainText));
+                    OnPropertyChanged(nameof(CopyableMarkdownCodeBlockText));
+                    OnPropertyChanged(nameof(HasCopyableMarkdownCodeBlock));
+                }
+            }
+        }
+
+        public ChatMarkdownRenderMode MarkdownRenderMode => MarkdownPresentation.RenderMode;
+        public bool ShouldRenderMarkdown => MarkdownPresentation.ShouldRenderMarkdown;
+        public bool ShouldRenderPlainText => MarkdownPresentation.ShouldRenderPlainText;
+        public string CopyableMarkdownCodeBlockText => MarkdownPresentation.CopyableCodeBlockText;
+        public bool HasCopyableMarkdownCodeBlock => MarkdownPresentation.HasCopyableCodeBlock;
+        public bool HasImageContent => !string.IsNullOrEmpty(ImageData);
        public bool HasAudioContent => !string.IsNullOrEmpty(AudioData);
        public bool HasToolCall => !string.IsNullOrEmpty(ToolCallId);
        public bool HasPlanEntry => PlanEntry != null;
@@ -337,32 +345,33 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
 
        public void MarkMarkdownRenderFailed()
        {
-           IsMarkdownFallbackSticky = true;
-           RefreshMarkdownRenderMode();
+            IsMarkdownFallbackSticky = true;
+            RefreshMarkdownPresentation();
        }
 
        public void MarkRenderFailed() => MarkMarkdownRenderFailed();
 
-       partial void OnIsOutgoingChanged(bool value) => RefreshMarkdownRenderMode();
+       partial void OnIsOutgoingChanged(bool value) => RefreshMarkdownPresentation();
 
-       partial void OnContentTypeChanged(string value) => RefreshMarkdownRenderMode();
+       partial void OnContentTypeChanged(string value) => RefreshMarkdownPresentation();
 
        partial void OnTextContentChanged(string value)
        {
-           RefreshMarkdownRenderMode();
-           OnPropertyChanged(nameof(HasCopyableMarkdownCodeBlock));
-           OnPropertyChanged(nameof(CopyableMarkdownCodeBlockText));
+            RefreshMarkdownPresentation();
        }
 
-       partial void OnIsMarkdownFallbackStickyChanged(bool value) => RefreshMarkdownRenderMode();
+       partial void OnIsMarkdownFallbackStickyChanged(bool value) => RefreshMarkdownPresentation();
 
-       private void RefreshMarkdownRenderMode()
+       private ChatMarkdownPresentationState _markdownPresentation = ChatMarkdownPresentationState.PlainStreaming;
+
+       private void RefreshMarkdownPresentation()
        {
-           MarkdownRenderMode = ChatMarkdownRenderPolicy.Resolve(
-               ContentType,
-               IsOutgoing,
-               TextContent,
-               IsMarkdownFallbackSticky);
+            var renderMode = ChatMarkdownRenderPolicy.Resolve(
+                ContentType,
+                IsOutgoing,
+                TextContent,
+                IsMarkdownFallbackSticky);
+            MarkdownPresentation = ChatMarkdownPresentationState.Create(renderMode, TextContent);
        }
 
         private void UpdateToolCallState()

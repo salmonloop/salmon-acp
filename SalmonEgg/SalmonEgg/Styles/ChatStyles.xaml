@@ -42,7 +42,7 @@
                     <Grid x:Name="IncomingTextContentHost"
                           Visibility="{x:Bind HasTextContent, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBlock x:Name="IncomingPlainTextBlock"
-                                   x:Load="{x:Bind ShouldRenderPlainText, Mode=OneWay}"
+                                   x:Load="{x:Bind MarkdownPresentation.ShouldRenderPlainText, Mode=OneWay}"
                                    Text="{x:Bind TextContent, Mode=OneWay}"
                                    TextWrapping="Wrap"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -51,9 +51,9 @@
                                    IsTextSelectionEnabled="True"/>
 
                         <controls:MarkdownTextPresenter x:Name="IncomingMarkdownPresenter"
-                                                        x:Load="{x:Bind ShouldRenderMarkdown, Mode=OneWay}"
+                                                        x:Load="{x:Bind MarkdownPresentation.ShouldRenderMarkdown, Mode=OneWay}"
                                                         Text="{x:Bind TextContent, Mode=OneWay}"
-                                                        ShouldRenderMarkdown="{x:Bind ShouldRenderMarkdown, Mode=OneWay}"
+                                                        ShouldRenderMarkdown="{x:Bind MarkdownPresentation.ShouldRenderMarkdown, Mode=OneWay}"
                                                         RenderFailureSink="{x:Bind}"
                                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                                         LinkForeground="{ThemeResource AccentTextFillColorPrimaryBrush}"
@@ -71,8 +71,8 @@
 
                         <Button x:Name="IncomingMarkdownCopyCodeButton"
                                 x:Uid="ChatMarkdownCopyCodeButton"
-                                x:Load="{x:Bind HasCopyableMarkdownCodeBlock, Mode=OneWay}"
-                                CommandParameter="{x:Bind CopyableMarkdownCodeBlockText, Mode=OneWay}"
+                                x:Load="{x:Bind MarkdownPresentation.HasCopyableCodeBlock, Mode=OneWay}"
+                                CommandParameter="{x:Bind MarkdownPresentation.CopyableCodeBlockText, Mode=OneWay}"
                                 Click="OnCopyTextClick"
                                 AutomationProperties.AutomationId="ChatMessage.CopyCodeButton"
                                 HorizontalAlignment="Right"
