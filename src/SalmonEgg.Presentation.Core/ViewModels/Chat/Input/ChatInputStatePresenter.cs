@@ -39,7 +39,9 @@ public sealed class ChatInputStatePresenter
         }
 
         var isSurfaceBlocked =
-            input.IsBusy;
+            input.IsBusy
+            || input.HasPendingAskUserRequest
+            || input.ShouldShowLoadingOverlayPresenter;
 
         var canSendPrompt =
             !isSurfaceBlocked

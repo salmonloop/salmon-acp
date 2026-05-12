@@ -28,6 +28,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly IUiDispatcher _uiDispatcher;
     private CancellationTokenSource? _refreshSessionsCts;
     private int _refreshGeneration;
+    private int _loadSessionGeneration;
     private bool _disposed;
 
     [ObservableProperty]
@@ -355,10 +356,17 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             return;
         }
 
+        var generation = Interlocked.Increment(ref _loadSessionGeneration);
+        var selectedProfileId = selectedProfile.Id;
         try
         {
             await PostToUiAsync(() =>
             {
+                if (!IsCurrentLoadSessionIntent(generation, selectedProfileId))
+                {
+                    return;
+                }
+
                 ErrorMessage = null;
                 LoadPhase = DiscoverSessionsLoadPhase.ImportingSession;
             }).ConfigureAwait(false);
@@ -375,6 +383,11 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 await PostToUiAsync(() =>
                 {
+                    if (!IsCurrentLoadSessionIntent(generation, selectedProfileId))
+                    {
+                        return;
+                    }
+
                     ErrorMessage = string.IsNullOrWhiteSpace(openResult.ErrorMessage)
                         ? "导入会话失败。"
                         : openResult.ErrorMessage;
@@ -383,15 +396,33 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                 return;
             }
 
-            await PostToUiAsync(() => LoadPhase = AgentSessions.Count == 0
-                ? DiscoverSessionsLoadPhase.Empty
-                : DiscoverSessionsLoadPhase.Loaded).ConfigureAwait(false);
+            await PostToUiAsync(() =>
+            {
+                if (!IsCurrentLoadSessionIntent(generation, selectedProfileId))
+                {
+                    return;
+                }
+
+                LoadPhase = AgentSessions.Count == 0
+                    ? DiscoverSessionsLoadPhase.Empty
+                    : DiscoverSessionsLoadPhase.Loaded;
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
+            if (!IsCurrentLoadSessionIntent(generation, selectedProfileId))
+            {
+                return;
+            }
+
             _logger.LogError(ex, "Failed to import session {SessionId}", session.Id);
             await PostToUiAsync(() =>
             {
+                if (!IsCurrentLoadSessionIntent(generation, selectedProfileId))
+                {
+                    return;
+                }
+
                 ErrorMessage = $"导入会话时出错: {ex.Message}";
                 LoadPhase = DiscoverSessionsLoadPhase.Error;
             }).ConfigureAwait(false);
@@ -517,6 +548,16 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         });
 
         await tcs.Task.ConfigureAwait(false);
+    }
+
+    private bool IsCurrentLoadSessionIntent(int generation, string selectedProfileId)
+    {
+        if (generation != Volatile.Read(ref _loadSessionGeneration))
+        {
+            return false;
+        }
+
+        return string.Equals(SelectedProfile?.Id, selectedProfileId, StringComparison.Ordinal);
     }
 
     private Task<T> RunOnUiContextAsync<T>(Func<Task<T>> action)

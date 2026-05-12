@@ -213,7 +213,7 @@
                                         Padding="0"
                                         CornerRadius="22"
                                         Style="{StaticResource AccentButtonStyle}"
-                                        IsEnabled="{x:Bind CanSubmitUi, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.CanSendPromptUi, Mode=OneWay}"
                                         Command="{x:Bind SubmitCommand}"/>
 
                                 <Button x:Name="CancelButton"

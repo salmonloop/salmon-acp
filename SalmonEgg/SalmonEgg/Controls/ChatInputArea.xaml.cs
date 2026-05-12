@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -26,17 +25,8 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             nameof(SubmitCommand),
             typeof(ICommand),
             typeof(ChatInputArea),
-            new PropertyMetadata(null, OnSubmitCommandChanged));
+            new PropertyMetadata(null));
 
-    public static readonly DependencyProperty CanSubmitUiProperty =
-        DependencyProperty.Register(
-            nameof(CanSubmitUi),
-            typeof(bool),
-            typeof(ChatInputArea),
-            new PropertyMetadata(false));
-
-    private INotifyPropertyChanged? _attachedViewModel;
-    private ICommand? _attachedSubmitCommand;
     private bool _isImeComposing;
 
     public ChatViewModel ViewModel
@@ -49,12 +39,6 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
     {
         get => (ICommand?)GetValue(SubmitCommandProperty);
         set => SetValue(SubmitCommandProperty, value);
-    }
-
-    public bool CanSubmitUi
-    {
-        get => (bool)GetValue(CanSubmitUiProperty);
-        private set => SetValue(CanSubmitUiProperty, value);
     }
 
     public ChatInputArea()
@@ -73,148 +57,10 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             return;
         }
 
-        if (e.OldValue is ChatViewModel oldVm)
-        {
-            control.DetachViewModel(oldVm);
-        }
-
         if (control.ViewModel != null && control.SubmitCommand == null)
         {
             control.SubmitCommand = control.ViewModel.SendPromptCommand;
         }
-
-        if (control.ViewModel != null)
-        {
-            control.AttachViewModel(control.ViewModel);
-        }
-
-        control.UpdateCanSubmitUi();
-    }
-
-    private static void OnSubmitCommandChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is not ChatInputArea control)
-        {
-            return;
-        }
-
-        if (e.OldValue is ICommand oldCmd)
-        {
-            control.DetachSubmitCommand(oldCmd);
-        }
-
-        if (e.NewValue is ICommand newCmd)
-        {
-            control.AttachSubmitCommand(newCmd);
-        }
-
-        control.UpdateCanSubmitUi();
-    }
-
-    private void AttachViewModel(ChatViewModel vm)
-    {
-        if (_attachedViewModel != null)
-        {
-            return;
-        }
-
-        _attachedViewModel = vm;
-        vm.PropertyChanged += OnAttachedViewModelPropertyChanged;
-    }
-
-    private void DetachViewModel(ChatViewModel vm)
-    {
-        if (_attachedViewModel == null || !ReferenceEquals(_attachedViewModel, vm))
-        {
-            return;
-        }
-
-        vm.PropertyChanged -= OnAttachedViewModelPropertyChanged;
-        _attachedViewModel = null;
-    }
-
-    private void OnAttachedViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        switch (e.PropertyName)
-        {
-            case nameof(ChatViewModel.CurrentPrompt):
-            case nameof(ChatViewModel.IsPromptInFlight):
-            case nameof(ChatViewModel.TurnPhase):
-            case nameof(ChatViewModel.IsSessionActive):
-            case nameof(ChatViewModel.IsConnected):
-            case nameof(ChatViewModel.CanSendPromptUi):
-                RequestUpdateCanSubmitUi();
-                break;
-        }
-    }
-
-    private void AttachSubmitCommand(ICommand? command)
-    {
-        if (command == null || _attachedSubmitCommand != null)
-        {
-            return;
-        }
-
-        _attachedSubmitCommand = command;
-        command.CanExecuteChanged += OnSubmitCommandCanExecuteChanged;
-    }
-
-    private void DetachSubmitCommand(ICommand command)
-    {
-        if (_attachedSubmitCommand == null || !ReferenceEquals(_attachedSubmitCommand, command))
-        {
-            return;
-        }
-
-        command.CanExecuteChanged -= OnSubmitCommandCanExecuteChanged;
-        _attachedSubmitCommand = null;
-    }
-
-    private void OnSubmitCommandCanExecuteChanged(object? sender, EventArgs e)
-    {
-        RequestUpdateCanSubmitUi();
-    }
-
-    private void RequestUpdateCanSubmitUi()
-    {
-        if (DispatcherQueue != null && !DispatcherQueue.HasThreadAccess)
-        {
-            DispatcherQueue.TryEnqueue(UpdateCanSubmitUi);
-            return;
-        }
-
-        UpdateCanSubmitUi();
-    }
-
-    private void UpdateCanSubmitUi()
-    {
-        if (ViewModel == null)
-        {
-            CanSubmitUi = false;
-            return;
-        }
-
-        var command = SubmitCommand ?? ViewModel.SendPromptCommand;
-        var hasText = !string.IsNullOrWhiteSpace(ViewModel.CurrentPrompt);
-
-        if (command == null)
-        {
-            CanSubmitUi = false;
-            return;
-        }
-
-        // If using the native chat send command, keep the existing stable UI enablement logic.
-        if (ReferenceEquals(command, ViewModel.SendPromptCommand))
-        {
-            CanSubmitUi = ViewModel.CanSendPromptUi;
-            return;
-        }
-
-        // Start page: allow submission without requiring ACP to already be connected.
-        var canExecute = false;
-        try { canExecute = command.CanExecute(null); } catch { }
-
-        CanSubmitUi = hasText && canExecute && IsPromptEditingAvailable();
     }
 
     private bool IsPromptEditingAvailable()

@@ -296,8 +296,10 @@ public sealed class XamlComplianceTests
         Assert.Contains("Visibility=\"{x:Bind ViewModel.ShouldShowSlashCommandsUi, Mode=OneWay", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.IsTextInputEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.AreComposerToolsEnabled, Mode=OneWay}\"", xaml);
+        Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanSendPromptUi, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanStartVoiceInput, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanStopVoiceInput, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("CanSubmitUi", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ViewModel.ComposerState.", xaml, StringComparison.Ordinal);
     }
 
@@ -619,10 +621,11 @@ public sealed class XamlComplianceTests
         Assert.Contains("ListViewBase", host, StringComparison.Ordinal);
         Assert.Contains("ListViewItem", host, StringComparison.Ordinal);
         Assert.Contains("Func<TranscriptVirtualizationRange?>", host, StringComparison.Ordinal);
-        Assert.Contains("SortedSet<int> _realizedIndices", host, StringComparison.Ordinal);
-        Assert.Contains("_realizedIndices.GetViewBetween(range.FirstIndex, range.LastIndex)", host, StringComparison.Ordinal);
+        Assert.Contains("ClampRange(visibleRange, itemCount)", host, StringComparison.Ordinal);
+        Assert.Contains("TryGetFirstVisibleIndexInRange(range, out index)", host, StringComparison.Ordinal);
         Assert.Contains("_listView.ScrollIntoView", host, StringComparison.Ordinal);
         Assert.Contains("_listView.ContainerFromIndex(index)", host, StringComparison.Ordinal);
+        Assert.Contains("TransformToVisual(_listView).TransformPoint(default)", host, StringComparison.Ordinal);
         Assert.Contains("itemBottom <= viewportBottom + bottomGeometryTolerance", host, StringComparison.Ordinal);
         Assert.Contains("anchor.ActualHeight <= availableViewportHeight + bottomGeometryTolerance", host, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsRepeater", host, StringComparison.Ordinal);
@@ -631,7 +634,6 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("BringIntoViewOptions", host, StringComparison.Ordinal);
         Assert.DoesNotContain("ChangeView", host, StringComparison.Ordinal);
         Assert.DoesNotContain("ScrollViewerViewportMonitor", host, StringComparison.Ordinal);
-        Assert.DoesNotContain("candidate = range.FirstIndex; candidate <= range.LastIndex", host, StringComparison.Ordinal);
     }
 
     [Fact]

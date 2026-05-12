@@ -44,11 +44,6 @@ public sealed partial class DiscoverSessionsPage : Page
         }
 
         var wasAlreadySelected = ReferenceEquals(ViewModel.SelectedProfile, profile);
-        if (!wasAlreadySelected)
-        {
-            ViewModel.SelectedProfile = profile;
-        }
-
         if (wasAlreadySelected && ViewModel.OpenProfileDetailsCommand.CanExecute(null))
         {
             ViewModel.OpenProfileDetailsCommand.Execute(null);

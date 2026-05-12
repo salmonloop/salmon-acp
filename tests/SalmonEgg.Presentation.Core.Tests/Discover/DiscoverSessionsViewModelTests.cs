@@ -341,6 +341,51 @@ public sealed class DiscoverSessionsViewModelTests
     }
 
     [Fact]
+    public async Task LoadSessionAsync_WhenProfileChangesBeforeImportCompletes_DropsStaleErrorState()
+    {
+        var syncContext = new CountingSynchronizationContext();
+        var originalContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var profile1 = CreateProfile();
+            var profile2 = new ServerConfiguration { Id = "profile-2", Name = "Profile 2" };
+            var profilesViewModel = CreateProfilesViewModel(profile1);
+            profilesViewModel.Profiles.Add(profile2);
+            var importStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowImportCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var navigationCoordinator = new StubNavigationCoordinator
+            {
+                DiscoverOpenAsync = async () =>
+                {
+                    importStarted.TrySetResult(null);
+                    await allowImportCompletion.Task;
+                    return new DiscoverRemoteSessionOpenResult(false, null, "导入失败");
+                }
+            };
+
+            using var viewModel = CreateViewModel(
+                profilesViewModel,
+                new FakeDiscoverSessionsConnectionFacade(),
+                navigationCoordinator);
+
+            var loadTask = viewModel.LoadSessionCommand.ExecuteAsync(CreateSessionItem());
+            await importStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            viewModel.SelectedProfile = profile2;
+            allowImportCompletion.TrySetResult(null);
+            await loadTask;
+
+            Assert.Null(viewModel.ErrorMessage);
+            Assert.NotEqual(DiscoverSessionsLoadPhase.Error, viewModel.LoadPhase);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task LoadSessionAsync_WhenHydrationFails_SetsPageErrorState()
     {
         var originalContext = SynchronizationContext.Current;

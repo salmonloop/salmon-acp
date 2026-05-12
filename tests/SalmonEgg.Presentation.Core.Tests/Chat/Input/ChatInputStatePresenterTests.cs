@@ -93,7 +93,30 @@ public sealed class ChatInputStatePresenterTests
     }
 
     [Fact]
-    public void Present_WithPendingAskUser_DoesNotProjectBlockedComposerMode()
+    public void Present_WithReadySession_ProjectsEnabledComposerWithAuthoritativeInputsOnly()
+    {
+        var state = _sut.Present(new ChatInputStateInput(
+            IsBusy: false,
+            IsPromptInFlight: false,
+            IsVoiceInputListening: false,
+            IsVoiceInputTransportBusy: false,
+            HasPendingAskUserRequest: false,
+            ShouldShowLoadingOverlayPresenter: false,
+            IsSessionActive: true,
+            HasChatService: true,
+            IsInitialized: true,
+            HasCurrentSessionId: true,
+            HasPromptText: true,
+            IsVoiceInputSupported: true));
+
+        Assert.Equal(ChatComposerMode.Enabled, state.Mode);
+        Assert.True(state.IsInteractiveSurfaceEnabled);
+        Assert.True(state.CanSendPrompt);
+        Assert.True(state.CanStartVoiceInput);
+    }
+
+    [Fact]
+    public void Present_WithPendingAskUser_DisablesComposerUntilQuestionResolves()
     {
         var state = _sut.Present(new ChatInputStateInput(
             IsBusy: false,
@@ -110,9 +133,10 @@ public sealed class ChatInputStatePresenterTests
             IsVoiceInputSupported: true));
 
         Assert.Equal(ChatComposerMode.Enabled, state.Mode);
-        Assert.True(state.IsInteractiveSurfaceEnabled);
-        Assert.True(state.CanSendPrompt);
-        Assert.True(state.CanStartVoiceInput);
+        Assert.False(state.IsTextInputEnabled);
+        Assert.False(state.AreComposerToolsEnabled);
+        Assert.False(state.CanSendPrompt);
+        Assert.False(state.CanStartVoiceInput);
     }
 
     [Fact]
@@ -160,7 +184,31 @@ public sealed class ChatInputStatePresenterTests
     }
 
     [Fact]
-    public void Present_WhenOnlyLoadingOverlayPresenterIsVisible_DoesNotDisableComposer()
+    public void Present_WhenBusy_DisablesComposerSurfaceAndVoiceRestart()
+    {
+        var state = _sut.Present(new ChatInputStateInput(
+            IsBusy: true,
+            IsPromptInFlight: false,
+            IsVoiceInputListening: false,
+            IsVoiceInputTransportBusy: false,
+            HasPendingAskUserRequest: false,
+            ShouldShowLoadingOverlayPresenter: false,
+            IsSessionActive: true,
+            HasChatService: true,
+            IsInitialized: true,
+            HasCurrentSessionId: true,
+            HasPromptText: true,
+            IsVoiceInputSupported: true));
+
+        Assert.Equal(ChatComposerMode.Enabled, state.Mode);
+        Assert.False(state.IsTextInputEnabled);
+        Assert.False(state.AreComposerToolsEnabled);
+        Assert.False(state.CanSendPrompt);
+        Assert.False(state.CanStartVoiceInput);
+    }
+
+    [Fact]
+    public void Present_WhenOverlayPresenterVisible_DisablesComposerSurfaceWithoutChangingMode()
     {
         var state = _sut.Present(new ChatInputStateInput(
             IsBusy: false,
@@ -177,10 +225,10 @@ public sealed class ChatInputStatePresenterTests
             IsVoiceInputSupported: true));
 
         Assert.Equal(ChatComposerMode.Enabled, state.Mode);
-        Assert.True(state.IsTextInputEnabled);
-        Assert.True(state.AreComposerToolsEnabled);
-        Assert.True(state.CanSendPrompt);
-        Assert.True(state.CanStartVoiceInput);
+        Assert.False(state.IsTextInputEnabled);
+        Assert.False(state.AreComposerToolsEnabled);
+        Assert.False(state.CanSendPrompt);
+        Assert.False(state.CanStartVoiceInput);
     }
 
     [Fact]

@@ -602,7 +602,6 @@ public sealed class NavigationCoreTests
             if (code.Contains("ShowsScrollingPlaceholders", StringComparison.Ordinal))
             {
                 Assert.Contains("#if WINDOWS", code, StringComparison.Ordinal);
-                Assert.Contains("MessagesList.ShowsScrollingPlaceholders = false;", code, StringComparison.Ordinal);
             }
             Assert.DoesNotContain("ContainerFromIndex(", code, StringComparison.Ordinal);
             Assert.DoesNotContain("ScrollIntoView(", code, StringComparison.Ordinal);

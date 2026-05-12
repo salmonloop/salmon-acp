@@ -587,7 +587,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     public bool IsVoiceInputTransportBusy
     {
         get => _voiceInputTransportState != VoiceInputTransportState.Idle;
-        set => SetVoiceInputTransportState(value ? VoiceInputTransportState.Starting : VoiceInputTransportState.Idle);
     }
 
     public bool HasPendingAskUserRequest => ResolveAskUserState().HasPendingRequest;
@@ -610,9 +609,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
     public bool CanStopVoiceInput => ResolveInputState().CanStopVoiceInput;
 
-    public bool ShowVoiceInputStartButton => ResolveInputState().ShowVoiceInputStartButton;
+    public bool ShowVoiceInputStartButton => ResolveInputState().ShowVoiceStartButton;
 
-    public bool ShowVoiceInputStopButton => ResolveInputState().ShowVoiceInputStopButton;
+    public bool ShowVoiceInputStopButton => ResolveInputState().ShowVoiceStopButton;
 
     public bool ShouldShowSlashCommandsUi => ShowSlashCommands && ComposerState.AreComposerToolsEnabled;
 

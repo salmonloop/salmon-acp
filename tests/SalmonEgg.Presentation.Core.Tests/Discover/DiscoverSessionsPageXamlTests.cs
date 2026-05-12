@@ -81,8 +81,8 @@ public sealed class DiscoverSessionsPageXamlTests
         var codeBehind = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml.cs");
 
         Assert.Contains("var wasAlreadySelected = ReferenceEquals(ViewModel.SelectedProfile, profile);", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("if (!wasAlreadySelected)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("if (wasAlreadySelected && ViewModel.OpenProfileDetailsCommand.CanExecute(null))", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewModel.SelectedProfile = profile;", codeBehind, StringComparison.Ordinal);
     }
 
     private static string LoadFile(string relativePath)

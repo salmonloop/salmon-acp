@@ -806,7 +806,6 @@ public partial class ChatViewModelTests
 
         fixture.ViewModel.IsVoiceInputSupported = true;
         fixture.ViewModel.IsVoiceInputListening = true;
-        fixture.ViewModel.IsVoiceInputTransportBusy = true;
 
         Assert.Equal(ChatComposerMode.VoiceListening, fixture.ViewModel.ComposerState.Mode);
         Assert.True(fixture.ViewModel.ComposerState.ShowVoiceStopButton);
