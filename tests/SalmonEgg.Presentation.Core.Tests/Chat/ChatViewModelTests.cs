@@ -3421,6 +3421,62 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task EnsureNewSessionDraftAsync_WhenRequiredProfileDiffersFromForeground_ClosesStaleDraftWithoutReuse()
+    {
+        await using var fixture = CreateViewModel();
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities)
+            .Returns(new AgentCapabilities(sessionCapabilities: new SessionCapabilities
+            {
+                Close = new SessionCloseCapabilities()
+            }));
+        chatService.Setup(service => service.CloseSessionAsync(
+                It.Is<SessionCloseParams>(p => p.SessionId == "remote-draft"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(SessionCloseResponse.Completed);
+        var draft = new NewSessionDraftState(
+            ProfileId: "profile-1",
+            Cwd: @"C:\Repo\App",
+            RemoteSessionId: "remote-draft",
+            ConnectionInstanceId: "conn-1",
+            Phase: NewSessionDraftPhase.Ready,
+            Version: 1,
+            AvailableModes: ImmutableList.Create(new ConversationModeOptionSnapshot
+            {
+                ModeId = "code",
+                ModeName = "Code"
+            }),
+            SelectedModeId: "code",
+            ConfigOptions: ImmutableList<ConversationConfigOptionSnapshot>.Empty,
+            ShowConfigOptionsPanel: false,
+            AvailableCommands: ImmutableList<ConversationAvailableCommandSnapshot>.Empty,
+            SessionInfo: null);
+
+        await fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object);
+        await fixture.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await fixture.DispatchConnectionAsync(new SetNewSessionDraftAction(draft));
+
+        await fixture.ViewModel.EnsureNewSessionDraftForProfileAsync(
+            @"C:\Repo\App",
+            requiredProfileId: "profile-2");
+
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await fixture.GetConnectionStateAsync();
+            return state.NewSessionDraft is null;
+        });
+        var connectionState = await fixture.GetConnectionStateAsync();
+        Assert.Null(connectionState.NewSessionDraft);
+        Assert.Empty(fixture.ViewModel.NewSessionDraftModeOptions);
+        chatService.Verify(service => service.CreateSessionAsync(It.IsAny<SessionNewParams>()), Times.Never);
+        chatService.Verify(service => service.CloseSessionAsync(
+            It.Is<SessionCloseParams>(p => p.SessionId == "remote-draft"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task EnsureNewSessionDraftAsync_WhenCancelledAfterSessionNew_ClosesCreatedRemoteSession()
     {
         await using var fixture = CreateViewModel();

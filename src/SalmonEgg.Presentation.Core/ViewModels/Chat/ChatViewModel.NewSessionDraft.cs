@@ -18,6 +18,12 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 public partial class ChatViewModel
 {
     public async Task EnsureNewSessionDraftAsync(string? cwd, CancellationToken cancellationToken = default)
+        => await EnsureNewSessionDraftForProfileAsync(cwd, requiredProfileId: null, cancellationToken).ConfigureAwait(false);
+
+    public async Task EnsureNewSessionDraftForProfileAsync(
+        string? cwd,
+        string? requiredProfileId,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (_disposed)
@@ -31,9 +37,25 @@ public partial class ChatViewModel
             await TryAutoConnectAsync(cancellationToken).ConfigureAwait(false);
             var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
             var chatService = _chatService;
-            var profileId = connectionState.ForegroundTransportProfileId ?? SelectedProfileId;
+            var normalizedRequiredProfileId = NormalizeNewSessionDraftProfileId(requiredProfileId);
+            var foregroundProfileId = connectionState.ForegroundTransportProfileId;
+            var profileId = normalizedRequiredProfileId ?? foregroundProfileId ?? SelectedProfileId;
             var connectionInstanceId = connectionState.ConnectionInstanceId ?? ConnectionInstanceId;
             var normalizedCwd = NormalizeNewSessionDraftCwd(cwd);
+
+            if (!string.IsNullOrWhiteSpace(normalizedRequiredProfileId)
+                && !string.Equals(foregroundProfileId, normalizedRequiredProfileId, StringComparison.Ordinal))
+            {
+                if (connectionState.NewSessionDraft is not null
+                    && chatService is { IsConnected: true, IsInitialized: true })
+                {
+                    await CloseNewSessionDraftQuietlyAsync(chatService, connectionState.NewSessionDraft, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                await ClearNewSessionDraftStateAsync().ConfigureAwait(false);
+                return;
+            }
 
             if (chatService is not { IsConnected: true, IsInitialized: true }
                 || connectionState.Phase != ConnectionPhase.Connected
@@ -522,4 +544,9 @@ public partial class ChatViewModel
             return string.Empty;
         }
     }
+
+    private static string? NormalizeNewSessionDraftProfileId(string? profileId)
+        => string.IsNullOrWhiteSpace(profileId)
+            ? null
+            : profileId.Trim();
 }

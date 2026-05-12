@@ -519,6 +519,12 @@
   <data name="StartAgentSelector.AutomationProperties.Name" xml:space="preserve">
     <value>新会话 Agent 选择</value>
   </data>
+  <data name="StartModeSelector.PlaceholderText" xml:space="preserve">
+    <value>选择模式</value>
+  </data>
+  <data name="StartModeSelector.AutomationProperties.Name" xml:space="preserve">
+    <value>新会话模式选择</value>
+  </data>
   <data name="CancelButton.AutomationProperties.Name" xml:space="preserve">
     <value>取消发送</value>
   </data>

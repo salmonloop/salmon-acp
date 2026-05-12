@@ -468,16 +468,96 @@ public sealed class StartViewModelTests
                 preferences,
                 nav,
                 workflow.Object);
+            startViewModel.OnComposerLoaded();
+            startViewModel.OnComposerFocusEntered();
 
+            await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
+            await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+            await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
             await chat.DispatchConnectionAsync(new SetNewSessionDraftAction(CreateReadyDraft("code")));
             await WaitForConditionAsync(() => startViewModel.StartModeOptions.Count == 2);
 
             Assert.True(startViewModel.IsStartModeSelectorVisible);
+            Assert.True(startViewModel.IsStartModeSelectorEnabled);
             Assert.Equal("code", startViewModel.SelectedStartMode?.ModeId);
             Assert.Collection(
                 startViewModel.StartModeOptions,
                 first => Assert.Equal("plan", first.ModeId),
                 second => Assert.Equal("code", second.ModeId));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public void StartModeSelector_WhenComposerExpandsBeforeDraftReady_IsVisibleButDisabled()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(
+                chat.ViewModel,
+                preferences,
+                nav,
+                workflow.Object);
+
+            startViewModel.OnComposerLoaded();
+            startViewModel.OnComposerFocusEntered();
+
+            Assert.True(startViewModel.IsComposerExpanded);
+            Assert.True(startViewModel.IsStartModeSelectorVisible);
+            Assert.False(startViewModel.IsStartModeSelectorEnabled);
+            Assert.Empty(startViewModel.StartModeOptions);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task StartModeSelector_WhenProfileChanges_DisablesExistingModesUntilFreshDraftArrives()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(
+                chat.ViewModel,
+                preferences,
+                nav,
+                workflow.Object);
+            startViewModel.OnComposerLoaded();
+            startViewModel.OnComposerFocusEntered();
+
+            await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
+            await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+            await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+            await chat.DispatchConnectionAsync(new SetNewSessionDraftAction(CreateReadyDraft("plan")));
+            await WaitForConditionAsync(() => startViewModel.StartModeOptions.Count == 2);
+            Assert.True(startViewModel.IsStartModeSelectorEnabled);
+
+            chat.ViewModel.AcpProfileList.Add(new ServerConfiguration { Id = "profile-1", Name = "Agent 1", Transport = TransportType.HttpSse, ServerUrl = "https://example-1.test" });
+            chat.ViewModel.AcpProfileList.Add(new ServerConfiguration { Id = "profile-2", Name = "Agent 2", Transport = TransportType.HttpSse, ServerUrl = "https://example-2.test" });
+            chat.ViewModel.SelectedAcpProfile = chat.ViewModel.AcpProfileList[1];
+
+            Assert.True(startViewModel.IsStartModeSelectorVisible);
+            Assert.False(startViewModel.IsStartModeSelectorEnabled);
         }
         finally
         {

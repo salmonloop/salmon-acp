@@ -418,11 +418,18 @@ public sealed class NavigationCoreTests
     public void StartViewXaml_ExposesModeSelectorAndVoiceButtons_ForNewSessionLaunch()
     {
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
+        var agentSelectorIndex = xaml.IndexOf("x:Name=\"StartAgentSelector\"", StringComparison.Ordinal);
+        var modeSelectorIndex = xaml.IndexOf("x:Name=\"StartModeSelector\"", StringComparison.Ordinal);
+        var projectSelectorIndex = xaml.IndexOf("x:Name=\"StartProjectSelector\"", StringComparison.Ordinal);
 
-        Assert.Contains("x:Name=\"ModeSelectorRow\"", xaml, StringComparison.Ordinal);
+        Assert.True(agentSelectorIndex >= 0);
+        Assert.True(modeSelectorIndex > agentSelectorIndex);
+        Assert.True(projectSelectorIndex > modeSelectorIndex);
         Assert.Contains("AutomationProperties.AutomationId=\"StartView.ModeSelector\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Load=\"{x:Bind ViewModel.IsStartModeSelectorVisible, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{x:Bind ViewModel.StartModeOptions, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("SelectedItem=\"{x:Bind ViewModel.SelectedStartMode, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{x:Bind ViewModel.StartVoiceInputCommand}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{x:Bind ViewModel.StopVoiceInputCommand}\"", xaml, StringComparison.Ordinal);
     }

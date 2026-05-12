@@ -30,11 +30,20 @@ public sealed partial class StartViewModel : ObservableObject
     private readonly ObservableCollection<StartProjectOptionViewModel> _startProjectOptions = new();
     private StartComposerState _composerState = StartComposerState.Default;
     private StartComposerSnapshot _composerSnapshot = StartComposerPolicy.Compute(StartComposerState.Default);
+    private StartSessionModeSnapshot _startSessionModeSnapshot = StartSessionModePolicy.Compute(new StartSessionModeState(
+        IsComposerExpanded: false,
+        IsStarting: false,
+        IsConnectionReady: false,
+        IsDraftRefreshPending: false,
+        IsDraftLoading: false,
+        IsDraftReady: false,
+        ModeCount: 0));
     private string? _selectedStartProjectIdOverride;
     private bool _suppressMirroredChatDraftUpdates;
     private bool _isVoicePromptBridgeActive;
     private string? _chatDraftBeforeVoiceBridge;
     private CancellationTokenSource? _newSessionDraftCts;
+    private bool _isNewSessionDraftRefreshPending;
     private bool _isComposerLoaded;
 
     public ChatViewModel Chat { get; }
@@ -49,7 +58,7 @@ public sealed partial class StartViewModel : ObservableObject
             if (SetProperty(ref _isStarting, value))
             {
                 OnPropertyChanged(nameof(IsInputEnabled));
-                OnPropertyChanged(nameof(IsStartModeSelectorEnabled));
+                RefreshStartModeState();
                 RefreshVoiceProjection();
                 StartSessionAndSendCommand.NotifyCanExecuteChanged();
             }
@@ -108,9 +117,11 @@ public sealed partial class StartViewModel : ObservableObject
         set => Chat.SelectedNewSessionDraftMode = value;
     }
 
-    public bool IsStartModeSelectorVisible => StartModeOptions.Count > 0;
+    public StartSessionModeStage StartModeStage => _startSessionModeSnapshot.Stage;
 
-    public bool IsStartModeSelectorEnabled => !IsStarting && !Chat.IsNewSessionDraftLoading && StartModeOptions.Count > 0;
+    public bool IsStartModeSelectorVisible => _startSessionModeSnapshot.IsVisible;
+
+    public bool IsStartModeSelectorEnabled => _startSessionModeSnapshot.IsEnabled;
 
     public bool IsVoiceInputSupported => Chat.IsVoiceInputSupported;
 
@@ -478,6 +489,28 @@ public sealed partial class StartViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(e.PropertyName, nameof(ChatViewModel.IsConnected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(ChatViewModel.IsConnecting), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(ChatViewModel.IsInitializing), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(ChatViewModel.ConnectionInstanceId), StringComparison.Ordinal))
+        {
+            if (_isComposerLoaded && (Chat.IsConnecting || Chat.IsInitializing))
+            {
+                SetNewSessionDraftRefreshPending(true);
+                return;
+            }
+
+            if (_isComposerLoaded && Chat.IsConnected)
+            {
+                QueueEnsureNewSessionDraft();
+                return;
+            }
+
+            SetNewSessionDraftRefreshPending(false);
+            RefreshStartModeState();
+            return;
+        }
+
         if (string.Equals(e.PropertyName, nameof(ChatViewModel.CurrentPrompt), StringComparison.Ordinal)
             && _isVoicePromptBridgeActive)
         {
@@ -536,8 +569,7 @@ public sealed partial class StartViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StartModeOptions));
         OnPropertyChanged(nameof(SelectedStartMode));
-        OnPropertyChanged(nameof(IsStartModeSelectorVisible));
-        OnPropertyChanged(nameof(IsStartModeSelectorEnabled));
+        RefreshStartModeState();
     }
 
     private void QueueEnsureNewSessionDraft()
@@ -547,19 +579,25 @@ public sealed partial class StartViewModel : ObservableObject
             return;
         }
 
-        _ = EnsureNewSessionDraftAsync();
-    }
-
-    private async Task EnsureNewSessionDraftAsync()
-    {
         _newSessionDraftCts?.Cancel();
         _newSessionDraftCts?.Dispose();
-        _newSessionDraftCts = new CancellationTokenSource();
-        var cancellationToken = _newSessionDraftCts.Token;
+        var refreshCts = new CancellationTokenSource();
+        _newSessionDraftCts = refreshCts;
+        SetNewSessionDraftRefreshPending(true);
+
+        _ = EnsureNewSessionDraftAsync(refreshCts);
+    }
+
+    private async Task EnsureNewSessionDraftAsync(CancellationTokenSource refreshCts)
+    {
+        var cancellationToken = refreshCts.Token;
 
         try
         {
-            await Chat.EnsureNewSessionDraftAsync(ResolvePreviewCwd(), cancellationToken)
+            await Chat.EnsureNewSessionDraftForProfileAsync(
+                    ResolvePreviewCwd(),
+                    Chat.SelectedAcpProfile?.Id,
+                    cancellationToken)
                 .ConfigureAwait(true);
         }
         catch (OperationCanceledException)
@@ -569,14 +607,70 @@ public sealed partial class StartViewModel : ObservableObject
         {
             _logger.LogDebug(ex, "Failed to prepare start-session draft.");
         }
+        finally
+        {
+            if (ReferenceEquals(_newSessionDraftCts, refreshCts))
+            {
+                _newSessionDraftCts = null;
+                SetNewSessionDraftRefreshPending(false);
+            }
+
+            refreshCts.Dispose();
+        }
     }
 
     private void CancelNewSessionDraftRefresh()
     {
-        _newSessionDraftCts?.Cancel();
-        _newSessionDraftCts?.Dispose();
+        var refreshCts = _newSessionDraftCts;
         _newSessionDraftCts = null;
-        OnPropertyChanged(nameof(IsStartModeSelectorEnabled));
+        refreshCts?.Cancel();
+        refreshCts?.Dispose();
+        SetNewSessionDraftRefreshPending(false);
+    }
+
+    private void SetNewSessionDraftRefreshPending(bool value)
+    {
+        if (_isNewSessionDraftRefreshPending == value)
+        {
+            return;
+        }
+
+        _isNewSessionDraftRefreshPending = value;
+        RefreshStartModeState();
+    }
+
+    private void RefreshStartModeState()
+    {
+        var nextSnapshot = StartSessionModePolicy.Compute(new StartSessionModeState(
+            IsComposerExpanded: IsComposerExpanded,
+            IsStarting: IsStarting,
+            IsConnectionReady: Chat.IsConnected && !Chat.IsConnecting && !Chat.IsInitializing,
+            IsDraftRefreshPending: _isNewSessionDraftRefreshPending,
+            IsDraftLoading: Chat.IsNewSessionDraftLoading,
+            IsDraftReady: Chat.IsNewSessionDraftReady,
+            ModeCount: StartModeOptions.Count));
+        if (nextSnapshot == _startSessionModeSnapshot)
+        {
+            return;
+        }
+
+        var previousSnapshot = _startSessionModeSnapshot;
+        _startSessionModeSnapshot = nextSnapshot;
+
+        if (previousSnapshot.Stage != nextSnapshot.Stage)
+        {
+            OnPropertyChanged(nameof(StartModeStage));
+        }
+
+        if (previousSnapshot.IsVisible != nextSnapshot.IsVisible)
+        {
+            OnPropertyChanged(nameof(IsStartModeSelectorVisible));
+        }
+
+        if (previousSnapshot.IsEnabled != nextSnapshot.IsEnabled)
+        {
+            OnPropertyChanged(nameof(IsStartModeSelectorEnabled));
+        }
     }
 
     private string? ResolvePreviewCwd()
@@ -613,6 +707,7 @@ public sealed partial class StartViewModel : ObservableObject
         if (previousSnapshot.IsExpanded != nextSnapshot.IsExpanded)
         {
             OnPropertyChanged(nameof(IsComposerExpanded));
+            RefreshStartModeState();
         }
 
         if (previousSnapshot.ShowHeroSuggestions != nextSnapshot.ShowHeroSuggestions)

@@ -159,6 +159,12 @@
   <data name="StartAgentSelector.AutomationProperties.Name" xml:space="preserve">
     <value>New session agent selector</value>
   </data>
+  <data name="StartModeSelector.PlaceholderText" xml:space="preserve">
+    <value>Choose mode</value>
+  </data>
+  <data name="StartModeSelector.AutomationProperties.Name" xml:space="preserve">
+    <value>New session mode selector</value>
+  </data>
   <data name="SessionNavCopySessionIdItem.Text" xml:space="preserve">
     <value>Copy ACP Session ID</value>
   </data>
