@@ -21,7 +21,7 @@ public sealed class ChatInteractionDialogFactoryTests
                 SessionId = "remote-1",
                 Options =
                 [
-                    new PermissionOption("opt-1", "Option 1", "allow")
+                    new PermissionOption("opt-1", "Option 1", "allow_once")
                 ]
             },
             (messageId, outcome, optionId) =>

@@ -19,7 +19,6 @@ using SalmonEgg.Infrastructure.Logging;
 using SalmonEgg.Infrastructure.Network;
 using SalmonEgg.Infrastructure.Serialization;
 using SalmonEgg.Infrastructure.Services;
-using SalmonEgg.Infrastructure.Services.Security;
 using SalmonEgg.Infrastructure.Storage;
 using SalmonEgg.Infrastructure.Transport;
 using SalmonEgg.Infrastructure.Client;
@@ -94,9 +93,6 @@ public static class DependencyInjection
 
         // Path Validator
         services.AddSingleton<IPathValidator, Infrastructure.Services.Security.PathValidator>();
-
-        // Permission Manager
-        services.AddSingleton<IPermissionManager, Infrastructure.Services.Security.PermissionManager>();
 
         // Error Logger
         services.AddSingleton<IErrorLogger, ErrorLogger>();

@@ -181,7 +181,7 @@ namespace SalmonEgg.Domain.Services
         /// 发送对之前权限请求的响应。
         /// </summary>
         /// <param name="messageId">原始请求的消息 ID</param>
-        /// <param name="outcome">结果（selected, cancelled, denied 等）</param>
+        /// <param name="outcome">结果（`selected` 或 `cancelled`）</param>
         /// <param name="optionId">选中的选项 ID（可选）</param>
         /// <returns>是否成功发送响应</returns>
         Task<bool> RespondToPermissionRequestAsync(object messageId, string outcome, string? optionId = null);

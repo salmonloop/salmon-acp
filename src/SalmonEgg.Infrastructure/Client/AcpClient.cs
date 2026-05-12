@@ -43,7 +43,6 @@ namespace SalmonEgg.Infrastructure.Client
         private readonly IMessageValidator _validator;
         private readonly ISessionManager _sessionManager;
         private readonly IPathValidator _pathValidator;
-        private readonly IPermissionManager _permissionManager;
         private readonly ITerminalSessionManager _terminalSessionManager;
         private readonly IErrorLogger _errorLogger;
 
@@ -145,7 +144,6 @@ namespace SalmonEgg.Infrastructure.Client
             _validator = validator ?? new MessageValidator();
             _sessionManager = sessionManager ?? new Services.SessionManager();
             _pathValidator = new Services.Security.PathValidator();
-            _permissionManager = new Services.Security.PermissionManager();
             _terminalSessionManager = new Services.TerminalSessionManager();
             _errorLogger = errorLogger ?? new Logging.ErrorLogger();
 
