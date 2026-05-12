@@ -177,11 +177,15 @@ public partial class ChatViewModelTests
                         ]
                     }));
 
+            await WaitForPendingSessionUpdatesAsync(ViewModel);
             await WaitForConditionAsync(() =>
             {
                 _syncContext.RunAll();
+                var actualNames = ViewModel.AvailableSlashCommands.Select(static command => command.Name).ToArray();
+                var expectedNames = commands.Select(static command => command.Name).ToArray();
                 return Task.FromResult(
-                    ViewModel.AvailableSlashCommands.Select(static command => command.Name).SequenceEqual(commands.Select(static command => command.Name)));
+                    actualNames.Length == expectedNames.Length
+                    && actualNames.SequenceEqual(expectedNames));
             });
         }
 

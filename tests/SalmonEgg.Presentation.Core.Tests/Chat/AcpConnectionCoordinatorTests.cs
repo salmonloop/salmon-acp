@@ -408,6 +408,14 @@ public sealed class AcpConnectionCoordinatorTests
 
         await coordinator.SetDisconnectedAsync("network down");
 
+        await WaitForConditionAsync(async () =>
+        {
+            var state = await connectionState;
+            return state is not null
+                && state.Phase == ConnectionPhase.Disconnected
+                && state.Generation == 4;
+        });
+
         var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
         Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
         Assert.Equal("network down", updated.Error);

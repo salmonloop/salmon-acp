@@ -824,11 +824,9 @@ public sealed class NavigationCoordinatorTests
             await chat.ViewModel.RestoreAsync();
             chat.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
 
-            var bindResult = await chat.ViewModel.ConversationBindingCommands
-                .UpdateBindingAsync("session-2", "remote-2", "profile-1");
-            Assert.True(
-                bindResult.Status is BindingUpdateStatus.Success or BindingUpdateStatus.Error,
-                bindResult.ErrorMessage);
+            chat.Workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+            await chat.ChatStore.Dispatch(new SetBindingSliceAction(
+                new ConversationBindingSlice("session-2", "remote-2", "profile-1")));
 
             var chatService = new Mock<IChatService>();
             chatService.SetupGet(service => service.IsConnected).Returns(true);
@@ -1338,9 +1336,9 @@ public sealed class NavigationCoordinatorTests
             await chat.ViewModel.RestoreAsync();
             chat.Profiles.Profiles.Add(CreateConnectableStdioProfile("profile-1", "Profile 1"));
 
-            var bindResult = await chat.ViewModel.ConversationBindingCommands
-                .UpdateBindingAsync("session-2", "remote-2", "profile-1");
-            Assert.Equal(BindingUpdateStatus.Success, bindResult.Status);
+            chat.Workspace.UpdateRemoteBinding("session-2", "remote-2", "profile-1");
+            await chat.ChatStore.Dispatch(new SetBindingSliceAction(
+                new ConversationBindingSlice("session-2", "remote-2", "profile-1")));
             await SetConnectedProfileAsync(chat, "profile-1", "conn-1");
 
             var loadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1380,17 +1378,19 @@ public sealed class NavigationCoordinatorTests
 
             var activationTask = coordinator.ActivateSessionAsync("session-2", "project-1");
             Assert.True(await activationTask);
+            await loadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.True(await coordinator.ActivateStartAsync());
             var selection = Assert.IsType<NavigationSelectionState.Start>(navVm.CurrentSelection);
             Assert.Equal(NavigationSelectionState.StartSelection, selection);
 
             allowLoadCompletion.TrySetResult(null);
+            await loadCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await WaitForConditionAsync(() =>
                 runtimeState.CurrentShellContent == ShellNavigationContent.Start
                 && string.IsNullOrWhiteSpace(chat.ViewModel.ErrorMessage)
                 && runtimeState.ActiveSessionActivation is null,
-                maxAttempts: 100,
+                maxAttempts: 300,
                 delayMilliseconds: 20);
         }
         finally

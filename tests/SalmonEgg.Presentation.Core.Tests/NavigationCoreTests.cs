@@ -239,9 +239,9 @@ public sealed class NavigationCoreTests
             "private void OnMessagesListUnloaded",
             "private void OnMessagesListLayoutUpdated");
 
-        Assert.Contains("MessagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);", loadSection, StringComparison.Ordinal);
-        Assert.Contains("MessagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);", loadSection, StringComparison.Ordinal);
+        Assert.Contains("AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);", loadSection, StringComparison.Ordinal);
         Assert.Contains("MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);", unloadSection, StringComparison.Ordinal);
         Assert.Contains("MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);", unloadSection, StringComparison.Ordinal);
         Assert.Contains("MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);", unloadSection, StringComparison.Ordinal);

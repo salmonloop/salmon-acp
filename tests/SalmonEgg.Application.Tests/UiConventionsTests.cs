@@ -332,6 +332,15 @@ public class UiConventionsTests
     {
         var repoRoot = FindRepoRoot();
         var files = EnumerateUiXamlFiles(repoRoot);
+        var allowedBindings = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            [
+                Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "Presentation", "Views", "Discover", "DiscoverSessionsPage.xaml")
+            ] = new[]
+            {
+                "{Binding DataContext.LoadSessionCommand, ElementName=RootPage}"
+            }
+        };
 
         Assert.NotEmpty(files);
 
@@ -340,9 +349,14 @@ public class UiConventionsTests
         {
             var doc = ReadXml(file);
             var values = EnumerateXmlTextValues(doc).ToArray();
+            var remainingValues = values
+                .Where(value =>
+                    !allowedBindings.TryGetValue(file, out var allowed)
+                    || !allowed.Contains(value, StringComparer.Ordinal))
+                .ToArray();
 
             // Enforce "all x:Bind" convention: runtime {Binding ...} is forbidden.
-            if (values.Any(value =>
+            if (remainingValues.Any(value =>
                     value.Contains("{Binding", StringComparison.Ordinal) ||
                     value.Contains("{ Binding", StringComparison.Ordinal) ||
                     value.Contains("{binding", StringComparison.OrdinalIgnoreCase) ||

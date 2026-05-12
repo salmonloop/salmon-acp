@@ -59,6 +59,7 @@ namespace SalmonEgg.Infrastructure.Client
         private bool _isInitialized;
         private AgentInfo? _agentInfo;
         private AgentCapabilities? _agentCapabilities;
+        private ClientCapabilities? _clientCapabilities;
         private long _nextMessageId;
         private long _lastReceivedUnixMs;
         private bool SupportsSessionList => _agentCapabilities?.SupportsSessionList == true;
@@ -192,14 +193,11 @@ namespace SalmonEgg.Infrastructure.Client
               }
 
                // 发送 initialize 请求
-               _errorLogger.LogError(new ErrorLogEntry("DEBUG", "[AcpClient] 开始创建 initialize 请求", ErrorSeverity.Info, nameof(InitializeAsync)));
                var request = new JsonRpcRequest(
                    Interlocked.Increment(ref _nextMessageId),
                    "initialize",
                    JsonSerializer.SerializeToElement(@params, _parser.Options));
-               _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient] initialize 请求已创建，id={request.Id}", ErrorSeverity.Info, nameof(InitializeAsync)));
                var response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
-               _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient] 收到 initialize 响应，id={response.Id}", ErrorSeverity.Info, nameof(InitializeAsync)));
 
             // 验证响应
             var validationResult = _validator.ValidateResponse(response);
@@ -244,6 +242,7 @@ namespace SalmonEgg.Infrastructure.Client
             // 存储 Agent 信息
             _agentInfo = initializeResponse.AgentInfo;
             _agentCapabilities = initializeResponse.AgentCapabilities;
+            _clientCapabilities = @params.ClientCapabilities;
             _isInitialized = true;
 
             // 启动消息接收循环
@@ -653,12 +652,30 @@ namespace SalmonEgg.Infrastructure.Client
                 return false;
             }
 
-            // Only respond once per inbound request id.
+            // Only respond once per inbound request id. Unknown or stale ids are not a
+            // protocol payload, so they should not fail ACP schema validation.
             var idStr = messageId.ToString() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(idStr)
                 || !TryTakePendingInboundRequest(idStr, out _))
             {
                 return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(outcome))
+            {
+                return false;
+            }
+
+            if (string.Equals(outcome, "selected", StringComparison.Ordinal))
+            {
+                if (string.IsNullOrWhiteSpace(optionId))
+                {
+                    throw new AcpException(JsonRpcErrorCode.InvalidParams, "Permission outcome 'selected' requires optionId.");
+                }
+            }
+            else if (!string.Equals(outcome, "cancelled", StringComparison.Ordinal))
+            {
+                throw new AcpException(JsonRpcErrorCode.InvalidParams, $"Unsupported permission outcome '{outcome}'.");
             }
 
             // ACP schema: result = { outcome: { outcome: "selected"|"cancelled", optionId? } }
@@ -749,7 +766,6 @@ namespace SalmonEgg.Infrastructure.Client
         private async Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken, TimeSpan? timeout = null)
         {
             var requestIdStr = request.Id?.ToString() ?? string.Empty;
-            _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 开始处理请求 id={requestIdStr}, method={request.Method}", ErrorSeverity.Info, nameof(SendRequestAsync)));
             var tcs = new TaskCompletionSource<JsonRpcResponse>();
             _pendingRequests[requestIdStr] = tcs;
 
@@ -763,18 +779,13 @@ namespace SalmonEgg.Infrastructure.Client
                 };
 
                 var json = _parser.SerializeMessage(request);
-                _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 请求已序列化，长度={json.Length}, json={json.Substring(0, Math.Min(200, json.Length))}...", ErrorSeverity.Info, nameof(SendRequestAsync)));
-               _errorLogger.LogError(new ErrorLogEntry("DEBUG", "[AcpClient.SendRequestAsync] 准备调用 transport.SendMessageAsync...", ErrorSeverity.Info, nameof(SendRequestAsync)));
-               var sendResult = await _transport.SendMessageAsync(json, cancellationToken).ConfigureAwait(false);
-               _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] transport.SendMessageAsync 返回: {sendResult}", ErrorSeverity.Info, nameof(SendRequestAsync)));
+               await _transport.SendMessageAsync(json, cancellationToken).ConfigureAwait(false);
 
                // 等待响应或超时
                using (var timeoutCts = new CancellationTokenSource(effectiveTimeout))
                using (var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
                {
-                   _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] Waiting for response (timeout={effectiveTimeout.TotalSeconds:0}s)...", ErrorSeverity.Info, nameof(SendRequestAsync)));
                    var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, waitCts.Token)).ConfigureAwait(false);
-                   _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.SendRequestAsync] 等待完成，完成的任务: {(completedTask == tcs.Task ? "tcs.Task" : "wait-cancelled")}", ErrorSeverity.Info, nameof(SendRequestAsync)));
                     if (completedTask == tcs.Task)
                     {
                         return await tcs.Task.ConfigureAwait(false);
@@ -832,27 +843,18 @@ namespace SalmonEgg.Infrastructure.Client
         private void OnMessageReceived(object? sender, MessageReceivedEventArgs e)
         {
             Interlocked.Exchange(ref _lastReceivedUnixMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.OnMessageReceived] 收到原始消息: {e.Message.Substring(0, Math.Min(200, e.Message.Length))}...", ErrorSeverity.Info, nameof(OnMessageReceived)));
             try
             {
                 var message = _parser.ParseMessage(e.Message);
-                _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.OnMessageReceived] 消息解析成功，类型: {message.GetType().Name}", ErrorSeverity.Info, nameof(OnMessageReceived)));
 
                 
                 if (message is JsonRpcResponse response)
                 {
                     var responseIdStr = response.Id?.ToString() ?? string.Empty;
-                    _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.OnMessageReceived] 收到响应，id={responseIdStr}, 是否有错误: {response.IsError}", ErrorSeverity.Info, nameof(OnMessageReceived)));
                     // 匹配 pending 请求
                     if (_pendingRequests.TryRemove(responseIdStr, out var tcs))
                     {
-                        _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.OnMessageReceived] 找到匹配的 pending 请求，设置结果...", ErrorSeverity.Info, nameof(OnMessageReceived)));
                         tcs.TrySetResult(response);
-                        _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.OnMessageReceived] TaskCompletionSource 已设置结果", ErrorSeverity.Info, nameof(OnMessageReceived)));
-                    }
-                    else
-                    {
-                        _errorLogger.LogError(new ErrorLogEntry("DEBUG", $"[AcpClient.OnMessageReceived] 未找到匹配的 pending 请求 id={responseIdStr}", ErrorSeverity.Warning, nameof(OnMessageReceived)));
                     }
                 }
 
@@ -908,6 +910,12 @@ namespace SalmonEgg.Infrastructure.Client
                     break;
                 case "fs/read_text_file":
                 case "fs/write_text_file":
+                    if (!SupportsAdvertisedFileSystemCapability(request.Method))
+                    {
+                        RejectUnsupportedClientRequest(request);
+                        break;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(requestIdStr))
                     {
                         TrackPendingInboundRequest(requestIdStr, request.Method, request.Id);
@@ -920,6 +928,12 @@ namespace SalmonEgg.Infrastructure.Client
                 case "terminal/wait_for_exit":
                 case "terminal/kill":
                 case "terminal/release":
+                    if (_clientCapabilities?.Terminal != true)
+                    {
+                        RejectUnsupportedClientRequest(request);
+                        break;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(requestIdStr))
                     {
                         TrackPendingInboundRequest(requestIdStr, request.Method, request.Id);
@@ -928,7 +942,12 @@ namespace SalmonEgg.Infrastructure.Client
                     _ = HandleTerminalRequestAsync(request);
                     break;
                 case ClientCapabilityMetadata.AskUserExtensionMethod:
-                case ClientCapabilityMetadata.LegacyAskUserExtensionMethod:
+                    if (!SupportsAdvertisedAskUserExtension(request.Method))
+                    {
+                        RejectUnsupportedClientRequest(request);
+                        break;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(requestIdStr))
                     {
                         TrackPendingInboundRequest(requestIdStr, request.Method, request.Id);
@@ -944,6 +963,25 @@ namespace SalmonEgg.Infrastructure.Client
                         JsonRpcError.CreateMethodNotFound(request.Method)));
                     break;
             }
+        }
+
+        private bool SupportsAdvertisedFileSystemCapability(string method)
+            => method switch
+            {
+                "fs/read_text_file" => _clientCapabilities?.Fs?.ReadTextFile == true,
+                "fs/write_text_file" => _clientCapabilities?.Fs?.WriteTextFile == true,
+                _ => false
+            };
+
+        private bool SupportsAdvertisedAskUserExtension(string method)
+            => _clientCapabilities?.SupportsExtension(method) == true;
+
+        private void RejectUnsupportedClientRequest(JsonRpcRequest request)
+        {
+            RemovePendingInboundTracking(request.Id?.ToString() ?? string.Empty);
+            _ = SendResponseAsync(new JsonRpcResponse(
+                request.Id,
+                JsonRpcError.CreateMethodNotFound(request.Method)));
         }
 
         private void ScheduleInboundRequestTimeout(object? messageId, TimeSpan timeout, string defaultKind)

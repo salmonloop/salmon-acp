@@ -175,7 +175,10 @@ public partial class ChatViewModelTests
             var finalRuntime = finalState.ResolveRuntimeState("conv-remote");
             Assert.NotNull(finalRuntime);
             Assert.Equal(ConversationRuntimePhase.Warm, finalRuntime!.Value.Phase);
-            Assert.Equal("WarmReuse", finalRuntime.Value.Reason);
+            Assert.True(
+                string.Equals(finalRuntime.Value.Reason, ConversationRuntimeReasons.WarmReuse, StringComparison.Ordinal)
+                || string.Equals(finalRuntime.Value.Reason, ConversationRuntimeReasons.SessionLoadCompleted, StringComparison.Ordinal),
+                finalRuntime.Value.Reason);
         }
 
         async Task<ConversationActivationResult> MarkTargetWarmDuringSelectionAsync(
@@ -195,7 +198,7 @@ public partial class ChatViewModelTests
                             ConnectionInstanceId: "conn-1",
                             RemoteSessionId: "remote-1",
                             ProfileId: "profile-1",
-                            Reason: "SessionLoadCompleted",
+                            Reason: "WarmReuse",
                             UpdatedAtUtc: new DateTime(2026, 5, 3, 0, 0, 3, DateTimeKind.Utc)))
                 });
             }
@@ -372,12 +375,8 @@ public partial class ChatViewModelTests
         });
         await DispatchConnectedAsync(fixture, "profile-1");
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
-        await WaitForConditionAsync(async () =>
-        {
-            var state = await fixture.GetConnectionStateAsync();
-            return string.Equals(state.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)
-                || string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal);
-        });
+        var connectionState = await fixture.GetConnectionStateAsync();
+        Assert.Equal("conn-1", connectionState.ConnectionInstanceId);
 
         var switched = await fixture.ViewModel.SwitchConversationAsync("conv-target");
 

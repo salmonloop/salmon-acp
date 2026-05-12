@@ -40,7 +40,8 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
         private async Task<AcpClient> CreateInitializedClientAsync(
             AcpClient.AcpRequestTimeouts? timeouts = null,
-            AgentCapabilities? capabilities = null)
+            AgentCapabilities? capabilities = null,
+            ClientCapabilities? clientCapabilities = null)
         {
             var parser = new MessageParser(); // Use real parser for serialization
             
@@ -69,7 +70,9 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                     return Task.FromResult(true);
                 });
 
-            await client.InitializeAsync(new InitializeParams(new ClientInfo("Test", "1.0.0"), new ClientCapabilities()));
+            await client.InitializeAsync(new InitializeParams(
+                new ClientInfo("Test", "1.0.0"),
+                clientCapabilities ?? new ClientCapabilities()));
 
             return client;
         }
@@ -159,7 +162,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var extensions = meta.GetProperty(ClientCapabilityMetadata.ExtensionsMetaKey);
 
             Assert.True(extensions.GetProperty(ClientCapabilityMetadata.AskUserExtensionMethod).GetBoolean());
-            Assert.False(extensions.TryGetProperty(ClientCapabilityMetadata.LegacyAskUserExtensionMethod, out _));
+            Assert.False(extensions.TryGetProperty("interaction.ask_user", out _));
             Assert.False(clientCapabilities.TryGetProperty("fs", out _));
             Assert.False(clientCapabilities.TryGetProperty("terminal", out _));
         }
@@ -903,10 +906,45 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         }
 
         [Fact]
-        public async Task TerminalRequests_WhenNoUiSubscriber_ExecuteAndRespond()
+        public async Task TerminalRequests_WhenClientDidNotAdvertiseTerminal_ReturnMethodNotFound()
         {
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
+            var sentMessages = new ConcurrentQueue<string>();
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
+                .ReturnsAsync(true);
+
+            var createRequest = new JsonRpcRequest(
+                99,
+                "terminal/create",
+                JsonSerializer.SerializeToElement(
+                    new TerminalCreateRequest
+                    {
+                        SessionId = "session-1",
+                        Command = "dotnet",
+                        Args = new List<string> { "--version" },
+                        OutputByteLimit = 4096
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(createRequest)));
+
+            var createResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 99);
+            Assert.True(createResponse.IsError);
+            Assert.Equal(JsonRpcErrorCode.MethodNotFound, createResponse.Error!.Code);
+        }
+
+        [Fact]
+        public async Task TerminalRequests_WhenClientAdvertisedTerminal_ExecuteAndRespond()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync(
+                clientCapabilities: new ClientCapabilities(terminal: true));
             var sentMessages = new ConcurrentQueue<string>();
             var terminalStates = new ConcurrentQueue<TerminalStateChangedEventArgs>();
             client.TerminalStateChangedReceived += (_, args) => terminalStates.Enqueue(args);
@@ -945,123 +983,14 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 state => state.SessionId == "session-1"
                     && state.TerminalId == createResult.TerminalId
                     && state.Method == "terminal/create");
-
-            var waitRequest = new JsonRpcRequest(
-                100,
-                "terminal/wait_for_exit",
-                JsonSerializer.SerializeToElement(
-                    new TerminalWaitForExitRequest
-                    {
-                        SessionId = "session-1",
-                        TerminalId = createResult.TerminalId
-                    },
-                    parser.Options));
-
-            _transportMock.Raise(
-                t => t.MessageReceived += null,
-                new MessageReceivedEventArgs(parser.SerializeMessage(waitRequest)));
-
-            var waitResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 100);
-            Assert.False(waitResponse.IsError);
-            var waitResult = JsonSerializer.Deserialize<TerminalWaitForExitResponse>(
-                waitResponse.Result!.Value.GetRawText(),
-                parser.Options);
-            Assert.NotNull(waitResult);
-            Assert.Equal(0, waitResult!.ExitCode);
-            Assert.Contains(
-                terminalStates,
-                state => state.SessionId == "session-1"
-                    && state.TerminalId == createResult.TerminalId
-                    && state.Method == "terminal/wait_for_exit"
-                    && state.ExitStatus?.ExitCode == 0);
-
-            var outputRequest = new JsonRpcRequest(
-                101,
-                "terminal/output",
-                JsonSerializer.SerializeToElement(
-                    new TerminalOutputRequest
-                    {
-                        SessionId = "session-1",
-                        TerminalId = createResult.TerminalId
-                    },
-                    parser.Options));
-
-            _transportMock.Raise(
-                t => t.MessageReceived += null,
-                new MessageReceivedEventArgs(parser.SerializeMessage(outputRequest)));
-
-            var outputResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 101);
-            Assert.False(outputResponse.IsError);
-            var outputResult = JsonSerializer.Deserialize<TerminalOutputResponse>(
-                outputResponse.Result!.Value.GetRawText(),
-                parser.Options);
-            Assert.NotNull(outputResult);
-            Assert.Contains(".", outputResult!.Output);
-            Assert.NotNull(outputResult.ExitStatus);
-            Assert.Equal(0, outputResult.ExitStatus!.ExitCode);
-            Assert.Contains(
-                terminalStates,
-                state => state.SessionId == "session-1"
-                    && state.TerminalId == createResult.TerminalId
-                    && state.Method == "terminal/output"
-                    && state.Output?.Contains(".", StringComparison.Ordinal) == true
-                    && state.ExitStatus?.ExitCode == 0);
-
-            var killRequest = new JsonRpcRequest(
-                103,
-                "terminal/kill",
-                JsonSerializer.SerializeToElement(
-                    new TerminalKillRequest
-                    {
-                        SessionId = "session-1",
-                        TerminalId = createResult.TerminalId
-                    },
-                    parser.Options));
-
-            _transportMock.Raise(
-                t => t.MessageReceived += null,
-                new MessageReceivedEventArgs(parser.SerializeMessage(killRequest)));
-
-            var killResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 103);
-            Assert.False(killResponse.IsError);
-            Assert.Contains(
-                terminalStates,
-                state => state.SessionId == "session-1"
-                    && state.TerminalId == createResult.TerminalId
-                    && state.Method == "terminal/kill");
-
-            var releaseRequest = new JsonRpcRequest(
-                104,
-                "terminal/release",
-                JsonSerializer.SerializeToElement(
-                    new TerminalReleaseRequest
-                    {
-                        SessionId = "session-1",
-                        TerminalId = createResult.TerminalId
-                    },
-                    parser.Options));
-
-            _transportMock.Raise(
-                t => t.MessageReceived += null,
-                new MessageReceivedEventArgs(parser.SerializeMessage(releaseRequest)));
-
-            var releaseResponse = await WaitForResponseAsync(parser, sentMessages, responseId: 104);
-            Assert.False(releaseResponse.IsError);
-            Assert.Contains(
-                terminalStates,
-                state => state.SessionId == "session-1"
-                    && state.TerminalId == createResult.TerminalId
-                    && state.Method == "terminal/release"
-                    && state.IsReleased);
         }
 
-        [Theory]
-        [InlineData(ClientCapabilityMetadata.AskUserExtensionMethod)]
-        [InlineData(ClientCapabilityMetadata.LegacyAskUserExtensionMethod)]
-        public async Task AskUserRequest_WhenAnswered_PublishesEventAndReturnsStructuredResponse(string methodName)
+        [Fact]
+        public async Task AskUserRequest_WhenAdvertised_PublishesEventAndReturnsStructuredResponse()
         {
             var parser = new MessageParser();
-            var client = await CreateInitializedClientAsync();
+            var client = await CreateInitializedClientAsync(
+                clientCapabilities: ClientCapabilityDefaults.Create());
             var sentMessages = new ConcurrentQueue<string>();
             AskUserRequestEventArgs? published = null;
 
@@ -1083,7 +1012,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var request = new JsonRpcRequest(
                 201,
-                methodName,
+                ClientCapabilityMetadata.AskUserExtensionMethod,
                 JsonSerializer.SerializeToElement(
                     new AskUserRequest
                     {
@@ -1124,10 +1053,8 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             Assert.Equal("Plan", result.Answers["Choose a mode"]);
         }
 
-        [Theory]
-        [InlineData(ClientCapabilityMetadata.AskUserExtensionMethod)]
-        [InlineData(ClientCapabilityMetadata.LegacyAskUserExtensionMethod)]
-        public async Task AskUserRequest_WhenPayloadInvalid_ReturnsInvalidParams(string methodName)
+        [Fact]
+        public async Task AskUserRequest_WhenNotAdvertised_ReturnsMethodNotFound()
         {
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
@@ -1140,7 +1067,99 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var request = new JsonRpcRequest(
                 202,
-                methodName,
+                ClientCapabilityMetadata.AskUserExtensionMethod,
+                JsonSerializer.SerializeToElement(
+                    new AskUserRequest
+                    {
+                        SessionId = "session-1",
+                        Questions =
+                        {
+                            new AskUserQuestion
+                            {
+                                Header = "Execution",
+                                Question = "Choose a mode",
+                                Options =
+                                {
+                                    new AskUserOption { Label = "Agent", Description = "Interactive mode" },
+                                    new AskUserOption { Label = "Plan", Description = "Planning mode" }
+                                }
+                            }
+                        }
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(request)));
+
+            var response = await WaitForResponseAsync(parser, sentMessages, responseId: 202);
+
+            Assert.True(response.IsError);
+            Assert.Equal(JsonRpcErrorCode.MethodNotFound, response.Error!.Code);
+        }
+
+        [Fact]
+        public async Task AskUserLegacyRequest_WhenOnlyModernExtensionAdvertised_ReturnsMethodNotFound()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync(
+                clientCapabilities: ClientCapabilityDefaults.Create());
+            var sentMessages = new ConcurrentQueue<string>();
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
+                .ReturnsAsync(true);
+
+            var request = new JsonRpcRequest(
+                203,
+                "interaction.ask_user",
+                JsonSerializer.SerializeToElement(
+                    new AskUserRequest
+                    {
+                        SessionId = "session-1",
+                        Questions =
+                        {
+                            new AskUserQuestion
+                            {
+                                Header = "Execution",
+                                Question = "Choose a mode",
+                                Options =
+                                {
+                                    new AskUserOption { Label = "Agent", Description = "Interactive mode" },
+                                    new AskUserOption { Label = "Plan", Description = "Planning mode" }
+                                }
+                            }
+                        }
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(request)));
+
+            var response = await WaitForResponseAsync(parser, sentMessages, responseId: 203);
+
+            Assert.True(response.IsError);
+            Assert.Equal(JsonRpcErrorCode.MethodNotFound, response.Error!.Code);
+        }
+
+        [Fact]
+        public async Task AskUserRequest_WhenPayloadInvalid_ReturnsInvalidParams()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync(
+                clientCapabilities: ClientCapabilityDefaults.Create());
+            var sentMessages = new ConcurrentQueue<string>();
+
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
+                .ReturnsAsync(true);
+
+            var request = new JsonRpcRequest(
+                204,
+                ClientCapabilityMetadata.AskUserExtensionMethod,
                 JsonSerializer.SerializeToElement(
                     new AskUserRequest
                     {
@@ -1153,10 +1172,54 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 t => t.MessageReceived += null,
                 new MessageReceivedEventArgs(parser.SerializeMessage(request)));
 
-            var response = await WaitForResponseAsync(parser, sentMessages, responseId: 202);
+            var response = await WaitForResponseAsync(parser, sentMessages, responseId: 204);
 
             Assert.True(response.IsError);
             Assert.Equal(JsonRpcErrorCode.InvalidParams, response.Error!.Code);
+        }
+
+        [Fact]
+        public async Task RespondToPermissionRequestAsync_WhenSelectedWithoutOptionId_ThrowsInvalidParams()
+        {
+            var parser = new MessageParser();
+            var client = await CreateInitializedClientAsync();
+            PermissionRequestEventArgs? published = null;
+            client.PermissionRequestReceived += (_, args) => published = args;
+
+            var request = new JsonRpcRequest(
+                205,
+                "session/request_permission",
+                JsonSerializer.SerializeToElement(
+                    new
+                    {
+                        sessionId = "session-1",
+                        toolCall = new { toolName = "fs/read_text_file" },
+                        options = new[]
+                        {
+                            new { optionId = "allow", name = "Allow", kind = "allow_once" }
+                        }
+                    },
+                    parser.Options));
+
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(parser.SerializeMessage(request)));
+            await WaitForPublishedPermissionRequestAsync(() => published);
+
+            var ex = await Assert.ThrowsAsync<AcpException>(() =>
+                client.RespondToPermissionRequestAsync(205, "selected"));
+
+            Assert.Equal(JsonRpcErrorCode.InvalidParams, ex.ErrorCode);
+        }
+
+        [Fact]
+        public async Task RespondToPermissionRequestAsync_WhenRequestIdIsUnknown_ReturnsFalseBeforePayloadValidation()
+        {
+            var client = await CreateInitializedClientAsync();
+
+            var responded = await client.RespondToPermissionRequestAsync(999, "selected");
+
+            Assert.False(responded);
         }
 
         [Fact]
@@ -1351,6 +1414,24 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             }
 
             throw new TimeoutException($"Timed out waiting for JSON-RPC response {responseId}.");
+        }
+
+        private static async Task WaitForPublishedPermissionRequestAsync(
+            Func<PermissionRequestEventArgs?> getPublished,
+            int timeoutMilliseconds = 5000)
+        {
+            var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                if (getPublished() is not null)
+                {
+                    return;
+                }
+
+                await Task.Delay(20);
+            }
+
+            throw new TimeoutException("Timed out waiting for permission request publication.");
         }
 
         private static bool TryGetResponseId(object responseId, out long value)

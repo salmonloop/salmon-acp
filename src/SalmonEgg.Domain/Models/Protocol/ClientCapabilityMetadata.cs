@@ -10,7 +10,6 @@ namespace SalmonEgg.Domain.Models.Protocol
     {
         public const string ExtensionsMetaKey = "salmonegg/extensions";
         public const string AskUserExtensionMethod = "_interaction.ask_user";
-        public const string LegacyAskUserExtensionMethod = "interaction.ask_user";
 
         /// <summary>
         /// Creates the default extension metadata advertised by SalmonEgg.
