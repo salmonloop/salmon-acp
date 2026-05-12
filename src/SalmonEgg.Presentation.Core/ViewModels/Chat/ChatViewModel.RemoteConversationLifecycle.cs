@@ -308,10 +308,10 @@ public partial class ChatViewModel
             var knownTranscriptGrowthGraceDeadlineUtc = DateTime.UtcNow + RemoteReplayKnownTranscriptGrowthGracePeriod;
             var replayBaseline = GetSessionUpdateObservationCount(binding.RemoteSessionId);
             var transcriptProjectionBaseline = GetTranscriptProjectionObservationCount(binding.RemoteSessionId);
-            var requiresTranscriptGrowthObservation = recoveryMode == AcpSessionRecoveryMode.Load && adapter != null;
+            var canObserveReplayProjection = recoveryMode == AcpSessionRecoveryMode.Load && adapter != null;
             var hasCachedTranscript = transcriptBaselineCount > 0;
             var shouldAwaitReplayProjection =
-                requiresTranscriptGrowthObservation &&
+                canObserveReplayProjection &&
                 _hydrationCompletionMode == AcpHydrationCompletionMode.StrictReplay &&
                 !hasCachedTranscript;
             Logger.LogInformation(
@@ -327,7 +327,7 @@ public partial class ChatViewModel
                     IsRemoteHydrationPending = true;
                     _pendingHistoryOverlayDismissConversationId = null;
                     _remoteHydrationSessionUpdateBaselineCounts[conversationId] = replayBaseline;
-                    if (requiresTranscriptGrowthObservation)
+                    if (shouldAwaitReplayProjection)
                     {
                         _remoteHydrationKnownTranscriptBaselineCounts[conversationId] = transcriptBaselineCount;
                         _remoteHydrationKnownTranscriptGrowthGraceDeadlineUtc[conversationId] =

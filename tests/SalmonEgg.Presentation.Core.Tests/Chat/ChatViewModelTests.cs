@@ -7423,6 +7423,50 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task HydrateActiveConversationAsync_WhenCompletionModeIsLoadResponseAndReplayIsEmpty_DismissesOverlayAfterLoadResponse()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(fixture.Preferences.IsLoaded);
+        });
+        fixture.Preferences.AcpHydrationCompletionMode = "LoadResponse";
+
+        var innerChatService = new ReplayLoadChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true),
+            OnLoadSessionAsync = (_, _) => Task.FromResult(SessionLoadResponse.Completed)
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(innerChatService, eventAdapter);
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(adapter));
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+        await DispatchConnectedAsync(fixture, "profile-1");
+        syncContext.RunAll();
+
+        var hydrationTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await syncContext.RunUntilCompletedAsync(hydrationTask);
+        syncContext.RunAll();
+
+        Assert.True(await hydrationTask, fixture.ViewModel.ErrorMessage);
+        Assert.False(fixture.ViewModel.IsRemoteHydrationPending);
+        Assert.False(fixture.ViewModel.IsOverlayVisible);
+        Assert.Equal(string.Empty, fixture.ViewModel.OverlayStatusText);
+    }
+
+    [Fact]
     public async Task HydrateActiveConversationAsync_WhenReplayStartsWithPlanUpdate_ProjectsReplayFacts()
     {
         var syncContext = new QueueingSynchronizationContext();
