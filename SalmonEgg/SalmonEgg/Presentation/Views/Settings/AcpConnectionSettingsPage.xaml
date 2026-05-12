@@ -269,53 +269,6 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Spacing="16">
-                        <TextBlock x:Uid="Acp_ConceptsTitle"
-                                   Text="ACP / Agent 标准概念"
-                                   FontSize="20"
-                                   FontWeight="SemiBold"/>
-                        <TextBlock x:Uid="Acp_ConceptsHint"
-                                   Text="这里展示的是已连接 ACP Agent 上报的信息，或 ACP 会话语义中的只读概念。"
-                                   Opacity="0.75"
-                                   TextWrapping="Wrap"/>
-
-                        <!-- Diagnostics -->
-                        <StackPanel Spacing="12">
-                            <TextBlock x:Uid="Acp_DiagnosticsTitle"
-                                       Text="当前 ACP Agent 信息"
-                                       FontSize="18"
-                                       FontWeight="SemiBold"
-                                       Foreground="{ThemeResource AccentBrush}"/>
-
-                            <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="16">
-                                <StackPanel Spacing="10">
-                                    <TextBlock x:Uid="Acp_DiagnosticsSubtitle"
-                                               Text="来自当前所选配置连接的只读信息。"
-                                               FontWeight="Medium"/>
-                                    <Grid ColumnDefinitions="Auto,*"
-                                          RowDefinitions="Auto,Auto,Auto,Auto"
-                                          ColumnSpacing="12"
-                                          RowSpacing="6">
-                                        <TextBlock Grid.Row="0" Grid.Column="0" x:Uid="Acp_DiagnosticsAgentLabel" Text="Agent" Opacity="0.7"/>
-                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileAgentName, Mode=OneWay}"/>
-
-                                        <TextBlock Grid.Row="1" Grid.Column="0" x:Uid="Acp_DiagnosticsVersionLabel" Text="版本" Opacity="0.7"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileAgentVersion, Mode=OneWay}" Opacity="0.85"/>
-
-                                        <TextBlock Grid.Row="2" Grid.Column="0" x:Uid="Acp_DiagnosticsStatusLabel" Text="状态" Opacity="0.7"/>
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileStatus, Mode=OneWay}" Opacity="0.85"/>
-
-                                        <TextBlock Grid.Row="3" Grid.Column="0" x:Uid="Acp_DiagnosticsEndpointLabel" Text="Endpoint" Opacity="0.7"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.SelectedProfileEndpoint, Mode=OneWay}" Opacity="0.85"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </StackPanel>
                 </StackPanel>
             </controls:ResponsiveSettingsHost.Child>
         </controls:ResponsiveSettingsHost>

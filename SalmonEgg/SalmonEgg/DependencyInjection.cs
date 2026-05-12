@@ -475,8 +475,6 @@ public static class DependencyInjection
             new AcpConnectionSettingsViewModel(
                 sp.GetRequiredService<ISettingsChatConnection>(),
                 sp.GetRequiredService<AcpProfilesViewModel>(),
-                sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
-                sp.GetRequiredService<IAcpConnectionSessionEvents>(),
                 sp.GetRequiredService<AppPreferencesViewModel>(),
                 sp.GetRequiredService<ILogger<AcpConnectionSettingsViewModel>>(),
                 sp.GetRequiredService<IUiDispatcher>()));

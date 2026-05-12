@@ -5,16 +5,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Moq;
-using SalmonEgg.Application.Services.Chat;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
-using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
-using SalmonEgg.Presentation.Core.Services;
-using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
 
@@ -41,7 +39,6 @@ public sealed class AcpConnectionSettingsViewModelTests
             logger.Object);
 
         Assert.IsAssignableFrom<ISettingsChatConnection>(viewModel.Chat);
-        Assert.Equal("Adapter Agent", viewModel.AgentDisplayName);
 
         var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile Alpha" };
         await viewModel.ConnectToProfileAsync(profile);
@@ -69,54 +66,6 @@ public sealed class AcpConnectionSettingsViewModelTests
     }
 
     [Fact]
-    public async Task ConnectionStatusText_ReflectsChatConnectionState()
-    {
-        // Arrange
-        var preferences = await CreatePreferencesAsync();
-        var profiles = CreateProfiles(preferences);
-        var chat = new TestSettingsChatConnection();
-        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, logger.Object);
-
-        // Act
-        chat.SetState(isConnecting: true);
-        var connecting = viewModel.ConnectionStatusText;
-        chat.SetState(isConnecting: false, isConnected: true);
-        var connected = viewModel.ConnectionStatusText;
-        chat.SetState(isConnected: false, connectionErrorMessage: "boom", hasConnectionError: true);
-        var failed = viewModel.ConnectionStatusText;
-
-        // Assert
-        Assert.Equal("正在连接…", connecting);
-        Assert.Equal("已连接", connected);
-        Assert.Equal("连接失败", failed);
-    }
-
-    [Fact]
-    public async Task CurrentEndpointDisplay_UpdatesWhenTransportConfigChanges()
-    {
-        // Arrange
-        var preferences = await CreatePreferencesAsync();
-        var profiles = CreateProfiles(preferences);
-        var chat = new TestSettingsChatConnection();
-        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, logger.Object);
-
-        // Act
-        chat.TransportConfig.StdioCommand = "agent";
-        chat.TransportConfig.StdioArgs = "--mode run";
-        var stdioEndpoint = viewModel.CurrentEndpointDisplay;
-
-        chat.TransportConfig.SelectedTransportType = TransportType.WebSocket;
-        chat.TransportConfig.RemoteUrl = "wss://example.test/socket";
-        var remoteEndpoint = viewModel.CurrentEndpointDisplay;
-
-        // Assert
-        Assert.Equal("agent --mode run", stdioEndpoint);
-        Assert.Equal("wss://example.test/socket", remoteEndpoint);
-    }
-
-    [Fact]
     public async Task TransportOptions_Should_PresentStdioAsSubprocessTransport()
     {
         var preferences = await CreatePreferencesAsync();
@@ -127,71 +76,6 @@ public sealed class AcpConnectionSettingsViewModelTests
         using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, logger.Object);
 
         Assert.Equal("Stdio（子进程）", viewModel.TransportOptions[0].Name);
-    }
-
-    [Fact]
-    public async Task AgentDisplayName_PrefersSelectedProfileNameAndFallsBackToAgentName()
-    {
-        // Arrange
-        var preferences = await CreatePreferencesAsync();
-        var profiles = CreateProfiles(preferences);
-        profiles.Profiles.Add(new ServerConfiguration { Id = "profile-1", Name = "Profile Alpha" });
-        var chat = new TestSettingsChatConnection { AgentName = "Direct Agent" };
-        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, logger.Object);
-
-        // Act
-        preferences.LastSelectedServerId = "profile-1";
-        var selectedProfileName = viewModel.AgentDisplayName;
-        preferences.LastSelectedServerId = null;
-        chat.SetAgentName("Fallback Agent");
-        var fallbackAgentName = viewModel.AgentDisplayName;
-
-        // Assert
-        Assert.Equal("Profile Alpha", selectedProfileName);
-        Assert.Equal("Fallback Agent", fallbackAgentName);
-    }
-
-    [Fact]
-    public async Task SelectedProfileDiagnostics_UsesAgentTitleWhenAvailable()
-    {
-        var preferences = await CreatePreferencesAsync();
-        var profiles = CreateProfiles(preferences);
-        var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile Alpha" };
-        profiles.Profiles.Add(profile);
-        profiles.SelectedProfile = profile;
-        var chat = new TestSettingsChatConnection();
-        var registry = new TestSessionRegistry();
-        var dispatcher = new QueueingUiDispatcher();
-        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        var itemLogger = new Mock<ILogger<AgentProfileItemViewModel>>();
-
-        profiles.SelectedProfileItem = new AgentProfileItemViewModel(
-            profile,
-            registry,
-            registry,
-            chat,
-            itemLogger.Object,
-            dispatcher);
-
-        using var viewModel = new AcpConnectionSettingsViewModel(
-            chat,
-            profiles,
-            registry,
-            registry,
-            preferences,
-            logger.Object,
-            dispatcher);
-
-        registry.ConnectedSession = CreateSessionSnapshot("profile-1", "@zed-industries/claude-agent-acp", "0.20.2", "Claude Agent");
-        registry.IsConnected = true;
-        registry.RaiseProfileConnectionChanged("profile-1", true);
-
-        dispatcher.RunAll();
-
-        Assert.Equal("Connected", viewModel.SelectedProfileStatus);
-        Assert.Equal("Claude Agent", viewModel.SelectedProfileAgentName);
-        Assert.Equal("0.20.2", viewModel.SelectedProfileAgentVersion);
     }
 
     [Fact]
@@ -231,14 +115,14 @@ public sealed class AcpConnectionSettingsViewModelTests
     }
 
     [Fact]
-    public async Task HandleConnectionToggleAsync_ConnectsWhenRequestedAndCurrentlyDisconnected()
+    public async Task HandleConnectionToggleAsync_ConnectsSelectedProfileWhenRequested()
     {
         var preferences = await CreatePreferencesAsync();
         var profiles = CreateProfiles(preferences);
         var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile 1" };
         profiles.Profiles.Add(profile);
         profiles.SelectedProfile = profile;
-        var state = new TestConnectionState { IsConnected = false };
+        var state = new TestConnectionState();
         var commands = new TestConnectionCommands();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
@@ -257,14 +141,14 @@ public sealed class AcpConnectionSettingsViewModelTests
     }
 
     [Fact]
-    public async Task HandleConnectionToggleAsync_DisconnectsWhenRequestedAndCurrentlyConnected()
+    public async Task HandleConnectionToggleAsync_DisconnectsSelectedProfileWhenRequested()
     {
         var preferences = await CreatePreferencesAsync();
         var profiles = CreateProfiles(preferences);
         var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile 1" };
         profiles.Profiles.Add(profile);
         profiles.SelectedProfile = profile;
-        var state = new TestConnectionState { IsConnected = true };
+        var state = new TestConnectionState();
         var commands = new TestConnectionCommands();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
@@ -284,34 +168,11 @@ public sealed class AcpConnectionSettingsViewModelTests
     }
 
     [Fact]
-    public async Task HandleConnectionToggleAsync_ReentrantState_DoesNothing()
-    {
-        var preferences = await CreatePreferencesAsync();
-        var profiles = CreateProfiles(preferences);
-        var state = new TestConnectionState { IsConnecting = true };
-        var commands = new TestConnectionCommands();
-        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-
-        using var viewModel = new AcpConnectionSettingsViewModel(
-            state,
-            commands,
-            new TestTransportConfiguration(),
-            profiles,
-            preferences,
-            logger.Object);
-
-        await viewModel.HandleConnectionToggleAsync(true);
-
-        Assert.Empty(commands.ConnectedProfiles);
-        Assert.Equal(0, commands.DisconnectCallCount);
-    }
-
-    [Fact]
     public async Task HandleConnectionToggleAsync_ConnectRequestedWithoutSelectedProfile_DoesNothing()
     {
         var preferences = await CreatePreferencesAsync();
         var profiles = CreateProfiles(preferences);
-        var state = new TestConnectionState { IsConnected = false };
+        var state = new TestConnectionState();
         var commands = new TestConnectionCommands();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
@@ -326,6 +187,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         await viewModel.HandleConnectionToggleAsync(true);
 
         Assert.Empty(commands.ConnectedProfiles);
+        Assert.Empty(commands.PoolConnectedProfiles);
         Assert.Equal(0, commands.DisconnectCallCount);
     }
 
@@ -425,53 +287,6 @@ public sealed class AcpConnectionSettingsViewModelTests
         Assert.Empty(preferences.ProjectPathMappings);
     }
 
-    [Fact]
-    public async Task ProfileConnectionChanged_WhenRaisedOffUiThread_RefreshesDiagnosticsViaDispatcher()
-    {
-        var preferences = await CreatePreferencesAsync();
-        var profiles = CreateProfiles(preferences);
-        var profile = new ServerConfiguration { Id = "profile-1", Name = "Profile 1" };
-        profiles.Profiles.Add(profile);
-        profiles.SelectedProfile = profile;
-
-        var chat = new TestSettingsChatConnection();
-        var registry = new TestSessionRegistry();
-        var dispatcher = new QueueingUiDispatcher();
-        var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        var itemLogger = new Mock<ILogger<AgentProfileItemViewModel>>();
-
-        profiles.SelectedProfileItem = new AgentProfileItemViewModel(
-            profile,
-            registry,
-            registry,
-            chat,
-            itemLogger.Object,
-            dispatcher);
-
-        using var viewModel = new AcpConnectionSettingsViewModel(
-            chat,
-            profiles,
-            registry,
-            registry,
-            preferences,
-            logger.Object,
-            dispatcher);
-
-        Assert.Equal("Disconnected", viewModel.SelectedProfileStatus);
-
-        registry.ConnectedSession = CreateSessionSnapshot("profile-1", "OpenCode", "1.3.15");
-        registry.IsConnected = true;
-        registry.RaiseProfileConnectionChanged("profile-1", true);
-
-        Assert.Equal("Disconnected", viewModel.SelectedProfileStatus);
-
-        dispatcher.RunAll();
-
-        Assert.Equal("Connected", viewModel.SelectedProfileStatus);
-        Assert.Equal("OpenCode", viewModel.SelectedProfileAgentName);
-        Assert.Equal("1.3.15", viewModel.SelectedProfileAgentVersion);
-    }
-
     private static async Task<AppPreferencesViewModel> CreatePreferencesAsync()
     {
         var appSettingsService = new Mock<IAppSettingsService>();
@@ -507,54 +322,27 @@ public sealed class AcpConnectionSettingsViewModelTests
 
     private sealed class TestSettingsChatConnection : ISettingsChatConnection
     {
-        private string? _agentName;
-        private bool _isConnecting;
-        private bool _isInitializing;
-        private bool _isConnected;
-        private string? _connectionErrorMessage;
-        private bool _hasConnectionError;
-
-        public event PropertyChangedEventHandler? PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged
+        {
+            add { }
+            remove { }
+        }
 
         public ISettingsAcpTransportConfiguration TransportConfig { get; } = new TestTransportConfiguration();
 
-        public string? AgentName
-        {
-            get => _agentName;
-            set => SetField(ref _agentName, value, nameof(AgentName));
-        }
+        public string? AgentName { get; set; }
 
         public string? AgentVersion { get; set; }
 
-        public bool IsConnecting
-        {
-            get => _isConnecting;
-            private set => SetField(ref _isConnecting, value, nameof(IsConnecting));
-        }
+        public bool IsConnecting { get; set; }
 
-        public bool IsInitializing
-        {
-            get => _isInitializing;
-            private set => SetField(ref _isInitializing, value, nameof(IsInitializing));
-        }
+        public bool IsInitializing { get; set; }
 
-        public bool IsConnected
-        {
-            get => _isConnected;
-            private set => SetField(ref _isConnected, value, nameof(IsConnected));
-        }
+        public bool IsConnected { get; set; }
 
-        public string? ConnectionErrorMessage
-        {
-            get => _connectionErrorMessage;
-            private set => SetField(ref _connectionErrorMessage, value, nameof(ConnectionErrorMessage));
-        }
+        public string? ConnectionErrorMessage { get; set; }
 
-        public bool HasConnectionError
-        {
-            get => _hasConnectionError;
-            private set => SetField(ref _hasConnectionError, value, nameof(HasConnectionError));
-        }
+        public bool HasConnectionError { get; set; }
 
         public IAsyncRelayCommand DisconnectCommand { get; } = new AsyncRelayCommand(() => Task.CompletedTask);
 
@@ -579,36 +367,6 @@ public sealed class AcpConnectionSettingsViewModelTests
         {
             PoolDisconnectedProfileIds.Add(profileId);
             return Task.CompletedTask;
-        }
-
-        public void SetState(
-            bool isConnecting = false,
-            bool isInitializing = false,
-            bool isConnected = false,
-            string? connectionErrorMessage = null,
-            bool hasConnectionError = false)
-        {
-            IsConnecting = isConnecting;
-            IsInitializing = isInitializing;
-            IsConnected = isConnected;
-            ConnectionErrorMessage = connectionErrorMessage;
-            HasConnectionError = hasConnectionError;
-        }
-
-        public void SetAgentName(string? agentName)
-        {
-            AgentName = agentName;
-        }
-
-        private void SetField<T>(ref T field, T value, string propertyName)
-        {
-            if (EqualityComparer<T>.Default.Equals(field, value))
-            {
-                return;
-            }
-
-            field = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 
@@ -719,66 +477,4 @@ public sealed class AcpConnectionSettingsViewModelTests
         }
     }
 
-    private sealed class TestSessionRegistry : IAcpConnectionSessionRegistry, IAcpConnectionSessionEvents
-    {
-        public event Action<string, bool>? ProfileConnectionChanged;
-
-        public bool IsConnected { get; set; }
-        public AcpConnectionSession? ConnectedSession { get; set; }
-
-        public bool TryGetByProfile(string profileId, out AcpConnectionSession session)
-        {
-            if (IsConnected && ConnectedSession != null)
-            {
-                session = ConnectedSession;
-                return true;
-            }
-
-            session = null!;
-            return false;
-        }
-
-        public bool TryGetProfileId(IChatService service, out string profileId)
-        {
-            profileId = string.Empty;
-            return false;
-        }
-
-        public void Upsert(AcpConnectionSession session) => throw new NotSupportedException();
-
-        public bool RemoveByProfile(string profileId) => throw new NotSupportedException();
-
-        public bool RemoveByService(IChatService service, out string profileId) => throw new NotSupportedException();
-
-        public IReadOnlyList<AcpConnectionSession> RemoveWhere(Func<AcpConnectionSession, bool> predicate) => throw new NotSupportedException();
-
-        public bool Touch(string profileId, DateTime? usedAtUtc = null) => throw new NotSupportedException();
-
-        public IReadOnlyList<AcpConnectionSession> GetSnapshot() => Array.Empty<AcpConnectionSession>();
-
-        public void RaiseProfileConnectionChanged(string profileId, bool isConnected)
-            => ProfileConnectionChanged?.Invoke(profileId, isConnected);
-    }
-
-    private static AcpConnectionSession CreateSessionSnapshot(string profileId, string agentName, string agentVersion, string? agentTitle = null)
-    {
-        var service = new Mock<IChatService>();
-        service.SetupGet(x => x.IsConnected).Returns(true);
-        service.SetupGet(x => x.IsInitialized).Returns(true);
-        service.SetupGet(x => x.AgentCapabilities).Returns(new AgentCapabilities());
-
-        var adapter = new AcpChatServiceAdapter(
-            service.Object,
-            new AcpEventAdapter(
-                _ => { },
-                new ImmediateUiDispatcher(),
-                bufferLimit: 16,
-                resyncRequired: _ => { }));
-
-        return new AcpConnectionSession(
-            profileId,
-            adapter,
-            new InitializeResponse(1, new AgentInfo(agentName, agentVersion, agentTitle), new AgentCapabilities()),
-            new AcpConnectionReuseKey(TransportType.Stdio, "ssh", "oci-arm", string.Empty));
-    }
 }

@@ -555,31 +555,6 @@
   <data name="Acp_PathMappingsRemove.ToolTipService.ToolTip" xml:space="preserve">
     <value>Remove mapping</value>
   </data>
-  <data name="Acp_ConceptsTitle.Text" xml:space="preserve">
-    <value>ACP / Agent standard concepts</value>
-  </data>
-  <data name="Acp_ConceptsHint.Text" xml:space="preserve">
-    <value>This section shows read-only information reported by the connected ACP agent or defined by ACP session semantics.</value>
-  </data>
-  <data name="Acp_DiagnosticsTitle.Text" xml:space="preserve">
-    <value>Connected ACP agent details</value>
-  </data>
-  <data name="Acp_DiagnosticsSubtitle.Text" xml:space="preserve">
-    <value>Read-only details from the selected profile's current connection.</value>
-  </data>
-  <data name="Acp_DiagnosticsAgentLabel.Text" xml:space="preserve">
-    <value>Agent</value>
-  </data>
-  <data name="Acp_DiagnosticsVersionLabel.Text" xml:space="preserve">
-    <value>Version</value>
-  </data>
-  <data name="Acp_DiagnosticsStatusLabel.Text" xml:space="preserve">
-    <value>Status</value>
-  </data>
-  <data name="Acp_DiagnosticsEndpointLabel.Text" xml:space="preserve">
-    <value>Endpoint</value>
-  </data>
-
   <data name="Start_Title.Text" xml:space="preserve">
     <value>Salmon Egg</value>
   </data>

@@ -459,31 +459,6 @@
   <data name="Acp_PathMappingsRemove.ToolTipService.ToolTip" xml:space="preserve">
     <value>移除映射</value>
   </data>
-  <data name="Acp_ConceptsTitle.Text" xml:space="preserve">
-    <value>ACP / Agent 标准概念</value>
-  </data>
-  <data name="Acp_ConceptsHint.Text" xml:space="preserve">
-    <value>这里展示的是已连接 ACP Agent 上报的信息，或 ACP 会话语义中的只读概念。</value>
-  </data>
-  <data name="Acp_DiagnosticsTitle.Text" xml:space="preserve">
-    <value>当前 ACP Agent 信息</value>
-  </data>
-  <data name="Acp_DiagnosticsSubtitle.Text" xml:space="preserve">
-    <value>来自当前所选配置连接的只读信息。</value>
-  </data>
-  <data name="Acp_DiagnosticsAgentLabel.Text" xml:space="preserve">
-    <value>Agent</value>
-  </data>
-  <data name="Acp_DiagnosticsVersionLabel.Text" xml:space="preserve">
-    <value>版本</value>
-  </data>
-  <data name="Acp_DiagnosticsStatusLabel.Text" xml:space="preserve">
-    <value>状态</value>
-  </data>
-  <data name="Acp_DiagnosticsEndpointLabel.Text" xml:space="preserve">
-    <value>端点</value>
-  </data>
-
   <data name="Start_Title.Text" xml:space="preserve">
     <value>Salmon Egg</value>
   </data>
