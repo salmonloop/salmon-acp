@@ -16,6 +16,7 @@ public class RemoteSessionRecoveryLeasePolicyTests
         Assert.Equal(RemoteSessionRecoveryLeaseDecisionKind.ReuseExisting, decision.Kind);
         Assert.False(decision.ShouldStartNew);
         Assert.True(decision.ShouldReuseExisting);
+        Assert.Equal(requested, decision.ExistingLeaseToReuse);
         Assert.Empty(decision.ConflictingLeasesToCancel);
     }
 
@@ -32,6 +33,7 @@ public class RemoteSessionRecoveryLeasePolicyTests
         Assert.Equal(RemoteSessionRecoveryLeaseDecisionKind.StartNew, decision.Kind);
         Assert.True(decision.ShouldStartNew);
         Assert.False(decision.ShouldReuseExisting);
+        Assert.Null(decision.ExistingLeaseToReuse);
         Assert.Empty(decision.ConflictingLeasesToCancel);
     }
 

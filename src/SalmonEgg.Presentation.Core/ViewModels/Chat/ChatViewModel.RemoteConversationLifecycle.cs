@@ -1647,7 +1647,12 @@ public partial class ChatViewModel
         RemoteSessionRecoveryRequest requestToStart;
         lock (_remoteSessionRecoveryRequestsSync)
         {
-            if (_remoteSessionRecoveryRequests.TryGetValue(key, out var existing))
+            var decision = RemoteSessionRecoveryLeasePolicy.Decide(
+                key,
+                _remoteSessionRecoveryRequests.Keys.ToArray());
+            if (decision.Kind == RemoteSessionRecoveryLeaseDecisionKind.ReuseExisting
+                && decision.ExistingLeaseToReuse is { } existingLease
+                && _remoteSessionRecoveryRequests.TryGetValue(existingLease, out var existing))
             {
                 Logger.LogInformation(
                     "Reusing in-flight remote session recovery request. RecoveryMode={RecoveryMode} RemoteSessionId={RemoteSessionId} ProfileId={ProfileId} ConnectionInstanceId={ConnectionInstanceId}",
@@ -1658,7 +1663,7 @@ public partial class ChatViewModel
                 return existing.Task;
             }
 
-            requestsToCancel = RemoveConflictingRemoteSessionRecoveryRequests(key);
+            requestsToCancel = RemoveConflictingRemoteSessionRecoveryRequests(decision);
             requestToStart = new RemoteSessionRecoveryRequest(
                 CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token));
             _remoteSessionRecoveryRequests[key] = requestToStart;
@@ -1747,11 +1752,8 @@ public partial class ChatViewModel
         }
     }
 
-    private List<RemoteSessionRecoveryRequest> RemoveConflictingRemoteSessionRecoveryRequests(RemoteSessionRecoveryLeaseKey key)
+    private List<RemoteSessionRecoveryRequest> RemoveConflictingRemoteSessionRecoveryRequests(RemoteSessionRecoveryLeaseDecision decision)
     {
-        var decision = RemoteSessionRecoveryLeasePolicy.Decide(
-            key,
-            _remoteSessionRecoveryRequests.Keys.ToArray());
         if (decision.ConflictingLeasesToCancel.Count == 0)
         {
             return [];

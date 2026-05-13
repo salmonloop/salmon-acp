@@ -32,9 +32,11 @@ public enum RemoteSessionRecoveryLeaseDecisionKind
 /// Result of evaluating a requested remote session recovery lease against active leases.
 /// </summary>
 /// <param name="Kind">The lease action selected by the policy.</param>
+/// <param name="ExistingLeaseToReuse">The active lease that should be reused, when <paramref name="Kind" /> is <see cref="RemoteSessionRecoveryLeaseDecisionKind.ReuseExisting" />.</param>
 /// <param name="ConflictingLeasesToCancel">Existing leases that conflict with the requested lease.</param>
 public readonly record struct RemoteSessionRecoveryLeaseDecision(
     RemoteSessionRecoveryLeaseDecisionKind Kind,
+    RemoteSessionRecoveryLeaseKey? ExistingLeaseToReuse,
     IReadOnlyList<RemoteSessionRecoveryLeaseKey> ConflictingLeasesToCancel)
 {
     /// <summary>
@@ -50,9 +52,12 @@ public readonly record struct RemoteSessionRecoveryLeaseDecision(
     /// <summary>
     /// Creates a decision that reuses an existing lease.
     /// </summary>
-    public static RemoteSessionRecoveryLeaseDecision ReuseExisting()
+    /// <param name="existingLeaseToReuse">The active lease that should be reused.</param>
+    public static RemoteSessionRecoveryLeaseDecision ReuseExisting(
+        RemoteSessionRecoveryLeaseKey existingLeaseToReuse)
         => new(
             RemoteSessionRecoveryLeaseDecisionKind.ReuseExisting,
+            existingLeaseToReuse,
             Array.Empty<RemoteSessionRecoveryLeaseKey>());
 
     /// <summary>
@@ -63,6 +68,7 @@ public readonly record struct RemoteSessionRecoveryLeaseDecision(
         IReadOnlyCollection<RemoteSessionRecoveryLeaseKey> conflictingLeasesToCancel)
         => new(
             RemoteSessionRecoveryLeaseDecisionKind.StartNew,
+            null,
             conflictingLeasesToCancel.Count == 0
                 ? Array.Empty<RemoteSessionRecoveryLeaseKey>()
                 : conflictingLeasesToCancel.ToArray());
@@ -85,9 +91,12 @@ public static class RemoteSessionRecoveryLeasePolicy
     {
         ArgumentNullException.ThrowIfNull(activeLeases);
 
-        if (activeLeases.Any(candidate => IsSameLease(candidate, requested)))
+        foreach (var candidate in activeLeases)
         {
-            return RemoteSessionRecoveryLeaseDecision.ReuseExisting();
+            if (IsSameLease(candidate, requested))
+            {
+                return RemoteSessionRecoveryLeaseDecision.ReuseExisting(candidate);
+            }
         }
 
         var conflictingLeases = activeLeases
