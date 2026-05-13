@@ -25,10 +25,6 @@
   <ItemGroup>
     <!-- Use the repository's custom black-and-white artwork as the single Uno.Resizetizer app icon source. -->
     <UnoIcon Include="Assets\Icons\icon.png" />
-    <!-- Use the repository splash artwork as the single Uno.Resizetizer splash screen source. -->
-    <UnoSplashScreen Include="Assets\Splash\splash_screen.png"
-                     BaseSize="300,300"
-                     Color="#FFFFFF" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.26100.0'">
@@ -78,6 +74,10 @@
 
     <OutputType>Exe</OutputType>
     <UnoSingleProject>true</UnoSingleProject>
+    <!-- Keep generated splash screens aligned with the app icon instead of Uno's default artwork. -->
+    <UnoSplashScreenFile>Assets\Icons\splash_screen.png</UnoSplashScreenFile>
+    <UnoSplashScreenColor>#FFFFFF</UnoSplashScreenColor>
+    <UnoSplashScreenBaseSize>256,256</UnoSplashScreenBaseSize>
 
     <!-- Display name -->
     <ApplicationTitle>SalmonEgg</ApplicationTitle>
@@ -121,6 +121,11 @@
     <PlatformTarget></PlatformTarget>
     <!-- Override Uno's net10 default (10.0.2) to the latest patched Windows compatibility stack. -->
     <WindowsCompatibilityVersion>10.0.6</WindowsCompatibilityVersion>
+    <!-- Reduce hash-mismatch startup failures caused by stale browser/service-worker caches. -->
+    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
+    <StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
+    <!-- Keep only shipped UI cultures to reduce wasm satellite payload size. -->
+    <SatelliteResourceLanguages>en;en-US;zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.26100.0'">

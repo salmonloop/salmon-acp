@@ -73,8 +73,10 @@ run.bat
 
 #### WebAssembly
 ```bash
-cd SalmonEgg/SalmonEgg
-dotnet run --framework net10.0-browserwasm
+pwsh -File scripts/dev/stop-stale-wasm-hosts.ps1
+
+dotnet run --project SalmonEgg/SalmonEgg/SalmonEgg.csproj `
+  --framework net10.0-browserwasm
 ```
 浏览器会自动打开 http://localhost:5000
 
@@ -117,8 +119,10 @@ Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object Subject -eq 'CN=Sa
 
 ```bash
 # 运行开发服务器
-cd SalmonEgg/SalmonEgg
-dotnet run --framework net10.0-browserwasm
+pwsh -File scripts/dev/stop-stale-wasm-hosts.ps1
+
+dotnet run --project SalmonEgg/SalmonEgg/SalmonEgg.csproj `
+  --framework net10.0-browserwasm
 
 # 发布为静态网站
 dotnet publish SalmonEgg/SalmonEgg/SalmonEgg.csproj \
@@ -126,6 +130,8 @@ dotnet publish SalmonEgg/SalmonEgg/SalmonEgg.csproj \
   -c Release \
   -o ./publish/wasm
 ```
+
+WASM 调试前必须先清理旧的 `WasmAppHost`。如果端口仍由其它目录的旧构建占用，浏览器可能拿到旧 `package_*` / `dotnet.*.js` 哈希，表现为 `_framework/dotnet.*.js` 404、加载进度条无限停住或 502。若要连当前 worktree 的 WasmHost 也一起清掉，可运行 `pwsh -File scripts/dev/stop-stale-wasm-hosts.ps1 -IncludeCurrentWorktree`。
 
 发布后的文件可以部署到任何静态网站托管服务（如 Azure Static Web Apps、GitHub Pages、Netlify 等）。
 

@@ -131,9 +131,14 @@ build.bat msix
 
 #### WebAssembly (浏览器)
 ```bash
+pwsh -File scripts/dev/stop-stale-wasm-hosts.ps1
+
 dotnet run --project SalmonEgg/SalmonEgg/SalmonEgg.csproj \
   --framework net10.0-browserwasm
 ```
+
+> 说明：WASM 调试前必须先清理旧的 `WasmAppHost`。如果端口仍由其它目录的旧构建占用，浏览器可能拿到旧 `package_*` / `dotnet.*.js` 哈希，表现为 `_framework/dotnet.*.js` 404、加载进度条无限停住或 502。
+> 若要连当前 worktree 的 WasmHost 也一起清掉，可运行 `pwsh -File scripts/dev/stop-stale-wasm-hosts.ps1 -IncludeCurrentWorktree`。
 
 ### 6. 发布应用
 
@@ -269,6 +274,8 @@ dotnet publish \
   -p:PublishTrimmed=true \
   -p:TrimMode=link
 ```
+
+> 注意：上面的命令启用的是 trimming/linker，并不等同于完整 AOT。当前 WASM 发布优化前，需先确认 browserwasm 依赖图没有拉入桌面/PTY/PInvoke 链路，否则发布阶段可能在 P/Invoke 扫描或裁剪阶段失败。
 
 ### 减小发布体积
 ```bash
