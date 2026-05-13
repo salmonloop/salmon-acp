@@ -39,9 +39,6 @@ public sealed partial class StartViewModel : ObservableObject
         IsDraftReady: false,
         ModeCount: 0));
     private string? _selectedStartProjectIdOverride;
-    private bool _suppressMirroredChatDraftUpdates;
-    private bool _isVoicePromptBridgeActive;
-    private string? _chatDraftBeforeVoiceBridge;
     private CancellationTokenSource? _newSessionDraftCts;
     private bool _isNewSessionDraftRefreshPending;
     private bool _isComposerLoaded;
@@ -58,6 +55,7 @@ public sealed partial class StartViewModel : ObservableObject
             if (SetProperty(ref _isStarting, value))
             {
                 OnPropertyChanged(nameof(IsInputEnabled));
+                OnPropertyChanged(nameof(CanStartSessionAndSendUi));
                 RefreshStartModeState();
                 RefreshVoiceProjection();
                 StartSessionAndSendCommand.NotifyCanExecuteChanged();
@@ -65,8 +63,21 @@ public sealed partial class StartViewModel : ObservableObject
         }
     }
 
-    [ObservableProperty]
-    private string _startPrompt = string.Empty;
+    public string StartPrompt
+    {
+        get => Chat.CurrentPrompt ?? string.Empty;
+        set
+        {
+            var next = value ?? string.Empty;
+            if (string.Equals(Chat.CurrentPrompt, next, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Chat.CurrentPrompt = next;
+            RefreshStartPromptProjection(next);
+        }
+    }
 
     public StartComposerStage ComposerStage => _composerSnapshot.Stage;
 
@@ -81,6 +92,8 @@ public sealed partial class StartViewModel : ObservableObject
     public bool FreezeComposerInteractions => _composerSnapshot.FreezeComposerInteractions;
 
     public IAsyncRelayCommand StartSessionAndSendCommand { get; }
+
+    public bool CanStartSessionAndSendUi => StartSessionAndSendCommand.CanExecute(null);
 
     public System.Collections.ObjectModel.ObservableCollection<QuickSuggestionViewModel> Suggestions { get; } = new();
 
@@ -270,10 +283,12 @@ public sealed partial class StartViewModel : ObservableObject
         }
     }
 
-    partial void OnStartPromptChanged(string value)
+    private void RefreshStartPromptProjection(string value)
     {
+        OnPropertyChanged(nameof(StartPrompt));
         DispatchComposerAction(new DraftChanged(!string.IsNullOrWhiteSpace(value)));
         StartSessionAndSendCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanStartSessionAndSendUi));
     }
 
     private bool CanStartSessionAndSend()
@@ -382,12 +397,7 @@ public sealed partial class StartViewModel : ObservableObject
             return;
         }
 
-        BeginVoicePromptBridge();
         await Chat.StartVoiceInputCommand.ExecuteAsync(null);
-        if (!Chat.IsVoiceInputListening)
-        {
-            EndVoicePromptBridge();
-        }
     }
 
     private async Task StopVoiceInputAsync()
@@ -398,68 +408,6 @@ public sealed partial class StartViewModel : ObservableObject
         }
 
         await Chat.StopVoiceInputCommand.ExecuteAsync(null);
-        EndVoicePromptBridge();
-    }
-
-    private void BeginVoicePromptBridge()
-    {
-        if (_isVoicePromptBridgeActive)
-        {
-            return;
-        }
-
-        _chatDraftBeforeVoiceBridge = Chat.CurrentPrompt;
-        _isVoicePromptBridgeActive = true;
-        PushStartDraftToChat();
-    }
-
-    private void EndVoicePromptBridge()
-    {
-        if (!_isVoicePromptBridgeActive)
-        {
-            return;
-        }
-
-        PullChatDraftToStart();
-        RestoreChatDraftAfterVoiceBridge();
-        _isVoicePromptBridgeActive = false;
-        _chatDraftBeforeVoiceBridge = null;
-    }
-
-    private void RestoreChatDraftAfterVoiceBridge()
-    {
-        _suppressMirroredChatDraftUpdates = true;
-        try
-        {
-            Chat.CurrentPrompt = _chatDraftBeforeVoiceBridge ?? string.Empty;
-        }
-        finally
-        {
-            _suppressMirroredChatDraftUpdates = false;
-        }
-    }
-
-    private void PushStartDraftToChat()
-    {
-        _suppressMirroredChatDraftUpdates = true;
-        try
-        {
-            Chat.CurrentPrompt = StartPrompt ?? string.Empty;
-        }
-        finally
-        {
-            _suppressMirroredChatDraftUpdates = false;
-        }
-    }
-
-    private void PullChatDraftToStart()
-    {
-        if (_suppressMirroredChatDraftUpdates)
-        {
-            return;
-        }
-
-        StartPrompt = Chat.CurrentPrompt ?? string.Empty;
     }
 
     private void OnChatPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -509,20 +457,14 @@ public sealed partial class StartViewModel : ObservableObject
             return;
         }
 
-        if (string.Equals(e.PropertyName, nameof(ChatViewModel.CurrentPrompt), StringComparison.Ordinal)
-            && _isVoicePromptBridgeActive)
+        if (string.Equals(e.PropertyName, nameof(ChatViewModel.CurrentPrompt), StringComparison.Ordinal))
         {
-            PullChatDraftToStart();
+            RefreshStartPromptProjection(Chat.CurrentPrompt ?? string.Empty);
             return;
         }
 
         if (string.Equals(e.PropertyName, nameof(ChatViewModel.IsVoiceInputListening), StringComparison.Ordinal))
         {
-            if (!Chat.IsVoiceInputListening)
-            {
-                EndVoicePromptBridge();
-            }
-
             RefreshVoiceProjection();
             return;
         }

@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SalmonEgg.Domain.Models;
 using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using XamlFocusManager = Microsoft.UI.Xaml.Input.FocusManager;
@@ -27,7 +28,116 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             typeof(ChatInputArea),
             new PropertyMetadata(null));
 
+    public static readonly DependencyProperty IsSubmitButtonEnabledProperty =
+        DependencyProperty.Register(
+            nameof(IsSubmitButtonEnabled),
+            typeof(bool),
+            typeof(ChatInputArea),
+            new PropertyMetadata(false));
+
+    public static readonly DependencyProperty InputBoxAutomationIdProperty =
+        DependencyProperty.Register(
+            nameof(InputBoxAutomationId),
+            typeof(string),
+            typeof(ChatInputArea),
+            new PropertyMetadata("InputBox"));
+
+    public static readonly DependencyProperty ShowAgentSelectorProperty =
+        DependencyProperty.Register(
+            nameof(ShowAgentSelector),
+            typeof(bool),
+            typeof(ChatInputArea),
+            new PropertyMetadata(false));
+
+    public static readonly DependencyProperty AgentItemsSourceProperty =
+        DependencyProperty.Register(
+            nameof(AgentItemsSource),
+            typeof(object),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty SelectedAgentProperty =
+        DependencyProperty.Register(
+            nameof(SelectedAgent),
+            typeof(ServerConfiguration),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty ShowModeSelectorProperty =
+        DependencyProperty.Register(
+            nameof(ShowModeSelector),
+            typeof(bool),
+            typeof(ChatInputArea),
+            new PropertyMetadata(true));
+
+    public static readonly DependencyProperty ModeItemsSourceProperty =
+        DependencyProperty.Register(
+            nameof(ModeItemsSource),
+            typeof(object),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty SelectedModeProperty =
+        DependencyProperty.Register(
+            nameof(SelectedMode),
+            typeof(SessionModeViewModel),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty IsModeSelectorEnabledProperty =
+        DependencyProperty.Register(
+            nameof(IsModeSelectorEnabled),
+            typeof(bool),
+            typeof(ChatInputArea),
+            new PropertyMetadata(false));
+
+    public static readonly DependencyProperty ShowProjectSelectorProperty =
+        DependencyProperty.Register(
+            nameof(ShowProjectSelector),
+            typeof(bool),
+            typeof(ChatInputArea),
+            new PropertyMetadata(false));
+
+    public static readonly DependencyProperty ProjectItemsSourceProperty =
+        DependencyProperty.Register(
+            nameof(ProjectItemsSource),
+            typeof(object),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty SelectedProjectIdProperty =
+        DependencyProperty.Register(
+            nameof(SelectedProjectId),
+            typeof(string),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty AgentSelectorAutomationIdProperty =
+        DependencyProperty.Register(
+            nameof(AgentSelectorAutomationId),
+            typeof(string),
+            typeof(ChatInputArea),
+            new PropertyMetadata("ChatInputArea.AgentSelector"));
+
+    public static readonly DependencyProperty ModeSelectorAutomationIdProperty =
+        DependencyProperty.Register(
+            nameof(ModeSelectorAutomationId),
+            typeof(string),
+            typeof(ChatInputArea),
+            new PropertyMetadata("ChatInputArea.ModeSelector"));
+
+    public static readonly DependencyProperty ProjectSelectorAutomationIdProperty =
+        DependencyProperty.Register(
+            nameof(ProjectSelectorAutomationId),
+            typeof(string),
+            typeof(ChatInputArea),
+            new PropertyMetadata("ChatInputArea.ProjectSelector"));
+
     private bool _isImeComposing;
+
+    public event EventHandler? SelectorDropDownOpened;
+
+    public event EventHandler? SelectorDropDownClosed;
 
     public ChatViewModel ViewModel
     {
@@ -39,6 +149,96 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
     {
         get => (ICommand?)GetValue(SubmitCommandProperty);
         set => SetValue(SubmitCommandProperty, value);
+    }
+
+    public bool IsSubmitButtonEnabled
+    {
+        get => (bool)GetValue(IsSubmitButtonEnabledProperty);
+        set => SetValue(IsSubmitButtonEnabledProperty, value);
+    }
+
+    public string InputBoxAutomationId
+    {
+        get => (string)GetValue(InputBoxAutomationIdProperty);
+        set => SetValue(InputBoxAutomationIdProperty, value);
+    }
+
+    public bool ShowAgentSelector
+    {
+        get => (bool)GetValue(ShowAgentSelectorProperty);
+        set => SetValue(ShowAgentSelectorProperty, value);
+    }
+
+    public object? AgentItemsSource
+    {
+        get => GetValue(AgentItemsSourceProperty);
+        set => SetValue(AgentItemsSourceProperty, value);
+    }
+
+    public ServerConfiguration? SelectedAgent
+    {
+        get => (ServerConfiguration?)GetValue(SelectedAgentProperty);
+        set => SetValue(SelectedAgentProperty, value);
+    }
+
+    public bool ShowModeSelector
+    {
+        get => (bool)GetValue(ShowModeSelectorProperty);
+        set => SetValue(ShowModeSelectorProperty, value);
+    }
+
+    public object? ModeItemsSource
+    {
+        get => GetValue(ModeItemsSourceProperty);
+        set => SetValue(ModeItemsSourceProperty, value);
+    }
+
+    public SessionModeViewModel? SelectedMode
+    {
+        get => (SessionModeViewModel?)GetValue(SelectedModeProperty);
+        set => SetValue(SelectedModeProperty, value);
+    }
+
+    public bool IsModeSelectorEnabled
+    {
+        get => (bool)GetValue(IsModeSelectorEnabledProperty);
+        set => SetValue(IsModeSelectorEnabledProperty, value);
+    }
+
+    public bool ShowProjectSelector
+    {
+        get => (bool)GetValue(ShowProjectSelectorProperty);
+        set => SetValue(ShowProjectSelectorProperty, value);
+    }
+
+    public object? ProjectItemsSource
+    {
+        get => GetValue(ProjectItemsSourceProperty);
+        set => SetValue(ProjectItemsSourceProperty, value);
+    }
+
+    public string? SelectedProjectId
+    {
+        get => (string?)GetValue(SelectedProjectIdProperty);
+        set => SetValue(SelectedProjectIdProperty, value);
+    }
+
+    public string AgentSelectorAutomationId
+    {
+        get => (string)GetValue(AgentSelectorAutomationIdProperty);
+        set => SetValue(AgentSelectorAutomationIdProperty, value);
+    }
+
+    public string ModeSelectorAutomationId
+    {
+        get => (string)GetValue(ModeSelectorAutomationIdProperty);
+        set => SetValue(ModeSelectorAutomationIdProperty, value);
+    }
+
+    public string ProjectSelectorAutomationId
+    {
+        get => (string)GetValue(ProjectSelectorAutomationIdProperty);
+        set => SetValue(ProjectSelectorAutomationIdProperty, value);
     }
 
     public ChatInputArea()
@@ -229,6 +429,12 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
 
         SlashCommandsList.ScrollIntoView(SlashCommandsList.SelectedItem);
     }
+
+    private void OnSelectorDropDownOpened(object sender, object e)
+        => SelectorDropDownOpened?.Invoke(this, EventArgs.Empty);
+
+    private void OnSelectorDropDownClosed(object sender, object e)
+        => SelectorDropDownClosed?.Invoke(this, EventArgs.Empty);
 
     private ChatInputFocusContext ResolveFocusContext(DependencyObject? focusedElement)
     {

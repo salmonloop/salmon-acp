@@ -7,6 +7,7 @@
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:vm="using:SalmonEgg.Presentation.ViewModels.Chat"
     xmlns:models="using:SalmonEgg.Presentation.Models"
+    xmlns:domain="using:SalmonEgg.Domain.Models"
     XYFocusKeyboardNavigation="Enabled"
     mc:Ignorable="d">
 
@@ -95,6 +96,7 @@
 
                             <TextBox x:Name="InputBox"
                                      x:Uid="ChatInputBox"
+                                     AutomationProperties.AutomationId="{x:Bind InputBoxAutomationId, Mode=OneWay}"
                                      Text="{x:Bind ViewModel.CurrentPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                      AcceptsReturn="True"
                                      TextWrapping="Wrap"
@@ -131,16 +133,43 @@
                                         Spacing="8"
                                         HorizontalAlignment="Left"
                                         VerticalAlignment="Center">
-                                <ComboBox x:Uid="ChatModeSelector"
+                                <ComboBox x:Name="AgentSelectorHost"
+                                          x:Load="{x:Bind ShowAgentSelector, Mode=OneWay}"
+                                          AutomationProperties.AutomationId="{x:Bind AgentSelectorAutomationId, Mode=OneWay}"
+                                          MinWidth="160"
+                                          MaxWidth="320"
+                                          FontSize="12"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          HorizontalAlignment="Left"
+                                          ItemsSource="{x:Bind AgentItemsSource, Mode=OneWay}"
+                                          SelectedItem="{x:Bind SelectedAgent, Mode=TwoWay}"
+                                          DropDownOpened="OnSelectorDropDownOpened"
+                                          DropDownClosed="OnSelectorDropDownClosed">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="domain:ServerConfiguration">
+                                            <TextBlock Text="{x:Bind Name, Mode=OneTime}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxLines="1"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <ComboBox x:Name="ModeSelectorHost"
+                                          x:Uid="ChatModeSelector"
+                                          x:Load="{x:Bind ShowModeSelector, Mode=OneWay}"
+                                          AutomationProperties.AutomationId="{x:Bind ModeSelectorAutomationId, Mode=OneWay}"
                                           MinWidth="120"
                                           MaxWidth="240"
                                           FontSize="12"
                                           Background="Transparent"
                                           BorderThickness="0"
                                           HorizontalAlignment="Left"
-                                          IsEnabled="{x:Bind ViewModel.AreComposerToolsEnabled, Mode=OneWay}"
-                                          ItemsSource="{x:Bind ViewModel.AvailableModes, Mode=OneWay}"
-                                          SelectedItem="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}">
+                                          IsEnabled="{x:Bind IsModeSelectorEnabled, Mode=OneWay}"
+                                          ItemsSource="{x:Bind ModeItemsSource, Mode=OneWay}"
+                                          SelectedItem="{x:Bind SelectedMode, Mode=TwoWay}"
+                                          DropDownOpened="OnSelectorDropDownOpened"
+                                          DropDownClosed="OnSelectorDropDownClosed">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate x:DataType="vm:SessionModeViewModel">
                                             <TextBlock Text="{x:Bind ModeName, Mode=OneWay}"
@@ -150,6 +179,21 @@
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
 
+                                <ComboBox x:Name="ProjectSelectorHost"
+                                          x:Load="{x:Bind ShowProjectSelector, Mode=OneWay}"
+                                          AutomationProperties.AutomationId="{x:Bind ProjectSelectorAutomationId, Mode=OneWay}"
+                                          ItemsSource="{x:Bind ProjectItemsSource, Mode=OneWay}"
+                                          SelectedValuePath="ProjectId"
+                                          SelectedValue="{x:Bind SelectedProjectId, Mode=TwoWay}"
+                                          DisplayMemberPath="DisplayName"
+                                          MinWidth="160"
+                                          MaxWidth="320"
+                                          FontSize="12"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          HorizontalAlignment="Left"
+                                          DropDownOpened="OnSelectorDropDownOpened"
+                                          DropDownClosed="OnSelectorDropDownClosed"/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="1"
@@ -196,7 +240,7 @@
                                         Padding="0"
                                         CornerRadius="22"
                                         Style="{StaticResource AccentButtonStyle}"
-                                        IsEnabled="{x:Bind ViewModel.CanSendPromptUi, Mode=OneWay}"
+                                        IsEnabled="{x:Bind IsSubmitButtonEnabled, Mode=OneWay}"
                                         Command="{x:Bind SubmitCommand}"/>
 
                                 <Button x:Name="CancelButton"

@@ -330,6 +330,10 @@
                     <controls:ResponsiveContentHost.Child>
                         <controls:ChatInputArea ViewModel="{x:Bind ViewModel, Mode=OneWay}"
                                                 SubmitCommand="{x:Bind ViewModel.SendPromptCommand}"
+                                                IsSubmitButtonEnabled="{x:Bind ViewModel.CanSendPromptUi, Mode=OneWay}"
+                                                ModeItemsSource="{x:Bind ViewModel.AvailableModes, Mode=OneWay}"
+                                                SelectedMode="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
+                                                IsModeSelectorEnabled="{x:Bind ViewModel.AreComposerToolsEnabled, Mode=OneWay}"
                                                 HorizontalAlignment="Stretch" />
                         </controls:ResponsiveContentHost.Child>
                 </controls:ResponsiveContentHost>

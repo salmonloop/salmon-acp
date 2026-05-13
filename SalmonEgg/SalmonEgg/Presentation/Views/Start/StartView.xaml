@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:controls="using:SalmonEgg.Controls"
     xmlns:domain="using:SalmonEgg.Domain.Models"
     xmlns:local_vm="using:SalmonEgg.Presentation.ViewModels.Start"
     xmlns:chat_vm="using:SalmonEgg.Presentation.ViewModels.Chat"
@@ -35,100 +36,6 @@
           Padding="24,20,24,24"
           PointerPressed="OnRootPointerPressed"
           Transitions="{x:Bind Motion.PageTransitions, Mode=OneWay}">
-        <VisualStateManager.VisualStateGroups>
-            <VisualStateGroup x:Name="ComposerLifecycleStates">
-                <VisualState x:Name="StageCollapsed">
-                    <VisualState.Setters>
-                        <Setter Target="ComposerShell.Padding" Value="16,12" />
-                        <Setter Target="StartPromptBox.MinHeight" Value="44" />
-                    </VisualState.Setters>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetName="HeroLayer" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroTranslateTransform" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerTranslateTransform" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.22" />
-                    </Storyboard>
-                </VisualState>
-                <VisualState x:Name="StagePrimed">
-                    <VisualState.Setters>
-                        <Setter Target="ComposerShell.Padding" Value="18,14" />
-                        <Setter Target="StartPromptBox.MinHeight" Value="52" />
-                    </VisualState.Setters>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetName="HeroLayer" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroTranslateTransform" Storyboard.TargetProperty="Y" To="-6" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.02" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.02" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerTranslateTransform" Storyboard.TargetProperty="Y" To="-6" Duration="0:0:0.22" />
-                    </Storyboard>
-                </VisualState>
-                <VisualState x:Name="StageInteracting">
-                    <VisualState.Setters>
-                        <Setter Target="ComposerShell.Padding" Value="20,16" />
-                        <Setter Target="StartPromptBox.MinHeight" Value="60" />
-                    </VisualState.Setters>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetName="HeroLayer" Storyboard.TargetProperty="Opacity" To="0.98" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleX" To="0.992" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleY" To="0.992" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroTranslateTransform" Storyboard.TargetProperty="Y" To="-12" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.045" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.045" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerTranslateTransform" Storyboard.TargetProperty="Y" To="-12" Duration="0:0:0.22" />
-                    </Storyboard>
-                </VisualState>
-                <VisualState x:Name="StagePopupEngaged">
-                    <VisualState.Setters>
-                        <Setter Target="ComposerShell.Padding" Value="20,16" />
-                        <Setter Target="StartPromptBox.MinHeight" Value="60" />
-                    </VisualState.Setters>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetName="HeroLayer" Storyboard.TargetProperty="Opacity" To="0.96" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleX" To="0.99" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleY" To="0.99" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroTranslateTransform" Storyboard.TargetProperty="Y" To="-14" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.05" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.05" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerTranslateTransform" Storyboard.TargetProperty="Y" To="-13" Duration="0:0:0.22" />
-                    </Storyboard>
-                </VisualState>
-                <VisualState x:Name="StageExpandedIdle">
-                    <VisualState.Setters>
-                        <Setter Target="ComposerShell.Padding" Value="20,16" />
-                        <Setter Target="StartPromptBox.MinHeight" Value="60" />
-                    </VisualState.Setters>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetName="HeroLayer" Storyboard.TargetProperty="Opacity" To="0.98" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleX" To="0.994" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleY" To="0.994" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroTranslateTransform" Storyboard.TargetProperty="Y" To="-10" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.04" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.04" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerTranslateTransform" Storyboard.TargetProperty="Y" To="-10" Duration="0:0:0.22" />
-                    </Storyboard>
-                </VisualState>
-                <VisualState x:Name="StageSubmitting">
-                    <VisualState.Setters>
-                        <Setter Target="ComposerShell.Padding" Value="20,16" />
-                        <Setter Target="StartPromptBox.MinHeight" Value="60" />
-                    </VisualState.Setters>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetName="HeroLayer" Storyboard.TargetProperty="Opacity" To="0.94" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleX" To="0.99" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroScaleTransform" Storyboard.TargetProperty="ScaleY" To="0.99" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="HeroTranslateTransform" Storyboard.TargetProperty="Y" To="-10" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.035" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.035" Duration="0:0:0.22" />
-                        <DoubleAnimation Storyboard.TargetName="ComposerTranslateTransform" Storyboard.TargetProperty="Y" To="-9" Duration="0:0:0.22" />
-                    </Storyboard>
-                </VisualState>
-            </VisualStateGroup>
-        </VisualStateManager.VisualStateGroups>
 
         <Grid x:Name="HeroLayer"
               Grid.Row="0"
@@ -218,206 +125,30 @@
             </StackPanel>
         </Grid>
 
-        <Border x:Name="ComposerShell"
-                Grid.Row="1"
-                MaxWidth="{x:Bind models:UiLayout.ContentMaxWidth, Mode=OneTime}"
-                HorizontalAlignment="Center"
-                BorderThickness="1"
-                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                CornerRadius="20"
-                Padding="16,12"
-                PointerPressed="OnComposerShellPointerPressed"
-                RenderTransformOrigin="0.5,1">
-            <Border.RenderTransform>
-                <TransformGroup>
-                    <ScaleTransform x:Name="ComposerScaleTransform" ScaleX="1" ScaleY="1" />
-                    <TranslateTransform x:Name="ComposerTranslateTransform" Y="0" />
-                </TransformGroup>
-            </Border.RenderTransform>
-            <Grid RowDefinitions="Auto,Auto"
-                  RowSpacing="12"
-                  XYFocusKeyboardNavigation="Enabled">
-                <Grid Grid.Row="0"
-                      ColumnDefinitions="*,Auto"
-                      ColumnSpacing="12"
-                      XYFocusKeyboardNavigation="Enabled">
-                    <TextBox x:Name="StartPromptBox"
-                             x:Uid="ChatInputBox"
-                             AutomationProperties.AutomationId="StartView.PromptBox"
-                             Text="{x:Bind ViewModel.StartPrompt, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             MinHeight="44"
-                             MaxHeight="240"
-                             MaxLength="4000"
-                             BorderThickness="0"
-                             Background="Transparent"
-                             IsEnabled="{x:Bind ViewModel.IsInputEnabled, Mode=OneWay}"
-                             GotFocus="OnComposerInteractiveElementGotFocus"
-                             LostFocus="OnComposerInteractiveElementLostFocus">
-                        <TextBox.Resources>
-                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                        </TextBox.Resources>
-                    </TextBox>
-
-                    <Button Grid.Column="1"
-                            x:Uid="SendButton"
-                            Content="&#xE724;"
-                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                            Width="44"
-                            Height="44"
-                            MinWidth="44"
-                            MinHeight="44"
-                            Padding="0"
-                            CornerRadius="22"
-                            Style="{StaticResource AccentButtonStyle}"
-                            Command="{x:Bind ViewModel.StartSessionAndSendCommand}"
-                            GotFocus="OnComposerInteractiveElementGotFocus"
-                            LostFocus="OnComposerInteractiveElementLostFocus" />
-                </Grid>
-
-                <Grid x:Name="ExpandedAgentRow"
-                      Grid.Row="1"
-                      x:Load="{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}"
-                      ColumnDefinitions="*,Auto,*,Auto,Auto"
-                      ColumnSpacing="10"
-                      XYFocusKeyboardNavigation="Enabled">
-                    <ComboBox x:Name="StartAgentSelector"
-                              Grid.Column="0"
-                              AutomationProperties.AutomationId="StartView.AgentSelector"
-                              ItemsSource="{x:Bind ViewModel.Chat.AcpProfileList, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.Chat.SelectedAcpProfile, Mode=TwoWay}"
-                              MinWidth="160"
-                              MaxWidth="320"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Center"
-                              FontSize="12"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              DropDownOpened="OnComposerSelectorDropDownOpened"
-                              DropDownClosed="OnComposerSelectorDropDownClosed"
-                              GotFocus="OnComposerInteractiveElementGotFocus"
-                              LostFocus="OnComposerInteractiveElementLostFocus">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="domain:ServerConfiguration">
-                                <TextBlock Text="{x:Bind Name, Mode=OneTime}"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxLines="1" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-
-                    <ComboBox x:Name="StartModeSelector"
-                              Grid.Column="1"
-                              x:Uid="StartModeSelector"
-                              AutomationProperties.AutomationId="StartView.ModeSelector"
-                              ItemsSource="{x:Bind ViewModel.StartModeOptions, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedStartMode, Mode=TwoWay}"
-                              MinWidth="140"
-                              MaxWidth="240"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Center"
-                              FontSize="12"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              IsEnabled="{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}"
-                              DropDownOpened="OnComposerSelectorDropDownOpened"
-                              DropDownClosed="OnComposerSelectorDropDownClosed"
-                              GotFocus="OnComposerInteractiveElementGotFocus"
-                              LostFocus="OnComposerInteractiveElementLostFocus">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="chat_vm:SessionModeViewModel">
-                                <TextBlock Text="{x:Bind ModeName, Mode=OneWay}"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxLines="1" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-
-                    <ComboBox x:Name="StartProjectSelector"
-                              Grid.Column="2"
-                              AutomationProperties.AutomationId="StartView.ProjectSelector"
-                              ItemsSource="{x:Bind ViewModel.StartProjectOptions, Mode=OneWay}"
-                              SelectedValuePath="ProjectId"
-                              SelectedValue="{x:Bind ViewModel.SelectedStartProjectId, Mode=TwoWay}"
-                              DisplayMemberPath="DisplayName"
-                              MinWidth="160"
-                              MaxWidth="320"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Center"
-                              FontSize="12"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              DropDownOpened="OnComposerSelectorDropDownOpened"
-                              DropDownClosed="OnComposerSelectorDropDownClosed"
-                              GotFocus="OnComposerInteractiveElementGotFocus"
-                              LostFocus="OnComposerInteractiveElementLostFocus" />
-
-                    <StackPanel Grid.Column="3"
-                                Orientation="Horizontal"
-                                Spacing="8"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center">
-                        <Button x:Uid="VoiceInputStartButton"
-                                Width="44"
-                                Height="44"
-                                MinWidth="44"
-                                MinHeight="44"
-                                Padding="0"
-                                CornerRadius="22"
-                                Command="{x:Bind ViewModel.StartVoiceInputCommand}"
-                                IsEnabled="{x:Bind ViewModel.CanStartVoiceInput, Mode=OneWay}"
-                                Visibility="{x:Bind ViewModel.ShowVoiceInputStartButton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+        <controls:ChatInputArea x:Name="ComposerShell"
+                                Grid.Row="1"
+                                ViewModel="{x:Bind ViewModel.Chat, Mode=OneWay}"
+                                SubmitCommand="{x:Bind ViewModel.StartSessionAndSendCommand}"
+                                IsSubmitButtonEnabled="{x:Bind ViewModel.CanStartSessionAndSendUi, Mode=OneWay}"
+                                InputBoxAutomationId="StartView.PromptBox"
+                                ShowAgentSelector="{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}"
+                                AgentItemsSource="{x:Bind ViewModel.Chat.AcpProfileList, Mode=OneWay}"
+                                SelectedAgent="{x:Bind ViewModel.Chat.SelectedAcpProfile, Mode=TwoWay}"
+                                AgentSelectorAutomationId="StartView.AgentSelector"
+                                ShowModeSelector="{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}"
+                                ModeItemsSource="{x:Bind ViewModel.StartModeOptions, Mode=OneWay}"
+                                SelectedMode="{x:Bind ViewModel.SelectedStartMode, Mode=TwoWay}"
+                                IsModeSelectorEnabled="{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}"
+                                ModeSelectorAutomationId="StartView.ModeSelector"
+                                ShowProjectSelector="{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}"
+                                ProjectItemsSource="{x:Bind ViewModel.StartProjectOptions, Mode=OneWay}"
+                                SelectedProjectId="{x:Bind ViewModel.SelectedStartProjectId, Mode=TwoWay}"
+                                ProjectSelectorAutomationId="StartView.ProjectSelector"
+                                PointerPressed="OnComposerShellPointerPressed"
                                 GotFocus="OnComposerInteractiveElementGotFocus"
-                                LostFocus="OnComposerInteractiveElementLostFocus">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE720;" FontSize="14" />
-                        </Button>
-
-                        <Button x:Uid="VoiceInputStopButton"
-                                Width="44"
-                                Height="44"
-                                MinWidth="44"
-                                MinHeight="44"
-                                Padding="0"
-                                CornerRadius="22"
-                                Command="{x:Bind ViewModel.StopVoiceInputCommand}"
-                                IsEnabled="{x:Bind ViewModel.CanStopVoiceInput, Mode=OneWay}"
-                                Visibility="{x:Bind ViewModel.ShowVoiceInputStopButton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                GotFocus="OnComposerInteractiveElementGotFocus"
-                                LostFocus="OnComposerInteractiveElementLostFocus">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE71A;" FontSize="14" />
-                        </Button>
-                    </StackPanel>
-
-                    <Border Grid.Column="4"
-                            HorizontalAlignment="Stretch"
-                            VerticalAlignment="Center"
-                            Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10,6"
-                            Visibility="{x:Bind ViewModel.FreezeComposerInteractions, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ProgressRing IsActive="True"
-                                          Width="12"
-                                          Height="12" />
-                            <TextBlock Text="Launching"
-                                       FontSize="11"
-                                       FontWeight="SemiBold" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </Grid>
-        </Border>
+                                LostFocus="OnComposerInteractiveElementLostFocus"
+                                SelectorDropDownOpened="OnComposerSelectorDropDownOpened"
+                                SelectorDropDownClosed="OnComposerSelectorDropDownClosed" />
 
         <Grid Grid.RowSpan="2"
               Background="{ThemeResource AppOverlayScrimBrush}"

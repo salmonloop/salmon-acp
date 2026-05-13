@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -31,10 +30,7 @@ public sealed partial class StartView : Page
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _isViewLoaded = true;
-        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
-        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.OnComposerLoaded();
-        ApplyComposerStageVisualState(useTransitions: false);
 
         try
         {
@@ -51,16 +47,7 @@ public sealed partial class StartView : Page
         _isViewLoaded = false;
         _composerPopupOpenCount = 0;
         _isComposerPopupClosePending = false;
-        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         ViewModel.OnComposerUnloaded();
-    }
-
-    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (string.Equals(e.PropertyName, nameof(StartViewModel.ComposerStage), StringComparison.Ordinal))
-        {
-            ApplyComposerStageVisualState(useTransitions: true);
-        }
     }
 
     private void OnRootPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -127,25 +114,6 @@ public sealed partial class StartView : Page
         {
             ReconcileComposerPopupClosed();
         }
-    }
-
-    private void ApplyComposerStageVisualState(bool useTransitions)
-    {
-        var stateName = ViewModel.ComposerStage switch
-        {
-            StartComposerStage.Collapsed => "StageCollapsed",
-            StartComposerStage.Primed => "StagePrimed",
-            StartComposerStage.Interacting => "StageInteracting",
-            StartComposerStage.PopupEngaged => "StagePopupEngaged",
-            StartComposerStage.ExpandedIdle => "StageExpandedIdle",
-            StartComposerStage.Submitting => "StageSubmitting",
-            _ => "StageCollapsed",
-        };
-
-        VisualStateManager.GoToState(
-            this,
-            stateName,
-            useTransitions);
     }
 
     private void ReconcileComposerPopupClosed()

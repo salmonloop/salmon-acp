@@ -120,7 +120,7 @@ public sealed class StartViewModelTests
     }
 
     [Fact]
-    public void ExecuteSuggestion_DoesNotMutateChatViewModelDraft()
+    public void ExecuteSuggestion_UpdatesSharedChatPromptDraft()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -140,7 +140,7 @@ public sealed class StartViewModelTests
             var suggestion = startViewModel.Suggestions[0];
             startViewModel.ExecuteSuggestionCommand.Execute(suggestion);
 
-            Assert.Equal("chat draft", chat.ViewModel.CurrentPrompt);
+            Assert.Equal(suggestion.Prompt, chat.ViewModel.CurrentPrompt);
             Assert.Equal(suggestion.Prompt, startViewModel.StartPrompt);
             Assert.Equal(StartComposerStage.ExpandedIdle, startViewModel.ComposerStage);
             Assert.True(startViewModel.IsComposerExpanded);
@@ -604,7 +604,7 @@ public sealed class StartViewModelTests
     }
 
     [Fact]
-    public async Task StartVoiceInput_WhenVoiceStartDoesNotEnterListening_RestoresChatDraft()
+    public async Task StartVoiceInput_WhenVoiceStartDoesNotEnterListening_LeavesSharedPromptUnchanged()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -622,16 +622,54 @@ public sealed class StartViewModelTests
             using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
             var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
 
-            chat.ViewModel.CurrentPrompt = "chat draft";
             startViewModel.StartPrompt = "start draft";
 
             Assert.True(startViewModel.CanStartVoiceInput);
 
             await startViewModel.StartVoiceInputCommand.ExecuteAsync(null);
 
-            Assert.Equal("chat draft", chat.ViewModel.CurrentPrompt);
+            Assert.Equal("start draft", chat.ViewModel.CurrentPrompt);
             Assert.Equal("start draft", startViewModel.StartPrompt);
             Assert.False(chat.ViewModel.IsVoiceInputListening);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task StartVoiceInput_WhenVoiceSessionCompletes_PreservesSharedMergedPrompt()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            var voiceInput = new FakeVoiceInputService
+            {
+                IsSupported = true,
+                PermissionResult = VoiceInputPermissionResult.Granted()
+            };
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>(), voiceInput);
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+
+            startViewModel.StartPrompt = "start draft";
+            var expectedPrompt = "start draft dictated prompt";
+
+            await startViewModel.StartVoiceInputCommand.ExecuteAsync(null);
+            Assert.True(chat.ViewModel.IsVoiceInputListening);
+            Assert.NotNull(voiceInput.LastSessionOptions);
+
+            voiceInput.RaiseFinalResult("dictated prompt");
+            voiceInput.RaiseSessionEnded();
+            await WaitForConditionAsync(() => !chat.ViewModel.IsVoiceInputListening);
+
+            Assert.Equal(expectedPrompt, chat.ViewModel.CurrentPrompt);
+            Assert.Equal(expectedPrompt, startViewModel.StartPrompt);
         }
         finally
         {
@@ -1138,32 +1176,18 @@ public sealed class StartViewModelTests
 
         public bool IsListening { get; private set; }
 
+        public VoiceInputSessionOptions? LastSessionOptions { get; private set; }
+
         public VoiceInputPermissionResult PermissionResult { get; set; } =
             new(VoiceInputPermissionStatus.Unsupported, "Not configured");
 
-        public event EventHandler<VoiceInputPartialResult>? PartialResultReceived
-        {
-            add { }
-            remove { }
-        }
+        public event EventHandler<VoiceInputPartialResult>? PartialResultReceived;
 
-        public event EventHandler<VoiceInputFinalResult>? FinalResultReceived
-        {
-            add { }
-            remove { }
-        }
+        public event EventHandler<VoiceInputFinalResult>? FinalResultReceived;
 
-        public event EventHandler<VoiceInputSessionEndedResult>? SessionEnded
-        {
-            add { }
-            remove { }
-        }
+        public event EventHandler<VoiceInputSessionEndedResult>? SessionEnded;
 
-        public event EventHandler<VoiceInputErrorResult>? ErrorOccurred
-        {
-            add { }
-            remove { }
-        }
+        public event EventHandler<VoiceInputErrorResult>? ErrorOccurred;
 
         public Task<VoiceInputPermissionResult> EnsurePermissionAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(PermissionResult);
@@ -1173,6 +1197,7 @@ public sealed class StartViewModelTests
 
         public Task StartAsync(VoiceInputSessionOptions options, CancellationToken cancellationToken = default)
         {
+            LastSessionOptions = options;
             IsListening = true;
             return Task.CompletedTask;
         }
@@ -1181,6 +1206,32 @@ public sealed class StartViewModelTests
         {
             IsListening = false;
             return Task.CompletedTask;
+        }
+
+        public void RaiseFinalResult(string text)
+        {
+            var options = LastSessionOptions ?? throw new InvalidOperationException("Voice input session has not started.");
+            FinalResultReceived?.Invoke(this, new VoiceInputFinalResult(options.RequestId, text));
+        }
+
+        public void RaisePartialResult(string text)
+        {
+            var options = LastSessionOptions ?? throw new InvalidOperationException("Voice input session has not started.");
+            PartialResultReceived?.Invoke(this, new VoiceInputPartialResult(options.RequestId, text));
+        }
+
+        public void RaiseSessionEnded()
+        {
+            var options = LastSessionOptions ?? throw new InvalidOperationException("Voice input session has not started.");
+            IsListening = false;
+            SessionEnded?.Invoke(this, new VoiceInputSessionEndedResult(options.RequestId));
+        }
+
+        public void RaiseError(string message)
+        {
+            var options = LastSessionOptions ?? throw new InvalidOperationException("Voice input session has not started.");
+            IsListening = false;
+            ErrorOccurred?.Invoke(this, new VoiceInputErrorResult(options.RequestId, message));
         }
 
         public void Dispose()

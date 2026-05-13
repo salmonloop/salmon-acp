@@ -298,6 +298,19 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void ChatInputArea_ExposesAgentAndProjectSlotsAsCapabilities()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
+
+        Assert.Contains("x:Name=\"AgentSelectorHost\"", xaml);
+        Assert.Contains("x:Load=\"{x:Bind ShowAgentSelector", xaml);
+        Assert.Contains("AutomationProperties.AutomationId=\"{x:Bind AgentSelectorAutomationId, Mode=OneWay}\"", xaml);
+        Assert.Contains("x:Name=\"ProjectSelectorHost\"", xaml);
+        Assert.Contains("x:Load=\"{x:Bind ShowProjectSelector", xaml);
+        Assert.Contains("AutomationProperties.AutomationId=\"{x:Bind ProjectSelectorAutomationId, Mode=OneWay}\"", xaml);
+    }
+
+    [Fact]
     public void ChatInputArea_ComposerBlockedStates_UseUnifiedViewModelProjection()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
@@ -306,7 +319,7 @@ public sealed class XamlComplianceTests
         Assert.Contains("Visibility=\"{x:Bind ViewModel.ShouldShowSlashCommandsUi, Mode=OneWay", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.IsTextInputEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.AreComposerToolsEnabled, Mode=OneWay}\"", xaml);
-        Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanSendPromptUi, Mode=OneWay}\"", xaml);
+        Assert.Contains("IsEnabled=\"{x:Bind IsSubmitButtonEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanStartVoiceInput, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanStopVoiceInput, Mode=OneWay}\"", xaml);
         Assert.DoesNotContain("CanSubmitUi", xaml, StringComparison.Ordinal);
@@ -418,7 +431,7 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml.cs");
 
-        Assert.Contains("<Border x:Name=\"ComposerShell\"", xaml);
+        Assert.Contains("<controls:ChatInputArea x:Name=\"ComposerShell\"", xaml);
         Assert.Contains("Grid.Row=\"1\"", xaml);
         Assert.DoesNotContain("x:Name=\"ComposerFocusHost\"", xaml);
         Assert.DoesNotContain("FocusEngaged=\"OnComposerFocusHostFocusEngaged\"", xaml);
@@ -426,20 +439,29 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void StartView_ModeSelector_IsResidentWithinExpandedComposer()
+    public void StartView_ComposerUsesSharedChatInputAreaWithoutPrivateInputControls()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
-        var selector = FindElementByName(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml", "StartModeSelector");
 
-        Assert.Contains("x:Name=\"ExpandedAgentRow\"", xaml);
-        Assert.Contains("x:Load=\"{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}\"", xaml);
-        Assert.False(
-            HasAttributeByLocalName(selector, "Load"),
-            "StartModeSelector must be resident whenever the expanded composer row is loaded; readiness is represented by IsEnabled, not nested x:Load.");
-        Assert.False(
-            HasAttributeByLocalName(selector, "Visibility"),
-            "StartModeSelector must share the expanded-row visibility lifecycle with the agent and project selectors.");
-        Assert.Equal("{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}", GetAttributeByLocalName(selector, "IsEnabled"));
+        Assert.Contains("<controls:ChatInputArea x:Name=\"ComposerShell\"", xaml);
+        Assert.Contains("ShowAgentSelector=\"{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}\"", xaml);
+        Assert.Contains("ShowModeSelector=\"{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}\"", xaml);
+        Assert.Contains("ShowProjectSelector=\"{x:Bind ViewModel.IsComposerExpanded, Mode=OneWay}\"", xaml);
+        Assert.Contains("ModeItemsSource=\"{x:Bind ViewModel.StartModeOptions, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("x:Name=\"StartPromptBox\"", xaml);
+        Assert.DoesNotContain("x:Name=\"StartAgentSelector\"", xaml);
+        Assert.DoesNotContain("x:Name=\"StartModeSelector\"", xaml);
+        Assert.DoesNotContain("x:Name=\"StartProjectSelector\"", xaml);
+    }
+
+    [Fact]
+    public void ChatView_UsesSharedInputAreaWithoutAgentSelectorCapability()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+
+        Assert.Contains("<controls:ChatInputArea ViewModel=\"{x:Bind ViewModel, Mode=OneWay}\"", xaml);
+        Assert.Contains("ModeItemsSource=\"{x:Bind ViewModel.AvailableModes, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("ShowAgentSelector=\"True\"", xaml);
     }
 
     [Fact]
