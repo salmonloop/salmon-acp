@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -808,5 +809,69 @@ public partial class ChatViewModelTests
 
         Assert.Equal(1, Volatile.Read(ref newLoadCount));
         Assert.True(await secondRemoteSwitch);
+    }
+
+    [Fact]
+    public void RemoteSessionRecoveryRequestCleanup_CancelsRequestsBeforeClearingRegistry()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "src",
+            "SalmonEgg.Presentation.Core",
+            "ViewModels",
+            "Chat",
+            "ChatViewModel.RemoteConversationLifecycle.cs"));
+        var methodBody = ExtractMethodBody(source, "private void CancelAndClearRemoteSessionRecoveryRequests");
+
+        var cancelIndex = methodBody.IndexOf(".Cancel();", StringComparison.Ordinal);
+        var clearIndex = methodBody.IndexOf("_remoteSessionRecoveryRequests.Clear();", StringComparison.Ordinal);
+
+        Assert.True(cancelIndex >= 0, "Recovery cleanup must cancel removed requests.");
+        Assert.True(clearIndex >= 0, "Recovery cleanup must clear the registry after cancellation.");
+        Assert.True(
+            cancelIndex < clearIndex,
+            "Recovery cleanup must not clear the registry before cancellation; completion cleanup could dispose the CTS before replacement cancels it.");
+    }
+
+    private static string ExtractMethodBody(string source, string methodSignature)
+    {
+        var methodStart = source.IndexOf(methodSignature, StringComparison.Ordinal);
+        Assert.True(methodStart >= 0, $"Could not find method signature: {methodSignature}");
+        var bodyStart = source.IndexOf('{', methodStart);
+        Assert.True(bodyStart >= 0, $"Could not find method body: {methodSignature}");
+        var depth = 0;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+            }
+            else if (source[index] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return source.Substring(bodyStart, index - bodyStart + 1);
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"Could not extract method body: {methodSignature}");
+    }
+
+    private static string FindRepoFile(params string[] relativeSegments)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeSegments]);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not find repository file.", Path.Combine(relativeSegments));
     }
 }

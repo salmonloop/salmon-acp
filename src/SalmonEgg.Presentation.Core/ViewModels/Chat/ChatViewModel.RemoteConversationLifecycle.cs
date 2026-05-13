@@ -1717,7 +1717,7 @@ public partial class ChatViewModel
 
     private void CancelAndClearRemoteSessionRecoveryRequests(string reason)
     {
-        List<RemoteSessionRecoveryRequest>? requestsToCancel = null;
+        var canceledCount = 0;
         lock (_remoteSessionRecoveryRequestsSync)
         {
             if (_remoteSessionRecoveryRequests.Count == 0)
@@ -1725,18 +1725,19 @@ public partial class ChatViewModel
                 return;
             }
 
-            requestsToCancel = _remoteSessionRecoveryRequests.Values.ToList();
+            foreach (var request in _remoteSessionRecoveryRequests.Values)
+            {
+                request.CancellationTokenSource.Cancel();
+                canceledCount++;
+            }
+
             _remoteSessionRecoveryRequests.Clear();
         }
 
         Logger.LogInformation(
             "Canceling in-flight remote session recovery requests. Count={Count} Reason={Reason}",
-            requestsToCancel.Count,
+            canceledCount,
             reason);
-        foreach (var request in requestsToCancel)
-        {
-            request.CancellationTokenSource.Cancel();
-        }
     }
 
     private async Task RemoveRemoteSessionRecoveryRequestWhenCompleteAsync(
