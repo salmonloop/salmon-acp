@@ -1702,7 +1702,7 @@ public partial class ChatViewModel
             }
             catch (TimeoutException)
             {
-                request.Cancel();
+                request.CancelTransport();
                 throw;
             }
         }
@@ -1720,7 +1720,7 @@ public partial class ChatViewModel
         }
         catch (TimeoutException)
         {
-            request.Cancel();
+            request.CancelTransport();
             throw;
         }
     }

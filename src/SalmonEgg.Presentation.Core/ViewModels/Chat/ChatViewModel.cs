@@ -249,6 +249,20 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
                 }
 
                 _cancellationTokenSource.Cancel();
+                _completion.TrySetCanceled(_cancellationTokenSource.Token);
+            }
+        }
+
+        public void CancelTransport()
+        {
+            lock (_sync)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _cancellationTokenSource.Cancel();
             }
         }
 
@@ -270,9 +284,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         {
             try
             {
+                if (Token.IsCancellationRequested)
+                {
+                    _completion.TrySetCanceled(Token);
+                    return;
+                }
+
                 _completion.TrySetResult(await operation(Token).ConfigureAwait(false));
             }
-            catch (OperationCanceledException ex) when (Token.IsCancellationRequested)
+            catch (OperationCanceledException) when (Token.IsCancellationRequested)
             {
                 _completion.TrySetCanceled(Token);
             }
