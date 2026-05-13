@@ -534,9 +534,6 @@
   <data name="ChatComposerPromptInFlightStatus.Text" xml:space="preserve">
     <value>正在等待本轮响应完成</value>
   </data>
-  <data name="ChatComposerVoiceListeningStatus.Text" xml:space="preserve">
-    <value>语音输入进行中</value>
-  </data>
   <data name="ChatAcpProfileSelector.PlaceholderText" xml:space="preserve">
     <value>选择 ACP 配置文件</value>
   </data>

@@ -65,9 +65,6 @@
   <data name="ChatComposerPromptInFlightStatus.Text" xml:space="preserve">
     <value>Waiting for the current response to finish.</value>
   </data>
-  <data name="ChatComposerVoiceListeningStatus.Text" xml:space="preserve">
-    <value>Voice input is active.</value>
-  </data>
   <data name="ChatAcpProfileSelector.PlaceholderText" xml:space="preserve">
     <value>Select ACP profile</value>
   </data>

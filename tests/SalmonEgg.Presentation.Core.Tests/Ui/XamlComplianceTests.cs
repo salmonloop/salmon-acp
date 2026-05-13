@@ -315,13 +315,13 @@ public sealed class XamlComplianceTests
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
 
-        Assert.Contains("Visibility=\"{x:Bind ViewModel.IsVoiceInputListening, Mode=OneWay", xaml);
         Assert.Contains("Visibility=\"{x:Bind ViewModel.ShouldShowSlashCommandsUi, Mode=OneWay", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.IsTextInputEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.AreComposerToolsEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind IsSubmitButtonEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanStartVoiceInput, Mode=OneWay}\"", xaml);
         Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanStopVoiceInput, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("ViewModel.IsVoiceInputListening", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("CanSubmitUi", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ViewModel.ComposerState.", xaml, StringComparison.Ordinal);
     }
@@ -332,7 +332,7 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
 
         Assert.DoesNotContain("x:Uid=\"ChatComposerPromptInFlightStatus\"", xaml);
-        Assert.Contains("x:Uid=\"ChatComposerVoiceListeningStatus\"", xaml);
+        Assert.DoesNotContain("x:Uid=\"ChatComposerVoiceListeningStatus\"", xaml);
     }
 
     [Theory]
