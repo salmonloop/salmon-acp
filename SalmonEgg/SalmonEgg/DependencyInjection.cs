@@ -423,6 +423,10 @@ public static class DependencyInjection
                 sp.GetRequiredService<IConversationSessionSwitcher>(),
                 sp.GetRequiredService<INavigationProjectSelectionStore>(),
                 sp.GetRequiredService<IShellNavigationService>()));
+        services.AddTransient<IShellStartupNavigationService>(sp =>
+            new ShellStartupNavigationService(
+                sp.GetRequiredService<INavigationCoordinator>(),
+                sp.GetRequiredService<ILogger<ShellStartupNavigationService>>()));
 
         // Global search
         services.AddSingleton<IGlobalSearchPipeline, DefaultGlobalSearchPipeline>();

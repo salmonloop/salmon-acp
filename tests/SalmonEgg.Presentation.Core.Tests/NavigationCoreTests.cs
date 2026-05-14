@@ -130,6 +130,31 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void MainPage_ActivatesInitialContentFromLoadedLifecycle()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+        var constructorSection = ExtractSection(code, "public MainPage()", "private async void OnAutomationArchiveSelectedClick");
+        var loadedSection = ExtractSection(code, "private async void OnMainPageLoaded", "private void AttachGamepadInput");
+
+        Assert.DoesNotContain("EnsureStartContent();", constructorSection, StringComparison.Ordinal);
+        Assert.Contains("await _startupNavigation.ActivateInitialContentAsync().ConfigureAwait(true);", loadedSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("_navigationCoordinator.ActivateStartAsync", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DependencyInjection_ShellStartupNavigationService_IsScopedToShellInstance()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\DependencyInjection.cs");
+        var section = ExtractSection(
+            code,
+            "services.AddTransient<IShellStartupNavigationService>",
+            "// Global search");
+
+        Assert.Contains("new ShellStartupNavigationService(", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddSingleton<IShellStartupNavigationService>", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainPage_DoesNotBackWriteSelectionFromFrameNavigation()
     {
         var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");

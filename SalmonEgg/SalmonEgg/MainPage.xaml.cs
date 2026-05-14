@@ -96,6 +96,7 @@ public sealed partial class MainPage : Page
     private readonly WindowBackdropService _windowBackdropService;
     private readonly IGamepadInputService _gamepadInputService;
     private readonly IGamepadNavigationDispatcher _gamepadNavigationDispatcher;
+    private readonly IShellStartupNavigationService _startupNavigation;
     private bool _isGamepadInputAttached;
 
     public MainPage()
@@ -116,6 +117,7 @@ public sealed partial class MainPage : Page
         _windowBackdropService = App.ServiceProvider.GetRequiredService<WindowBackdropService>();
         _gamepadInputService = App.ServiceProvider.GetRequiredService<IGamepadInputService>();
         _gamepadNavigationDispatcher = App.ServiceProvider.GetRequiredService<IGamepadNavigationDispatcher>();
+        _startupNavigation = App.ServiceProvider.GetRequiredService<IShellStartupNavigationService>();
         IsGuiAutomationMode = string.Equals(
             Environment.GetEnvironmentVariable("SALMONEGG_GUI"),
             "1",
@@ -157,10 +159,6 @@ public sealed partial class MainPage : Page
         ApplyBackdrop();
         RebuildAppShortcuts();
         // NavVM.PropertyChanged registration removed as layout is now driven by LayoutVM SSOT
-
-        // 4. Default to Start view on launch
-        EnsureStartContent();
-        BootLogDebug("MainPage: navigated to StartView");
     }
 
     private async void OnAutomationArchiveSelectedClick(object sender, RoutedEventArgs e)
@@ -707,6 +705,8 @@ public sealed partial class MainPage : Page
         NavVM.RebuildTree();
         UpdateMainNavAutomationSelectionState();
         _ = _metricsSink.ReportContentContext(IsChatPageType(ContentFrame?.CurrentSourcePageType));
+        await _startupNavigation.ActivateInitialContentAsync().ConfigureAwait(true);
+        BootLogDebug("MainPage: initial shell content activated");
 #if WINDOWS
         InitializeTray();
 #endif
