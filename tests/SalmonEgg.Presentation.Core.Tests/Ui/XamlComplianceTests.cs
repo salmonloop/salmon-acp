@@ -588,15 +588,19 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void TransportComboBoxes_UseExplicitItemTemplates_ForUnoWasm()
+    public void ComboBoxes_DoNotUseDisplayMemberPath_ForUnoWasm()
     {
+        var chatInputXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
         var dialogXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\ConfigurationEditorDialog.xaml");
         var editorXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AgentProfileEditorPage.xaml");
 
+        Assert.DoesNotContain("DisplayMemberPath=", chatInputXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("DisplayMemberPath=\"Name\"", dialogXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("DisplayMemberPath=\"Name\"", editorXaml, StringComparison.Ordinal);
+        Assert.Contains("x:DataType=\"startVm:StartProjectOptionViewModel\"", chatInputXaml, StringComparison.Ordinal);
         Assert.Contains("x:DataType=\"vm:TransportOption\"", dialogXaml, StringComparison.Ordinal);
         Assert.Contains("x:DataType=\"vm:TransportOption\"", editorXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind DisplayName, Mode=OneWay}\"", chatInputXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{x:Bind Name, Mode=OneWay}\"", dialogXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{x:Bind Name, Mode=OneWay}\"", editorXaml, StringComparison.Ordinal);
     }

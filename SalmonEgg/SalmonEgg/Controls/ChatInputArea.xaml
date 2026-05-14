@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
     xmlns:vm="using:SalmonEgg.Presentation.ViewModels.Chat"
+    xmlns:startVm="using:SalmonEgg.Presentation.ViewModels.Start"
     xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:domain="using:SalmonEgg.Domain.Models"
     XYFocusKeyboardNavigation="Enabled"
@@ -180,7 +181,6 @@
                                           ItemsSource="{x:Bind ProjectItemsSource, Mode=OneWay}"
                                           SelectedValuePath="ProjectId"
                                           SelectedValue="{x:Bind SelectedProjectId, Mode=TwoWay}"
-                                          DisplayMemberPath="DisplayName"
                                           MinWidth="160"
                                           MaxWidth="320"
                                           FontSize="12"
@@ -188,7 +188,15 @@
                                           BorderThickness="0"
                                           HorizontalAlignment="Left"
                                           DropDownOpened="OnSelectorDropDownOpened"
-                                          DropDownClosed="OnSelectorDropDownClosed"/>
+                                          DropDownClosed="OnSelectorDropDownClosed">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="startVm:StartProjectOptionViewModel">
+                                            <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxLines="1"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                             </StackPanel>
 
                             <StackPanel Grid.Column="1"
