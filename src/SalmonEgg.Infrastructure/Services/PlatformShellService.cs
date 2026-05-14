@@ -8,17 +8,16 @@ namespace SalmonEgg.Infrastructure.Services;
 
 public sealed class PlatformShellService : IPlatformShellService
 {
-    public Task OpenFolderAsync(string path)
+    private readonly IPlatformCapabilityService _capabilities;
+
+    public PlatformShellService(IPlatformCapabilityService capabilities)
     {
-        TryOpenWithShell(path);
-        return Task.CompletedTask;
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
     }
 
-    public Task OpenFileAsync(string path)
-    {
-        TryOpenWithShell(path);
-        return Task.CompletedTask;
-    }
+    public Task<bool> OpenFolderAsync(string path) => OpenWithShellAsync(path);
+
+    public Task<bool> OpenFileAsync(string path) => OpenWithShellAsync(path);
 
     public Task<bool> CopyToClipboardAsync(string text)
     {
@@ -37,15 +36,15 @@ public sealed class PlatformShellService : IPlatformShellService
         return Task.FromResult(false);
     }
 
-    private static void TryOpenWithShell(string path)
+    private Task<bool> OpenWithShellAsync(string path)
     {
+        if (!_capabilities.SupportsExternalFileOpen || string.IsNullOrWhiteSpace(path))
+        {
+            return Task.FromResult(false);
+        }
+
         try
         {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return;
-            }
-
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 Process.Start(new ProcessStartInfo
@@ -53,19 +52,21 @@ public sealed class PlatformShellService : IPlatformShellService
                     FileName = path,
                     UseShellExecute = true
                 });
-                return;
+                return Task.FromResult(true);
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
                 Process.Start("open", path);
-                return;
+                return Task.FromResult(true);
             }
 
             Process.Start("xdg-open", path);
+            return Task.FromResult(true);
         }
         catch
         {
+            return Task.FromResult(false);
         }
     }
 }

@@ -1,16 +1,17 @@
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls;
 
 namespace SalmonEgg.Controls;
 
-public sealed class ResizeGrip : Control
+public sealed partial class ResizeGrip : Control
 {
     public ResizeGrip()
     {
-        ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
+        ApplyPlatformCursor();
     }
+
+    partial void ApplyPlatformCursor();
 
     protected override void OnPointerEntered(PointerRoutedEventArgs e)
     {

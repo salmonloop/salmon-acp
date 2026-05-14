@@ -37,7 +37,10 @@ public sealed class SessionExportServiceTests : IDisposable
     [Fact]
     public async Task ExportAsync_Json_WritesExportWithMessages()
     {
-        var sut = new SessionExportService(new TestAppDataService(_root), new FileSystemAppFileStore());
+        var sut = new SessionExportService(
+            new TestAppDataService(_root),
+            new TestPlatformCapabilities(supportsLocalFileExport: true),
+            new FileSystemAppFileStore());
         var request = new SessionExportRequest(
             "json",
             "session-1",
@@ -48,12 +51,53 @@ public sealed class SessionExportServiceTests : IDisposable
                 new("message-1", DateTimeOffset.UnixEpoch, true, "text", null, "hello")
             });
 
-        var path = await sut.ExportAsync(request);
+        var result = await sut.ExportAsync(request);
 
+        Assert.Equal(SessionExportStatus.Success, result.Status);
+        var path = Assert.IsType<string>(result.Path);
         Assert.True(File.Exists(path));
         using var json = JsonDocument.Parse(await File.ReadAllTextAsync(path));
         Assert.Equal("session-1", json.RootElement.GetProperty("SessionId").GetString());
         Assert.Single(json.RootElement.GetProperty("Messages").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ExportAsync_WhenLocalFileExportUnsupported_DoesNotCreateExport()
+    {
+        var sut = new SessionExportService(
+            new TestAppDataService(_root),
+            new TestPlatformCapabilities(supportsLocalFileExport: false),
+            new FileSystemAppFileStore());
+        var request = new SessionExportRequest(
+            "json",
+            "session-1",
+            "agent",
+            "1.0",
+            []);
+
+        var result = await sut.ExportAsync(request);
+
+        Assert.Equal(SessionExportStatus.Unsupported, result.Status);
+        Assert.Null(result.Path);
+        Assert.False(Directory.Exists(Path.Combine(_root, "exports")));
+    }
+
+    private sealed class TestPlatformCapabilities : IPlatformCapabilityService
+    {
+        public TestPlatformCapabilities(bool supportsLocalFileExport)
+        {
+            SupportsLocalFileExport = supportsLocalFileExport;
+        }
+
+        public bool SupportsLaunchOnStartup => false;
+        public bool SupportsTray => false;
+        public bool SupportsLanguageOverride => false;
+        public bool SupportsMiniWindow => false;
+        public bool SupportsExternalFileOpen => SupportsLocalFileExport;
+        public bool SupportsLocalFileExport { get; }
+        public bool SupportsStdioTransport => false;
+        public bool SupportsInteractiveTerminalSurface => false;
+        public bool SupportsLocalTerminal => false;
     }
 
     private sealed class TestAppDataService : IAppDataService

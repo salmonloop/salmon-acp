@@ -14,6 +14,7 @@ namespace SalmonEgg.Presentation.ViewModels.Settings;
 public sealed partial class AboutViewModel : ObservableObject
 {
     private readonly IPlatformShellService _shell;
+    private readonly IPlatformCapabilityService _capabilities;
     private readonly IStorageLocationService _storageLocations;
     private readonly IAppDataService _paths;
     private readonly IAppDocumentService _documents;
@@ -30,8 +31,11 @@ public sealed partial class AboutViewModel : ObservableObject
 
     public string DocsRootPath => _documents.DocsRootPath;
 
+    public bool CanOpenExternalFiles => _capabilities.SupportsExternalFileOpen;
+
     public AboutViewModel(
         IPlatformShellService shell,
+        IPlatformCapabilityService capabilities,
         IStorageLocationService storageLocations,
         IAppDataService paths,
         IAppDocumentService documents,
@@ -39,6 +43,7 @@ public sealed partial class AboutViewModel : ObservableObject
         IStringLocalizer<CoreStrings> localizer)
     {
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _storageLocations = storageLocations ?? throw new ArgumentNullException(nameof(storageLocations));
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
@@ -49,7 +54,7 @@ public sealed partial class AboutViewModel : ObservableObject
     [RelayCommand]
     private Task OpenAppDataFolderAsync()
     {
-        return _storageLocations.OpenAsync(AppStorageLocation.AppData);
+        return OpenStorageLocationAsync(AppStorageLocation.AppData);
     }
 
     [RelayCommand]
@@ -62,7 +67,7 @@ public sealed partial class AboutViewModel : ObservableObject
             return;
         }
 
-        await _shell.OpenFileAsync(path);
+        await OpenFileOrNotifyAsync(path);
     }
 
     [RelayCommand]
@@ -75,7 +80,7 @@ public sealed partial class AboutViewModel : ObservableObject
             return;
         }
 
-        await _shell.OpenFileAsync(path);
+        await OpenFileOrNotifyAsync(path);
     }
 
     [RelayCommand]
@@ -100,9 +105,28 @@ public sealed partial class AboutViewModel : ObservableObject
 
         await _ui.ShowInfoAsync(message);
 
-        if (!string.IsNullOrWhiteSpace(folder))
+        if (CanOpenExternalFiles && !string.IsNullOrWhiteSpace(folder))
         {
-            await _storageLocations.OpenExistingFolderAsync(folder);
+            _ = await _storageLocations.OpenExistingFolderAsync(folder);
         }
     }
+
+    private async Task OpenStorageLocationAsync(AppStorageLocation location)
+    {
+        if (!await _storageLocations.OpenAsync(location))
+        {
+            await NotifyExternalOpenUnsupportedAsync();
+        }
+    }
+
+    private async Task OpenFileOrNotifyAsync(string path)
+    {
+        if (!await _shell.OpenFileAsync(path))
+        {
+            await NotifyExternalOpenUnsupportedAsync();
+        }
+    }
+
+    private Task NotifyExternalOpenUnsupportedAsync()
+        => _ui.ShowInfoAsync(_localizer["Platform_ExternalOpenUnsupported"]);
 }

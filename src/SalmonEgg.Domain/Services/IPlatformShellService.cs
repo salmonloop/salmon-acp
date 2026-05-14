@@ -4,9 +4,9 @@ namespace SalmonEgg.Domain.Services;
 
 public interface IPlatformShellService
 {
-    Task OpenFolderAsync(string path);
+    Task<bool> OpenFolderAsync(string path);
 
-    Task OpenFileAsync(string path);
+    Task<bool> OpenFileAsync(string path);
 
     Task<bool> CopyToClipboardAsync(string text);
 }

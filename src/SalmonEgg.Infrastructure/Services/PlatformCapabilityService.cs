@@ -14,6 +14,10 @@ public sealed class PlatformCapabilityService : IPlatformCapabilityService
 
     public bool SupportsMiniWindow => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
+    public bool SupportsExternalFileOpen => IsDesktopProcessHost;
+
+    public bool SupportsLocalFileExport => IsDesktopProcessHost;
+
     public bool SupportsStdioTransport => IsDesktopProcessHost;
 
     public bool SupportsInteractiveTerminalSurface

@@ -25,4 +25,23 @@ public sealed class PlatformCapabilityServiceTests
             RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
             sut.SupportsInteractiveTerminalSurface);
     }
+
+    [Fact]
+    public void SupportsExternalFileOpen_FollowsDesktopProcessHostAvailability()
+    {
+        var sut = new PlatformCapabilityService();
+        var expected = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            || RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        Assert.Equal(expected, sut.SupportsExternalFileOpen);
+    }
+
+    [Fact]
+    public void SupportsLocalFileExport_FollowsDesktopProcessHostAvailability()
+    {
+        var sut = new PlatformCapabilityService();
+
+        Assert.Equal(sut.SupportsExternalFileOpen, sut.SupportsLocalFileExport);
+    }
 }

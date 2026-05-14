@@ -9,6 +9,7 @@ using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Resources;
+using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -18,8 +19,10 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     private readonly IAppDataService _paths;
     private readonly IDiagnosticsBundleService _bundle;
     private readonly IPlatformShellService _shell;
+    private readonly IPlatformCapabilityService _capabilities;
     private readonly IStorageLocationService _storageLocations;
     private readonly ILogFileCatalog _logFileCatalog;
+    private readonly IUiInteractionService _ui;
     private readonly IStringLocalizer<CoreStrings> _localizer;
     private readonly ILogger<DiagnosticsSettingsViewModel> _logger;
 
@@ -41,6 +44,10 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
 
     public string LogsDirectoryPath => _paths.LogsDirectoryPath;
 
+    public bool CanOpenExternalFiles => _capabilities.SupportsExternalFileOpen;
+
+    public bool CanExportLocalFiles => _capabilities.SupportsLocalFileExport;
+
     [ObservableProperty]
     private string? _latestLogFilePath;
 
@@ -49,8 +56,10 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
         IAppDataService paths,
         IDiagnosticsBundleService bundle,
         IPlatformShellService shell,
+        IPlatformCapabilityService capabilities,
         IStorageLocationService storageLocations,
         ILogFileCatalog logFileCatalog,
+        IUiInteractionService ui,
         LiveLogViewerViewModel liveLogViewer,
         IStringLocalizer<CoreStrings> localizer,
         ILogger<DiagnosticsSettingsViewModel> logger)
@@ -59,8 +68,10 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _bundle = bundle ?? throw new ArgumentNullException(nameof(bundle));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _storageLocations = storageLocations ?? throw new ArgumentNullException(nameof(storageLocations));
         _logFileCatalog = logFileCatalog ?? throw new ArgumentNullException(nameof(logFileCatalog));
+        _ui = ui ?? throw new ArgumentNullException(nameof(ui));
         LiveLogViewer = liveLogViewer ?? throw new ArgumentNullException(nameof(liveLogViewer));
         _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -80,10 +91,10 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task OpenLogsFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.Logs);
+    private Task OpenLogsFolderAsync() => OpenStorageLocationAsync(AppStorageLocation.Logs);
 
     [RelayCommand]
-    private Task OpenAppDataFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.AppData);
+    private Task OpenAppDataFolderAsync() => OpenStorageLocationAsync(AppStorageLocation.AppData);
 
     [RelayCommand]
     private async Task CopyRecentLogSnippetAsync()
@@ -121,6 +132,12 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     {
         try
         {
+            if (!CanExportLocalFiles)
+            {
+                await NotifyLocalFileExportUnsupportedAsync();
+                return;
+            }
+
             var snapshot = new DiagnosticsSnapshot
             {
                 AppVersion = AppVersion,
@@ -136,12 +153,35 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
                 }
             };
 
-            var path = await _bundle.CreateBundleAsync(snapshot);
-            await _shell.OpenFileAsync(path);
+            var result = await _bundle.CreateBundleAsync(snapshot);
+            if (result.Status is DiagnosticsBundleStatus.Unsupported || string.IsNullOrWhiteSpace(result.Path))
+            {
+                await NotifyLocalFileExportUnsupportedAsync();
+                return;
+            }
+
+            if (!await _shell.OpenFileAsync(result.Path))
+            {
+                await NotifyExternalOpenUnsupportedAsync();
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "CreateDiagnosticsBundle failed");
         }
     }
+
+    private async Task OpenStorageLocationAsync(AppStorageLocation location)
+    {
+        if (!await _storageLocations.OpenAsync(location))
+        {
+            await NotifyExternalOpenUnsupportedAsync();
+        }
+    }
+
+    private Task NotifyExternalOpenUnsupportedAsync()
+        => _ui.ShowInfoAsync(_localizer["Platform_ExternalOpenUnsupported"]);
+
+    private Task NotifyLocalFileExportUnsupportedAsync()
+        => _ui.ShowInfoAsync(_localizer["Platform_LocalFileExportUnsupported"]);
 }

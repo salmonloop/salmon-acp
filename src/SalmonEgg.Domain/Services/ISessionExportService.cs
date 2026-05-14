@@ -8,7 +8,20 @@ namespace SalmonEgg.Domain.Services;
 
 public interface ISessionExportService
 {
-    Task<string> ExportAsync(SessionExportRequest request, CancellationToken cancellationToken = default);
+    Task<SessionExportResult> ExportAsync(SessionExportRequest request, CancellationToken cancellationToken = default);
+}
+
+public enum SessionExportStatus
+{
+    Success,
+    Unsupported
+}
+
+public sealed record SessionExportResult(SessionExportStatus Status, string? Path)
+{
+    public static SessionExportResult Success(string path) => new(SessionExportStatus.Success, path);
+
+    public static SessionExportResult Unsupported() => new(SessionExportStatus.Unsupported, null);
 }
 
 public sealed record SessionExportRequest(

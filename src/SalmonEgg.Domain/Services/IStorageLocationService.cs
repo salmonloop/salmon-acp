@@ -12,7 +12,7 @@ public enum AppStorageLocation
 
 public interface IStorageLocationService
 {
-    Task OpenAsync(AppStorageLocation location);
+    Task<bool> OpenAsync(AppStorageLocation location);
 
-    Task OpenExistingFolderAsync(string path);
+    Task<bool> OpenExistingFolderAsync(string path);
 }

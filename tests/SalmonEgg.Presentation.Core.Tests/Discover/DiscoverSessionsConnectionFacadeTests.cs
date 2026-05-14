@@ -61,6 +61,10 @@ public sealed class DiscoverSessionsConnectionFacadeTests
 
         public bool SupportsMiniWindow => true;
 
+        public bool SupportsExternalFileOpen => true;
+
+        public bool SupportsLocalFileExport => true;
+
         public bool SupportsStdioTransport { get; }
 
         public bool SupportsInteractiveTerminalSurface => SupportsStdioTransport;

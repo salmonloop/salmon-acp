@@ -37,6 +37,8 @@ internal sealed class TestCoreStringLocalizer : IStringLocalizer<CoreStrings>
         ["About_VersionInfoProtocolLabel"] = "协议",
         ["About_VersionInfoCopied"] = "版本信息已复制到剪贴板。",
         ["About_ClipboardUnsupported"] = "当前平台暂不支持剪贴板复制。",
+        ["Platform_ExternalOpenUnsupported"] = "当前平台暂不支持打开本地文件或目录。",
+        ["Platform_LocalFileExportUnsupported"] = "当前平台暂不支持导出本地文件。",
         ["About_MissingDocumentMessage"] = "未找到{0}文件。",
         ["About_MissingDocumentWithFolderMessage"] = "未找到{0}文件。\n请在以下目录创建对应的 Markdown 文件：\n{1}"
     };

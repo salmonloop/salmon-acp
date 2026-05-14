@@ -62,7 +62,8 @@
                                     Click="OnClearCacheClick" />
                             <Button x:Uid="DataStorage_OpenCacheFolder"
                                     Content="打开缓存目录"
-                                    Command="{x:Bind ViewModel.OpenCacheFolderCommand}" />
+                                    Command="{x:Bind ViewModel.OpenCacheFolderCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -78,12 +79,24 @@
                     <StackPanel Spacing="12">
                         <TextBlock x:Uid="DataStorage_ExportDescription" Text="导出会话（当前会话/当前消息列表）与诊断包到 exports 目录" Opacity="0.7" TextWrapping="Wrap"/>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Uid="DataStorage_ExportMarkdown" Content="导出会话（Markdown）" Command="{x:Bind ViewModel.ExportCurrentSessionMarkdownCommand}" />
-                            <Button x:Uid="DataStorage_ExportJson" Content="导出会话（JSON）" Command="{x:Bind ViewModel.ExportCurrentSessionJsonCommand}" />
+                            <Button x:Uid="DataStorage_ExportMarkdown"
+                                    Content="导出会话（Markdown）"
+                                    Command="{x:Bind ViewModel.ExportCurrentSessionMarkdownCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanExportLocalFiles, Mode=OneWay}" />
+                            <Button x:Uid="DataStorage_ExportJson"
+                                    Content="导出会话（JSON）"
+                                    Command="{x:Bind ViewModel.ExportCurrentSessionJsonCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanExportLocalFiles, Mode=OneWay}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Uid="DataStorage_ExportDiagnostics" Content="导出诊断包（ZIP）" Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}" />
-                            <Button x:Uid="DataStorage_OpenExports" Content="打开导出目录" Command="{x:Bind ViewModel.OpenExportsFolderCommand}" />
+                            <Button x:Uid="DataStorage_ExportDiagnostics"
+                                    Content="导出诊断包（ZIP）"
+                                    Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanExportLocalFiles, Mode=OneWay}" />
+                            <Button x:Uid="DataStorage_OpenExports"
+                                    Content="打开导出目录"
+                                    Command="{x:Bind ViewModel.OpenExportsFolderCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

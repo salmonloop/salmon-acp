@@ -75,6 +75,12 @@
   <data name="About_ClipboardUnsupported" xml:space="preserve">
     <value>当前平台暂不支持剪贴板复制。</value>
   </data>
+  <data name="Platform_ExternalOpenUnsupported" xml:space="preserve">
+    <value>当前平台暂不支持打开本地文件或目录。</value>
+  </data>
+  <data name="Platform_LocalFileExportUnsupported" xml:space="preserve">
+    <value>当前平台暂不支持导出本地文件。</value>
+  </data>
   <data name="About_MissingDocumentMessage" xml:space="preserve">
     <value>未找到{0}文件。</value>
   </data>

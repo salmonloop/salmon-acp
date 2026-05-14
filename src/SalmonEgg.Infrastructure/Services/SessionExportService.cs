@@ -13,19 +13,29 @@ namespace SalmonEgg.Infrastructure.Services;
 public sealed class SessionExportService : ISessionExportService
 {
     private readonly IAppDataService _paths;
+    private readonly IPlatformCapabilityService _capabilities;
     private readonly IAppFileStore _fileStore;
 
-    public SessionExportService(IAppDataService paths, IAppFileStore fileStore)
+    public SessionExportService(
+        IAppDataService paths,
+        IPlatformCapabilityService capabilities,
+        IAppFileStore fileStore)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
     }
 
-    public async Task<string> ExportAsync(SessionExportRequest request, CancellationToken cancellationToken = default)
+    public async Task<SessionExportResult> ExportAsync(SessionExportRequest request, CancellationToken cancellationToken = default)
     {
         if (request is null)
         {
             throw new ArgumentNullException(nameof(request));
+        }
+
+        if (!_capabilities.SupportsLocalFileExport)
+        {
+            return SessionExportResult.Unsupported();
         }
 
         var format = string.Equals(request.Format, "json", StringComparison.OrdinalIgnoreCase) ? "json" : "md";
@@ -36,7 +46,7 @@ public sealed class SessionExportService : ISessionExportService
         var content = format == "json" ? BuildJson(request) : BuildMarkdown(request);
 
         await _fileStore.WriteAllTextAsync(path, content, cancellationToken).ConfigureAwait(false);
-        return path;
+        return SessionExportResult.Success(path);
     }
 
     private static string BuildJson(SessionExportRequest request)

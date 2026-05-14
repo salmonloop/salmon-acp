@@ -11,15 +11,24 @@ namespace SalmonEgg.Infrastructure.Services;
 public sealed class DiagnosticsBundleService : IDiagnosticsBundleService
 {
     private readonly IAppDataService _paths;
+    private readonly IPlatformCapabilityService _capabilities;
 
-    public DiagnosticsBundleService(IAppDataService paths)
+    public DiagnosticsBundleService(
+        IAppDataService paths,
+        IPlatformCapabilityService capabilities)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
     }
 
-    public async Task<string> CreateBundleAsync(DiagnosticsSnapshot snapshot)
+    public async Task<DiagnosticsBundleResult> CreateBundleAsync(DiagnosticsSnapshot snapshot)
     {
         if (snapshot is null) throw new ArgumentNullException(nameof(snapshot));
+
+        if (!_capabilities.SupportsLocalFileExport)
+        {
+            return DiagnosticsBundleResult.Unsupported();
+        }
 
         Directory.CreateDirectory(_paths.ExportsDirectoryPath);
 
@@ -46,7 +55,7 @@ public sealed class DiagnosticsBundleService : IDiagnosticsBundleService
             }
 
             ZipFile.CreateFromDirectory(tempDir, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
-            return zipPath;
+            return DiagnosticsBundleResult.Success(zipPath);
         }
         finally
         {

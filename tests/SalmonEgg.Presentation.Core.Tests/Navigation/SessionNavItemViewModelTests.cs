@@ -237,9 +237,9 @@ public sealed class SessionNavItemViewModelTests
     {
         public string? LastCopiedText { get; private set; }
 
-        public Task OpenFolderAsync(string path) => Task.CompletedTask;
+        public Task<bool> OpenFolderAsync(string path) => Task.FromResult(false);
 
-        public Task OpenFileAsync(string path) => Task.CompletedTask;
+        public Task<bool> OpenFileAsync(string path) => Task.FromResult(false);
 
         public Task<bool> CopyToClipboardAsync(string text)
         {

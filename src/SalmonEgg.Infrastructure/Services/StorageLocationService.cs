@@ -8,33 +8,41 @@ namespace SalmonEgg.Infrastructure.Services;
 public sealed class StorageLocationService : IStorageLocationService
 {
     private readonly IAppDataService _paths;
+    private readonly IPlatformCapabilityService _capabilities;
     private readonly IPlatformShellService _shell;
 
     public StorageLocationService(
         IAppDataService paths,
+        IPlatformCapabilityService capabilities,
         IPlatformShellService shell)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
     }
 
-    public async Task OpenAsync(AppStorageLocation location)
+    public async Task<bool> OpenAsync(AppStorageLocation location)
     {
+        if (!_capabilities.SupportsExternalFileOpen)
+        {
+            return false;
+        }
+
         var path = ResolvePath(location);
         Directory.CreateDirectory(path);
-        await _shell.OpenFolderAsync(path).ConfigureAwait(false);
+        return await _shell.OpenFolderAsync(path).ConfigureAwait(false);
     }
 
-    public Task OpenExistingFolderAsync(string path)
+    public Task<bool> OpenExistingFolderAsync(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        if (!_capabilities.SupportsExternalFileOpen || string.IsNullOrWhiteSpace(path))
         {
-            return Task.CompletedTask;
+            return Task.FromResult(false);
         }
 
         if (!Directory.Exists(path))
         {
-            return Task.CompletedTask;
+            return Task.FromResult(false);
         }
 
         return _shell.OpenFolderAsync(path);

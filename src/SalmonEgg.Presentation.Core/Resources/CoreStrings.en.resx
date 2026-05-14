@@ -36,6 +36,12 @@
   <data name="About_ClipboardUnsupported" xml:space="preserve">
     <value>Clipboard copy is not supported on this platform.</value>
   </data>
+  <data name="Platform_ExternalOpenUnsupported" xml:space="preserve">
+    <value>Opening local files or folders is not supported on this platform.</value>
+  </data>
+  <data name="Platform_LocalFileExportUnsupported" xml:space="preserve">
+    <value>Exporting local files is not supported on this platform.</value>
+  </data>
   <data name="About_MissingDocumentMessage" xml:space="preserve">
     <value>The {0} file was not found.</value>
   </data>

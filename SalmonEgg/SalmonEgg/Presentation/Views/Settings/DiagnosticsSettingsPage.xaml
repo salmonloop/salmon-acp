@@ -53,7 +53,10 @@
                         <TextBlock Text="{x:Bind ViewModel.LatestLogFilePath, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap"/>
 
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Uid="Diagnostics_OpenLogs" Content="打开日志目录" Command="{x:Bind ViewModel.OpenLogsFolderCommand}" />
+                            <Button x:Uid="Diagnostics_OpenLogs"
+                                    Content="打开日志目录"
+                                    Command="{x:Bind ViewModel.OpenLogsFolderCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
                             <Button x:Uid="Diagnostics_CopyLogSnippet" Content="复制最近日志片段" Command="{x:Bind ViewModel.CopyRecentLogSnippetCommand}" />
                             <Button x:Uid="Diagnostics_RefreshLogs" Content="刷新" Command="{x:Bind ViewModel.RefreshLatestLogFileCommand}" />
                         </StackPanel>
@@ -143,7 +146,10 @@
                         Padding="16">
                     <StackPanel Spacing="12">
                         <TextBlock x:Uid="Diagnostics_BundleDescription" Text="生成 ZIP 包，包含配置（不含密钥）、日志与环境快照。" Opacity="0.7" TextWrapping="Wrap"/>
-                        <Button x:Uid="Diagnostics_CreateBundle" Content="生成诊断包（ZIP）" Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}" />
+                        <Button x:Uid="Diagnostics_CreateBundle"
+                                Content="生成诊断包（ZIP）"
+                                Command="{x:Bind ViewModel.CreateDiagnosticsBundleCommand}"
+                                IsEnabled="{x:Bind ViewModel.CanExportLocalFiles, Mode=OneWay}" />
                     </StackPanel>
                 </Border>
             </StackPanel>

@@ -12,6 +12,8 @@ using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.ConversationPreview;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
+using SalmonEgg.Presentation.Core.Tests.Localization;
+using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Chat.Transcript;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -180,7 +182,11 @@ public partial class ChatViewModelTests
             var maintenance = new Mock<IAppMaintenanceService>();
             var diagnostics = new Mock<IDiagnosticsBundleService>();
             var shell = new Mock<IPlatformShellService>();
+            var capabilities = new Mock<IPlatformCapabilityService>();
+            capabilities.SetupGet(service => service.SupportsExternalFileOpen).Returns(true);
+            capabilities.SetupGet(service => service.SupportsLocalFileExport).Returns(true);
             var storageLocations = new Mock<IStorageLocationService>();
+            var ui = new Mock<IUiInteractionService>();
             var sessionExport = new Mock<ISessionExportService>();
             sessionExport.Setup(service => service.ExportAsync(It.IsAny<SessionExportRequest>(), default))
                 .Returns<SessionExportRequest, CancellationToken>(async (request, _) =>
@@ -189,9 +195,9 @@ public partial class ChatViewModelTests
                     var json = JsonSerializer.Serialize(
                         new { Messages = request.Messages.Select(message => new { message.Id }) });
                     await System.IO.File.WriteAllTextAsync(path, json);
-                    return path;
+                    return SessionExportResult.Success(path);
                 });
-            shell.Setup(service => service.OpenFileAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+            shell.Setup(service => service.OpenFileAsync(It.IsAny<string>())).ReturnsAsync(true);
             var preferences = (AppPreferencesViewModel)RuntimeHelpers.GetUninitializedObject(typeof(AppPreferencesViewModel));
             var settings = new DataStorageSettingsViewModel(
                 preferences,
@@ -200,8 +206,11 @@ public partial class ChatViewModelTests
                 maintenance.Object,
                 diagnostics.Object,
                 shell.Object,
+                capabilities.Object,
                 storageLocations.Object,
                 sessionExport.Object,
+                ui.Object,
+                new TestCoreStringLocalizer(),
                 Mock.Of<ILogger<DataStorageSettingsViewModel>>());
 
             await settings.ExportCurrentSessionJsonCommand.ExecuteAsync(null);

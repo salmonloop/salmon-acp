@@ -930,6 +930,18 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("var legacyValue = Encoding.UTF8.GetString(bytes);", code, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ResizeGrip_KeepsPlatformCursorImplementationOutOfSharedControl()
+    {
+        var sharedControl = LoadText(@"SalmonEgg\SalmonEgg\Controls\ResizeGrip.cs");
+        var windowsImplementation = LoadText(@"SalmonEgg\SalmonEgg\Platforms\Windows\ResizeGrip.Windows.cs");
+
+        Assert.Contains("partial void ApplyPlatformCursor()", sharedControl, StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.UI.Input", sharedControl, StringComparison.Ordinal);
+        Assert.DoesNotContain("InputSystemCursor", sharedControl, StringComparison.Ordinal);
+        Assert.Contains("InputSystemCursor.Create", windowsImplementation, StringComparison.Ordinal);
+    }
+
 
     private static string LoadXaml(string relativePath)
     {
