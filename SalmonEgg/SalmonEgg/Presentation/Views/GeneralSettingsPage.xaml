@@ -96,35 +96,6 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-
-            <!-- 维护组 -->
-            <StackPanel Spacing="12">
-                <TextBlock x:Uid="General_MaintenanceTitle" Text="维护" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
-
-                <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="16">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                            <TextBlock x:Uid="General_ClearCacheTitle" Text="清理本地缓存" FontWeight="Medium"/>
-                            <TextBlock x:Uid="General_ClearCacheDescription" Text="将删除本地缓存目录下的所有文件"
-                                       FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                x:Uid="General_ClearCacheAction"
-                                Content="清理"
-                                Command="{x:Bind ViewModel.ClearCacheCommand}"
-                                VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
-            </StackPanel>
                 </StackPanel>
             </controls:ResponsiveSettingsHost.Child>
         </controls:ResponsiveSettingsHost>

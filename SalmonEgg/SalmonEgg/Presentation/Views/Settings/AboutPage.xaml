@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:SalmonEgg.Controls"
+    xmlns:settings="using:SalmonEgg.Presentation.ViewModels.Settings"
     xmlns:views="using:SalmonEgg.Presentation.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -44,15 +45,17 @@
                                 Content="打开应用数据目录"
                                 Command="{x:Bind ViewModel.OpenAppDataFolderCommand}"
                                 IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Uid="About_OpenReleaseNotes"
-                                    Content="打开更新日志"
-                                    Command="{x:Bind ViewModel.OpenReleaseNotesCommand}"
-                                    IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
-                            <Button x:Uid="About_OpenPrivacyPolicy"
-                                    Content="打开隐私政策"
-                                    Command="{x:Bind ViewModel.OpenPrivacyPolicyCommand}"
-                                    IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Uid="About_OpenReleaseNotes"
+                                        Content="打开更新日志"
+                                        Command="{x:Bind ViewModel.OpenReleaseNotesCommand}"
+                                        IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
+                                <Button x:Uid="About_OpenPrivacyPolicy"
+                                        Content="打开隐私政策"
+                                        Command="{x:Bind ViewModel.OpenPrivacyPolicyCommand}"
+                                        IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}" />
+                            </StackPanel>
                             <Button x:Uid="About_CopyVersionInfo" Content="复制版本信息" Command="{x:Bind ViewModel.CopyVersionInfoCommand}" />
                         </StackPanel>
                         <TextBlock x:Uid="About_DocsFolderLabel" Text="文档目录：" FontWeight="SemiBold"/>
@@ -60,6 +63,58 @@
                         <TextBlock x:Uid="About_DocsHint" Text="将 release-notes.md 与 privacy-policy.md 放入该目录后即可一键打开。"
                                    Opacity="0.7"
                                    TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <TextBlock x:Uid="About_OpenSourceTitle" Text="开源鸣谢" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AccentBrush}"/>
+                <Border Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="16">
+                    <StackPanel Spacing="12">
+                        <TextBlock x:Uid="About_OpenSourceDescription" Text="构建时根据 PackageReference 自动生成。"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"/>
+                        <ListView ItemsSource="{x:Bind ViewModel.OpenSourceAcknowledgements, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  MaxHeight="360"
+                                  AutomationProperties.AutomationId="About.OpenSourceAcknowledgements">
+                            <ListView.Header>
+                                <Grid Padding="0,0,0,8"
+                                      ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="2*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Uid="About_OpenSourcePackageHeader" Text="项目" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="1" x:Uid="About_OpenSourceVersionHeader" Text="版本" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="2" x:Uid="About_OpenSourceLicenseHeader" Text="许可证" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Column="3" x:Uid="About_OpenSourceSourceHeader" Text="来源" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </Grid>
+                            </ListView.Header>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="settings:OpenSourceAcknowledgementViewModel">
+                                    <Grid Padding="0,8"
+                                          ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="2*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Version, Mode=OneWay}" Opacity="0.72" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="2" Text="{x:Bind License, Mode=OneWay}" Opacity="0.72" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="3" Text="{x:Bind SourceUrl, Mode=OneWay}" Opacity="0.72" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                     </StackPanel>
                 </Border>
             </StackPanel>

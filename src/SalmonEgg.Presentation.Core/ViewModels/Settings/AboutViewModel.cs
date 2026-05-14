@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,6 +9,7 @@ using Microsoft.Extensions.Localization;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Resources;
+using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Services;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -20,6 +23,7 @@ public sealed partial class AboutViewModel : ObservableObject
     private readonly IAppDocumentService _documents;
     private readonly IUiInteractionService _ui;
     private readonly IStringLocalizer<CoreStrings> _localizer;
+    private readonly IReadOnlyList<OpenSourceAcknowledgement> _acknowledgements;
 
     public string AppName => "SalmonEgg";
 
@@ -33,6 +37,8 @@ public sealed partial class AboutViewModel : ObservableObject
 
     public bool CanOpenExternalFiles => _capabilities.SupportsExternalFileOpen;
 
+    public IReadOnlyList<OpenSourceAcknowledgementViewModel> OpenSourceAcknowledgements => CreateOpenSourceAcknowledgements();
+
     public AboutViewModel(
         IPlatformShellService shell,
         IPlatformCapabilityService capabilities,
@@ -40,7 +46,8 @@ public sealed partial class AboutViewModel : ObservableObject
         IAppDataService paths,
         IAppDocumentService documents,
         IUiInteractionService ui,
-        IStringLocalizer<CoreStrings> localizer)
+        IStringLocalizer<CoreStrings> localizer,
+        IOpenSourceAcknowledgementsProvider acknowledgementsProvider)
     {
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
@@ -49,7 +56,27 @@ public sealed partial class AboutViewModel : ObservableObject
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _ui = ui ?? throw new ArgumentNullException(nameof(ui));
         _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
+        ArgumentNullException.ThrowIfNull(acknowledgementsProvider);
+        _acknowledgements = acknowledgementsProvider.GetAcknowledgements()
+            ?? Array.Empty<OpenSourceAcknowledgement>();
     }
+
+    private IReadOnlyList<OpenSourceAcknowledgementViewModel> CreateOpenSourceAcknowledgements()
+        => _acknowledgements
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(item => new OpenSourceAcknowledgementViewModel(
+                item.Name.Trim(),
+                string.IsNullOrWhiteSpace(item.Version)
+                    ? _localizer["About_AcknowledgementVersionFallback"]
+                    : item.Version.Trim(),
+                string.IsNullOrWhiteSpace(item.License)
+                    ? _localizer["About_AcknowledgementLicenseFallback"]
+                    : item.License.Trim(),
+                string.IsNullOrWhiteSpace(item.SourceUrl)
+                    ? _localizer["About_AcknowledgementSourceFallback"]
+                    : item.SourceUrl.Trim()))
+            .ToArray();
 
     [RelayCommand]
     private Task OpenAppDataFolderAsync()

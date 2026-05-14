@@ -47,6 +47,37 @@
     <PackageReference Include="Uno.Extensions.Reactive" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(TargetFramework)' != ''">
+    <OpenSourceAcknowledgementsGeneratedDirectory>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)</OpenSourceAcknowledgementsGeneratedDirectory>
+    <OpenSourceAcknowledgementsGeneratedFile>$(OpenSourceAcknowledgementsGeneratedDirectory)\OpenSourceAcknowledgements.tsv</OpenSourceAcknowledgementsGeneratedFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OpenSourceAcknowledgementsGeneratedFile)' != ''">
+    <EmbeddedResource Include="$(OpenSourceAcknowledgementsGeneratedFile)"
+                      LogicalName="SalmonEgg.Presentation.Services.OpenSourceAcknowledgements.tsv"
+                      Visible="false" />
+  </ItemGroup>
+
+  <Target Name="GenerateOpenSourceAcknowledgements"
+          BeforeTargets="CreateManifestResourceNames"
+          Condition="'$(OpenSourceAcknowledgementsGeneratedFile)' != ''">
+    <ItemGroup>
+      <_OpenSourceAcknowledgementPackage Include="@(PackageReference)">
+        <PackageName>%(PackageReference.Identity)</PackageName>
+        <PackageVersion Condition="'%(PackageReference.Version)' != ''">%(PackageReference.Version)</PackageVersion>
+        <PackageVersion Condition="'%(PackageReference.Version)' == ''">SDK-managed</PackageVersion>
+        <PackageLicense Condition="'%(PackageReference.PackageLicenseExpression)' != ''">%(PackageReference.PackageLicenseExpression)</PackageLicense>
+        <PackageSource Condition="'%(PackageReference.PackageProjectUrl)' != ''">%(PackageReference.PackageProjectUrl)</PackageSource>
+      </_OpenSourceAcknowledgementPackage>
+      <_OpenSourceAcknowledgementManifestLine Include="@(_OpenSourceAcknowledgementPackage->'%(PackageName)%09%(PackageVersion)%09%(PackageLicense)%09%(PackageSource)')" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(OpenSourceAcknowledgementsGeneratedDirectory)" />
+    <WriteLinesToFile File="$(OpenSourceAcknowledgementsGeneratedFile)"
+                      Lines="@(_OpenSourceAcknowledgementManifestLine)"
+                      Overwrite="true" />
+  </Target>
+
   <ItemGroup>
     <!-- Use the repository's custom black-and-white artwork as the single Uno.Resizetizer app icon source. -->
     <UnoIcon Include="Assets\Icons\icon.png" />

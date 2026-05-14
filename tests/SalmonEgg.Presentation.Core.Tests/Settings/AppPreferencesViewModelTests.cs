@@ -63,6 +63,52 @@ public class AppPreferencesViewModelTests
     }
 
     [Fact]
+    public async Task LoadAsync_RestoresAnimationPreference()
+    {
+        var appSettings = new AppSettings
+        {
+            Theme = "System",
+            IsAnimationEnabled = false,
+            Backdrop = "System",
+            LaunchOnStartup = false,
+            MinimizeToTray = true,
+            Language = "System",
+            SaveLocalHistory = true,
+            CacheRetentionDays = 7
+        };
+
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(appSettings);
+
+        var startupService = new Mock<IAppStartupService>();
+        startupService.SetupGet(s => s.IsSupported).Returns(false);
+
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        capabilities.SetupGet(c => c.SupportsLaunchOnStartup).Returns(false);
+        capabilities.SetupGet(c => c.SupportsTray).Returns(false);
+        capabilities.SetupGet(c => c.SupportsLanguageOverride).Returns(false);
+
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        var logger = new Mock<ILogger<AppPreferencesViewModel>>();
+
+        var vm = new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            logger.Object,
+            new ImmediateUiDispatcher());
+
+        await Task.Delay(100);
+
+        Assert.False(vm.IsAnimationEnabled);
+        uiRuntime.Verify(u => u.SetAnimationsEnabled(false), Times.AtLeastOnce);
+        appSettingsService.Verify(s => s.SaveAsync(It.IsAny<AppSettings>()), Times.Never);
+    }
+
+    [Fact]
     public async Task LoadAsync_NormalizesLegacyLanguageTagBeforeApplyingOverride()
     {
         var appSettingsService = new Mock<IAppSettingsService>();

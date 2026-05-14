@@ -199,6 +199,18 @@
   <data name="DataStorage_ResetWarning.Text" xml:space="preserve">
     <value>清空本地数据会删除配置、日志、缓存等文件。此操作不可撤销。</value>
   </data>
+  <data name="DataStorage_DangerTitle.Text" xml:space="preserve">
+    <value>危险操作</value>
+  </data>
+  <data name="DataStorage_DangerWarning.Text" xml:space="preserve">
+    <value>以下操作会影响偏好设置或删除本地文件，请确认当前会话已保存。</value>
+  </data>
+  <data name="DataStorage_ResetDefaultsHint.Text" xml:space="preserve">
+    <value>仅恢复常规、外观、数据与存储、快捷键等偏好，不删除日志或会话导出。</value>
+  </data>
+  <data name="DataStorage_ClearAllDataHint.Text" xml:space="preserve">
+    <value>删除配置、日志、缓存、导出等文件。此操作不可撤销。</value>
+  </data>
 
   <data name="Diagnostics_EnvironmentTitle.Text" xml:space="preserve">
     <value>运行环境</value>
@@ -330,6 +342,33 @@
   </data>
   <data name="About_DocsHint.Text" xml:space="preserve">
     <value>将 release-notes.md 与 privacy-policy.md 放入该目录后即可一键打开。</value>
+  </data>
+  <data name="About_OpenSourceTitle.Text" xml:space="preserve">
+    <value>开源鸣谢</value>
+  </data>
+  <data name="About_OpenSourceDescription.Text" xml:space="preserve">
+    <value>构建时根据 PackageReference 自动生成。</value>
+  </data>
+  <data name="About_OpenSourcePackageHeader.Text" xml:space="preserve">
+    <value>项目</value>
+  </data>
+  <data name="About_OpenSourceVersionHeader.Text" xml:space="preserve">
+    <value>版本</value>
+  </data>
+  <data name="About_OpenSourceLicenseHeader.Text" xml:space="preserve">
+    <value>许可证</value>
+  </data>
+  <data name="About_OpenSourceSourceHeader.Text" xml:space="preserve">
+    <value>来源</value>
+  </data>
+  <data name="About_AcknowledgementVersionFallback" xml:space="preserve">
+    <value>版本未列出</value>
+  </data>
+  <data name="About_AcknowledgementLicenseFallback" xml:space="preserve">
+    <value>许可证未列出</value>
+  </data>
+  <data name="About_AcknowledgementSourceFallback" xml:space="preserve">
+    <value>来源未列出</value>
   </data>
 
   <data name="Conn_Title.Text" xml:space="preserve">

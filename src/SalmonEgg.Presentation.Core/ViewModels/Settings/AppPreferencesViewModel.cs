@@ -130,7 +130,6 @@ public partial class AppPreferencesViewModel : ObservableObject
             _suppressSave = true;
             var settings = await _appSettingsService.LoadAsync();
             var launchOnStartup = settings.LaunchOnStartup;
-            var shouldPersistAnimation = !settings.IsAnimationEnabled;
 
             try
             {
@@ -148,9 +147,7 @@ public partial class AppPreferencesViewModel : ObservableObject
             _uiDispatcher.Enqueue(() =>
             {
                 Theme = settings.Theme;
-                // Default to enabled and mark "disable" as not yet supported in UI.
-                IsAnimationEnabled = true;
-                _uiRuntime.SetAnimationsEnabled(true);
+                IsAnimationEnabled = settings.IsAnimationEnabled;
                 Backdrop = settings.Backdrop;
                 LaunchOnStartup = launchOnStartup;
                 MinimizeToTray = settings.MinimizeToTray;
@@ -200,12 +197,6 @@ public partial class AppPreferencesViewModel : ObservableObject
                 foreach (var kvp in settings.KeyBindings)
                 {
                     KeyBindings.Add(new KeyBindingPairViewModel(kvp.Key, kvp.Value));
-                }
-
-                if (shouldPersistAnimation)
-                {
-                    _suppressSave = false;
-                    ScheduleSave();
                 }
             });
 

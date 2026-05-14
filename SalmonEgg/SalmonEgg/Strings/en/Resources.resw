@@ -594,4 +594,73 @@
   <data name="ToolCallPillSummaryAudioContent" xml:space="preserve">
     <value>Audio content</value>
   </data>
+  <data name="DataStorage_DangerTitle.Text" xml:space="preserve">
+    <value>Danger zone</value>
+  </data>
+  <data name="DataStorage_DangerWarning.Text" xml:space="preserve">
+    <value>These actions affect preferences or delete local files. Make sure the current session is saved.</value>
+  </data>
+  <data name="DataStorage_ResetDefaultsHint.Text" xml:space="preserve">
+    <value>Restores General, Appearance, Data &amp; Storage, and Shortcuts preferences without deleting logs or exports.</value>
+  </data>
+  <data name="DataStorage_ClearAllDataHint.Text" xml:space="preserve">
+    <value>Deletes configuration, logs, caches, exports, and other local files. This cannot be undone.</value>
+  </data>
+  <data name="About_AppInfoTitle.Text" xml:space="preserve">
+    <value>App info</value>
+  </data>
+  <data name="About_VersionLabel.Text" xml:space="preserve">
+    <value>Version:</value>
+  </data>
+  <data name="About_ProtocolLabel.Text" xml:space="preserve">
+    <value>Protocol version:</value>
+  </data>
+  <data name="About_SupportTitle.Text" xml:space="preserve">
+    <value>Support</value>
+  </data>
+  <data name="About_OpenAppData.Content" xml:space="preserve">
+    <value>Open app data folder</value>
+  </data>
+  <data name="About_OpenReleaseNotes.Content" xml:space="preserve">
+    <value>Open release notes</value>
+  </data>
+  <data name="About_OpenPrivacyPolicy.Content" xml:space="preserve">
+    <value>Open privacy policy</value>
+  </data>
+  <data name="About_CopyVersionInfo.Content" xml:space="preserve">
+    <value>Copy version info</value>
+  </data>
+  <data name="About_DocsFolderLabel.Text" xml:space="preserve">
+    <value>Docs folder:</value>
+  </data>
+  <data name="About_DocsHint.Text" xml:space="preserve">
+    <value>Place release-notes.md and privacy-policy.md here to open them.</value>
+  </data>
+  <data name="About_OpenSourceTitle.Text" xml:space="preserve">
+    <value>Open source acknowledgements</value>
+  </data>
+  <data name="About_OpenSourceDescription.Text" xml:space="preserve">
+    <value>Generated from package references during build.</value>
+  </data>
+  <data name="About_OpenSourcePackageHeader.Text" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="About_OpenSourceVersionHeader.Text" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="About_OpenSourceLicenseHeader.Text" xml:space="preserve">
+    <value>License</value>
+  </data>
+  <data name="About_OpenSourceSourceHeader.Text" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="About_AcknowledgementVersionFallback" xml:space="preserve">
+    <value>Version not listed</value>
+  </data>
+  <data name="About_AcknowledgementLicenseFallback" xml:space="preserve">
+    <value>License not listed</value>
+  </data>
+  <data name="About_AcknowledgementSourceFallback" xml:space="preserve">
+    <value>Source not listed</value>
+  </data>
 </root>

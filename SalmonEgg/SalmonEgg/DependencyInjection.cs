@@ -557,6 +557,7 @@ public static class DependencyInjection
                 sp.GetRequiredService<IUiDispatcher>(),
                 sp.GetRequiredService<IStringLocalizer<CoreStrings>>()));
         services.AddSingleton<DiagnosticsSettingsViewModel>();
+        services.AddSingleton<IOpenSourceAcknowledgementsProvider, GeneratedOpenSourceAcknowledgementsProvider>();
         services.AddSingleton<AboutViewModel>();
 
         // Shell navigation facade (prevents Settings pages from walking the visual tree)

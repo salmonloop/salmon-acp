@@ -833,6 +833,74 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void SettingsShell_KeepsSectionNavigationAtTheTop()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsShellPage.xaml");
+
+        Assert.Contains("<Setter Property=\"PaneDisplayMode\" Value=\"Top\" />", xaml);
+        Assert.DoesNotContain("PaneDisplayMode\" Value=\"Left", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<NavigationViewItemHeader", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GeneralSettingsPage_DoesNotDuplicateCacheMaintenance()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\GeneralSettingsPage.xaml");
+
+        Assert.DoesNotContain("General_MaintenanceTitle", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("General_ClearCacheTitle", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("General_ClearCacheAction", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppearanceSettingsPage_MotionPreferenceIsActionable()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AppearanceSettingsPage.xaml");
+
+        Assert.Contains("IsOn=\"{x:Bind Preferences.IsAnimationEnabled, Mode=TwoWay}\"", xaml);
+        Assert.DoesNotContain("未实现", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsEnabled=\"False\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DataStorageSettingsPage_SeparatesRoutineStorageAndDangerActions()
+    {
+        var document = XDocument.Parse(LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DataStorageSettingsPage.xaml"));
+        var resetDefaults = FindElementByUid(document, "DataStorage_ResetDefaults");
+        var clearAllData = FindElementByUid(document, "DataStorage_ClearAllData");
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("DataStorage_DangerTitle", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataStorage_DangerWarning", xaml, StringComparison.Ordinal);
+        Assert.NotSame(resetDefaults.Parent, clearAllData.Parent);
+    }
+
+    [Fact]
+    public void AboutPage_DisplaysGeneratedOpenSourceAcknowledgements()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AboutPage.xaml");
+
+        Assert.Contains("x:Uid=\"About_OpenSourceTitle\"", xaml);
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.OpenSourceAcknowledgements, Mode=OneWay}\"", xaml);
+        Assert.Contains("x:DataType=\"settings:OpenSourceAcknowledgementViewModel\"", xaml);
+        Assert.DoesNotContain("Binding OpenSourceAcknowledgements", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SalmonEggApp_GeneratesOpenSourceAcknowledgementsFromPackageReferences()
+    {
+        var project = LoadText(@"SalmonEgg\SalmonEgg\SalmonEgg.csproj");
+
+        Assert.Contains("Target Name=\"GenerateOpenSourceAcknowledgements\"", project, StringComparison.Ordinal);
+        Assert.Contains("BeforeTargets=\"CreateManifestResourceNames\"", project, StringComparison.Ordinal);
+        Assert.Contains("Include=\"@(PackageReference)\"", project, StringComparison.Ordinal);
+        Assert.Contains("OpenSourceAcknowledgements.tsv", project, StringComparison.Ordinal);
+        Assert.Contains("EmbeddedResource Include=\"$(OpenSourceAcknowledgementsGeneratedFile)\"", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenSourceAcknowledgements.g.cs", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Compile Include=\"$(OpenSourceAcknowledgementsGeneratedFile)\"", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsGamepadInputService_UsesRawFallbackAsASecondaryPath()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadInputService.cs");
@@ -1009,6 +1077,20 @@ public sealed class XamlComplianceTests
         if (element is null)
         {
             throw new InvalidOperationException($"Element '{elementName}' not found in XAML '{relativePath}'.");
+        }
+
+        return element;
+    }
+
+    private static XElement FindElementByUid(XDocument document, string uid)
+    {
+        var element = document.Descendants().FirstOrDefault(candidate =>
+            candidate.Attributes().Any(attribute =>
+                string.Equals(attribute.Name.LocalName, "Uid", StringComparison.Ordinal)
+                && string.Equals(attribute.Value, uid, StringComparison.Ordinal)));
+        if (element is null)
+        {
+            throw new InvalidOperationException($"Element with x:Uid '{uid}' not found.");
         }
 
         return element;
