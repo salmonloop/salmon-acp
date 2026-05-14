@@ -29,7 +29,6 @@
                       SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="..\..\src\SalmonEgg.Infrastructure\SalmonEgg.Infrastructure.csproj"
                       SetTargetFramework="TargetFramework=net10.0"
-                      AdditionalProperties="SalmonEggPlatform=$(SalmonEggPlatform);SalmonEggSupportsDesktopProcessHost=$(SalmonEggSupportsDesktopProcessHost)"
                       SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="..\..\src\SalmonEgg.Infrastructure.Desktop\SalmonEgg.Infrastructure.Desktop.csproj"
                       SetTargetFramework="TargetFramework=net10.0"

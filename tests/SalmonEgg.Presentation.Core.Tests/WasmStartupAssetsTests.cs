@@ -67,8 +67,7 @@ public sealed class WasmStartupAssetsTests
 
         Assert.Equal("BrowserWasm", browserWasmPropertyGroup.Element("SalmonEggPlatform")?.Value);
         Assert.Equal("false", browserWasmPropertyGroup.Element("SalmonEggSupportsDesktopProcessHost")?.Value);
-        Assert.Contains("SalmonEggPlatform=$(SalmonEggPlatform)", (string?)infrastructureReference.Attribute("AdditionalProperties"), StringComparison.Ordinal);
-        Assert.Contains("SalmonEggSupportsDesktopProcessHost=$(SalmonEggSupportsDesktopProcessHost)", (string?)infrastructureReference.Attribute("AdditionalProperties"), StringComparison.Ordinal);
+        Assert.Null(infrastructureReference.Attribute("AdditionalProperties"));
         Assert.DoesNotContain(infrastructureProject.Descendants("PackageReference"), element => (string?)element.Attribute("Include") == "Porta.Pty");
         var desktopReference = Assert.Single(desktopInfrastructureReferences);
         Assert.Equal("'$(SalmonEggSupportsDesktopProcessHost)' != 'false'", (string?)desktopReference.Attribute("Condition"));
@@ -102,6 +101,15 @@ public sealed class WasmStartupAssetsTests
         var script = LoadFile(@"scripts\vercel-build.sh");
 
         Assert.Contains("find \"${publish_dir}\" -type d -name .vercel -prune -exec rm -rf {} +", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VercelBuildScript_UsesDeterministicSingleNodePublish()
+    {
+        var script = LoadFile(@"scripts\vercel-build.sh");
+
+        Assert.Contains("-maxcpucount:1", script, StringComparison.Ordinal);
+        Assert.Contains("-p:BuildInParallel=false", script, StringComparison.Ordinal);
     }
 
     private static string LoadFile(string relativePath)
