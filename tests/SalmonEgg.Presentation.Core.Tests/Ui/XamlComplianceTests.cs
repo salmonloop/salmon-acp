@@ -848,6 +848,29 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void SettingsSubPages_ExposePageTitlesAndSummaries()
+    {
+        string[] pages =
+        [
+            @"SalmonEgg\SalmonEgg\Presentation\Views\GeneralSettingsPage.xaml",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AppearanceSettingsPage.xaml",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AcpConnectionSettingsPage.xaml",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DataStorageSettingsPage.xaml",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Settings\ShortcutsSettingsPage.xaml",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DiagnosticsSettingsPage.xaml",
+            @"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AboutPage.xaml"
+        ];
+
+        foreach (var page in pages)
+        {
+            var xaml = LoadXaml(page);
+
+            Assert.Contains("Style=\"{StaticResource SettingsPageTitleTextStyle}\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("Style=\"{StaticResource SettingsPageSummaryTextStyle}\"", xaml, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void SettingsShell_KeepsSectionNavigationAtTheTop()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsShellPage.xaml");
