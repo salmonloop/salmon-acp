@@ -6,6 +6,7 @@ using Moq;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Localization;
 using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Settings;
@@ -19,7 +20,7 @@ public sealed class ShortcutsSettingsViewModelTests
     {
         var preferences = await CreatePreferencesAsync(new AppSettings());
 
-        var viewModel = new ShortcutsSettingsViewModel(preferences);
+        var viewModel = new ShortcutsSettingsViewModel(preferences, new TestCoreStringLocalizer());
 
         Assert.Collection(
             viewModel.Shortcuts,
@@ -49,7 +50,7 @@ public sealed class ShortcutsSettingsViewModelTests
             }
         });
 
-        var viewModel = new ShortcutsSettingsViewModel(preferences);
+        var viewModel = new ShortcutsSettingsViewModel(preferences, new TestCoreStringLocalizer());
 
         var searchShortcut = Assert.Single(viewModel.Shortcuts.Where(shortcut => shortcut.ActionId == "search"));
         Assert.Equal("Alt+K", searchShortcut.Gesture);
@@ -62,7 +63,7 @@ public sealed class ShortcutsSettingsViewModelTests
     {
         var preferences = await CreatePreferencesAsync(new AppSettings());
 
-        var viewModel = new ShortcutsSettingsViewModel(preferences);
+        var viewModel = new ShortcutsSettingsViewModel(preferences, new TestCoreStringLocalizer());
 
         var searchShortcut = Assert.Single(viewModel.Shortcuts.Where(shortcut => shortcut.ActionId == "search"));
         Assert.Equal("Shortcuts.Record.search", searchShortcut.RecorderAutomationId);

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Tests.Localization;
 using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using Xunit;
@@ -17,7 +18,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -33,7 +34,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -47,7 +48,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -64,7 +65,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -79,7 +80,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), maxVisibleCharacters: 8);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer(), maxVisibleCharacters: 8);
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -94,7 +95,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         Assert.True(viewModel.CanStartStreaming);
         Assert.False(viewModel.CanPauseStreaming);
@@ -107,7 +108,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -124,7 +125,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         viewModel.IsExpanded = true;
 
@@ -140,7 +141,7 @@ public sealed class LiveLogViewerViewModelTests
     {
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher());
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, new ImmediateUiDispatcher(), new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;
@@ -156,7 +157,7 @@ public sealed class LiveLogViewerViewModelTests
         var service = new TestLiveLogStreamService();
         var logger = new Mock<ILogger<LiveLogViewerViewModel>>();
         var dispatcher = new QueueingUiDispatcher();
-        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, dispatcher);
+        var viewModel = new LiveLogViewerViewModel(service, "C:/logs", logger.Object, dispatcher, new TestCoreStringLocalizer());
 
         await viewModel.StartStreamingAsync();
         await service.Started.Task;

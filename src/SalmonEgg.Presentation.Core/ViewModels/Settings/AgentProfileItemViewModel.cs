@@ -3,8 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 
@@ -29,6 +31,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
     private readonly ISettingsAcpConnectionCommands _commands;
     private readonly ILogger<AgentProfileItemViewModel> _logger;
     private readonly IUiDispatcher _uiDispatcher;
+    private readonly IStringLocalizer<CoreStrings> _localizer;
     private bool _disposed;
 
     // ── Observable state ────────────────────────────────────────────────────
@@ -73,10 +76,10 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
     /// Short status string suitable for a badge or subtitle.
     /// </summary>
     public string StatusLabel => IsConnecting
-        ? "Connecting…"
+        ? _localizer["AgentProfile_StatusConnecting"]
         : IsConnected
-            ? "Connected"
-            : "Disconnected";
+            ? _localizer["AgentProfile_StatusConnected"]
+            : _localizer["AgentProfile_StatusDisconnected"];
 
     // ── Underlying config (needed to invoke connect) ─────────────────────────
 
@@ -90,7 +93,8 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
         IAcpConnectionSessionEvents events,
         ISettingsAcpConnectionCommands commands,
         ILogger<AgentProfileItemViewModel> logger,
-        IUiDispatcher uiDispatcher)
+        IUiDispatcher uiDispatcher,
+        IStringLocalizer<CoreStrings> localizer)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(registry);
@@ -104,6 +108,7 @@ public sealed partial class AgentProfileItemViewModel : ObservableObject, IDispo
         _commands = commands;
         _logger = logger;
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+        _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
 
         ProfileId = profile.Id;
         Name = profile.Name;

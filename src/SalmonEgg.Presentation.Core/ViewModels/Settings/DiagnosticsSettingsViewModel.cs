@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.ViewModels.Chat;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -16,7 +18,9 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     private readonly IAppDataService _paths;
     private readonly IDiagnosticsBundleService _bundle;
     private readonly IPlatformShellService _shell;
+    private readonly IStorageLocationService _storageLocations;
     private readonly ILogFileCatalog _logFileCatalog;
+    private readonly IStringLocalizer<CoreStrings> _localizer;
     private readonly ILogger<DiagnosticsSettingsViewModel> _logger;
 
     public ChatViewModel Chat { get; }
@@ -45,16 +49,20 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
         IAppDataService paths,
         IDiagnosticsBundleService bundle,
         IPlatformShellService shell,
+        IStorageLocationService storageLocations,
         ILogFileCatalog logFileCatalog,
         LiveLogViewerViewModel liveLogViewer,
+        IStringLocalizer<CoreStrings> localizer,
         ILogger<DiagnosticsSettingsViewModel> logger)
     {
         Chat = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _bundle = bundle ?? throw new ArgumentNullException(nameof(bundle));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _storageLocations = storageLocations ?? throw new ArgumentNullException(nameof(storageLocations));
         _logFileCatalog = logFileCatalog ?? throw new ArgumentNullException(nameof(logFileCatalog));
         LiveLogViewer = liveLogViewer ?? throw new ArgumentNullException(nameof(liveLogViewer));
+        _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -63,7 +71,7 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     {
         try
         {
-            LatestLogFilePath = (await _logFileCatalog.GetLatestAsync(_paths.LogsDirectoryPath).ConfigureAwait(false))?.Path;
+            LatestLogFilePath = (await _logFileCatalog.GetLatestAsync(_paths.LogsDirectoryPath))?.Path;
         }
         catch
         {
@@ -72,31 +80,31 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task OpenLogsFolderAsync() => _shell.OpenFolderAsync(_paths.LogsDirectoryPath);
+    private Task OpenLogsFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.Logs);
 
     [RelayCommand]
-    private Task OpenAppDataFolderAsync() => _shell.OpenFolderAsync(_paths.AppDataRootPath);
+    private Task OpenAppDataFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.AppData);
 
     [RelayCommand]
     private async Task CopyRecentLogSnippetAsync()
     {
         try
         {
-            await RefreshLatestLogFileAsync().ConfigureAwait(false);
+            await RefreshLatestLogFileAsync();
             if (string.IsNullOrWhiteSpace(LatestLogFilePath))
             {
-                _ = await _shell.CopyToClipboardAsync("No log file found.").ConfigureAwait(false);
+                _ = await _shell.CopyToClipboardAsync(_localizer["Diagnostics_NoLogFileFound"]);
                 return;
             }
 
-            var text = await _logFileCatalog.ReadTailAsync(LatestLogFilePath, 8000).ConfigureAwait(false);
+            var text = await _logFileCatalog.ReadTailAsync(LatestLogFilePath, 8000);
             if (text is null)
             {
-                _ = await _shell.CopyToClipboardAsync("No log file found.").ConfigureAwait(false);
+                _ = await _shell.CopyToClipboardAsync(_localizer["Diagnostics_NoLogFileFound"]);
                 return;
             }
 
-            var copied = await _shell.CopyToClipboardAsync(text).ConfigureAwait(false);
+            var copied = await _shell.CopyToClipboardAsync(text);
             if (!copied)
             {
                 _logger.LogWarning("Clipboard copy is not supported on the current platform.");
@@ -128,8 +136,8 @@ public sealed partial class DiagnosticsSettingsViewModel : ObservableObject
                 }
             };
 
-            var path = await _bundle.CreateBundleAsync(snapshot).ConfigureAwait(false);
-            await _shell.OpenFileAsync(path).ConfigureAwait(false);
+            var path = await _bundle.CreateBundleAsync(snapshot);
+            await _shell.OpenFileAsync(path);
         }
         catch (Exception ex)
         {

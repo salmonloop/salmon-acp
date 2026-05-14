@@ -180,6 +180,7 @@ public partial class ChatViewModelTests
             var maintenance = new Mock<IAppMaintenanceService>();
             var diagnostics = new Mock<IDiagnosticsBundleService>();
             var shell = new Mock<IPlatformShellService>();
+            var storageLocations = new Mock<IStorageLocationService>();
             var sessionExport = new Mock<ISessionExportService>();
             sessionExport.Setup(service => service.ExportAsync(It.IsAny<SessionExportRequest>(), default))
                 .Returns<SessionExportRequest, CancellationToken>(async (request, _) =>
@@ -199,6 +200,7 @@ public partial class ChatViewModelTests
                 maintenance.Object,
                 diagnostics.Object,
                 shell.Object,
+                storageLocations.Object,
                 sessionExport.Object,
                 Mock.Of<ILogger<DataStorageSettingsViewModel>>());
 

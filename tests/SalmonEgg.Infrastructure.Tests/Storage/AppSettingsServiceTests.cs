@@ -203,6 +203,16 @@ public sealed class AppSettingsServiceTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_testDirectory, "SalmonEgg", "config")));
     }
 
+    [Fact]
+    public async Task LoadAsync_WhenSettingsFileCannotBeRead_ReturnsDefaults()
+    {
+        var service = new AppSettingsService(new FailingAppFileStore(), new AppDataService());
+
+        var loaded = await service.LoadAsync();
+
+        Assert.Equal("System", loaded.Theme);
+    }
+
     private AppSettingsService CreateService()
         => new(new FileSystemAppFileStore(), new AppDataService());
 }

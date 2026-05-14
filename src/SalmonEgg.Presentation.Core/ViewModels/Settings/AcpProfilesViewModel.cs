@@ -5,9 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 
@@ -19,6 +21,7 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
     private readonly AppPreferencesViewModel _preferences;
     private readonly ILogger<AcpProfilesViewModel> _logger;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IStringLocalizer<CoreStrings>? _localizer;
     private readonly SemaphoreSlim _refreshSemaphore = new(1, 1);
 
     // ── Dependencies for per-profile item ViewModels ─────────────────────────
@@ -78,12 +81,14 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
         IConfigurationService configurationService,
         AppPreferencesViewModel preferences,
         ILogger<AcpProfilesViewModel> logger,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        IStringLocalizer<CoreStrings>? localizer = null)
     {
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _localizer = localizer;
     }
 
     /// <summary>
@@ -97,8 +102,9 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
         IAcpConnectionSessionEvents sessionEvents,
         ISettingsAcpConnectionCommands connectionCommands,
         ILoggerFactory loggerFactory,
-        IUiDispatcher dispatcher)
-        : this(configurationService, preferences, logger, dispatcher)
+        IUiDispatcher dispatcher,
+        IStringLocalizer<CoreStrings> localizer)
+        : this(configurationService, preferences, logger, dispatcher, localizer)
     {
         _sessionRegistry = sessionRegistry ?? throw new ArgumentNullException(nameof(sessionRegistry));
         _sessionEvents = sessionEvents ?? throw new ArgumentNullException(nameof(sessionEvents));
@@ -294,7 +300,8 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
     {
         // Only create item VMs when the connection dependencies were provided.
         if (_sessionRegistry == null || _sessionEvents == null ||
-            _connectionCommands == null || _loggerFactory == null)
+            _connectionCommands == null || _loggerFactory == null ||
+            _localizer == null)
         {
             return null;
         }
@@ -305,7 +312,8 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
             _sessionEvents,
             _connectionCommands,
             _loggerFactory.CreateLogger<AgentProfileItemViewModel>(),
-            _dispatcher);
+            _dispatcher,
+            _localizer);
     }
 
     private void SelectById(string? id)

@@ -17,6 +17,7 @@ public partial class DataStorageSettingsViewModel : ObservableObject
     private readonly IAppMaintenanceService _maintenance;
     private readonly IDiagnosticsBundleService _diagnostics;
     private readonly IPlatformShellService _shell;
+    private readonly IStorageLocationService _storageLocations;
     private readonly ISessionExportService _sessionExport;
     private readonly ILogger<DataStorageSettingsViewModel> _logger;
 
@@ -35,6 +36,7 @@ public partial class DataStorageSettingsViewModel : ObservableObject
         IAppMaintenanceService maintenance,
         IDiagnosticsBundleService diagnostics,
         IPlatformShellService shell,
+        IStorageLocationService storageLocations,
         ISessionExportService sessionExport,
         ILogger<DataStorageSettingsViewModel> logger)
     {
@@ -44,39 +46,40 @@ public partial class DataStorageSettingsViewModel : ObservableObject
         _maintenance = maintenance ?? throw new ArgumentNullException(nameof(maintenance));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _storageLocations = storageLocations ?? throw new ArgumentNullException(nameof(storageLocations));
         _sessionExport = sessionExport ?? throw new ArgumentNullException(nameof(sessionExport));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     [RelayCommand]
-    private Task OpenAppDataFolderAsync() => _shell.OpenFolderAsync(_paths.AppDataRootPath);
+    private Task OpenAppDataFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.AppData);
 
     [RelayCommand]
-    private Task OpenCacheFolderAsync() => _shell.OpenFolderAsync(_paths.CacheRootPath);
+    private Task OpenCacheFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.Cache);
 
     [RelayCommand]
-    private Task OpenLogsFolderAsync() => _shell.OpenFolderAsync(_paths.LogsDirectoryPath);
+    private Task OpenLogsFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.Logs);
 
     [RelayCommand]
-    private Task OpenExportsFolderAsync() => _shell.OpenFolderAsync(_paths.ExportsDirectoryPath);
+    private Task OpenExportsFolderAsync() => _storageLocations.OpenAsync(AppStorageLocation.Exports);
 
     [RelayCommand]
     private async Task ExportCurrentSessionMarkdownAsync()
     {
-        await ExportCurrentSessionAsync("md").ConfigureAwait(false);
+        await ExportCurrentSessionAsync("md");
     }
 
     [RelayCommand]
     private async Task ExportCurrentSessionJsonAsync()
     {
-        await ExportCurrentSessionAsync("json").ConfigureAwait(false);
+        await ExportCurrentSessionAsync("json");
     }
 
     private async Task ExportCurrentSessionAsync(string format)
     {
         try
         {
-            var transcript = await Chat.GetCurrentSessionTranscriptSnapshotAsync().ConfigureAwait(false);
+            var transcript = await Chat.GetCurrentSessionTranscriptSnapshotAsync();
             var request = new SessionExportRequest(
                 format,
                 Chat.CurrentSessionId,
@@ -90,8 +93,8 @@ public partial class DataStorageSettingsViewModel : ObservableObject
                     m.Title,
                     m.TextContent)).ToList());
 
-            var path = await _sessionExport.ExportAsync(request).ConfigureAwait(false);
-            await _shell.OpenFileAsync(path).ConfigureAwait(false);
+            var path = await _sessionExport.ExportAsync(request);
+            await _shell.OpenFileAsync(path);
         }
         catch (Exception ex)
         {
@@ -122,8 +125,8 @@ public partial class DataStorageSettingsViewModel : ObservableObject
                 }
             };
 
-            var zipPath = await _diagnostics.CreateBundleAsync(snapshot).ConfigureAwait(false);
-            await _shell.OpenFileAsync(zipPath).ConfigureAwait(false);
+            var zipPath = await _diagnostics.CreateBundleAsync(snapshot);
+            await _shell.OpenFileAsync(zipPath);
         }
         catch (Exception ex)
         {
@@ -134,13 +137,13 @@ public partial class DataStorageSettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task ClearCacheAsync()
     {
-        await _maintenance.ClearCacheAsync().ConfigureAwait(false);
+        await _maintenance.ClearCacheAsync();
     }
 
     [RelayCommand]
     private async Task ClearAllLocalDataAsync()
     {
-        await _maintenance.ClearAllLocalDataAsync().ConfigureAwait(false);
+        await _maintenance.ClearAllLocalDataAsync();
     }
 
     private static DateTimeOffset ToExportTimestamp(DateTime timestamp)

@@ -126,6 +126,16 @@ public sealed class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadConfigurationAsync_WhenConfigurationFileCannotBeRead_ReturnsNull()
+    {
+        var manager = new ConfigurationManager(_secureStorage, new FailingAppFileStore(), new AppDataService());
+
+        var loaded = await manager.LoadConfigurationAsync("unreadable");
+
+        Assert.Null(loaded);
+    }
+
+    [Fact]
     public async Task ListConfigurationsAsync_MultipleConfigs_EnumeratesServerYamlFiles()
     {
         var config1 = CreateTestConfiguration("test-list-001");
@@ -141,6 +151,16 @@ public sealed class ConfigurationManagerTests : IDisposable
         Assert.Contains(configs, c => c.Id == "test-list-001");
         Assert.Contains(configs, c => c.Id == "test-list-002");
         Assert.Contains(configs, c => c.Id == "test-list-003");
+    }
+
+    [Fact]
+    public async Task ListConfigurationsAsync_WhenConfigurationDirectoryCannotBeEnumerated_ReturnsEmptyList()
+    {
+        var manager = new ConfigurationManager(_secureStorage, new FailingAppFileStore(), new AppDataService());
+
+        var configs = await manager.ListConfigurationsAsync();
+
+        Assert.Empty(configs);
     }
 
     [Fact]

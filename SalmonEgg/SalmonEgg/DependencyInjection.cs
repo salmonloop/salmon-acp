@@ -186,6 +186,7 @@ public static class DependencyInjection
         services.AddSingleton<IDiagnosticsBundleService, SalmonEgg.Infrastructure.Services.DiagnosticsBundleService>();
         services.AddSingleton<ILiveLogStreamService, SalmonEgg.Infrastructure.Services.LiveLogStreamService>();
         services.AddSingleton<IPlatformShellService, SalmonEgg.Infrastructure.Services.PlatformShellService>();
+        services.AddSingleton<IStorageLocationService, SalmonEgg.Infrastructure.Services.StorageLocationService>();
         services.AddSingleton<IConversationPreviewStore, ConversationPreviewStore>();
         services.AddSingleton<ISessionExportService, SalmonEgg.Infrastructure.Services.SessionExportService>();
         services.AddSingleton<ILogFileCatalog, SalmonEgg.Infrastructure.Services.LogFileCatalog>();
@@ -506,7 +507,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<IAcpConnectionSessionEvents>(),
                 sp.GetRequiredService<ISettingsAcpConnectionCommands>(),
                 sp.GetRequiredService<ILoggerFactory>(),
-                sp.GetRequiredService<IUiDispatcher>()));
+                sp.GetRequiredService<IUiDispatcher>(),
+                sp.GetRequiredService<IStringLocalizer<CoreStrings>>()));
 
 
         // ACP connection settings page view model (wraps Chat + Profiles)
@@ -517,6 +519,7 @@ public static class DependencyInjection
                 sp.GetRequiredService<AppPreferencesViewModel>(),
                 sp.GetRequiredService<ITransportSupportPolicy>(),
                 sp.GetRequiredService<ILogger<AcpConnectionSettingsViewModel>>(),
+                sp.GetRequiredService<IStringLocalizer<CoreStrings>>(),
                 sp.GetRequiredService<IUiDispatcher>()));
 
         // Settings pages (Data/Shortcuts/Diagnostics/About)
@@ -527,7 +530,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILiveLogStreamService>(),
                 sp.GetRequiredService<IAppDataService>().LogsDirectoryPath,
                 sp.GetRequiredService<ILogger<LiveLogViewerViewModel>>(),
-                sp.GetRequiredService<IUiDispatcher>()));
+                sp.GetRequiredService<IUiDispatcher>(),
+                sp.GetRequiredService<IStringLocalizer<CoreStrings>>()));
         services.AddSingleton<DiagnosticsSettingsViewModel>();
         services.AddSingleton<AboutViewModel>();
 

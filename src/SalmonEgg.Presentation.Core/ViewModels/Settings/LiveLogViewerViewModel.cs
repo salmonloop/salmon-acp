@@ -4,9 +4,11 @@ using System.Threading.Tasks;
 using SalmonEgg.Presentation.Core.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
 
@@ -19,6 +21,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
     private readonly string _logsDirectoryPath;
     private readonly int _maxVisibleCharacters;
     private readonly IUiDispatcher _uiDispatcher;
+    private readonly IStringLocalizer<CoreStrings> _localizer;
     private CancellationTokenSource? _streamingCancellationTokenSource;
     private Task? _streamingTask;
     private bool _suppressExpansionSideEffects;
@@ -28,17 +31,19 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
         string logsDirectoryPath,
         ILogger<LiveLogViewerViewModel> logger,
         IUiDispatcher uiDispatcher,
+        IStringLocalizer<CoreStrings> localizer,
         int maxVisibleCharacters = DefaultMaxVisibleCharacters)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _logsDirectoryPath = logsDirectoryPath ?? throw new ArgumentNullException(nameof(logsDirectoryPath));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+        _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
         _maxVisibleCharacters = maxVisibleCharacters > 0
             ? maxVisibleCharacters
             : throw new ArgumentOutOfRangeException(nameof(maxVisibleCharacters));
         _visibleLogText = string.Empty;
-        _statusText = "未启动";
+        _statusText = _localizer["LiveLog_StatusNotStarted"];
         _isAutoFollowEnabled = true;
     }
 
@@ -79,7 +84,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
 
         IsPaused = false;
         IsStreaming = true;
-        StatusText = "正在实时查看";
+        StatusText = _localizer["LiveLog_StatusStreaming"];
         NotifyStreamingStateChanged();
 
         var cancellationTokenSource = new CancellationTokenSource();
@@ -92,7 +97,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
     public async Task StopStreamingAsync()
     {
         IsPaused = false;
-        await StopStreamingCoreAsync("已停止").ConfigureAwait(false);
+        await StopStreamingCoreAsync(_localizer["LiveLog_StatusStopped"]).ConfigureAwait(false);
     }
 
     public async Task PauseStreamingAsync()
@@ -103,7 +108,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
         }
 
         IsPaused = true;
-        await StopStreamingCoreAsync("已暂停").ConfigureAwait(false);
+        await StopStreamingCoreAsync(_localizer["LiveLog_StatusPaused"]).ConfigureAwait(false);
     }
 
     public async Task ResumeStreamingAsync()
@@ -221,7 +226,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
                 }
 
                 IsStreaming = false;
-                StatusText = "已停止";
+                StatusText = _localizer["LiveLog_StatusStopped"];
                 NotifyStreamingStateChanged();
             }).ConfigureAwait(false);
         }
@@ -239,7 +244,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
                 }
 
                 IsStreaming = false;
-                StatusText = "读取失败，请稍后重试";
+                StatusText = _localizer["LiveLog_StatusReadFailed"];
                 NotifyStreamingStateChanged();
             }).ConfigureAwait(false);
         }
@@ -262,8 +267,8 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
         if (update.HasFileSwitched)
         {
             StatusText = string.IsNullOrWhiteSpace(update.CurrentLogFilePath)
-                ? "未找到可用日志文件"
-                : "已切换到最新日志文件";
+                ? _localizer["LiveLog_StatusNoLogFile"]
+                : _localizer["LiveLog_StatusSwitchedToLatest"];
         }
 
         if (string.IsNullOrEmpty(update.AppendedText))
@@ -275,7 +280,7 @@ public sealed partial class LiveLogViewerViewModel : ObservableObject
 
         if (!IsPaused)
         {
-            StatusText = "正在实时查看";
+            StatusText = _localizer["LiveLog_StatusStreaming"];
         }
     }
 

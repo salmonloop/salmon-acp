@@ -3,8 +3,10 @@ using System.Text;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Services;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -12,9 +14,11 @@ namespace SalmonEgg.Presentation.ViewModels.Settings;
 public sealed partial class AboutViewModel : ObservableObject
 {
     private readonly IPlatformShellService _shell;
+    private readonly IStorageLocationService _storageLocations;
     private readonly IAppDataService _paths;
     private readonly IAppDocumentService _documents;
     private readonly IUiInteractionService _ui;
+    private readonly IStringLocalizer<CoreStrings> _localizer;
 
     public string AppName => "SalmonEgg";
 
@@ -28,74 +32,77 @@ public sealed partial class AboutViewModel : ObservableObject
 
     public AboutViewModel(
         IPlatformShellService shell,
+        IStorageLocationService storageLocations,
         IAppDataService paths,
         IAppDocumentService documents,
-        IUiInteractionService ui)
+        IUiInteractionService ui,
+        IStringLocalizer<CoreStrings> localizer)
     {
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _storageLocations = storageLocations ?? throw new ArgumentNullException(nameof(storageLocations));
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _ui = ui ?? throw new ArgumentNullException(nameof(ui));
+        _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
     }
 
     [RelayCommand]
     private Task OpenAppDataFolderAsync()
     {
-        return _shell.OpenFolderAsync(_paths.AppDataRootPath);
+        return _storageLocations.OpenAsync(AppStorageLocation.AppData);
     }
 
     [RelayCommand]
     private async Task OpenReleaseNotesAsync()
     {
         var path = _documents.GetReleaseNotesPath();
-        if (!await _documents.ExistsAsync(path).ConfigureAwait(false))
+        if (!await _documents.ExistsAsync(path))
         {
-            await NotifyMissingDocAsync(path, "更新日志").ConfigureAwait(true);
+            await NotifyMissingDocAsync(path, _localizer["About_ReleaseNotesTitle"]);
             return;
         }
 
-        await _shell.OpenFileAsync(path).ConfigureAwait(false);
+        await _shell.OpenFileAsync(path);
     }
 
     [RelayCommand]
     private async Task OpenPrivacyPolicyAsync()
     {
         var path = _documents.GetPrivacyPolicyPath();
-        if (!await _documents.ExistsAsync(path).ConfigureAwait(false))
+        if (!await _documents.ExistsAsync(path))
         {
-            await NotifyMissingDocAsync(path, "隐私政策").ConfigureAwait(true);
+            await NotifyMissingDocAsync(path, _localizer["About_PrivacyPolicyTitle"]);
             return;
         }
 
-        await _shell.OpenFileAsync(path).ConfigureAwait(false);
+        await _shell.OpenFileAsync(path);
     }
 
     [RelayCommand]
     private async Task CopyVersionInfoAsync()
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"App: {AppName}");
-        sb.AppendLine($"Version: {AppVersion}");
-        sb.AppendLine($"Protocol: {ProtocolVersion}");
-        var copied = await _shell.CopyToClipboardAsync(sb.ToString()).ConfigureAwait(false);
+        sb.AppendLine($"{_localizer["About_VersionInfoAppLabel"]}: {AppName}");
+        sb.AppendLine($"{_localizer["About_VersionInfoVersionLabel"]}: {AppVersion}");
+        sb.AppendLine($"{_localizer["About_VersionInfoProtocolLabel"]}: {ProtocolVersion}");
+        var copied = await _shell.CopyToClipboardAsync(sb.ToString());
         await _ui.ShowInfoAsync(copied
-                ? "版本信息已复制到剪贴板。"
-                : "当前平台暂不支持剪贴板复制。")
-            .ConfigureAwait(true);
+                ? _localizer["About_VersionInfoCopied"]
+                : _localizer["About_ClipboardUnsupported"]);
     }
 
     private async Task NotifyMissingDocAsync(string path, string title)
     {
         var folder = System.IO.Path.GetDirectoryName(path);
         var message = folder == null
-            ? $"未找到{title}文件。"
-            : $"未找到{title}文件。\n请在以下目录创建对应的 Markdown 文件：\n{folder}";
+            ? _localizer["About_MissingDocumentMessage", title]
+            : _localizer["About_MissingDocumentWithFolderMessage", title, folder];
 
-        await _ui.ShowInfoAsync(message).ConfigureAwait(true);
+        await _ui.ShowInfoAsync(message);
 
         if (!string.IsNullOrWhiteSpace(folder))
         {
-            await _shell.OpenFolderAsync(folder).ConfigureAwait(false);
+            await _storageLocations.OpenExistingFolderAsync(folder);
         }
     }
 }

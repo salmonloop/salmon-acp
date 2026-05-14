@@ -9,6 +9,7 @@ using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
+using SalmonEgg.Presentation.Core.Tests.Localization;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Tests.Threading;
 using SalmonEgg.Presentation.Services;
@@ -37,7 +38,8 @@ public sealed class AcpConnectionSettingsViewModelTests
             profiles,
             preferences,
             CreateTransportSupportPolicy(preferences),
-            logger.Object);
+            logger.Object,
+            new TestCoreStringLocalizer());
 
         Assert.IsAssignableFrom<ISettingsChatConnection>(viewModel.Chat);
 
@@ -57,7 +59,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
         // Act
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
 
         // Assert
         Assert.IsAssignableFrom<ISettingsChatConnection>(viewModel.Chat);
@@ -74,7 +76,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var chat = new TestSettingsChatConnection();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
 
         Assert.Equal("Stdio（子进程）", viewModel.TransportOptions[0].Name);
     }
@@ -87,7 +89,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var chat = new TestSettingsChatConnection();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
 
         Assert.DoesNotContain(viewModel.TransportOptions, option => option.Type == TransportType.Stdio);
         Assert.Equal(TransportType.WebSocket, viewModel.SelectedTransport?.Type);
@@ -102,7 +104,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var chat = new TestSettingsChatConnection();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
 
         chat.TransportConfig.SelectedTransportType = TransportType.Stdio;
 
@@ -118,7 +120,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var profiles = CreateProfiles(preferences);
         var chat = new TestSettingsChatConnection();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
 
         // Act
         viewModel.SelectedTransport = viewModel.TransportOptions[1];
@@ -136,7 +138,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var profiles = CreateProfiles(preferences);
         var chat = new TestSettingsChatConnection();
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
         var profile = new ServerConfiguration { Id = "profile-42", Name = "Selected Profile" };
 
         // Act
@@ -165,7 +167,8 @@ public sealed class AcpConnectionSettingsViewModelTests
             profiles,
             preferences,
             CreateTransportSupportPolicy(preferences),
-            logger.Object);
+            logger.Object,
+            new TestCoreStringLocalizer());
 
         await viewModel.HandleConnectionToggleAsync(true);
 
@@ -192,7 +195,8 @@ public sealed class AcpConnectionSettingsViewModelTests
             profiles,
             preferences,
             CreateTransportSupportPolicy(preferences),
-            logger.Object);
+            logger.Object,
+            new TestCoreStringLocalizer());
 
         await viewModel.HandleConnectionToggleAsync(false);
 
@@ -217,7 +221,8 @@ public sealed class AcpConnectionSettingsViewModelTests
             profiles,
             preferences,
             CreateTransportSupportPolicy(preferences),
-            logger.Object);
+            logger.Object,
+            new TestCoreStringLocalizer());
 
         await viewModel.HandleConnectionToggleAsync(true);
 
@@ -259,7 +264,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
         // Act
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
         var profileARows = viewModel.PathMappingRows.ToArray();
         profiles.SelectedProfile = profiles.Profiles[1];
         var profileBRows = viewModel.PathMappingRows.ToArray();
@@ -284,7 +289,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
         // Act
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
         viewModel.AddPathMappingCommand.Execute(null);
         var row = Assert.Single(viewModel.PathMappingRows);
         row.RemoteRootPath = " /remote/workspace ";
@@ -312,7 +317,7 @@ public sealed class AcpConnectionSettingsViewModelTests
         var logger = new Mock<ILogger<AcpConnectionSettingsViewModel>>();
 
         // Act
-        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object);
+        using var viewModel = new AcpConnectionSettingsViewModel(chat, profiles, preferences, CreateTransportSupportPolicy(preferences), logger.Object, new TestCoreStringLocalizer());
         var canExecute = viewModel.AddPathMappingCommand.CanExecute(null);
         viewModel.AddPathMappingCommand.Execute(null);
 

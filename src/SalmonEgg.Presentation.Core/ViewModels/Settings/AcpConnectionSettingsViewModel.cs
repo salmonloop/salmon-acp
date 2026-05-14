@@ -7,10 +7,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Chat;
@@ -24,6 +26,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
     private readonly ISettingsAcpConnectionCommands _connectionCommands;
     private readonly ISettingsAcpTransportConfiguration _transportConfig;
     private readonly ITransportSupportPolicy _transportSupportPolicy;
+    private readonly IStringLocalizer<CoreStrings> _localizer;
     private readonly IUiDispatcher _uiDispatcher;
     private bool _suppressPathMappingProjection;
     private bool _disposed;
@@ -34,11 +37,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
     public ObservableCollection<TransportOptionViewModel> TransportOptions { get; }
 
     public ObservableCollection<AcpPathMappingRowViewModel> PathMappingRows { get; } = new();
-    public ObservableCollection<HydrationCompletionModeOptionViewModel> HydrationCompletionModeOptions { get; } = new()
-    {
-        new("StrictReplay", "StrictReplay", "Complete hydration after replay projection reaches a stable state."),
-        new("LoadResponse", "LoadResponse", "Complete hydration right after session/load; replay projects asynchronously.")
-    };
+    public ObservableCollection<HydrationCompletionModeOptionViewModel> HydrationCompletionModeOptions { get; }
 
     public bool CanEditPathMappings => !string.IsNullOrWhiteSpace(ResolveSelectedProfileId());
 
@@ -58,8 +57,9 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AppPreferencesViewModel preferences,
         ITransportSupportPolicy transportSupportPolicy,
         ILogger<AcpConnectionSettingsViewModel> logger,
+        IStringLocalizer<CoreStrings> localizer,
         IUiDispatcher? uiDispatcher = null)
-        : this(new SettingsChatConnectionAdapter(chatViewModel, connectionCommands), profiles, preferences, transportSupportPolicy, logger, uiDispatcher)
+        : this(new SettingsChatConnectionAdapter(chatViewModel, connectionCommands), profiles, preferences, transportSupportPolicy, logger, localizer, uiDispatcher)
     {
     }
 
@@ -69,6 +69,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AppPreferencesViewModel preferences,
         ITransportSupportPolicy transportSupportPolicy,
         ILogger<AcpConnectionSettingsViewModel> logger,
+        IStringLocalizer<CoreStrings> localizer,
         IUiDispatcher? uiDispatcher = null)
         : this(
             chat,
@@ -78,6 +79,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
             preferences,
             transportSupportPolicy,
             logger,
+            localizer,
             chat,
             uiDispatcher)
     {
@@ -91,6 +93,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AppPreferencesViewModel preferences,
         ITransportSupportPolicy transportSupportPolicy,
         ILogger<AcpConnectionSettingsViewModel> logger,
+        IStringLocalizer<CoreStrings> localizer,
         IUiDispatcher? uiDispatcher = null)
         : this(
             connectionState,
@@ -100,6 +103,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
             preferences,
             transportSupportPolicy,
             logger,
+            localizer,
             chatFacade: null,
             uiDispatcher)
     {
@@ -113,6 +117,7 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         AppPreferencesViewModel preferences,
         ITransportSupportPolicy transportSupportPolicy,
         ILogger<AcpConnectionSettingsViewModel> logger,
+        IStringLocalizer<CoreStrings> localizer,
         ISettingsChatConnection? chatFacade,
         IUiDispatcher? uiDispatcher)
     {
@@ -123,9 +128,11 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _transportSupportPolicy = transportSupportPolicy ?? throw new ArgumentNullException(nameof(transportSupportPolicy));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
         _uiDispatcher = uiDispatcher ?? InlineUiDispatcher.Instance;
         Chat = chatFacade ?? new CompositeSettingsChatConnection(connectionState, _connectionCommands, _transportConfig);
-        TransportOptions = CreateTransportOptions(_transportSupportPolicy);
+        TransportOptions = CreateTransportOptions(_transportSupportPolicy, _localizer);
+        HydrationCompletionModeOptions = CreateHydrationCompletionModeOptions(_localizer);
 
         SelectedTransport = TransportOptions.FirstOrDefault(o => o.Type == _transportConfig.SelectedTransportType)
                             ?? TransportOptions.FirstOrDefault();
@@ -237,16 +244,29 @@ public sealed partial class AcpConnectionSettingsViewModel : ObservableObject, I
         => _transportSupportPolicy.Coerce(transportType);
 
     private static ObservableCollection<TransportOptionViewModel> CreateTransportOptions(
-        ITransportSupportPolicy transportSupportPolicy)
+        ITransportSupportPolicy transportSupportPolicy,
+        IStringLocalizer<CoreStrings> localizer)
     {
         var options = new ObservableCollection<TransportOptionViewModel>();
         if (transportSupportPolicy.IsSupported(TransportType.Stdio))
         {
-            options.Add(new TransportOptionViewModel(TransportType.Stdio, "Stdio（子进程）"));
+            options.Add(new TransportOptionViewModel(TransportType.Stdio, localizer["AcpConnection_TransportStdio"]));
         }
 
-        options.Add(new TransportOptionViewModel(TransportType.WebSocket, "WebSocket"));
-        options.Add(new TransportOptionViewModel(TransportType.HttpSse, "HTTP SSE"));
+        options.Add(new TransportOptionViewModel(TransportType.WebSocket, localizer["AcpConnection_TransportWebSocket"]));
+        options.Add(new TransportOptionViewModel(TransportType.HttpSse, localizer["AcpConnection_TransportHttpSse"]));
+        return options;
+    }
+
+    private static ObservableCollection<HydrationCompletionModeOptionViewModel> CreateHydrationCompletionModeOptions(
+        IStringLocalizer<CoreStrings> localizer)
+    {
+        var options = new ObservableCollection<HydrationCompletionModeOptionViewModel>
+        {
+            new("StrictReplay", localizer["AcpConnection_HydrationStrictReplayName"], localizer["AcpConnection_HydrationStrictReplayDescription"]),
+            new("LoadResponse", localizer["AcpConnection_HydrationLoadResponseName"], localizer["AcpConnection_HydrationLoadResponseDescription"])
+        };
+
         return options;
     }
 

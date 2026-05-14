@@ -5,6 +5,8 @@ using System.ComponentModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services.Shortcuts;
 
 namespace SalmonEgg.Presentation.ViewModels.Settings;
@@ -12,6 +14,7 @@ namespace SalmonEgg.Presentation.ViewModels.Settings;
 public sealed partial class ShortcutsSettingsViewModel : ObservableObject
 {
     private readonly AppPreferencesViewModel _preferences;
+    private readonly IStringLocalizer<CoreStrings> _localizer;
 
     public ObservableCollection<ShortcutEntryViewModel> Shortcuts { get; } = new();
 
@@ -31,7 +34,7 @@ public sealed partial class ShortcutsSettingsViewModel : ObservableObject
         {
             if (HasInvalid)
             {
-                return "存在无效快捷键格式，请修正后保存。";
+                return _localizer["Shortcuts_InvalidGestureMessage"];
             }
 
             if (!HasConflicts)
@@ -47,13 +50,16 @@ public sealed partial class ShortcutsSettingsViewModel : ObservableObject
                 .Take(3)
                 .ToArray();
 
-            return $"存在冲突：{string.Join("，", conflicts)}";
+            return _localizer["Shortcuts_ConflictMessage", string.Join(_localizer["Shortcuts_ConflictSeparator"], conflicts)];
         }
     }
 
-    public ShortcutsSettingsViewModel(AppPreferencesViewModel preferences)
+    public ShortcutsSettingsViewModel(
+        AppPreferencesViewModel preferences,
+        IStringLocalizer<CoreStrings> localizer)
     {
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _localizer = localizer ?? throw new ArgumentNullException(nameof(localizer));
 
         PruneUnsupportedBindings();
         SeedDefaults();
@@ -229,4 +235,3 @@ public sealed partial class ShortcutEntryViewModel : ObservableObject
         Gesture = DefaultGesture;
     }
 }
-

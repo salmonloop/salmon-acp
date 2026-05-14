@@ -27,14 +27,14 @@ public sealed class AppSettingsService : IAppSettingsService
 
     public async Task<AppSettings> LoadAsync()
     {
-        var yaml = await _fileStore.ReadAllTextAsync(_appYamlPath).ConfigureAwait(false);
-        if (yaml is null)
-        {
-            return new AppSettings();
-        }
-
         try
         {
+            var yaml = await _fileStore.ReadAllTextAsync(_appYamlPath).ConfigureAwait(false);
+            if (yaml is null)
+            {
+                return new AppSettings();
+            }
+
             var model = YamlSerialization.CreateDeserializer().Deserialize<AppSettingsYamlV1>(yaml);
             if (model.SchemaVersion <= 0)
             {
@@ -113,14 +113,14 @@ public sealed class AppSettingsService : IAppSettingsService
 
     private async Task EnsureWritableSchemaAsync(string appYamlPath)
     {
-        var yaml = await _fileStore.ReadAllTextAsync(appYamlPath).ConfigureAwait(false);
-        if (yaml is null)
-        {
-            return;
-        }
-
         try
         {
+            var yaml = await _fileStore.ReadAllTextAsync(appYamlPath).ConfigureAwait(false);
+            if (yaml is null)
+            {
+                return;
+            }
+
             var existing = YamlSerialization.CreateDeserializer().Deserialize<AppSettingsYamlV1>(yaml);
             if (existing.SchemaVersion > CurrentSchemaVersion)
             {

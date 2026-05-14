@@ -15,4 +15,96 @@
   <data name="Nav_Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
+  <data name="About_ReleaseNotesTitle" xml:space="preserve">
+    <value>release notes</value>
+  </data>
+  <data name="About_PrivacyPolicyTitle" xml:space="preserve">
+    <value>privacy policy</value>
+  </data>
+  <data name="About_VersionInfoAppLabel" xml:space="preserve">
+    <value>App</value>
+  </data>
+  <data name="About_VersionInfoVersionLabel" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="About_VersionInfoProtocolLabel" xml:space="preserve">
+    <value>Protocol</value>
+  </data>
+  <data name="About_VersionInfoCopied" xml:space="preserve">
+    <value>Version info copied to clipboard.</value>
+  </data>
+  <data name="About_ClipboardUnsupported" xml:space="preserve">
+    <value>Clipboard copy is not supported on this platform.</value>
+  </data>
+  <data name="About_MissingDocumentMessage" xml:space="preserve">
+    <value>The {0} file was not found.</value>
+  </data>
+  <data name="About_MissingDocumentWithFolderMessage" xml:space="preserve">
+    <value>The {0} file was not found.
+Create the corresponding Markdown file in:
+{1}</value>
+  </data>
+  <data name="Diagnostics_NoLogFileFound" xml:space="preserve">
+    <value>No log file found.</value>
+  </data>
+  <data name="LiveLog_StatusNotStarted" xml:space="preserve">
+    <value>Not started</value>
+  </data>
+  <data name="LiveLog_StatusStreaming" xml:space="preserve">
+    <value>Viewing live</value>
+  </data>
+  <data name="LiveLog_StatusStopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="LiveLog_StatusPaused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="LiveLog_StatusReadFailed" xml:space="preserve">
+    <value>Read failed. Try again later.</value>
+  </data>
+  <data name="LiveLog_StatusNoLogFile" xml:space="preserve">
+    <value>No available log file found.</value>
+  </data>
+  <data name="LiveLog_StatusSwitchedToLatest" xml:space="preserve">
+    <value>Switched to the latest log file.</value>
+  </data>
+  <data name="Shortcuts_InvalidGestureMessage" xml:space="preserve">
+    <value>One or more shortcuts use an invalid format. Fix them before saving.</value>
+  </data>
+  <data name="Shortcuts_ConflictMessage" xml:space="preserve">
+    <value>Conflicts: {0}</value>
+  </data>
+  <data name="Shortcuts_ConflictSeparator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="AgentProfile_StatusConnecting" xml:space="preserve">
+    <value>Connecting...</value>
+  </data>
+  <data name="AgentProfile_StatusConnected" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="AgentProfile_StatusDisconnected" xml:space="preserve">
+    <value>Disconnected</value>
+  </data>
+  <data name="AcpConnection_TransportStdio" xml:space="preserve">
+    <value>Stdio (subprocess)</value>
+  </data>
+  <data name="AcpConnection_TransportWebSocket" xml:space="preserve">
+    <value>WebSocket</value>
+  </data>
+  <data name="AcpConnection_TransportHttpSse" xml:space="preserve">
+    <value>HTTP SSE</value>
+  </data>
+  <data name="AcpConnection_HydrationStrictReplayName" xml:space="preserve">
+    <value>Strict replay</value>
+  </data>
+  <data name="AcpConnection_HydrationStrictReplayDescription" xml:space="preserve">
+    <value>Complete hydration after replay projection reaches a stable state.</value>
+  </data>
+  <data name="AcpConnection_HydrationLoadResponseName" xml:space="preserve">
+    <value>Load response</value>
+  </data>
+  <data name="AcpConnection_HydrationLoadResponseDescription" xml:space="preserve">
+    <value>Complete hydration right after session/load; replay projects asynchronously.</value>
+  </data>
 </root>

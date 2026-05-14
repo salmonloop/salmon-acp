@@ -54,15 +54,15 @@ public sealed class ConfigurationManager : IConfigurationService
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Configuration ID cannot be empty", nameof(id));
 
         var path = GetServerYamlPath(id);
-        var yaml = await _fileStore.ReadAllTextAsync(path).ConfigureAwait(false);
-        if (yaml is null)
-        {
-            return null;
-        }
-
         ServerConfigurationYamlV1 yamlModel;
         try
         {
+            var yaml = await _fileStore.ReadAllTextAsync(path).ConfigureAwait(false);
+            if (yaml is null)
+            {
+                return null;
+            }
+
             yamlModel = YamlSerialization.CreateDeserializer().Deserialize<ServerConfigurationYamlV1>(yaml);
         }
         catch (YamlException)
@@ -104,45 +104,52 @@ public sealed class ConfigurationManager : IConfigurationService
         var result = new List<ServerConfiguration>();
         var deserializer = YamlSerialization.CreateDeserializer();
 
-        await foreach (var path in _fileStore.EnumerateFilesAsync(_serversDirectory, "*.yaml").ConfigureAwait(false))
+        try
         {
-            try
+            await foreach (var path in _fileStore.EnumerateFilesAsync(_serversDirectory, "*.yaml").ConfigureAwait(false))
             {
-                var yaml = await _fileStore.ReadAllTextAsync(path).ConfigureAwait(false);
-                if (yaml is null)
+                try
                 {
-                    continue;
-                }
+                    var yaml = await _fileStore.ReadAllTextAsync(path).ConfigureAwait(false);
+                    if (yaml is null)
+                    {
+                        continue;
+                    }
 
-                var yamlModel = deserializer.Deserialize<ServerConfigurationYamlV1>(yaml);
-                if (yamlModel.SchemaVersion <= 0)
+                    var yamlModel = deserializer.Deserialize<ServerConfigurationYamlV1>(yaml);
+                    if (yamlModel.SchemaVersion <= 0)
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(yamlModel.Name))
+                    {
+                        continue;
+                    }
+
+                    var transport = TransportFromString(yamlModel.Transport);
+                    if (transport != TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.ServerUrl))
+                    {
+                        continue;
+                    }
+
+                    if (transport == TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.StdioCommand))
+                    {
+                        continue;
+                    }
+
+                    var config = FromYaml(yamlModel, fallbackId: System.IO.Path.GetFileNameWithoutExtension(path));
+                    result.Add(config);
+                }
+                catch (Exception)
                 {
-                    continue;
+                    // Ignore malformed or unreadable individual files.
                 }
-
-                if (string.IsNullOrWhiteSpace(yamlModel.Name))
-                {
-                    continue;
-                }
-
-                var transport = TransportFromString(yamlModel.Transport);
-                if (transport != TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.ServerUrl))
-                {
-                    continue;
-                }
-
-                if (transport == TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.StdioCommand))
-                {
-                    continue;
-                }
-
-                var config = FromYaml(yamlModel, fallbackId: System.IO.Path.GetFileNameWithoutExtension(path));
-                result.Add(config);
             }
-            catch (Exception)
-            {
-                // ignore malformed files
-            }
+        }
+        catch (IOException)
+        {
+            return Array.Empty<ServerConfiguration>();
         }
 
         return result
@@ -348,14 +355,14 @@ public sealed class ConfigurationManager : IConfigurationService
 
     private async Task EnsureWritableSchemaAsync(string serverPath)
     {
-        var yaml = await _fileStore.ReadAllTextAsync(serverPath).ConfigureAwait(false);
-        if (yaml is null)
-        {
-            return;
-        }
-
         try
         {
+            var yaml = await _fileStore.ReadAllTextAsync(serverPath).ConfigureAwait(false);
+            if (yaml is null)
+            {
+                return;
+            }
+
             var existing = YamlSerialization.CreateDeserializer().Deserialize<ServerConfigurationYamlV1>(yaml);
             if (existing.SchemaVersion > CurrentSchemaVersion)
             {
