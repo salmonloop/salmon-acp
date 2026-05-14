@@ -70,7 +70,7 @@ public static class DependencyInjection
     private static void ConfigureLogging(IServiceCollection services)
     {
         var appDataPath = GetAppDataPath();
-        var logger = LoggingConfiguration.ConfigureLogging(appDataPath);
+        var logger = LoggingConfiguration.ConfigureLogging(appDataPath, hostCapabilities: GetLoggingHostCapabilities());
         Log.Logger = logger;
         services.AddLogging(builder =>
         {
@@ -78,6 +78,15 @@ public static class DependencyInjection
             builder.AddSerilog(logger, dispose: true);
         });
         services.AddSingleton(logger);
+    }
+
+    private static LoggingHostCapabilities GetLoggingHostCapabilities()
+    {
+#if __WASM__
+        return LoggingHostCapabilities.BrowserWebAssembly;
+#else
+        return LoggingHostCapabilities.Desktop;
+#endif
     }
 
     private static void RegisterDomainServices(IServiceCollection services)

@@ -260,7 +260,11 @@ public partial class App : global::Microsoft.UI.Xaml.Application
             builder.SetMinimumLevel(LogLevel.Information);
 #else
             // Keep release logs minimal, but still silence known noisy categories.
+#if __WASM__
+            builder.AddProvider(new global::Uno.Extensions.Logging.WebAssembly.WebAssemblyConsoleLoggerProvider());
+#else
             builder.AddConsole();
+#endif
             builder.SetMinimumLevel(LogLevel.Warning);
 #endif
             // Uno RemoteControl is a development-only feature (hot reload / diagnostics). When the

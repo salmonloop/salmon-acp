@@ -18,41 +18,66 @@ public static class LoggingConfiguration
     /// <param name="appDataPath">应用数据目录路径（平台特定）</param>
     /// <param name="enableDebugMode">是否启用调试模式（记录详细的网络通信）</param>
     /// <returns>配置好的 ILogger 实例</returns>
-    public static ILogger ConfigureLogging(string appDataPath, bool enableDebugMode = true)
+    public static ILogger ConfigureLogging(
+        string appDataPath,
+        bool enableDebugMode = true,
+        LoggingHostCapabilities? hostCapabilities = null)
     {
-        // 确保日志目录存在 (Requirement 6.4)
-        var logDirectory = Path.Combine(appDataPath, "logs");
-        if (!Directory.Exists(logDirectory))
-        {
-            Directory.CreateDirectory(logDirectory);
-        }
+        hostCapabilities ??= LoggingHostCapabilities.Desktop;
 
-        var logPath = Path.Combine(logDirectory, "app-.log");
+        string? logPath = null;
+        if (hostCapabilities.Value.SupportsFileSink)
+        {
+            // 确保日志目录存在 (Requirement 6.4)
+            var logDirectory = Path.Combine(appDataPath, "logs");
+            if (!Directory.Exists(logDirectory))
+            {
+                Directory.CreateDirectory(logDirectory);
+            }
+
+            logPath = Path.Combine(logDirectory, "app-.log");
+        }
 
         // 根据调试模式设置日志级别 (Requirement 6.2, 6.3)
         // 默认启用 Verbose 级别以查看完整的传输层调试信息
         var minimumLevel = enableDebugMode ? LogEventLevel.Verbose : LogEventLevel.Information;
 
-        return new LoggerConfiguration()
+        var configuration = new LoggerConfiguration()
             // 配置日志级别 (Requirement 6.2)
             .MinimumLevel.Is(minimumLevel)
             .MinimumLevel.Override("Microsoft", LogEventLevel.Debug)
             .MinimumLevel.Override("System", LogEventLevel.Debug)
             // 添加上下文信息 (Requirement 6.1)
-            .Enrich.FromLogContext()
-            .Enrich.WithThreadId()
-            .Enrich.WithMachineName()
-            // 配置控制台 sink
-            .WriteTo.Console(
-                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .Enrich.FromLogContext();
+
+        if (hostCapabilities.Value.SupportsThreadEnricher)
+        {
+            configuration = configuration.Enrich.WithThreadId();
+        }
+
+        if (hostCapabilities.Value.SupportsMachineNameEnricher)
+        {
+            configuration = configuration.Enrich.WithMachineName();
+        }
+
+        if (hostCapabilities.Value.SupportsConsoleSink)
+        {
+            configuration = configuration.WriteTo.Console(
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+        }
+
+        if (logPath != null)
+        {
             // 配置文件 sink (Requirements 6.1, 6.4, 6.5)
-            .WriteTo.File(
+            configuration = configuration.WriteTo.File(
                 path: logPath,
                 rollingInterval: RollingInterval.Day,
                 fileSizeLimitBytes: 10_485_760, // 10MB 限制 (Requirement 6.5)
                 retainedFileCountLimit: 7,      // 保留 7 天 (Requirement 6.5)
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [Thread:{ThreadId}] {Message:lj}{NewLine}{Exception}")
-            .CreateLogger();
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [Thread:{ThreadId}] {Message:lj}{NewLine}{Exception}");
+        }
+
+        return configuration.CreateLogger();
     }
 
     /// <summary>
@@ -63,4 +88,23 @@ public static class LoggingConfiguration
     {
         return SalmonEggPaths.GetAppDataRootPath();
     }
+}
+
+public readonly record struct LoggingHostCapabilities(
+    bool SupportsConsoleSink,
+    bool SupportsFileSink,
+    bool SupportsThreadEnricher,
+    bool SupportsMachineNameEnricher)
+{
+    public static LoggingHostCapabilities Desktop { get; } = new(
+        SupportsConsoleSink: true,
+        SupportsFileSink: true,
+        SupportsThreadEnricher: true,
+        SupportsMachineNameEnricher: true);
+
+    public static LoggingHostCapabilities BrowserWebAssembly { get; } = new(
+        SupportsConsoleSink: false,
+        SupportsFileSink: false,
+        SupportsThreadEnricher: false,
+        SupportsMachineNameEnricher: false);
 }

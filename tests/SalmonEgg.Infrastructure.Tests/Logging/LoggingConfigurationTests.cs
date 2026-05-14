@@ -212,6 +212,34 @@ public class LoggingConfigurationTests
     }
 
     [Fact]
+    public void ConfigureLogging_WhenHostDoesNotSupportFiles_ShouldNotCreateLogDirectory()
+    {
+        // Arrange
+        var tempPath = Path.Combine(Path.GetTempPath(), "SalmonEggTests", Guid.NewGuid().ToString());
+
+        try
+        {
+            // Act
+            var logger = LoggingConfiguration.ConfigureLogging(
+                tempPath,
+                hostCapabilities: LoggingHostCapabilities.BrowserWebAssembly);
+
+            // Assert
+            Assert.NotNull(logger);
+            Assert.False(Directory.Exists(Path.Combine(tempPath, "logs")));
+
+            (logger as IDisposable)?.Dispose();
+        }
+        finally
+        {
+            if (Directory.Exists(tempPath))
+            {
+                Directory.Delete(tempPath, true);
+            }
+        }
+    }
+
+    [Fact]
     public void GetPlatformSpecificLogPath_ShouldReturnValidPath()
     {
         // Act
