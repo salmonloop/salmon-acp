@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:vm="using:SalmonEgg.Presentation.ViewModels"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -26,8 +27,13 @@
 
             <ComboBox x:Uid="ConfigurationEditorDialogTransport"
                       ItemsSource="{x:Bind ViewModel.TransportOptions, Mode=OneWay}"
-                      SelectedItem="{x:Bind ViewModel.SelectedTransportOption, Mode=TwoWay}"
-                      DisplayMemberPath="Name"/>
+                      SelectedItem="{x:Bind ViewModel.SelectedTransportOption, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TransportOption">
+                        <TextBlock Text="{x:Bind Name, Mode=OneWay}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
 
             <StackPanel Spacing="12"
                         Visibility="{x:Bind ViewModel.IsStdio, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -50,4 +56,3 @@
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>
-

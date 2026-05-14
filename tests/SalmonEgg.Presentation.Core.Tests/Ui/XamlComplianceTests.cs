@@ -588,6 +588,20 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void TransportComboBoxes_UseExplicitItemTemplates_ForUnoWasm()
+    {
+        var dialogXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\ConfigurationEditorDialog.xaml");
+        var editorXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AgentProfileEditorPage.xaml");
+
+        Assert.DoesNotContain("DisplayMemberPath=\"Name\"", dialogXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisplayMemberPath=\"Name\"", editorXaml, StringComparison.Ordinal);
+        Assert.Contains("x:DataType=\"vm:TransportOption\"", dialogXaml, StringComparison.Ordinal);
+        Assert.Contains("x:DataType=\"vm:TransportOption\"", editorXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind Name, Mode=OneWay}\"", dialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind Name, Mode=OneWay}\"", editorXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MiniChatView_TextsAreLocalized()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\MiniWindow\MiniChatView.xaml");

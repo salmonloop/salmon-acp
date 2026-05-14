@@ -5,6 +5,7 @@
     xmlns:controls="using:SalmonEgg.Controls"
     xmlns:views="using:SalmonEgg.Presentation.Views"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:vm="using:SalmonEgg.Presentation.ViewModels"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -41,8 +42,13 @@
                             <ComboBox x:Uid="AgentProfileEditorTransport"
                                       ItemsSource="{x:Bind ViewModel.TransportOptions, Mode=OneWay}"
                                       SelectedItem="{x:Bind ViewModel.SelectedTransportOption, Mode=TwoWay}"
-                                      DisplayMemberPath="Name"
-                                      MinWidth="240"/>
+                                      MinWidth="240">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:TransportOption">
+                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
 
                             <StackPanel Spacing="12"
                                         Visibility="{x:Bind ViewModel.IsStdio, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
