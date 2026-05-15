@@ -63,7 +63,7 @@
                                                   VerticalAlignment="Center"/>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="-16,0" Visibility="Visible"/>
+                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
                                 <Grid Style="{StaticResource SettingsRowGridStyle}">
                                     <Grid.ColumnDefinitions>
@@ -122,7 +122,8 @@
                                           ItemsSource="{x:Bind ViewModel.Preferences.LanguageOptions, Mode=OneWay}"
                                           SelectedValue="{x:Bind ViewModel.Preferences.Language, Mode=TwoWay}"
                                           SelectedValuePath="Tag"
-                                          MinWidth="240"
+                                          MinWidth="{StaticResource SettingsRowControlMinWidth}"
+                                          HorizontalAlignment="Stretch"
                                           IsEnabled="{x:Bind ViewModel.Preferences.IsLanguageOverrideSupported, Mode=OneWay}"
                                           VerticalAlignment="Center">
                                     <ComboBox.ItemTemplate>

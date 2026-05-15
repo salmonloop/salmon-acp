@@ -890,6 +890,41 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void GeneralAndAppearanceSettingsPages_HaveLocalizedVisibleTextResources()
+    {
+        string[] resourceFiles =
+        [
+            @"SalmonEgg\SalmonEgg\Strings\zh-Hans\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\en\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\en-US\Resources.resw"
+        ];
+        string[] requiredResources =
+        [
+            "General_PageTitle.Text",
+            "General_PageSummary.Text",
+            "General_AutoStartTitle.Text",
+            "General_MinimizeToTrayTitle.Text",
+            "Appearance_PageTitle.Text",
+            "Appearance_PageSummary.Text",
+            "Appearance_ThemeLabel.Text",
+            "Appearance_BackdropLabel.Text"
+        ];
+
+        foreach (var resourceFile in resourceFiles)
+        {
+            var resources = XDocument.Parse(LoadText(resourceFile));
+
+            foreach (var resourceName in requiredResources)
+            {
+                Assert.True(
+                    resources.Descendants("data")
+                        .Any(data => string.Equals((string?)data.Attribute("name"), resourceName, StringComparison.Ordinal)),
+                    $"{resourceFile} must define {resourceName}.");
+            }
+        }
+    }
+
+    [Fact]
     public void SettingsShell_KeepsSectionNavigationAtTheTop()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsShellPage.xaml");

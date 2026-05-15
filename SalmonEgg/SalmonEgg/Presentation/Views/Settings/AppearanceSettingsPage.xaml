@@ -56,7 +56,8 @@
                                 <ComboBox Grid.Column="1"
                                           SelectedValue="{x:Bind Preferences.Theme, Mode=TwoWay}"
                                           SelectedValuePath="Tag"
-                                          MinWidth="240"
+                                          MinWidth="{StaticResource SettingsRowControlMinWidth}"
+                                          HorizontalAlignment="Stretch"
                                           VerticalAlignment="Center">
                                     <ComboBoxItem x:Uid="Appearance_ThemeSystem" Content="跟随系统" Tag="System" />
                                     <ComboBoxItem x:Uid="Appearance_ThemeLight" Content="浅色" Tag="Light" />
@@ -122,7 +123,8 @@
                                 <ComboBox Grid.Column="1"
                                           SelectedValue="{x:Bind Preferences.Backdrop, Mode=TwoWay}"
                                           SelectedValuePath="Tag"
-                                          MinWidth="240"
+                                          MinWidth="{StaticResource SettingsRowControlMinWidth}"
+                                          HorizontalAlignment="Stretch"
                                           VerticalAlignment="Center">
                                     <ComboBoxItem x:Uid="Appearance_BackdropSystem" Content="自动（系统推荐）" Tag="System" />
                                     <ComboBoxItem Content="Mica" Tag="Mica" />

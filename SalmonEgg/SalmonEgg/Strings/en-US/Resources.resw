@@ -35,6 +35,12 @@
     <value>About</value>
   </data>
 
+  <data name="Appearance_PageTitle.Text" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Appearance_PageSummary.Text" xml:space="preserve">
+    <value>Adjust theme, transitions, and window backdrop.</value>
+  </data>
   <data name="Appearance_ThemeTitle.Text" xml:space="preserve">
     <value>Theme</value>
   </data>
@@ -70,6 +76,9 @@
   </data>
   <data name="Appearance_ThemeDescription.Text" xml:space="preserve">
     <value>Choose your preferred app theme.</value>
+  </data>
+  <data name="Appearance_ThemeLabel.Text" xml:space="preserve">
+    <value>App theme</value>
   </data>
   <data name="Appearance_ThemeSystem.Content" xml:space="preserve">
     <value>System</value>
@@ -155,6 +164,9 @@
   <data name="Appearance_BackdropTitle.Text" xml:space="preserve">
     <value>Backdrop</value>
   </data>
+  <data name="Appearance_BackdropLabel.Text" xml:space="preserve">
+    <value>Window backdrop</value>
+  </data>
   <data name="Appearance_BackdropDescription.Text" xml:space="preserve">
     <value>Choose window backdrop (may fall back on older systems).</value>
   </data>
@@ -171,8 +183,17 @@
     <value>Theme, animation, and backdrop take effect immediately (some platforms may require restart).</value>
   </data>
 
+  <data name="General_PageTitle.Text" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="General_PageSummary.Text" xml:space="preserve">
+    <value>Manage startup, window behavior, and UI language.</value>
+  </data>
   <data name="General_StartupTitle.Text" xml:space="preserve">
     <value>Startup and window</value>
+  </data>
+  <data name="General_AutoStartTitle.Text" xml:space="preserve">
+    <value>Launch on startup</value>
   </data>
   <data name="General_AutoStart.Header" xml:space="preserve">
     <value>Launch on startup</value>
@@ -187,6 +208,9 @@
     <value>Not supported on this platform.</value>
   </data>
   <data name="General_MinimizeToTray.Header" xml:space="preserve">
+    <value>Minimize to tray</value>
+  </data>
+  <data name="General_MinimizeToTrayTitle.Text" xml:space="preserve">
     <value>Minimize to tray</value>
   </data>
   <data name="General_MinimizeToTray.OnContent" xml:space="preserve">

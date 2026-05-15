@@ -594,6 +594,126 @@
   <data name="ToolCallPillSummaryAudioContent" xml:space="preserve">
     <value>Audio content</value>
   </data>
+  <data name="Appearance_PageTitle.Text" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Appearance_PageSummary.Text" xml:space="preserve">
+    <value>Adjust theme, transitions, and window backdrop.</value>
+  </data>
+  <data name="Appearance_ThemeTitle.Text" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="Appearance_ThemeLabel.Text" xml:space="preserve">
+    <value>App theme</value>
+  </data>
+  <data name="Appearance_ThemeDescription.Text" xml:space="preserve">
+    <value>Choose your preferred app theme.</value>
+  </data>
+  <data name="Appearance_ThemeSystem.Content" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="Appearance_ThemeLight.Content" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="Appearance_ThemeDark.Content" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="Appearance_MotionTitle.Text" xml:space="preserve">
+    <value>Interaction</value>
+  </data>
+  <data name="Appearance_MotionToggleTitle.Text" xml:space="preserve">
+    <value>Page transitions</value>
+  </data>
+  <data name="Appearance_MotionToggleDescription.Text" xml:space="preserve">
+    <value>When enabled, page transitions use smooth animations.</value>
+  </data>
+  <data name="Appearance_MotionToggle.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="Appearance_MotionToggle.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Appearance_BackdropTitle.Text" xml:space="preserve">
+    <value>Backdrop</value>
+  </data>
+  <data name="Appearance_BackdropLabel.Text" xml:space="preserve">
+    <value>Window backdrop</value>
+  </data>
+  <data name="Appearance_BackdropDescription.Text" xml:space="preserve">
+    <value>Choose window backdrop (may fall back on older systems).</value>
+  </data>
+  <data name="Appearance_BackdropSystem.Content" xml:space="preserve">
+    <value>Automatic (recommended)</value>
+  </data>
+  <data name="Appearance_BackdropSolid.Content" xml:space="preserve">
+    <value>Solid</value>
+  </data>
+  <data name="Appearance_Notice.Title" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="Appearance_Notice.Message" xml:space="preserve">
+    <value>Theme, animation, and backdrop take effect immediately (some platforms may require restart).</value>
+  </data>
+  <data name="General_PageTitle.Text" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="General_PageSummary.Text" xml:space="preserve">
+    <value>Manage startup, window behavior, and UI language.</value>
+  </data>
+  <data name="General_StartupTitle.Text" xml:space="preserve">
+    <value>Startup and window</value>
+  </data>
+  <data name="General_AutoStartTitle.Text" xml:space="preserve">
+    <value>Launch on startup</value>
+  </data>
+  <data name="General_AutoStart.Header" xml:space="preserve">
+    <value>Launch on startup</value>
+  </data>
+  <data name="General_AutoStart.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="General_AutoStart.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="General_AutoStartUnsupported.Text" xml:space="preserve">
+    <value>Not supported on this platform.</value>
+  </data>
+  <data name="General_MinimizeToTrayTitle.Text" xml:space="preserve">
+    <value>Minimize to tray</value>
+  </data>
+  <data name="General_MinimizeToTray.Header" xml:space="preserve">
+    <value>Minimize to tray</value>
+  </data>
+  <data name="General_MinimizeToTray.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="General_MinimizeToTray.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="General_TrayUnsupported.Text" xml:space="preserve">
+    <value>System tray is not available on this platform.</value>
+  </data>
+  <data name="General_LanguageTitle.Text" xml:space="preserve">
+    <value>Language and region</value>
+  </data>
+  <data name="General_LanguageLabel.Text" xml:space="preserve">
+    <value>UI language</value>
+  </data>
+  <data name="General_LanguageSystem.Content" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="General_LanguageZhCn.Content" xml:space="preserve">
+    <value>Simplified Chinese</value>
+  </data>
+  <data name="General_LanguageEn.Content" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="General_LanguageUnsupported.Text" xml:space="preserve">
+    <value>Language override is not supported on this platform.</value>
+  </data>
+  <data name="General_LanguageRestartHint.Text" xml:space="preserve">
+    <value>Some settings take effect after restarting the app.</value>
+  </data>
   <data name="DataStorage_DangerTitle.Text" xml:space="preserve">
     <value>Danger zone</value>
   </data>

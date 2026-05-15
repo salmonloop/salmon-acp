@@ -35,8 +35,17 @@
     <value>关于</value>
   </data>
 
+  <data name="Appearance_PageTitle.Text" xml:space="preserve">
+    <value>外观</value>
+  </data>
+  <data name="Appearance_PageSummary.Text" xml:space="preserve">
+    <value>调整主题、过渡动画和窗口背景材质。</value>
+  </data>
   <data name="Appearance_ThemeTitle.Text" xml:space="preserve">
     <value>界面主题</value>
+  </data>
+  <data name="Appearance_ThemeLabel.Text" xml:space="preserve">
+    <value>应用主题</value>
   </data>
   <data name="Appearance_ThemeDescription.Text" xml:space="preserve">
     <value>选择您偏好的应用主题颜色</value>
@@ -68,6 +77,9 @@
   <data name="Appearance_BackdropTitle.Text" xml:space="preserve">
     <value>背景材质</value>
   </data>
+  <data name="Appearance_BackdropLabel.Text" xml:space="preserve">
+    <value>窗口背景</value>
+  </data>
   <data name="Appearance_BackdropDescription.Text" xml:space="preserve">
     <value>选择窗口背景效果（不同系统版本会自动降级）</value>
   </data>
@@ -84,8 +96,17 @@
     <value>主题、动画和材质设置会立即生效（部分平台可能需要重启）。</value>
   </data>
 
+  <data name="General_PageTitle.Text" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="General_PageSummary.Text" xml:space="preserve">
+    <value>管理启动、窗口行为和界面语言。</value>
+  </data>
   <data name="General_StartupTitle.Text" xml:space="preserve">
     <value>启动与窗口</value>
+  </data>
+  <data name="General_AutoStartTitle.Text" xml:space="preserve">
+    <value>开机自动启动</value>
   </data>
   <data name="General_AutoStart.Header" xml:space="preserve">
     <value>开机自动启动</value>
@@ -100,6 +121,9 @@
     <value>当前平台不支持开机自动启动</value>
   </data>
   <data name="General_MinimizeToTray.Header" xml:space="preserve">
+    <value>最小化到系统托盘</value>
+  </data>
+  <data name="General_MinimizeToTrayTitle.Text" xml:space="preserve">
     <value>最小化到系统托盘</value>
   </data>
   <data name="General_MinimizeToTray.OnContent" xml:space="preserve">
