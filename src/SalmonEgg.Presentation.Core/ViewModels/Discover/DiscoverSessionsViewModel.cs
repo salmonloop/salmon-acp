@@ -33,9 +33,15 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLoading))]
+    [NotifyPropertyChangedFor(nameof(IsCatalogLoading))]
+    [NotifyPropertyChangedFor(nameof(IsImportInProgress))]
     [NotifyPropertyChangedFor(nameof(LoadingStatus))]
     [NotifyPropertyChangedFor(nameof(IsListVisible))]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
+    [NotifyPropertyChangedFor(nameof(ShowSessionsSkeleton))]
+    [NotifyPropertyChangedFor(nameof(ShowBusyStatus))]
+    [NotifyPropertyChangedFor(nameof(CanRefreshSessions))]
+    [NotifyPropertyChangedFor(nameof(AreSessionActionsEnabled))]
     private DiscoverSessionsLoadPhase _loadPhase = DiscoverSessionsLoadPhase.Idle;
 
     [ObservableProperty]
@@ -56,6 +62,10 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         DiscoverSessionsLoadPhase.ActivatingSession or
         DiscoverSessionsLoadPhase.HydratingSession;
 
+    public bool IsCatalogLoading => IsCatalogLoadingPhase(LoadPhase);
+
+    public bool IsImportInProgress => IsImportPhase(LoadPhase);
+
     public string? LoadingStatus => LoadPhase switch
     {
         DiscoverSessionsLoadPhase.Connecting => "正在连接到 Agent...",
@@ -68,14 +78,21 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     };
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowProfilesPane))]
+    [NotifyPropertyChangedFor(nameof(ShowDetailsPane))]
+    [NotifyPropertyChangedFor(nameof(ShowCompactBackButton))]
     private DiscoverLayoutMode _layoutMode = DiscoverLayoutMode.Wide;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowProfilesPane))]
+    [NotifyPropertyChangedFor(nameof(ShowDetailsPane))]
+    [NotifyPropertyChangedFor(nameof(ShowCompactBackButton))]
     private DiscoverPaneMode _activePaneMode = DiscoverPaneMode.List;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
     [NotifyPropertyChangedFor(nameof(HasNoSelectedProfile))]
+    [NotifyPropertyChangedFor(nameof(ShowDetailsPane))]
     private ServerConfiguration? _selectedProfile;
 
     public bool ShowProfilesPane => LayoutMode == DiscoverLayoutMode.Wide || ActivePaneMode == DiscoverPaneMode.List;
@@ -84,9 +101,20 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
     public bool ShowCompactBackButton => LayoutMode == DiscoverLayoutMode.Narrow && ActivePaneMode == DiscoverPaneMode.Detail;
 
-    public bool IsListVisible => LoadPhase == DiscoverSessionsLoadPhase.Loaded;
+    public bool IsListVisible => AgentSessions.Count > 0
+        && (LoadPhase == DiscoverSessionsLoadPhase.Loaded
+            || LoadPhase == DiscoverSessionsLoadPhase.Error
+            || IsImportInProgress);
 
     public bool ShowEmptyState => LoadPhase == DiscoverSessionsLoadPhase.Empty;
+
+    public bool ShowSessionsSkeleton => IsCatalogLoading;
+
+    public bool ShowBusyStatus => IsLoading;
+
+    public bool CanRefreshSessions => !IsLoading;
+
+    public bool AreSessionActionsEnabled => !IsLoading;
 
     public AcpProfilesViewModel ProfilesViewModel => _profilesViewModel;
 
@@ -125,9 +153,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         }
 
         LayoutMode = mode;
-        OnPropertyChanged(nameof(ShowProfilesPane));
-        OnPropertyChanged(nameof(ShowDetailsPane));
-        OnPropertyChanged(nameof(ShowCompactBackButton));
     }
 
     [RelayCommand]
@@ -138,9 +163,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             && ActivePaneMode != DiscoverPaneMode.Detail)
         {
             ActivePaneMode = DiscoverPaneMode.Detail;
-            OnPropertyChanged(nameof(ShowProfilesPane));
-            OnPropertyChanged(nameof(ShowDetailsPane));
-            OnPropertyChanged(nameof(ShowCompactBackButton));
         }
     }
 
@@ -151,9 +173,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             && ActivePaneMode != DiscoverPaneMode.List)
         {
             ActivePaneMode = DiscoverPaneMode.List;
-            OnPropertyChanged(nameof(ShowProfilesPane));
-            OnPropertyChanged(nameof(ShowDetailsPane));
-            OnPropertyChanged(nameof(ShowCompactBackButton));
         }
     }
 
@@ -174,10 +193,6 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 ActivePaneMode = DiscoverPaneMode.Detail;
             }
-
-            OnPropertyChanged(nameof(ShowProfilesPane));
-            OnPropertyChanged(nameof(ShowDetailsPane));
-            OnPropertyChanged(nameof(ShowCompactBackButton));
 
             _ = RefreshSessionsAsync();
         }
@@ -525,6 +540,18 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         };
     }
 
+    private static bool IsCatalogLoadingPhase(DiscoverSessionsLoadPhase phase)
+        => phase is
+            DiscoverSessionsLoadPhase.Connecting or
+            DiscoverSessionsLoadPhase.Initializing or
+            DiscoverSessionsLoadPhase.ListingSessions;
+
+    private static bool IsImportPhase(DiscoverSessionsLoadPhase phase)
+        => phase is
+            DiscoverSessionsLoadPhase.ImportingSession or
+            DiscoverSessionsLoadPhase.ActivatingSession or
+            DiscoverSessionsLoadPhase.HydratingSession;
+
     private async Task PostToUiAsync(Action action)
     {
         if (_uiDispatcher.HasThreadAccess)
@@ -634,6 +661,16 @@ public sealed class DiscoverSessionItemViewModel
     public bool NeedsUserAttention { get; }
 
     public string FormattedDate => LastModified?.ToString("yyyy-MM-dd HH:mm") ?? string.Empty;
+
+    public bool HasFormattedDate => LastModified.HasValue;
+
+    public bool HasSessionCwd => !string.IsNullOrWhiteSpace(SessionCwd);
+
+    public string SessionCwdDisplayText => SessionCwd ?? string.Empty;
+
+    public string AutomationName => string.IsNullOrWhiteSpace(FormattedDate)
+        ? $"{Title}, {Description}"
+        : $"{Title}, {Description}, {FormattedDate}";
 
     public DiscoverSessionItemViewModel(
         string id,

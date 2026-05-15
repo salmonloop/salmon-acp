@@ -555,8 +555,14 @@
   <data name="DiscoverSessionsImportableListLabel.Text" xml:space="preserve">
     <value>Importable sessions</value>
   </data>
-  <data name="DiscoverSessionsRefreshText.Text" xml:space="preserve">
-    <value>Refresh list</value>
+  <data name="DiscoverSessionsRefreshButton.Label" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="DiscoverSessionsRefreshButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Refresh session list</value>
+  </data>
+  <data name="DiscoverSessionsRefreshButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>Refresh session list</value>
   </data>
   <data name="DiscoverSessionsBackButton.ToolTipService.ToolTip" xml:space="preserve">
     <value>Back to profiles</value>

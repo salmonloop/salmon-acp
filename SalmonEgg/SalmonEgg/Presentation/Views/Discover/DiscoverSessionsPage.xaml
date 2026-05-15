@@ -16,18 +16,6 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
-        <Storyboard x:Name="SkeletonPulse" RepeatBehavior="Forever">
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RightSkeletonPanel" Storyboard.TargetProperty="Opacity">
-                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0.4" />
-                <LinearDoubleKeyFrame KeyTime="0:0:0.6" Value="0.8" />
-                <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="0.4" />
-            </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LeftSkeletonPanel" Storyboard.TargetProperty="Opacity">
-                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0.4" />
-                <LinearDoubleKeyFrame KeyTime="0:0:0.6" Value="0.8" />
-                <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="0.4" />
-            </DoubleAnimationUsingKeyFrames>
-        </Storyboard>
     </Page.Resources>
 
     <Grid x:Name="LayoutRoot"
@@ -144,7 +132,9 @@
                     ItemClick="OnProfileItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="models:ServerConfiguration">
-                        <Grid Padding="12,10" ColumnSpacing="12">
+                        <Grid Padding="12,10"
+                              ColumnSpacing="12"
+                              AutomationProperties.Name="{x:Bind Name}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -225,11 +215,13 @@
                         <Button x:Name="CompactBackButton"
                                 x:Uid="DiscoverSessionsBackButton"
                                 Grid.Column="0"
+                                Width="40"
+                                Height="40"
+                                Padding="0"
                                 VerticalAlignment="Center"
-                                Style="{StaticResource SubtleButtonStyle}"
                                 Command="{x:Bind ViewModel.BackToProfilesCommand}"
                                 Visibility="{x:Bind ViewModel.ShowCompactBackButton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE72B;" />
+                            <SymbolIcon Symbol="Back" />
                         </Button>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
@@ -242,253 +234,284 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <Button
+                        <CommandBar
                             Grid.Column="2"
+                            x:Name="SessionsCommandBar"
+                            Background="Transparent"
+                            DefaultLabelPosition="Right"
+                            IsOpen="False"
                             VerticalAlignment="Center"
-                            Command="{x:Bind ViewModel.RefreshSessionsCommand}"
-                            IsEnabled="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
-                            Style="{StaticResource AccentButtonStyle}"
-                            Padding="16,8">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE72C;" FontSize="14" />
-                                <TextBlock x:Uid="DiscoverSessionsRefreshText" />
+                            OverflowButtonVisibility="Collapsed">
+                            <AppBarButton
+                                x:Uid="DiscoverSessionsRefreshButton"
+                                Command="{x:Bind ViewModel.RefreshSessionsCommand}"
+                                IsEnabled="{x:Bind ViewModel.CanRefreshSessions, Mode=OneWay}">
+                                <AppBarButton.Icon>
+                                    <SymbolIcon Symbol="Refresh" />
+                                </AppBarButton.Icon>
+                            </AppBarButton>
+                        </CommandBar>
+                    </Grid>
+
+                    <Grid Grid.Row="1"
+                          RowDefinitions="Auto,Auto,*"
+                          RowSpacing="12">
+                        <InfoBar
+                            x:Uid="DiscoverSessionsConnectionError"
+                            Grid.Row="0"
+                            Message="{x:Bind ViewModel.DisplayErrorMessage, Mode=OneWay}"
+                            Severity="Error"
+                            IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                            IsClosable="False" />
+
+                        <Border Grid.Row="1"
+                                Padding="12,8"
+                                CornerRadius="8"
+                                Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                Visibility="{x:Bind ViewModel.ShowBusyStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="10"
+                                        VerticalAlignment="Center">
+                                <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                                              Width="18"
+                                              Height="18" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.LoadingStatus, Mode=OneWay}"
+                                    Style="{ThemeResource CaptionTextBlockStyle}"
+                                    FontWeight="SemiBold"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>
-                        </Button>
-                    </Grid>
+                        </Border>
 
-                    <!-- Loading & Error States Overlay -->
-                    <Grid Grid.Row="1" Canvas.ZIndex="10">
-                    <InfoBar
-                        x:Uid="DiscoverSessionsConnectionError"
-                        Message="{x:Bind ViewModel.DisplayErrorMessage, Mode=OneWay}"
-                        Severity="Error"
-                        IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
-                        IsClosable="False"
-                        VerticalAlignment="Top"
-                        Margin="0,0,0,16" />
+                        <Grid Grid.Row="2"
+                              Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                          Glyph="&#xE8B7;"
+                                          FontSize="48"
+                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock x:Uid="DiscoverSessionsEmptyTitle"
+                                           Style="{ThemeResource TitleTextBlockStyle}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock x:Uid="DiscoverSessionsEmptyDescription"
+                                           Style="{ThemeResource BodyTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           HorizontalAlignment="Center"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="360" />
+                            </StackPanel>
+                        </Grid>
 
-                    <Grid Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
-                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                      Glyph="&#xE8B7;"
-                                      FontSize="48"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:Uid="DiscoverSessionsEmptyTitle"
-                                       Style="{ThemeResource TitleTextBlockStyle}"
-                                       HorizontalAlignment="Center" />
-                            <TextBlock x:Uid="DiscoverSessionsEmptyDescription"
-                                       Style="{ThemeResource BodyTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       HorizontalAlignment="Center"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       MaxWidth="360" />
+                        <StackPanel x:Name="RightSkeletonPanel"
+                                    Grid.Row="2"
+                                    Visibility="{x:Bind ViewModel.ShowSessionsSkeleton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    Spacing="10"
+                                    Padding="0,0,0,40">
+                            <Border Padding="14" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="36" Height="36" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                        <Border Width="160" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                        <Border Width="300" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2" Width="96" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+
+                            <Border Padding="14" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="36" Height="36" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                        <Border Width="120" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                        <Border Width="260" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2" Width="96" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+
+                            <Border Padding="14" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="36" Height="36" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
+                                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                        <Border Width="180" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
+                                        <Border Width="220" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2" Width="96" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
-                    </Grid>
 
-                    <!-- Native Skeleton View (Fishbone) -->
-                    <StackPanel x:Name="RightSkeletonPanel"
-                        Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                        Spacing="16"
-                        Padding="0,0,0,40">
-                        
-                        <!-- Transparent Lifecycle Feedback -->
-                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" Margin="0,0,0,24">
-                            <ProgressRing IsActive="True" Width="20" Height="20" />
-                            <TextBlock 
-                                Text="{x:Bind ViewModel.LoadingStatus, Mode=OneWay}" 
-                                Style="{ThemeResource BodyStrongTextBlockStyle}" 
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                        </StackPanel>
+                        <ListView
+                            x:Name="SessionsList"
+                            AutomationProperties.AutomationId="DiscoverSessions.SessionsList"
+                            Grid.Row="2"
+                            Visibility="{x:Bind ViewModel.IsListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                            ItemsSource="{x:Bind ViewModel.AgentSessions, Mode=OneWay}"
+                            IsFocusEngagementEnabled="True"
+                            SelectionMode="None"
+                            IsItemClickEnabled="False"
+                            Padding="0,0,0,40">
 
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Margin" Value="0,0,0,10"/>
+                                    <Setter Property="MinHeight" Value="104"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
 
-                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
-                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
-                                    <Border Width="120" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
-                                    <Border Width="280" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
-                                </StackPanel>
-                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:DiscoverSessionItemViewModel">
+                                    <Border
+                                        AutomationProperties.Name="{x:Bind AutomationName}"
+                                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="14">
 
-                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
-                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
-                                    <Border Width="150" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
-                                    <Border Width="240" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
-                                </StackPanel>
-                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                                        <Grid ColumnSpacing="12" RowSpacing="6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
 
-                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
-                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
-                                    <Border Width="100" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
-                                    <Border Width="200" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
-                                </StackPanel>
-                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                                            <Border Grid.Column="0"
+                                                    Grid.RowSpan="3"
+                                                    Width="36" Height="36"
+                                                    CornerRadius="8"
+                                                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                    Opacity="0.18"
+                                                    VerticalAlignment="Top">
+                                                <Viewbox Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                                              Glyph="&#xE8F2;"
+                                                              Foreground="{ThemeResource AccentBrush}" />
+                                                </Viewbox>
+                                            </Border>
 
-                        <Border Padding="16" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="40" Height="40" CornerRadius="6" Background="{ThemeResource ButtonBackground}" Opacity="0.1" />
-                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
-                                    <Border Width="180" Height="14" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.1" HorizontalAlignment="Left" />
-                                    <Border Width="160" Height="10" CornerRadius="2" Background="{ThemeResource ButtonBackground}" Opacity="0.06" HorizontalAlignment="Left" />
-                                </StackPanel>
-                                <Border Grid.Column="2" Width="84" Height="32" CornerRadius="4" Background="{ThemeResource ButtonBackground}" Opacity="0.1" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
-                    </StackPanel>
-                    </Grid>
-
-                    <!-- Sessions List (Only visible when no errors) -->
-                    <ListView
-                        x:Name="SessionsList"
-                        AutomationProperties.AutomationId="DiscoverSessions.SessionsList"
-                        Grid.Row="1"
-                        Visibility="{x:Bind ViewModel.IsListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                        ItemsSource="{x:Bind ViewModel.AgentSessions, Mode=OneWay}"
-                        IsFocusEngagementEnabled="True"
-                        SelectionMode="None"
-                        IsItemClickEnabled="False"
-                        Padding="0,0,0,40">
-
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="Margin" Value="0,0,0,16"/>
-                                <Setter Property="Padding" Value="0"/>
-                            </Style>
-                        </ListView.ItemContainerStyle>
-
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="viewModels:DiscoverSessionItemViewModel">
-                                <Border
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="16">
-
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Icon -->
-                                        <Border Grid.Column="0"
-                                                Width="40" Height="40"
-                                                CornerRadius="6"
-                                                Background="{ThemeResource SystemControlBackgroundAccentBrush}"
-                                                Margin="0,0,16,0"
-                                                VerticalAlignment="Top">
-                                            <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                                      Glyph="&#xE8F2;"
-                                                      Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                                                      FontSize="18" />
-                                        </Border>
-
-                                        <!-- Details -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
                                             <TextBlock
+                                                Grid.Column="1"
+                                                Grid.Row="0"
                                                 Text="{x:Bind Title}"
                                                 Style="{ThemeResource BodyStrongTextBlockStyle}"
                                                 TextWrapping="NoWrap"
                                                 TextTrimming="CharacterEllipsis" />
 
                                             <TextBlock
+                                                Grid.Column="1"
+                                                Grid.Row="1"
                                                 Text="{x:Bind Description}"
                                                 Style="{ThemeResource BodyTextBlockStyle}"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Margin="0,4,0,0"
                                                 TextWrapping="Wrap"
                                                 MaxLines="2"
                                                 TextTrimming="CharacterEllipsis" />
 
-                                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE787;" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                                                <TextBlock
-                                                    Text="{x:Bind FormattedDate}"
-                                                    Style="{ThemeResource CaptionTextBlockStyle}"
-                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                                            </StackPanel>
-
-                                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                                                <Border
-                                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4"
-                                                    Padding="6,2">
+                                            <Grid Grid.Column="1"
+                                                  Grid.Row="2"
+                                                  RowDefinitions="Auto,Auto,Auto"
+                                                  RowSpacing="4">
+                                                <StackPanel Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            Visibility="{x:Bind HasFormattedDate, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE787;" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                                                     <TextBlock
-                                                        Text="{x:Bind ProjectAffinityBadgeText, Mode=OneTime}"
+                                                        Text="{x:Bind FormattedDate}"
                                                         Style="{ThemeResource CaptionTextBlockStyle}"
-                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                </Border>
-                                                <FontIcon
-                                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                                    Glyph="&#xE7BA;"
-                                                    FontSize="12"
-                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                    VerticalAlignment="Center"
-                                                    Visibility="{x:Bind NeedsUserAttention, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                            </StackPanel>
+                                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                                                </StackPanel>
 
-                                            <TextBlock
-                                                Text="{x:Bind AffinityStatusText, Mode=OneTime}"
-                                                Style="{ThemeResource CaptionTextBlockStyle}"
-                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                Margin="0,4,0,0"
-                                                TextWrapping="WrapWholeWords"
-                                                MaxLines="2" />
-                                        </StackPanel>
+                                                <StackPanel Grid.Row="1"
+                                                            Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            Visibility="{x:Bind HasSessionCwd, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}" Glyph="&#xE8B7;" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                    <TextBlock
+                                                        Text="{x:Bind SessionCwdDisplayText, Mode=OneTime}"
+                                                        Style="{ThemeResource CaptionTextBlockStyle}"
+                                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                        TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
 
-                                        <!-- Action -->
-                                        <!-- Binding is required here because the DataTemplate item scope cannot compiled-bind to the page command across Uno targets. -->
-                                        <Button
-                                            x:Name="ActionBtn"
-                                            AutomationProperties.AutomationId="DiscoverSessions.ImportButton"
-                                            Grid.Column="2"
-                                            x:Uid="DiscoverSessionsImportButton"
-                                            Style="{StaticResource AccentButtonStyle}"
-                                            VerticalAlignment="Center"
-                                            Command="{Binding DataContext.LoadSessionCommand, ElementName=RootPage}"
-                                            CommandParameter="{x:Bind}" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                                                <Grid Grid.Row="2"
+                                                      ColumnDefinitions="Auto,Auto,*"
+                                                      ColumnSpacing="8">
+                                                    <Border
+                                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Padding="6,2">
+                                                        <TextBlock
+                                                            Text="{x:Bind ProjectAffinityBadgeText, Mode=OneTime}"
+                                                            Style="{ThemeResource CaptionTextBlockStyle}"
+                                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                            MaxWidth="280"
+                                                            TextTrimming="CharacterEllipsis" />
+                                                    </Border>
+                                                    <FontIcon
+                                                        Grid.Column="1"
+                                                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                                        Glyph="&#xE7BA;"
+                                                        FontSize="12"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        VerticalAlignment="Center"
+                                                        Visibility="{x:Bind NeedsUserAttention, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                                    <TextBlock
+                                                        Grid.Column="2"
+                                                        Text="{x:Bind AffinityStatusText, Mode=OneTime}"
+                                                        Style="{ThemeResource CaptionTextBlockStyle}"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        TextWrapping="WrapWholeWords"
+                                                        MaxLines="2" />
+                                                </Grid>
+                                            </Grid>
+
+                                            <!-- Binding is required here because the DataTemplate item scope cannot compiled-bind to the page command across Uno targets. -->
+                                            <Button
+                                                x:Name="ActionBtn"
+                                                AutomationProperties.AutomationId="DiscoverSessions.ImportButton"
+                                                Grid.Column="2"
+                                                Grid.RowSpan="3"
+                                                x:Uid="DiscoverSessionsImportButton"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding DataContext.LoadSessionCommand, ElementName=RootPage}"
+                                                CommandParameter="{x:Bind}"
+                                                IsEnabled="{Binding DataContext.AreSessionActionsEnabled, ElementName=RootPage}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>

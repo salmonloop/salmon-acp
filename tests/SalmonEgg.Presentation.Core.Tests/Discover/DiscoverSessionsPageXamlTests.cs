@@ -52,6 +52,34 @@ public sealed class DiscoverSessionsPageXamlTests
     }
 
     [Fact]
+    public void DiscoverSessionsPage_LoadingAndCommands_UseNativeWinUiSurfaces()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var codeBehind = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml.cs");
+
+        Assert.Contains("<CommandBar", xaml, StringComparison.Ordinal);
+        Assert.Contains("<AppBarButton", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Uid=\"DiscoverSessionsRefreshButton\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowBusyStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowSessionsSkeleton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding DataContext.AreSessionActionsEnabled, ElementName=RootPage}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SkeletonPulse", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SkeletonPulse", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource SubtleButtonStyle}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DiscoverSessionsPage_SessionRowsExposeAccessibleMetadataBoundaries()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+
+        Assert.Contains("AutomationProperties.Name=\"{x:Bind AutomationName}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind HasFormattedDate, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind HasSessionCwd, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{x:Bind SessionCwdDisplayText, Mode=OneTime}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DiscoverSessionsPage_HeaderBindsToLocalSelectedProfileProjection()
     {
         // Arrange

@@ -996,8 +996,14 @@
   <data name="DiscoverSessionsImportableListLabel.Text" xml:space="preserve">
     <value>可导入的会话列表</value>
   </data>
-  <data name="DiscoverSessionsRefreshText.Text" xml:space="preserve">
-    <value>刷新列表</value>
+  <data name="DiscoverSessionsRefreshButton.Label" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="DiscoverSessionsRefreshButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>刷新会话列表</value>
+  </data>
+  <data name="DiscoverSessionsRefreshButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>刷新会话列表</value>
   </data>
   <data name="DiscoverSessionsBackButton.ToolTipService.ToolTip" xml:space="preserve">
     <value>返回节点列表</value>

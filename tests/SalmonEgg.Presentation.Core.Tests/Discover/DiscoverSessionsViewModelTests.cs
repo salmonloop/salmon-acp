@@ -572,6 +572,23 @@ public sealed class DiscoverSessionsViewModelTests
             var activationStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var connectionFacade = new FakeDiscoverSessionsConnectionFacade();
+            connectionFacade.CurrentChatService = new FakeChatService
+            {
+                SessionListResponse = new SessionListResponse
+                {
+                    Sessions =
+                    {
+                        new AgentSessionInfo
+                        {
+                            SessionId = "remote-session-1",
+                            Title = "Remote Session",
+                            Description = "Imported from ACP",
+                            UpdatedAt = "2026-03-27T12:00:00+08:00",
+                            Cwd = @"C:\repo\remote"
+                        }
+                    }
+                }
+            };
 
             var navigationCoordinator = new StubNavigationCoordinator
             {
@@ -590,11 +607,18 @@ public sealed class DiscoverSessionsViewModelTests
 
             await viewModel.RefreshSessionsCommand.ExecuteAsync(null);
             Assert.NotEqual(DiscoverSessionsLoadPhase.Error, viewModel.LoadPhase);
+            Assert.True(viewModel.IsListVisible);
 
             var loadTask = viewModel.LoadSessionCommand.ExecuteAsync(CreateSessionItem());
 
             await activationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
             Assert.True(viewModel.IsLoading);
+            Assert.True(viewModel.IsImportInProgress);
+            Assert.True(viewModel.ShowBusyStatus);
+            Assert.True(viewModel.IsListVisible);
+            Assert.False(viewModel.ShowSessionsSkeleton);
+            Assert.False(viewModel.CanRefreshSessions);
+            Assert.False(viewModel.AreSessionActionsEnabled);
             Assert.Equal("正在导入会话...", viewModel.LoadingStatus);
 
             allowActivationCompletion.TrySetResult(null);
@@ -604,6 +628,34 @@ public sealed class DiscoverSessionsViewModelTests
         {
             SynchronizationContext.SetSynchronizationContext(originalContext);
         }
+    }
+
+    [Fact]
+    public void DiscoverSessionItemViewModel_OptionalMetadata_ProjectsVisibilityBoundaries()
+    {
+        var withoutMetadata = new DiscoverSessionItemViewModel(
+            "remote-session-1",
+            "Remote Session",
+            "Imported from ACP",
+            null,
+            null);
+        var withMetadata = new DiscoverSessionItemViewModel(
+            "remote-session-2",
+            "Remote Session 2",
+            "Imported from ACP",
+            new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
+            @"C:\repo\remote");
+
+        Assert.False(withoutMetadata.HasFormattedDate);
+        Assert.False(withoutMetadata.HasSessionCwd);
+        Assert.Equal(string.Empty, withoutMetadata.FormattedDate);
+        Assert.Equal(string.Empty, withoutMetadata.SessionCwdDisplayText);
+        Assert.Equal("Remote Session, Imported from ACP", withoutMetadata.AutomationName);
+
+        Assert.True(withMetadata.HasFormattedDate);
+        Assert.True(withMetadata.HasSessionCwd);
+        Assert.Equal(@"C:\repo\remote", withMetadata.SessionCwdDisplayText);
+        Assert.Contains("2026-03-27 12:00", withMetadata.AutomationName, StringComparison.Ordinal);
     }
 
     [Fact]

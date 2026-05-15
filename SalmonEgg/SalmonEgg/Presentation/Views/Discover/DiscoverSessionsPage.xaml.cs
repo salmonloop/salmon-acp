@@ -16,7 +16,6 @@ public sealed partial class DiscoverSessionsPage : Page
         DataContext = ViewModel;
 
         Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
         SizeChanged += OnSizeChanged;
     }
 
@@ -28,7 +27,6 @@ public sealed partial class DiscoverSessionsPage : Page
 
     private async void OnLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        SkeletonPulse?.Begin();
         ViewModel.SetLayoutMode(ActualWidth < 768 ? DiscoverLayoutMode.Narrow : DiscoverLayoutMode.Wide);
         if (ViewModel.InitializeCommand.CanExecute(null))
         {
@@ -48,10 +46,5 @@ public sealed partial class DiscoverSessionsPage : Page
         {
             ViewModel.OpenProfileDetailsCommand.Execute(null);
         }
-    }
-
-    private void OnUnloaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-    {
-        SkeletonPulse?.Stop();
     }
 }
