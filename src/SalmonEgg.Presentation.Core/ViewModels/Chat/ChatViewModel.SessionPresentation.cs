@@ -165,12 +165,22 @@ public partial class ChatViewModel
 
     private void OnAcpProfilesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_selectedProfileIdFromStore))
+        var profileId = _selectedProfileIdFromStore;
+        if (string.IsNullOrWhiteSpace(profileId))
         {
             return;
         }
 
-        ApplySelectedProfileFromStore(_selectedProfileIdFromStore);
+        _uiDispatcher.Enqueue(() =>
+        {
+            if (_disposed
+                || !string.Equals(_selectedProfileIdFromStore, profileId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            ApplySelectedProfileFromStore(profileId);
+        });
     }
 
     private void ApplySessionIdentityProjection(

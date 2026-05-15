@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.ProjectAffinity;
@@ -327,6 +329,55 @@ public sealed class AcpConnectionSettingsViewModelTests
         Assert.Empty(preferences.ProjectPathMappings);
     }
 
+    [Fact]
+    public async Task RefreshCommand_WhenLegacyProfilesObserverFails_KeepsSettingsProfileItemsVisible()
+    {
+        // Arrange
+        var preferences = await CreatePreferencesAsync();
+        var configurations = new[]
+        {
+            new ServerConfiguration
+            {
+                Id = "profile-b",
+                Name = "Beta",
+                Transport = TransportType.WebSocket,
+                ServerUrl = "ws://localhost:9002"
+            },
+            new ServerConfiguration
+            {
+                Id = "profile-a",
+                Name = "Alpha",
+                Transport = TransportType.Stdio,
+                StdioCommand = "alpha-acp"
+            }
+        };
+
+        var configurationService = new Mock<IConfigurationService>();
+        configurationService
+            .Setup(service => service.ListConfigurationsAsync())
+            .ReturnsAsync(configurations);
+
+        var registry = new InMemoryAcpConnectionSessionRegistry();
+        var profiles = new AcpProfilesViewModel(
+            configurationService.Object,
+            preferences,
+            NullLogger<AcpProfilesViewModel>.Instance,
+            registry,
+            registry,
+            new TestConnectionCommands(),
+            NullLoggerFactory.Instance,
+            new ImmediateUiDispatcher(),
+            new TestCoreStringLocalizer());
+
+        profiles.Profiles.CollectionChanged += ThrowWhenLegacyProfilesAdd;
+
+        // Act
+        await profiles.RefreshCommand.ExecuteAsync(null);
+
+        // Assert
+        Assert.Equal(new[] { "Alpha", "Beta" }, profiles.ProfileItems.Select(item => item.Name));
+    }
+
     private static async Task<AppPreferencesViewModel> CreatePreferencesAsync(
         bool supportsStdioTransport = true,
         bool supportsLocalTerminal = true)
@@ -367,6 +418,14 @@ public sealed class AcpConnectionSettingsViewModelTests
 
     private static ITransportSupportPolicy CreateTransportSupportPolicy(AppPreferencesViewModel preferences)
         => new TransportSupportPolicy(preferences.PlatformCapabilities);
+
+    private static void ThrowWhenLegacyProfilesAdd(object? sender, NotifyCollectionChangedEventArgs args)
+    {
+        if (args.Action == NotifyCollectionChangedAction.Add)
+        {
+            throw new InvalidOperationException("Simulates a downstream native selector projection failure.");
+        }
+    }
 
     private sealed class TestSettingsChatConnection : ISettingsChatConnection
     {

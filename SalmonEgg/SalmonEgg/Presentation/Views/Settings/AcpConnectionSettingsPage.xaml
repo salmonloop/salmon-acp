@@ -70,10 +70,11 @@
                                       ItemContainerStyle="{StaticResource AgentListItemStyle}">
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="vm:AgentProfileItemViewModel">
-                                        <Grid Padding="14,12"
+                                        <Grid Padding="16,14"
                                               ColumnDefinitions="Auto,*,Auto"
-                                              ColumnSpacing="14"
-                                              RowDefinitions="Auto,Auto">
+                                              ColumnSpacing="16"
+                                              RowDefinitions="Auto,Auto"
+                                              RowSpacing="4">
                                             <Border Grid.RowSpan="2"
                                                     Width="36"
                                                     Height="36"
@@ -88,25 +89,17 @@
                                                 </Viewbox>
                                             </Border>
 
-                                            <StackPanel Grid.Column="1"
-                                                        Spacing="3"
-                                                        VerticalAlignment="Center">
+                                            <Grid Grid.Column="1"
+                                                  ColumnDefinitions="*,Auto"
+                                                  ColumnSpacing="10"
+                                                  VerticalAlignment="Center">
                                                 <TextBlock Text="{x:Bind Name}"
                                                            FontWeight="SemiBold"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{x:Bind EndpointDescription}"
-                                                           FontSize="12"
-                                                           Opacity="0.65"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center"/>
 
-                                            <Grid Grid.Column="2"
-                                                  MinWidth="188"
-                                                  ColumnDefinitions="Auto,Auto,Auto"
-                                                  ColumnSpacing="10"
-                                                  VerticalAlignment="Center"
-                                                  HorizontalAlignment="Right">
-                                                <Grid VerticalAlignment="Center">
+                                                <Grid Grid.Column="1"
+                                                      VerticalAlignment="Center">
                                                     <Border CornerRadius="12"
                                                             Padding="8,4"
                                                             Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
@@ -127,16 +120,29 @@
                                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                     </Border>
                                                 </Grid>
+                                            </Grid>
 
-                                                <ToggleSwitch Grid.Column="1"
-                                                              VerticalAlignment="Center"
+                                            <TextBlock Grid.Row="1"
+                                                       Grid.Column="1"
+                                                       Text="{x:Bind EndpointDescription}"
+                                                       FontSize="12"
+                                                       Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis"/>
+
+                                            <Grid Grid.RowSpan="2"
+                                                  Grid.Column="2"
+                                                  ColumnDefinitions="Auto,Auto"
+                                                  ColumnSpacing="10"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Right">
+                                                <ToggleSwitch VerticalAlignment="Center"
                                                               OffContent=""
                                                               OnContent=""
                                                               IsOn="{x:Bind IsConnected, Mode=OneWay}"
                                                               IsEnabled="{x:Bind IsConnecting, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
                                                               Toggled="OnProfileConnectionToggleToggled"/>
 
-                                                <Button Grid.Column="2"
+                                                <Button Grid.Column="1"
                                                         VerticalAlignment="Center"
                                                         x:Uid="Acp_ProfileMore"
                                                         ToolTipService.ToolTip="更多">

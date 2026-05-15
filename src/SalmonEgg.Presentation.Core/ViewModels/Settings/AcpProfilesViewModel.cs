@@ -162,6 +162,9 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
 
             await MarshalToUiAsync(() =>
             {
+                // Keep the settings list visible even if legacy collection observers fail while projecting to older surfaces.
+                RebuildProfileItems(ordered);
+
                 // ── Update legacy flat list (backward compat) ────────────
                 Profiles.Clear();
                 foreach (var cfg in ordered)
@@ -173,9 +176,6 @@ public partial class AcpProfilesViewModel : ObservableObject, IDisposable
                 {
                     SelectedProfile = Profiles.FirstOrDefault(p => p.Id == _preferences.LastSelectedServerId);
                 }
-
-                // ── Rebuild per-profile item VMs ─────────────────────────
-                RebuildProfileItems(ordered);
             }).ConfigureAwait(false);
         }
         catch (Exception ex)

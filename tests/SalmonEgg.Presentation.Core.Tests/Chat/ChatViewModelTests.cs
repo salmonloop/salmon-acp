@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Collections.Immutable;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -2215,6 +2216,37 @@ public partial class ChatViewModelTests
 
         var connectionState = await fixture.GetConnectionStateAsync();
         Assert.Equal("profile-a", connectionState.SettingsSelectedProfileId);
+    }
+
+    [Fact]
+    public async Task AcpProfileList_AddForStoredSelection_DefersSelectedProfileProjectionUntilCollectionObserversCanSettle()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        await using var fixture = CreateViewModel(syncContext);
+        var detachedProfile = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.ViewModel.SelectProfileAsync(detachedProfile));
+
+        ServerConfiguration? selectedDuringAdd = null;
+        fixture.Profiles.Profiles.CollectionChanged += (_, args) =>
+        {
+            if (args.Action == NotifyCollectionChangedAction.Add)
+            {
+                selectedDuringAdd = fixture.ViewModel.SelectedAcpProfile;
+            }
+        };
+
+        var profile = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+        fixture.Profiles.Profiles.Add(profile);
+
+        Assert.Null(selectedDuringAdd);
+        Assert.Null(fixture.ViewModel.SelectedAcpProfile);
+
+        syncContext.RunAll();
+
+        Assert.Same(profile, fixture.ViewModel.SelectedAcpProfile);
     }
 
     [Fact]
