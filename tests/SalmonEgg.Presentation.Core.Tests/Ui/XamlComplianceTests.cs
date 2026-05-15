@@ -957,7 +957,27 @@ public sealed class XamlComplianceTests
             "Diagnostics_SessionLabel.Text",
             "Diagnostics_BundleTitle.Text",
             "Diagnostics_BundleDescription.Text",
-            "Diagnostics_CreateBundle.Content"
+            "Diagnostics_CreateBundle.Content",
+            "About_PageTitle.Text",
+            "About_PageSummary.Text",
+            "About_AppInfoTitle.Text",
+            "About_AppNameLabel.Text",
+            "About_VersionLabel.Text",
+            "About_ProtocolLabel.Text",
+            "About_SupportTitle.Text",
+            "About_SupportActionsTitle.Text",
+            "About_OpenAppData.Content",
+            "About_OpenReleaseNotes.Content",
+            "About_OpenPrivacyPolicy.Content",
+            "About_CopyVersionInfo.Content",
+            "About_DocsFolderLabel.Text",
+            "About_DocsHint.Text",
+            "About_OpenSourceTitle.Text",
+            "About_OpenSourceDescription.Text",
+            "About_OpenSourcePackageHeader.Text",
+            "About_OpenSourceVersionHeader.Text",
+            "About_OpenSourceLicenseHeader.Text",
+            "About_OpenSourceSourceHeader.Text"
         ];
 
         foreach (var resourceFile in resourceFiles)
