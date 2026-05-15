@@ -880,6 +880,10 @@ public sealed class XamlComplianceTests
         Assert.Contains("x:Uid=\"General_PageSummary\"", general, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource SettingsRowGridStyle}\"", general, StringComparison.Ordinal);
         Assert.Contains("<ToggleSwitch", general, StringComparison.Ordinal);
+        Assert.Contains("x:Uid=\"General_AutoStartSwitch\"", general, StringComparison.Ordinal);
+        Assert.Contains("x:Uid=\"General_MinimizeToTraySwitch\"", general, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Uid=\"General_AutoStart\"", general, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Uid=\"General_MinimizeToTray\"", general, StringComparison.Ordinal);
         Assert.Contains("<ComboBox", general, StringComparison.Ordinal);
 
         Assert.Contains("x:Uid=\"Appearance_PageTitle\"", appearance, StringComparison.Ordinal);

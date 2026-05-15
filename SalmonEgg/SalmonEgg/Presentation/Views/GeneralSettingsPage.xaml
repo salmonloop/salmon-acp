@@ -55,7 +55,7 @@
                                     </StackPanel>
 
                                     <ToggleSwitch Grid.Column="1"
-                                                  x:Uid="General_AutoStart"
+                                                  x:Uid="General_AutoStartSwitch"
                                                   IsOn="{x:Bind ViewModel.Preferences.LaunchOnStartup, Mode=TwoWay}"
                                                   IsEnabled="{x:Bind ViewModel.Preferences.IsLaunchOnStartupSupported, Mode=OneWay}"
                                                   OnContent="开启"
@@ -82,7 +82,7 @@
                                     </StackPanel>
 
                                     <ToggleSwitch Grid.Column="1"
-                                                  x:Uid="General_MinimizeToTray"
+                                                  x:Uid="General_MinimizeToTraySwitch"
                                                   IsOn="{x:Bind ViewModel.Preferences.MinimizeToTray, Mode=TwoWay}"
                                                   IsEnabled="{x:Bind ViewModel.Preferences.IsMinimizeToTraySupported, Mode=OneWay}"
                                                   OnContent="开启"

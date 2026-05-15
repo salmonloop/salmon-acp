@@ -675,6 +675,12 @@
   <data name="General_AutoStart.OffContent" xml:space="preserve">
     <value>Off</value>
   </data>
+  <data name="General_AutoStartSwitch.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="General_AutoStartSwitch.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
   <data name="General_AutoStartUnsupported.Text" xml:space="preserve">
     <value>Not supported on this platform.</value>
   </data>
@@ -688,6 +694,12 @@
     <value>On</value>
   </data>
   <data name="General_MinimizeToTray.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="General_MinimizeToTraySwitch.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="General_MinimizeToTraySwitch.OffContent" xml:space="preserve">
     <value>Off</value>
   </data>
   <data name="General_TrayUnsupported.Text" xml:space="preserve">

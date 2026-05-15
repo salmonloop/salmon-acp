@@ -117,6 +117,12 @@
   <data name="General_AutoStart.OffContent" xml:space="preserve">
     <value>关闭</value>
   </data>
+  <data name="General_AutoStartSwitch.OnContent" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="General_AutoStartSwitch.OffContent" xml:space="preserve">
+    <value>关闭</value>
+  </data>
   <data name="General_AutoStartUnsupported.Text" xml:space="preserve">
     <value>当前平台不支持开机自动启动</value>
   </data>
@@ -130,6 +136,12 @@
     <value>开启</value>
   </data>
   <data name="General_MinimizeToTray.OffContent" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="General_MinimizeToTraySwitch.OnContent" xml:space="preserve">
+    <value>开启</value>
+  </data>
+  <data name="General_MinimizeToTraySwitch.OffContent" xml:space="preserve">
     <value>关闭</value>
   </data>
   <data name="General_TrayUnsupported.Text" xml:space="preserve">
