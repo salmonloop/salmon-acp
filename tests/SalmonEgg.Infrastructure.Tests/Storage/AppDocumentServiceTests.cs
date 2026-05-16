@@ -25,7 +25,7 @@ public class AppDocumentServiceTests
     [Fact]
     public void Constructor_NullPaths_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => new AppDocumentService(null));
+        Assert.Throws<ArgumentNullException>(() => new AppDocumentService(null!));
     }
 
     [Fact]
