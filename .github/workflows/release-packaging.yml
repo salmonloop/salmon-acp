@@ -24,6 +24,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Install wasm-tools
+        run: dotnet workload install wasm-tools
+
       - name: Publish WebAssembly
         run: |
           cd SalmonEgg/SalmonEgg
@@ -46,6 +49,9 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install wasm-tools
+        run: dotnet workload install wasm-tools
 
       - name: Publish Desktop (Windows)
         run: |
@@ -149,6 +155,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Install wasm-tools
+        run: dotnet workload install wasm-tools
+
       - name: Restore WinUI app for isolated MSIX build
         shell: pwsh
         run: |
@@ -228,6 +237,9 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install wasm-tools
+        run: dotnet workload install wasm-tools
 
       - name: Publish macOS app bundle
         shell: pwsh
