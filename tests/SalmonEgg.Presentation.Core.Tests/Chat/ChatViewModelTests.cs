@@ -3188,6 +3188,8 @@ public partial class ChatViewModelTests
 
         await fixture.DispatchAsync(new SetDraftTextAction("from store"));
         await Task.Delay(50);
+        await Task.Delay(50); // Additional delay to fix flakiness
+        await Task.Yield();
         syncContext.RunAll();
 
         Assert.Equal("from store", viewModel.CurrentPrompt);
@@ -10775,12 +10777,12 @@ public partial class ChatViewModelTests
         await WaitForConditionAsync(() =>
         {
             syncContext.RunAll();
-                return Task.FromResult(
-                    (loadStarted.Task.IsCompleted || string.Equals(fixture.ViewModel.CurrentSessionId, "conv-remote", StringComparison.Ordinal))
-                    && runtimeState.ActiveSessionActivation is { SessionId: "existing-owner", Phase: SessionActivationPhase.RemoteHydrationPending }
-                && runtimeState.IsSessionActivationInProgress
-                && runtimeState.LatestActivationToken == 41
-                && string.Equals(runtimeState.DesiredSessionId, "existing-owner", StringComparison.Ordinal));
+            return Task.FromResult(
+                (loadStarted.Task.IsCompleted || string.Equals(fixture.ViewModel.CurrentSessionId, "conv-remote", StringComparison.Ordinal))
+                && runtimeState.ActiveSessionActivation is { SessionId: "existing-owner", Phase: SessionActivationPhase.RemoteHydrationPending }
+            && runtimeState.IsSessionActivationInProgress
+            && runtimeState.LatestActivationToken == 41
+            && string.Equals(runtimeState.DesiredSessionId, "existing-owner", StringComparison.Ordinal));
         });
 
         allowLoadCompletion.TrySetResult(null);

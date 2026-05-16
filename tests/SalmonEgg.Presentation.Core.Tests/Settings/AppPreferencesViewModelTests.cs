@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -394,5 +395,40 @@ public class AppPreferencesViewModelTests
 
         Assert.Equal("Alt+K", vm.GetKeyBinding("search"));
         Assert.Equal(1, raisedCount);
+    }
+    [Fact]
+    public async Task LoadAsync_GetLaunchOnStartupThrows_LogsWarning()
+    {
+        var appSettingsService = new Mock<IAppSettingsService>();
+        appSettingsService.Setup(s => s.LoadAsync()).ReturnsAsync(new AppSettings());
+
+        var startupService = new Mock<IAppStartupService>();
+        var exception = new Exception("Mock startup error");
+        startupService.Setup(s => s.GetLaunchOnStartupAsync()).ThrowsAsync(exception);
+
+        var languageService = new Mock<IAppLanguageService>();
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        var uiRuntime = new Mock<IUiRuntimeService>();
+        var logger = new Mock<ILogger<AppPreferencesViewModel>>();
+
+        var vm = new AppPreferencesViewModel(
+            appSettingsService.Object,
+            startupService.Object,
+            languageService.Object,
+            capabilities.Object,
+            uiRuntime.Object,
+            logger.Object,
+            new ImmediateUiDispatcher());
+
+        await Task.Delay(100);
+
+        logger.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to query launch-on-startup state")),
+                exception,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 }

@@ -12,4 +12,3 @@ public sealed class AgentProfileEditorArgs
 
     public string? ProfileId { get; }
 }
-

@@ -35,4 +35,3 @@ public sealed class EnumToBooleanConverter : IValueConverter
         return Microsoft.UI.Xaml.DependencyProperty.UnsetValue;
     }
 }
-
