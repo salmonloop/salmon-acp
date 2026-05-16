@@ -102,48 +102,62 @@ public sealed class ConfigurationManager : IConfigurationService
     public async Task<IEnumerable<ServerConfiguration>> ListConfigurationsAsync()
     {
         var result = new List<ServerConfiguration>();
-        var deserializer = YamlSerialization.CreateDeserializer();
 
         try
         {
+            var tasks = new List<Task<ServerConfiguration?>>();
+
             await foreach (var path in _fileStore.EnumerateFilesAsync(_serversDirectory, "*.yaml").ConfigureAwait(false))
             {
-                try
+                tasks.Add(Task.Run<ServerConfiguration?>(async () =>
                 {
-                    var yaml = await _fileStore.ReadAllTextAsync(path).ConfigureAwait(false);
-                    if (yaml is null)
+                    try
                     {
-                        continue;
-                    }
+                        var yaml = await _fileStore.ReadAllTextAsync(path).ConfigureAwait(false);
+                        if (yaml is null)
+                        {
+                            return null;
+                        }
 
-                    var yamlModel = deserializer.Deserialize<ServerConfigurationYamlV1>(yaml);
-                    if (yamlModel.SchemaVersion <= 0)
+                        var deserializer = YamlSerialization.CreateDeserializer();
+                        var yamlModel = deserializer.Deserialize<ServerConfigurationYamlV1>(yaml);
+                        if (yamlModel.SchemaVersion <= 0)
+                        {
+                            return null;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(yamlModel.Name))
+                        {
+                            return null;
+                        }
+
+                        var transport = TransportFromString(yamlModel.Transport);
+                        if (transport != TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.ServerUrl))
+                        {
+                            return null;
+                        }
+
+                        if (transport == TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.StdioCommand))
+                        {
+                            return null;
+                        }
+
+                        return FromYaml(yamlModel, fallbackId: System.IO.Path.GetFileNameWithoutExtension(path));
+                    }
+                    catch (Exception)
                     {
-                        continue;
+                        // Ignore malformed or unreadable individual files.
+                        return null;
                     }
+                }));
+            }
 
-                    if (string.IsNullOrWhiteSpace(yamlModel.Name))
-                    {
-                        continue;
-                    }
-
-                    var transport = TransportFromString(yamlModel.Transport);
-                    if (transport != TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.ServerUrl))
-                    {
-                        continue;
-                    }
-
-                    if (transport == TransportType.Stdio && string.IsNullOrWhiteSpace(yamlModel.StdioCommand))
-                    {
-                        continue;
-                    }
-
-                    var config = FromYaml(yamlModel, fallbackId: System.IO.Path.GetFileNameWithoutExtension(path));
+            var configs = await Task.WhenAll(tasks).ConfigureAwait(false);
+            foreach (var config in configs)
+            {
+                if (config != null)
+                {
                     result.Add(config);
-                }
-                catch (Exception)
-                {
-                    // Ignore malformed or unreadable individual files.
                 }
             }
         }
