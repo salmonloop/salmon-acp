@@ -218,7 +218,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         private readonly CancellationToken _token;
         private readonly TaskCompletionSource<AcpSessionRecoveryProjection> _completion =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<Task> _executionTaskReady =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<Task> _transportTaskReady =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
         private Task? _executionTask;
+        private Task? _transportTask;
         private bool _disposed;
         private bool _bufferingStarted;
         private int _started;
@@ -231,16 +236,47 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
         public Task<AcpSessionRecoveryProjection> Task => _completion.Task;
 
-        public Task ExecutionTask => Volatile.Read(ref _executionTask) ?? System.Threading.Tasks.Task.CompletedTask;
+        public Task ExecutionTask
+        {
+            get
+            {
+                var executionTask = Volatile.Read(ref _executionTask);
+                if (executionTask is not null)
+                {
+                    return executionTask;
+                }
+
+                return HasStarted
+                    ? AwaitExecutionTaskReadyAsync()
+                    : System.Threading.Tasks.Task.CompletedTask;
+            }
+        }
 
         public Task CompletionOrExecutionTask
         {
             get
             {
-                var executionTask = Volatile.Read(ref _executionTask);
-                return executionTask is null
+                var executionTask = ExecutionTask;
+                var transportTask = TransportTask;
+                return executionTask.IsCompletedSuccessfully && transportTask.IsCompletedSuccessfully
                     ? _completion.Task
-                    : System.Threading.Tasks.Task.WhenAll(_completion.Task, executionTask);
+                    : System.Threading.Tasks.Task.WhenAll(_completion.Task, executionTask, transportTask);
+            }
+        }
+
+        public Task TransportTask
+        {
+            get
+            {
+                var transportTask = Volatile.Read(ref _transportTask);
+                if (transportTask is not null)
+                {
+                    return transportTask;
+                }
+
+                return HasStarted
+                    ? AwaitTransportTaskReadyAsync()
+                    : System.Threading.Tasks.Task.CompletedTask;
             }
         }
 
@@ -249,6 +285,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         public long? HydrationAttemptId { get; set; }
 
         public bool BufferingStarted => _bufferingStarted;
+
+        public bool HasStarted => Volatile.Read(ref _started) == 1;
 
         public void MarkBufferingStarted()
             => _bufferingStarted = true;
@@ -264,7 +302,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
                 return;
             }
 
-            Volatile.Write(ref _executionTask, RunAsync(operation));
+            var executionTask = RunAsync(operation);
+            Volatile.Write(ref _executionTask, executionTask);
+            _executionTaskReady.TrySetResult(executionTask);
         }
 
         public void Cancel()
@@ -275,6 +315,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
         public void CancelTransport()
             => TryRequestCancellation();
+
+        public void TrackTransportTask(Task transportTask)
+        {
+            ArgumentNullException.ThrowIfNull(transportTask);
+            Volatile.Write(ref _transportTask, transportTask);
+            _transportTaskReady.TrySetResult(transportTask);
+        }
 
         public void Dispose()
         {
@@ -334,6 +381,22 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             {
                 _completion.TrySetException(ex);
             }
+            finally
+            {
+                _transportTaskReady.TrySetResult(System.Threading.Tasks.Task.CompletedTask);
+            }
+        }
+
+        private async Task AwaitExecutionTaskReadyAsync()
+        {
+            var executionTask = await _executionTaskReady.Task.ConfigureAwait(false);
+            await executionTask.ConfigureAwait(false);
+        }
+
+        private async Task AwaitTransportTaskReadyAsync()
+        {
+            var transportTask = await _transportTaskReady.Task.ConfigureAwait(false);
+            await transportTask.ConfigureAwait(false);
         }
     }
 
@@ -347,6 +410,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         AcpSessionRecoveryBufferScope BufferScope,
         Task? ConflictingRecoveryCompletion,
         RemoteSessionRecoveryRequest? RecoveryRequest,
+        RemoteSessionRecoveryLeaseKey? RecoveryLeaseKey,
         Action? StartRecoveryTransport);
 
     /// <summary>

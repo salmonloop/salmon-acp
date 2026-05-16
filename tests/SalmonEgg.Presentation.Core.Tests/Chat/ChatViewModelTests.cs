@@ -11832,6 +11832,314 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
+    public async Task ConversationSessionSwitcherContract_WhenConflictingLeaseIsCanceled_StartsReplacementLoad()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessionManager = CreateSessionManagerWithStore();
+
+        await sessionManager.Object.CreateSessionAsync("conv-remote", @"C:\repo\old");
+
+        var firstLoadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstLoadCanceled = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondLoadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowSecondLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loadInvocationCount = 0;
+
+        ReplayLoadChatService? innerChatService = null;
+        innerChatService = new ReplayLoadChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true),
+            OnLoadSessionAsync = async (parameters, cancellationToken) =>
+            {
+                var invocation = Interlocked.Increment(ref loadInvocationCount);
+                Assert.Equal("remote-1", parameters.SessionId);
+                if (invocation == 1)
+                {
+                    Assert.Equal(@"C:\repo\old", parameters.Cwd);
+                    firstLoadStarted.TrySetResult(null);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        firstLoadCanceled.TrySetResult(null);
+                        throw;
+                    }
+                }
+
+                Assert.Equal(2, invocation);
+                Assert.Equal(@"C:\repo\new", parameters.Cwd);
+                secondLoadStarted.TrySetResult(null);
+                innerChatService!.RaiseSessionUpdate(new SessionUpdateEventArgs(
+                    "remote-1",
+                    new AgentMessageUpdate(new TextContentBlock("replacement replay"))));
+                await allowSecondLoadCompletion.Task.WaitAsync(cancellationToken);
+                return SessionLoadResponse.Completed;
+            }
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(innerChatService, eventAdapter);
+
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        await syncContext.RunUntilCompletedAsync(fixture.ViewModel.RestoreAsync());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(adapter));
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-remote",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
+        });
+        await DispatchConnectedAsync(fixture, "profile-1");
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        syncContext.RunAll();
+
+        var firstHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(firstLoadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        sessionManager.Object.UpdateSession("conv-remote", session => session.Cwd = @"C:\repo\new", updateActivity: false);
+        var secondHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(secondLoadStarted.Task.IsCompleted || secondHydrateTask.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        Assert.True(
+            secondLoadStarted.Task.IsCompleted,
+            $"Replacement session/load did not start. Status={secondHydrateTask.Status} Error={fixture.ViewModel.ErrorMessage ?? "<none>"}");
+
+        allowSecondLoadCompletion.TrySetResult(null);
+        await syncContext.RunUntilCompletedAsync(secondHydrateTask);
+        Assert.True(await secondHydrateTask, fixture.ViewModel.ErrorMessage ?? "<no error>");
+        Assert.Equal(2, Volatile.Read(ref loadInvocationCount));
+        Assert.True(firstLoadCanceled.Task.IsCompleted);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => syncContext.RunUntilCompletedAsync(firstHydrateTask));
+    }
+
+    [Fact]
+    public async Task ConversationSessionSwitcherContract_WhenReplacementActivationIsCanceledBeforeLoadStarts_DoesNotKeepZombieLease()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessionManager = CreateSessionManagerWithStore();
+
+        await sessionManager.Object.CreateSessionAsync("conv-remote", @"C:\repo\old");
+
+        var firstLoadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstLoadCanceled = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowFirstLoadCancellationCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thirdLoadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowThirdLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loadInvocationCount = 0;
+
+        ReplayLoadChatService? innerChatService = null;
+        innerChatService = new ReplayLoadChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true),
+            OnLoadSessionAsync = async (parameters, cancellationToken) =>
+            {
+                var invocation = Interlocked.Increment(ref loadInvocationCount);
+                Assert.Equal("remote-1", parameters.SessionId);
+                if (invocation == 1)
+                {
+                    Assert.Equal(@"C:\repo\old", parameters.Cwd);
+                    firstLoadStarted.TrySetResult(null);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        firstLoadCanceled.TrySetResult(null);
+                        await allowFirstLoadCancellationCompletion.Task;
+                        throw;
+                    }
+                }
+
+                Assert.Equal(2, invocation);
+                Assert.Equal(@"C:\repo\new", parameters.Cwd);
+                thirdLoadStarted.TrySetResult(null);
+                innerChatService!.RaiseSessionUpdate(new SessionUpdateEventArgs(
+                    "remote-1",
+                    new AgentMessageUpdate(new TextContentBlock("third replay"))));
+                await allowThirdLoadCompletion.Task.WaitAsync(cancellationToken);
+                return SessionLoadResponse.Completed;
+            }
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(innerChatService, eventAdapter);
+
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        await syncContext.RunUntilCompletedAsync(fixture.ViewModel.RestoreAsync());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(adapter));
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-remote",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
+        });
+        await DispatchConnectedAsync(fixture, "profile-1");
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        syncContext.RunAll();
+
+        var firstHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(firstLoadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        sessionManager.Object.UpdateSession("conv-remote", session => session.Cwd = @"C:\repo\new", updateActivity: false);
+        using var secondHydrateCts = new CancellationTokenSource();
+        var secondHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync(secondHydrateCts.Token);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(firstLoadCanceled.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        secondHydrateCts.Cancel();
+        allowFirstLoadCancellationCompletion.TrySetResult(null);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => syncContext.RunUntilCompletedAsync(secondHydrateTask));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => syncContext.RunUntilCompletedAsync(firstHydrateTask));
+
+        var thirdHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(thirdLoadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        allowThirdLoadCompletion.TrySetResult(null);
+        await syncContext.RunUntilCompletedAsync(thirdHydrateTask);
+        Assert.True(await thirdHydrateTask, fixture.ViewModel.ErrorMessage ?? "<no error>");
+        Assert.Equal(2, Volatile.Read(ref loadInvocationCount));
+    }
+
+    [Fact]
+    public async Task ConversationSessionSwitcherContract_WhenReplacementLeaseIsReusedBeforeConflictingTransportCompletes_DoesNotStartLoadEarly()
+    {
+        var syncContext = new QueueingSynchronizationContext();
+        var sessionManager = CreateSessionManagerWithStore();
+
+        await sessionManager.Object.CreateSessionAsync("conv-remote", @"C:\repo\old");
+
+        var firstLoadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstLoadCanceled = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowFirstLoadCancellationCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementLoadStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowReplacementLoadCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loadInvocationCount = 0;
+
+        ReplayLoadChatService? innerChatService = null;
+        innerChatService = new ReplayLoadChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true),
+            OnLoadSessionAsync = async (parameters, cancellationToken) =>
+            {
+                var invocation = Interlocked.Increment(ref loadInvocationCount);
+                Assert.Equal("remote-1", parameters.SessionId);
+                if (invocation == 1)
+                {
+                    Assert.Equal(@"C:\repo\old", parameters.Cwd);
+                    firstLoadStarted.TrySetResult(null);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        firstLoadCanceled.TrySetResult(null);
+                        await allowFirstLoadCancellationCompletion.Task;
+                        throw;
+                    }
+                }
+
+                Assert.Equal(2, invocation);
+                Assert.Equal(@"C:\repo\new", parameters.Cwd);
+                replacementLoadStarted.TrySetResult(null);
+                innerChatService!.RaiseSessionUpdate(new SessionUpdateEventArgs(
+                    "remote-1",
+                    new AgentMessageUpdate(new TextContentBlock("replacement replay"))));
+                await allowReplacementLoadCompletion.Task.WaitAsync(cancellationToken);
+                return SessionLoadResponse.Completed;
+            }
+        };
+
+        AcpChatServiceAdapter? adapter = null;
+        var eventAdapter = new AcpEventAdapter(
+            update => adapter!.PublishBufferedUpdate(update),
+            syncContext);
+        adapter = new AcpChatServiceAdapter(innerChatService, eventAdapter);
+
+        await using var fixture = CreateViewModel(syncContext, sessionManager: sessionManager);
+        await syncContext.RunUntilCompletedAsync(fixture.ViewModel.RestoreAsync());
+        await AwaitWithSynchronizationContextAsync(syncContext, fixture.ViewModel.ReplaceChatServiceAsync(adapter));
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-remote",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-remote", new ConversationBindingSlice("conv-remote", "remote-1", "profile-1"))
+        });
+        await DispatchConnectedAsync(fixture, "profile-1");
+        await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        syncContext.RunAll();
+
+        var firstHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(firstLoadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        sessionManager.Object.UpdateSession("conv-remote", session => session.Cwd = @"C:\repo\new", updateActivity: false);
+        var secondHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(firstLoadCanceled.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        var thirdHydrateTask = fixture.ViewModel.HydrateActiveConversationAsync();
+        await Task.Delay(100);
+        syncContext.RunAll();
+        Assert.False(replacementLoadStarted.Task.IsCompleted);
+        Assert.Equal(1, Volatile.Read(ref loadInvocationCount));
+
+        allowFirstLoadCancellationCompletion.TrySetResult(null);
+        await WaitForConditionAsync(() =>
+        {
+            syncContext.RunAll();
+            return Task.FromResult(replacementLoadStarted.Task.IsCompleted);
+        }, timeoutMilliseconds: 2000);
+
+        allowReplacementLoadCompletion.TrySetResult(null);
+        await syncContext.RunUntilCompletedAsync(Task.WhenAll(secondHydrateTask, thirdHydrateTask));
+        Assert.True(await secondHydrateTask, fixture.ViewModel.ErrorMessage ?? "<no error>");
+        Assert.True(await thirdHydrateTask, fixture.ViewModel.ErrorMessage ?? "<no error>");
+        Assert.Equal(2, Volatile.Read(ref loadInvocationCount));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => syncContext.RunUntilCompletedAsync(firstHydrateTask));
+    }
+
+    [Fact]
     public async Task ConversationSessionSwitcherContract_WhenHydrationAttemptIsSuperseded_DoesNotPublishStaleLoadAsWarm()
     {
         var syncContext = new QueueingSynchronizationContext();
