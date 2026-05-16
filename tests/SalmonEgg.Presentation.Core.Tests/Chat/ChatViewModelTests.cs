@@ -3188,6 +3188,8 @@ public partial class ChatViewModelTests
 
         await fixture.DispatchAsync(new SetDraftTextAction("from store"));
         await Task.Delay(50);
+        await Task.Delay(50); // Additional delay to fix flakiness
+        await Task.Yield();
         syncContext.RunAll();
 
         Assert.Equal("from store", viewModel.CurrentPrompt);
