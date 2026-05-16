@@ -424,5 +424,20 @@ namespace SalmonEgg.Infrastructure.Tests.Network
             // Verify connection attempt was made
             _mockTransport.Verify(x => x.ConnectAsync(config.ServerUrl, It.IsAny<CancellationToken>()), Times.Once);
         }
+
+        [Fact]
+        public async Task SendMessageAsync_WithNullMessage_ShouldThrowArgumentNullException()
+        {
+            // Arrange
+            var transportFactory = new Func<TransportType, ITransport>(_ => _mockTransport.Object);
+            var connectionManager = new ConnectionManager(
+                _mockProtocolService.Object,
+                _mockLogger.Object,
+                transportFactory);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentNullException>(() =>
+                connectionManager.SendMessageAsync(null!, CancellationToken.None));
+        }
     }
 }
