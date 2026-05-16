@@ -1,3 +1,0 @@
-💡 **What:** The `ListConfigurationsAsync` method now reads and parses YAML files concurrently using `Task.WhenAll` and `Task.Run` instead of reading them sequentially in a `foreach` loop.
-🎯 **Why:** Sequential I/O reading caused the configuration listing to be slow, especially when many configuration files were present. By changing to a concurrent execution model, the overall time to read configuration files is drastically reduced.
-📊 **Measured Improvement:** In a benchmark testing 1000 YAML configuration files, the execution time was reduced from ~455 ms down to ~392 ms (approximately 14% improvement in a local test, though real-world improvements for networked drives might be even higher).
