@@ -1,4 +1,13 @@
-using System;using System.Reactive.Subjects;using System.Threading;using System.Threading.Tasks;using Moq;using Serilog;using SalmonEgg.Domain.Models;using SalmonEgg.Domain.Services;using SalmonEgg.Infrastructure.Network;using Xunit;
+using System;
+using System.Reactive.Subjects;
+using System.Threading;
+using System.Threading.Tasks;
+using Moq;
+using Serilog;
+using SalmonEgg.Domain.Models;
+using SalmonEgg.Domain.Services;
+using SalmonEgg.Infrastructure.Network;
+using Xunit;
 
 namespace SalmonEgg.Infrastructure.Tests.Network
 {
@@ -423,6 +432,21 @@ namespace SalmonEgg.Infrastructure.Tests.Network
             Assert.True(result.IsSuccess);
             // Verify connection attempt was made
             _mockTransport.Verify(x => x.ConnectAsync(config.ServerUrl, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task SendMessageAsync_WithNullMessage_ShouldThrowArgumentNullException()
+        {
+            // Arrange
+            var transportFactory = new Func<TransportType, ITransport>(_ => _mockTransport.Object);
+            var connectionManager = new ConnectionManager(
+                _mockProtocolService.Object,
+                _mockLogger.Object,
+                transportFactory);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentNullException>(() =>
+                connectionManager.SendMessageAsync(null!, CancellationToken.None));
         }
     }
 }
