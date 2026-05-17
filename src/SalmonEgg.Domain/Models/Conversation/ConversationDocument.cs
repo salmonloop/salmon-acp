@@ -99,7 +99,19 @@ namespace SalmonEgg.Domain.Models.Conversation
 
     public sealed class ConversationSessionInfoSnapshot
     {
-        public string? Title { get; set; }
+        private string? _title;
+
+        public string? Title
+        {
+            get => _title;
+            set
+            {
+                _title = value;
+                HasTitle = true;
+            }
+        }
+
+        public bool HasTitle { get; set; }
 
         public string? Description { get; set; }
 
@@ -221,4 +233,3 @@ namespace SalmonEgg.Domain.Models.Conversation
         public PlanEntryPriority Priority { get; set; }
     }
 }
-

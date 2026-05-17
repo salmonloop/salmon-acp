@@ -215,10 +215,6 @@ public sealed class SessionNavItemViewModelTests
 
         public Task RestoreAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-        public void RenameConversation(string conversationId, string newDisplayName)
-        {
-        }
-
         public Task<ConversationMutationResult> ArchiveConversationAsync(string conversationId, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConversationMutationResult(true, false, null));
 

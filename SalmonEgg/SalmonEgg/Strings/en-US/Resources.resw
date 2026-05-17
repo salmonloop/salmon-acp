@@ -744,9 +744,6 @@
   <data name="SessionNavMoveItem.Text" xml:space="preserve">
     <value>Move...</value>
   </data>
-  <data name="SessionNavRenameItem.Text" xml:space="preserve">
-    <value>Rename...</value>
-  </data>
   <data name="SessionProjectPickerDialog.PrimaryButtonText" xml:space="preserve">
     <value>Move</value>
   </data>

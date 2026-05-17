@@ -20,8 +20,7 @@ namespace SalmonEgg.Domain.Models.Session
         public string SessionId { get; set; } = string.Empty;
 
         /// <summary>
-        /// 会话显示名称（本地 UI 元数据，不影响 ACP 协议的 sessionId）。
-        /// 允许用户自由重命名。
+        /// 会话显示名称缓存。远程 ACP 会话必须由 session metadata title 投影写入。
         /// </summary>
         [JsonPropertyName("displayName")]
         public string? DisplayName { get; set; }

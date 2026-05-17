@@ -33,9 +33,6 @@ public sealed class ChatViewModelSessionCatalogAdapter : IChatSessionCatalog
     public Task RestoreAsync(CancellationToken cancellationToken = default)
         => _conversationCatalog.RestoreAsync(cancellationToken);
 
-    public void RenameConversation(string conversationId, string newName)
-        => _conversationCatalog.RenameConversation(conversationId, newName);
-
     public void MoveConversationToProject(string conversationId, string projectId)
         => _conversationCatalog.MoveConversationToProject(conversationId, projectId);
 

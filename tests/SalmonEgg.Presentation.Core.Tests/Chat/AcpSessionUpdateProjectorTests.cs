@@ -460,6 +460,7 @@ public class AcpSessionUpdateProjectorTests
         // Assert
         Assert.NotNull(delta.SessionInfo);
         Assert.Equal("Remote session", delta.SessionInfo.Title);
+        Assert.True(delta.SessionInfo.HasTitle);
         Assert.Null(delta.SessionInfo.Description);
         Assert.Null(delta.SessionInfo.Cwd);
         Assert.Equal(updatedAt, delta.SessionInfo.UpdatedAt);
@@ -512,6 +513,7 @@ public class AcpSessionUpdateProjectorTests
         // Assert
         Assert.NotNull(delta.SessionInfo);
         Assert.Equal("Remote session", delta.SessionInfo.Title);
+        Assert.True(delta.SessionInfo.HasTitle);
         Assert.Null(delta.SessionInfo.Meta);
     }
 
@@ -706,6 +708,7 @@ public class AcpSessionUpdateProjectorTests
 
         Assert.NotNull(delta.SessionInfo);
         Assert.Equal("Debug authentication timeout", delta.SessionInfo!.Title);
+        Assert.True(delta.SessionInfo.HasTitle);
         Assert.Null(delta.SessionInfo.Description);
         Assert.Null(delta.SessionInfo.Cwd);
         Assert.Null(delta.SessionInfo.UpdatedAt);

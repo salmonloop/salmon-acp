@@ -60,11 +60,9 @@ public sealed partial class MainPage : Page
 
     private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
     private readonly DeferredActionGate<string> _moveOnFlyoutClosed = new(StringComparer.Ordinal);
-    private readonly DeferredActionGate<string> _renameOnFlyoutClosed = new(StringComparer.Ordinal);
     private readonly Dictionary<KeyboardAccelerator, string> _appShortcutActions = new();
     private string? _pendingArchiveSessionId;
     private string? _pendingMoveSessionId;
-    private string? _pendingRenameSessionId;
 #if WINDOWS
     private TrayIconManager? _trayIcon;
     private bool _allowClose;
@@ -429,12 +427,6 @@ public sealed partial class MainPage : Page
             _moveOnFlyoutClosed.TryConsume(sessionId);
         }
 
-        if (!string.IsNullOrWhiteSpace(_pendingRenameSessionId))
-        {
-            var sessionId = _pendingRenameSessionId;
-            _pendingRenameSessionId = null;
-            _renameOnFlyoutClosed.TryConsume(sessionId);
-        }
     }
 
     private void OnSessionMoveMenuItemClick(object sender, RoutedEventArgs e)
@@ -453,25 +445,6 @@ public sealed partial class MainPage : Page
         _moveOnFlyoutClosed.Request(session.SessionId, () =>
         {
             _ = DispatcherQueue.TryEnqueue(() => _ = session.MoveCommand.ExecuteAsync(null));
-        });
-    }
-
-    private void OnSessionRenameMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not MenuFlyoutItem item || item.CommandParameter is not SessionNavItemViewModel session)
-        {
-            return;
-        }
-
-        if (session.IsPlaceholder || string.IsNullOrWhiteSpace(session.SessionId))
-        {
-            return;
-        }
-
-        _pendingRenameSessionId = session.SessionId;
-        _renameOnFlyoutClosed.Request(session.SessionId, () =>
-        {
-            _ = DispatcherQueue.TryEnqueue(() => _ = session.RenameCommand.ExecuteAsync(null));
         });
     }
 

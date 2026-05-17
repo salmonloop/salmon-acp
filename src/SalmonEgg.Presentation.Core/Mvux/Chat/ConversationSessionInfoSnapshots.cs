@@ -17,6 +17,7 @@ internal static class ConversationSessionInfoSnapshots
         return new ConversationSessionInfoSnapshot
         {
             Title = sessionInfo.Title,
+            HasTitle = sessionInfo.HasTitle,
             Description = sessionInfo.Description,
             Cwd = sessionInfo.Cwd,
             UpdatedAtUtc = sessionInfo.UpdatedAtUtc,
@@ -45,7 +46,8 @@ internal static class ConversationSessionInfoSnapshots
 
         return new ConversationSessionInfoSnapshot
         {
-            Title = ResolveIncomingField(incoming.Title, existing?.Title),
+            Title = incoming.HasTitle ? incoming.Title : existing?.Title,
+            HasTitle = incoming.HasTitle || existing?.HasTitle == true,
             Description = ResolveIncomingField(incoming.Description, existing?.Description),
             Cwd = ResolveIncomingField(incoming.Cwd, existing?.Cwd),
             UpdatedAtUtc = AcpSessionTimestampPolicy.ResolveLatestUpdatedAtUtc(existing?.UpdatedAtUtc, incoming.UpdatedAtUtc),

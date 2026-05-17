@@ -251,7 +251,7 @@ public sealed class XamlComplianceTests
         Assert.Contains("x:Uid=\"ProjectNavNewSessionItem\"", xaml);
         Assert.Contains("x:Uid=\"SessionNavArchiveItem\"", xaml);
         Assert.Contains("x:Uid=\"SessionNavMoveItem\"", xaml);
-        Assert.Contains("x:Uid=\"SessionNavRenameItem\"", xaml);
+        Assert.DoesNotContain("x:Uid=\"SessionNavRenameItem\"", xaml);
         Assert.Contains("x:Uid=\"DiffPanelPlaceholder\"", xaml);
         Assert.Contains("x:Uid=\"PlanEmptyTitle\"", xaml);
         Assert.Contains("x:Uid=\"PlanEmptySubtitle\"", xaml);

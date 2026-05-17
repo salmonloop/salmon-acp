@@ -28,7 +28,6 @@ using SalmonEgg.Domain.Models.JsonRpc;
 using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.ProjectAffinity;
-using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
@@ -450,56 +449,6 @@ public partial class ChatViewModel
         RefreshProjectAffinityCorrectionState(CurrentSessionId);
         ApplyProjectAffinityOverrideCommand.NotifyCanExecuteChanged();
         ClearProjectAffinityOverrideCommand.NotifyCanExecuteChanged();
-    }
-
-    [RelayCommand]
-    private void BeginEditSessionName()
-    {
-        if (!_sessionHeaderActionCoordinator.TryBeginEditSessionName(
-            IsSessionActive,
-            CurrentSessionId,
-            CurrentSessionDisplayName,
-            out var editingSessionName))
-        {
-            return;
-        }
-
-        EditingSessionName = editingSessionName;
-        IsEditingSessionName = true;
-    }
-
-    [RelayCommand]
-    private void CancelSessionNameEdit()
-    {
-        IsEditingSessionName = false;
-        EditingSessionName = string.Empty;
-    }
-
-    [RelayCommand]
-    private void CommitSessionNameEdit()
-    {
-        if (!IsSessionActive || string.IsNullOrWhiteSpace(CurrentSessionId))
-        {
-            CancelSessionNameEdit();
-            return;
-        }
-
-        var sessionId = CurrentSessionId;
-        var finalName = _sessionHeaderActionCoordinator.CommitSessionName(sessionId, EditingSessionName);
-
-        RenameConversation(sessionId, finalName);
-
-        CancelSessionNameEdit();
-    }
-
-    public void RenameConversation(string conversationId, string newDisplayName)
-    {
-        _conversationCatalogFacade.RenameConversation(conversationId, newDisplayName);
-
-        if (string.Equals(CurrentSessionId, conversationId, StringComparison.Ordinal))
-        {
-            RefreshCurrentSessionDisplayName();
-        }
     }
 
     public IReadOnlyList<ConversationProjectTargetOption> GetConversationProjectTargets()

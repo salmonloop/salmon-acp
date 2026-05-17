@@ -1077,14 +1077,6 @@ public partial class ChatViewModel
         try
         {
             await _sessionManager.CreateSessionAsync(localConversationId, request.RemoteSessionCwd).ConfigureAwait(false);
-            var sanitizedTitle = SessionNamePolicy.Sanitize(request.RemoteSessionTitle);
-            if (!string.IsNullOrWhiteSpace(sanitizedTitle))
-            {
-                _sessionManager.UpdateSession(
-                    localConversationId,
-                    session => session.DisplayName = sanitizedTitle,
-                    updateActivity: false);
-            }
 
             await _conversationWorkspace.RegisterConversationAsync(
                 localConversationId,
@@ -1103,6 +1095,19 @@ public partial class ChatViewModel
                     null,
                     bindingResult.ErrorMessage ?? $"BindingUpdateFailed:{bindingResult.Status}");
             }
+
+            await _conversationWorkspace
+                .ApplySessionInfoSnapshotAsync(
+                    localConversationId,
+                    new ConversationSessionInfoSnapshot
+                    {
+                        Title = request.RemoteSessionTitle,
+                        HasTitle = true,
+                        Cwd = request.RemoteSessionCwd
+                    },
+                    allowRegisterWhenMissing: true,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
 
             return new DiscoverRemoteSessionOpenResult(true, localConversationId, null);
         }
@@ -2208,14 +2213,13 @@ public partial class ChatViewModel
             return null;
         }
 
-        var normalizedTitle = string.IsNullOrWhiteSpace(sessionInfo.Title) ? null : sessionInfo.Title;
         var normalizedDescription = string.IsNullOrWhiteSpace(sessionInfo.Description) ? null : sessionInfo.Description;
         var normalizedCwd = string.IsNullOrWhiteSpace(sessionInfo.Cwd) ? null : sessionInfo.Cwd;
         var normalizedUpdatedAt = string.IsNullOrWhiteSpace(sessionInfo.UpdatedAt) ? null : sessionInfo.UpdatedAt;
         var normalizedMeta = sessionInfo.Meta is { Count: > 0 }
             ? new Dictionary<string, object?>(sessionInfo.Meta, StringComparer.Ordinal)
             : null;
-        if (normalizedTitle is null
+        if (!sessionInfo.HasTitle
             && normalizedDescription is null
             && normalizedCwd is null
             && normalizedUpdatedAt is null
@@ -2226,7 +2230,8 @@ public partial class ChatViewModel
 
         return new ConversationSessionInfoSnapshot
         {
-            Title = normalizedTitle,
+            Title = sessionInfo.Title,
+            HasTitle = sessionInfo.HasTitle,
             Description = normalizedDescription,
             Cwd = normalizedCwd,
             UpdatedAtUtc = AcpSessionTimestampPolicy.ParseUpdatedAtUtc(normalizedUpdatedAt),

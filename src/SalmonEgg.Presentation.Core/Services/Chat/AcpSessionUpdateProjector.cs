@@ -139,6 +139,7 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
     private static AcpSessionInfoSnapshot MapSessionInfo(SessionInfoUpdate update)
         => new(
             Title: update.Title,
+            HasTitle: update.HasTitle,
             Description: null,
             // ACP session_info_update does not redefine cwd; cwd is established during
             // session/new or session/load and must remain immutable for the session.
@@ -209,6 +210,7 @@ public sealed partial record AcpConfigOptionSnapshot(
 
 public sealed record AcpSessionInfoSnapshot(
     string? Title,
+    bool HasTitle,
     string? Description,
     string? Cwd,
     string? UpdatedAt,

@@ -687,9 +687,6 @@
   <data name="SessionNavMoveItem.Text" xml:space="preserve">
     <value>移动…</value>
   </data>
-  <data name="SessionNavRenameItem.Text" xml:space="preserve">
-    <value>重命名…</value>
-  </data>
   <data name="SessionProjectPickerDialog.PrimaryButtonText" xml:space="preserve">
     <value>移动</value>
   </data>

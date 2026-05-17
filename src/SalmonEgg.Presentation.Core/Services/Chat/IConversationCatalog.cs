@@ -17,8 +17,6 @@ public interface IConversationCatalog : INotifyPropertyChanged
 
     Task RestoreAsync(CancellationToken cancellationToken = default);
 
-    void RenameConversation(string conversationId, string newDisplayName);
-
     void MoveConversationToProject(string conversationId, string projectId);
 
     Task<ConversationMutationResult> ArchiveConversationAsync(string conversationId, CancellationToken cancellationToken = default);

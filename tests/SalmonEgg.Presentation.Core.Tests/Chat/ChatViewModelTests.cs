@@ -5939,7 +5939,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_PreservesWhitespaceFieldsConsistentlyAcrossStoreAndWorkspace()
+    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_ReplacesEmptyTitleConsistentlyAcrossStoreAndWorkspace()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
@@ -6055,7 +6055,7 @@ public partial class ChatViewModelTests
         var workspaceSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
             fixture.Workspace.GetConversationSnapshot("conv-1")!.SessionInfo);
 
-        Assert.Equal("Original title", storeSessionInfo.Title);
+        Assert.Equal(string.Empty, storeSessionInfo.Title);
         Assert.Equal("Original description", storeSessionInfo.Description);
         Assert.Equal(@"C:\repo\demo", storeSessionInfo.Cwd);
         Assert.Equal(storeSessionInfo.Title, workspaceSessionInfo.Title);
@@ -7459,7 +7459,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task HydrateActiveConversationAsync_FollowedByWhitespaceSessionInfoUpdate_KeepsStoreAndWorkspaceSessionInfoAligned()
+    public async Task HydrateActiveConversationAsync_FollowedByWhitespaceSessionInfoUpdate_ReplacesTitleAndKeepsStoreAndWorkspaceAligned()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
@@ -7642,7 +7642,7 @@ public partial class ChatViewModelTests
             var workspaceSessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(
                 fixture.Workspace.GetConversationSnapshot("conv-1")!.SessionInfo);
 
-            Assert.Equal("Remote title", storeSessionInfo.Title);
+            Assert.Equal("   ", storeSessionInfo.Title);
             Assert.Equal(@"C:\repo\stale", storeSessionInfo.Cwd);
             Assert.Equal(storeSessionInfo.Title, workspaceSessionInfo.Title);
             Assert.Equal(storeSessionInfo.Cwd, workspaceSessionInfo.Cwd);
@@ -7681,7 +7681,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_WithWhitespaceOnlyPayload_DoesNotCreateSessionInfoState()
+    public async Task ProcessSessionUpdateAsync_SessionInfoUpdate_WithWhitespaceTitle_CreatesSessionInfoState()
     {
         var syncContext = new ImmediateSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
@@ -7708,8 +7708,8 @@ public partial class ChatViewModelTests
         await Task.Delay(50);
 
         var state = await fixture.GetStateAsync();
-        Assert.Null(state.ResolveSessionStateSlice("conv-1")?.SessionInfo);
-        Assert.Null(fixture.Workspace.GetConversationSnapshot("conv-1")?.SessionInfo);
+        Assert.Equal("   ", state.ResolveSessionStateSlice("conv-1")?.SessionInfo?.Title);
+        Assert.Equal("   ", fixture.Workspace.GetConversationSnapshot("conv-1")?.SessionInfo?.Title);
     }
 
     [Fact]

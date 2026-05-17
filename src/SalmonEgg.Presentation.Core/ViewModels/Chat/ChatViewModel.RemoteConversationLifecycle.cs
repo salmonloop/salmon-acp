@@ -2568,6 +2568,7 @@ public partial class ChatViewModel
 
         return ToConversationSessionInfoSnapshot(new AcpSessionInfoSnapshot(
             sessionInfo.Title,
+            HasTitle: true,
             sessionInfo.Description,
             null,
             sessionInfo.UpdatedAt,
@@ -2769,6 +2770,7 @@ public partial class ChatViewModel
         return new ConversationSessionInfoSnapshot
         {
             Title = sessionInfo.Title,
+            HasTitle = sessionInfo.HasTitle,
             Description = sessionInfo.Description,
             Cwd = establishedCwd,
             UpdatedAtUtc = sessionInfo.UpdatedAtUtc,

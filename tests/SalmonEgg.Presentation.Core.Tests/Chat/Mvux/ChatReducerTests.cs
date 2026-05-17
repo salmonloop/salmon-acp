@@ -663,7 +663,7 @@ public class ChatReducerTests
     }
 
     [Fact]
-    public void MergeConversationSessionState_PreservesExistingSessionInfoStringFields_WhenIncomingValuesAreEmptyOrWhitespace()
+    public void MergeConversationSessionState_ReplacesTitleAndPreservesOtherStringFields_WhenIncomingTitleIsEmpty()
     {
         var initialState = ChatState.Empty with
         {
@@ -699,14 +699,14 @@ public class ChatReducerTests
         Assert.NotNull(sessionState);
         var sessionInfo = sessionState!.Value.SessionInfo;
         Assert.NotNull(sessionInfo);
-        Assert.Equal("before title", sessionInfo!.Title);
+        Assert.Equal(string.Empty, sessionInfo!.Title);
         Assert.Equal("before description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\before", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);
     }
 
     [Fact]
-    public void MergeConversationSessionState_IgnoresWhitespaceFields_AndMergesMetadata()
+    public void MergeConversationSessionState_ReplacesWhitespaceTitle_AndMergesMetadata()
     {
         var initialState = ChatState.Empty with
         {
@@ -752,7 +752,7 @@ public class ChatReducerTests
         Assert.NotNull(sessionState);
         var sessionInfo = sessionState!.Value.SessionInfo;
         Assert.NotNull(sessionInfo);
-        Assert.Equal("before title", sessionInfo!.Title);
+        Assert.Equal(" ", sessionInfo!.Title);
         Assert.Equal("before description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\before", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 4, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);
@@ -762,7 +762,7 @@ public class ChatReducerTests
     }
 
     [Fact]
-    public void MergeConversationSessionState_WhitespaceSessionInfoFields_PreserveExistingValues()
+    public void MergeConversationSessionState_EmptyTitleReplacesTitleAndPreservesOtherValues()
     {
         var initialState = ChatState.Empty with
         {
@@ -797,7 +797,7 @@ public class ChatReducerTests
 
         var sessionInfo = next.ResolveSessionStateSlice("conv-1")!.Value.SessionInfo;
         Assert.NotNull(sessionInfo);
-        Assert.Equal("before", sessionInfo!.Title);
+        Assert.Equal(string.Empty, sessionInfo!.Title);
         Assert.Equal("existing description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\one", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);

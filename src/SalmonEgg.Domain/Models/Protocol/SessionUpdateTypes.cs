@@ -412,6 +412,8 @@ namespace SalmonEgg.Domain.Models.Protocol
     /// </summary>
     public class SessionInfoUpdate : SessionUpdate
     {
+        private string? _title;
+
         /// <summary>
         /// 协议扩展字段（_meta）。
         /// </summary>
@@ -422,7 +424,18 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// 会话标题（可选）。
         /// </summary>
         [JsonPropertyName("title")]
-        public string? Title { get; set; }
+        public string? Title
+        {
+            get => _title;
+            set
+            {
+                _title = value;
+                HasTitle = true;
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasTitle { get; set; }
 
         /// <summary>
         /// 最近更新时间（UTC iso8601）。

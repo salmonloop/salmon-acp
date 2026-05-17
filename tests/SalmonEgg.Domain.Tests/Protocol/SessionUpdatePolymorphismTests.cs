@@ -112,6 +112,7 @@ public sealed class SessionUpdatePolymorphismTests
 
         var update = (SessionInfoUpdate)parsed.Update!;
         Assert.That(update.Title, Is.EqualTo("New Title"));
+        Assert.That(update.HasTitle, Is.True);
         Assert.That(update.UpdatedAt, Is.EqualTo("2026-03-22T19:00:00Z"));
 
         var meta = update.Meta;
@@ -167,12 +168,36 @@ public sealed class SessionUpdatePolymorphismTests
 
         var update = (SessionInfoUpdate)parsed.Update!;
         Assert.That(update.Title, Is.Null);
+        Assert.That(update.HasTitle, Is.False);
         Assert.That(update.UpdatedAt, Is.Null);
 
         var meta = update.Meta;
         Assert.That(meta, Is.Not.Null);
         Assert.That(meta!.ContainsKey("source"), Is.True);
         Assert.That(ReadMetaValue(meta["source"]), Is.EqualTo("unit-test"));
+    }
+
+    [Test]
+    public void Deserialize_SessionInfoUpdate_WithNullTitle_MarksTitleAsPresent()
+    {
+        var json = """
+        {
+          "sessionId": "s-info",
+          "update": {
+            "sessionUpdate": "session_info_update",
+            "title": null
+          }
+        }
+        """;
+
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, CreateJsonOptions());
+
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
+
+        var update = (SessionInfoUpdate)parsed.Update!;
+        Assert.That(update.Title, Is.Null);
+        Assert.That(update.HasTitle, Is.True);
     }
 
     [Test]

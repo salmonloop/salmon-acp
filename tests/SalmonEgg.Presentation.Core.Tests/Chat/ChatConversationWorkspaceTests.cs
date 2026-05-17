@@ -99,7 +99,7 @@ public sealed class ChatConversationWorkspaceTests
 
         var session = sessionManager.GetSession("session-1");
         Assert.NotNull(session);
-        Assert.Equal("Session One", session!.DisplayName);
+        Assert.Equal(SessionNamePolicy.CreateDefault("session-1"), session!.DisplayName);
         Assert.Equal(@"C:\repo\one", session.Cwd);
     }
 
@@ -670,6 +670,7 @@ public sealed class ChatConversationWorkspaceTests
             SessionInfo: new ConversationSessionInfoSnapshot
             {
                 Title = "Remote title",
+                HasTitle = true,
                 Cwd = @"C:\repo\one",
                 UpdatedAtUtc = new DateTime(2026, 3, 2, 1, 0, 0, DateTimeKind.Utc)
             },
@@ -755,6 +756,7 @@ public sealed class ChatConversationWorkspaceTests
             SessionInfo: new ConversationSessionInfoSnapshot
             {
                 Title = "Remote title",
+                HasTitle = true,
                 Cwd = @"C:\repo\one",
                 UpdatedAtUtc = new DateTime(2026, 3, 2, 1, 0, 0, DateTimeKind.Utc)
             },
@@ -838,6 +840,7 @@ public sealed class ChatConversationWorkspaceTests
                         SessionInfo = new ConversationSessionInfoSnapshot
                         {
                             Title = "Remote title",
+                            HasTitle = true,
                             Cwd = @"C:\repo\one"
                         },
                         Usage = new ConversationUsageSnapshot(
@@ -1093,7 +1096,7 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
-    public async Task RenameConversation_AdvancesConversationListVersionSoNavigationCanRefresh()
+    public async Task ApplySessionInfoSnapshotAsync_RemoteTitleAdvancesConversationListVersionSoNavigationCanRefresh()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var store = new CapturingConversationStore();
@@ -1117,7 +1120,14 @@ public sealed class ChatConversationWorkspaceTests
 
         var beforeVersion = workspace.ConversationListVersion;
 
-        workspace.RenameConversation("session-1", "Renamed Session");
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = "Renamed Session",
+                HasTitle = true,
+                UpdatedAtUtc = new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc)
+            });
 
         Assert.Equal(beforeVersion + 1, workspace.ConversationListVersion);
         var catalog = Assert.Single(workspace.GetCatalog());
@@ -1314,6 +1324,7 @@ public sealed class ChatConversationWorkspaceTests
             SessionInfo: new ConversationSessionInfoSnapshot
             {
                 Title = "Original title",
+                HasTitle = true,
                 Description = "Original description",
                 Cwd = @"C:\repo\one",
                 UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -1350,7 +1361,7 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
-    public async Task ApplySessionInfoSnapshotAsync_EmptyOrWhitespaceStrings_PreserveExistingSessionInfoFields()
+    public async Task ApplySessionInfoSnapshotAsync_EmptyTitle_ReplacesRemoteTitleAndPreservesOtherFields()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var store = new CapturingConversationStore();
@@ -1369,6 +1380,7 @@ public sealed class ChatConversationWorkspaceTests
             SessionInfo: new ConversationSessionInfoSnapshot
             {
                 Title = "Original title",
+                HasTitle = true,
                 Description = "Original description",
                 Cwd = @"C:\repo\one"
             }));
@@ -1386,14 +1398,59 @@ public sealed class ChatConversationWorkspaceTests
         var snapshot = workspace.GetConversationSnapshot("session-1");
         Assert.NotNull(snapshot);
         var sessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(snapshot!.SessionInfo);
-        Assert.Equal("Original title", sessionInfo.Title);
+        Assert.Equal(string.Empty, sessionInfo.Title);
         Assert.Equal("Original description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\one", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);
     }
 
     [Fact]
-    public async Task ApplySessionInfoSnapshotAsync_RemoteTitleDoesNotOverrideEstablishedDisplayName()
+    public async Task ApplySessionInfoSnapshotAsync_ExplicitNullTitle_ClearsRemoteTitleCache()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var store = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        var preferences = CreatePreferences(syncContext);
+
+        var session = await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        session.DisplayName = "Original remote title";
+
+        using var workspace = CreateWorkspace(store, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            SessionInfo: new ConversationSessionInfoSnapshot
+            {
+                Title = "Original remote title",
+                HasTitle = true,
+                Cwd = @"C:\repo\one",
+                UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
+            }));
+
+        await workspace.ApplySessionInfoSnapshotAsync(
+            "session-1",
+            new ConversationSessionInfoSnapshot
+            {
+                Title = null,
+                HasTitle = true,
+                UpdatedAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)
+            });
+
+        var snapshot = workspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(snapshot);
+        Assert.Null(snapshot!.SessionInfo!.Title);
+        Assert.True(snapshot.SessionInfo.HasTitle);
+        Assert.Equal(SessionNamePolicy.CreateDefault("session-1"), sessionManager.GetSession("session-1")!.DisplayName);
+        Assert.Equal(SessionNamePolicy.CreateDefault("session-1"), workspace.GetCatalog().Single(item => item.ConversationId == "session-1").DisplayName);
+    }
+
+    [Fact]
+    public async Task ApplySessionInfoSnapshotAsync_RemoteTitleOverridesCachedDisplayName()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var store = new CapturingConversationStore();
@@ -1415,6 +1472,7 @@ public sealed class ChatConversationWorkspaceTests
             SessionInfo: new ConversationSessionInfoSnapshot
             {
                 Title = "Original remote metadata title",
+                HasTitle = true,
                 Cwd = @"C:\repo\one",
                 UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)
             }));
@@ -1424,18 +1482,19 @@ public sealed class ChatConversationWorkspaceTests
             new ConversationSessionInfoSnapshot
             {
                 Title = "/systematic-debugging",
+                HasTitle = true,
                 UpdatedAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)
             });
 
         var snapshot = workspace.GetConversationSnapshot("session-1");
         Assert.NotNull(snapshot);
         Assert.Equal("/systematic-debugging", snapshot!.SessionInfo!.Title);
-        Assert.Equal("User chosen title", sessionManager.GetSession("session-1")!.DisplayName);
-        Assert.Equal("User chosen title", workspace.GetCatalog().Single(item => item.ConversationId == "session-1").DisplayName);
+        Assert.Equal("/systematic-debugging", sessionManager.GetSession("session-1")!.DisplayName);
+        Assert.Equal("/systematic-debugging", workspace.GetCatalog().Single(item => item.ConversationId == "session-1").DisplayName);
     }
 
     [Fact]
-    public async Task ApplySessionInfoSnapshotAsync_WhitespaceFields_StillMergeMetadata()
+    public async Task ApplySessionInfoSnapshotAsync_WhitespaceTitle_ReplacesRemoteTitleAndStillMergesMetadata()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var store = new CapturingConversationStore();
@@ -1482,7 +1541,7 @@ public sealed class ChatConversationWorkspaceTests
         var snapshot = workspace.GetConversationSnapshot("session-1");
         Assert.NotNull(snapshot);
         var sessionInfo = Assert.IsType<ConversationSessionInfoSnapshot>(snapshot!.SessionInfo);
-        Assert.Equal("Original title", sessionInfo.Title);
+        Assert.Equal(" ", sessionInfo.Title);
         Assert.Equal("Original description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\one", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);
@@ -1492,7 +1551,7 @@ public sealed class ChatConversationWorkspaceTests
     }
 
     [Fact]
-    public async Task ApplySessionInfoSnapshotAsync_WhitespaceFields_PreserveExistingValues()
+    public async Task ApplySessionInfoSnapshotAsync_EmptyTitle_ReplacesRemoteTitleAndPreservesOtherValues()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var store = new CapturingConversationStore();
@@ -1528,7 +1587,7 @@ public sealed class ChatConversationWorkspaceTests
 
         var sessionInfo = workspace.GetConversationSnapshot("session-1")!.SessionInfo;
         Assert.NotNull(sessionInfo);
-        Assert.Equal("Original title", sessionInfo!.Title);
+        Assert.Equal(string.Empty, sessionInfo!.Title);
         Assert.Equal("Original description", sessionInfo.Description);
         Assert.Equal(@"C:\repo\one", sessionInfo.Cwd);
         Assert.Equal(new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), sessionInfo.UpdatedAtUtc);
@@ -2350,6 +2409,7 @@ public sealed class ChatConversationWorkspaceTests
             new ConversationSessionInfoSnapshot
             {
                 Title = "Remote older",
+                HasTitle = true,
                 UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 10, 0, DateTimeKind.Utc)
             });
         await workspace.ApplySessionInfoSnapshotAsync(
@@ -2357,10 +2417,14 @@ public sealed class ChatConversationWorkspaceTests
             new ConversationSessionInfoSnapshot
             {
                 Title = "Remote newer",
+                HasTitle = true,
                 UpdatedAtUtc = new DateTime(2026, 3, 1, 0, 20, 0, DateTimeKind.Utc)
             });
 
-        workspace.RenameConversation("session-1", "Local rename must not reorder remote session");
+        sessionManager.UpdateSession(
+            "session-1",
+            session => session.LastActivityAt = new DateTime(2026, 3, 1, 0, 30, 0, DateTimeKind.Utc),
+            updateActivity: false);
 
         Assert.Equal(new[] { "session-2", "session-1" }, workspace.GetKnownConversationIds());
 

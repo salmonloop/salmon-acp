@@ -1761,7 +1761,6 @@ public sealed partial class RealUserConfigSmokeTests
         {
             "ChatView.ActiveRoot",
             "ChatView.CurrentSessionNameButton",
-            "ChatView.CurrentSessionNameEditor",
             "ChatView.LoadingOverlay",
             "ChatView.LoadingOverlayMask",
             "ChatView.LoadingOverlayStatus",

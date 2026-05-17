@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using SalmonEgg.Domain.Models;
-using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
@@ -144,7 +143,6 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
     public bool IsPlaceholder { get; }
 
     public IAsyncRelayCommand MoveCommand { get; }
-    public IAsyncRelayCommand RenameCommand { get; }
     public IAsyncRelayCommand ArchiveCommand { get; }
     public IAsyncRelayCommand CopySessionIdCommand { get; }
 
@@ -198,15 +196,11 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         IsPlaceholder = isPlaceholder;
 
         MoveCommand = new AsyncRelayCommand(MoveAsync, CanMove);
-        RenameCommand = new AsyncRelayCommand(RenameAsync, CanRename);
         ArchiveCommand = new AsyncRelayCommand(ArchiveAsync, CanArchive);
         CopySessionIdCommand = new AsyncRelayCommand(CopySessionIdAsync, CanCopySessionId);
     }
 
     private bool CanMove()
-        => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
-
-    private bool CanRename()
         => !IsPlaceholder && !string.IsNullOrWhiteSpace(SessionId);
 
     private bool CanArchive()
@@ -263,28 +257,6 @@ public sealed partial class SessionNavItemViewModel : MainNavItemViewModel
         _chatSessionCatalog.MoveConversationToProject(SessionId, pickedProjectId.Trim());
     }
 
-    private async Task RenameAsync()
-    {
-        var original = Title;
-        var result = await _ui.PromptTextAsync(
-            title: "重命名会话",
-            primaryButtonText: "确定",
-            closeButtonText: "取消",
-            initialText: original).ConfigureAwait(true);
-
-        if (result == null)
-        {
-            return;
-        }
-
-        var sanitized = SessionNamePolicy.Sanitize(result);
-        var finalName = string.IsNullOrEmpty(sanitized)
-            ? SessionNamePolicy.CreateDefault(SessionId)
-            : sanitized;
-
-        _chatSessionCatalog.RenameConversation(SessionId, finalName);
-        Title = finalName;
-    }
 }
 
 public sealed partial class MoreSessionsNavItemViewModel : MainNavItemViewModel

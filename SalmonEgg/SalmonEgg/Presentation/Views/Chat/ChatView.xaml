@@ -146,29 +146,13 @@
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Stretch"
                                         MinWidth="0"
-                                        Padding="6,2"
-                                        Visibility="{x:Bind ViewModel.IsEditingSessionName, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                                        Click="OnSessionNameClick">
+                                        Padding="6,2">
                                     <TextBlock Text="{x:Bind ViewModel.PresentedSessionHeaderDisplayName, Mode=OneWay}"
                                                FontWeight="SemiBold"
                                                FontSize="14"
                                                TextTrimming="CharacterEllipsis"
                                                MaxLines="1" />
                                 </Button>
-
-                                <TextBox x:Name="SessionNameEditor"
-                                         AutomationProperties.AutomationId="ChatView.CurrentSessionNameEditor"
-                                         Text="{x:Bind ViewModel.EditingSessionName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         FontWeight="SemiBold"
-                                         FontSize="14"
-                                         MinWidth="0"
-                                         HorizontalAlignment="Stretch"
-                                         Padding="6,2"
-                                         BorderThickness="1"
-                                         CornerRadius="6"
-                                         KeyDown="OnSessionNameEditorKeyDown"
-                                         LostFocus="OnSessionNameEditorLostFocus"
-                                         Visibility="{x:Bind ViewModel.IsEditingSessionName, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </Grid>
                         </Grid>
 

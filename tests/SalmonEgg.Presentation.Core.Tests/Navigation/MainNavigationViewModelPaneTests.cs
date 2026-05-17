@@ -172,10 +172,6 @@ public sealed class MainNavigationViewModelPaneTests
 
         public Task RestoreAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-        public void RenameConversation(string conversationId, string newName)
-        {
-        }
-
         public Task<ConversationMutationResult> ArchiveConversationAsync(string conversationId, CancellationToken cancellationToken = default)
             => Task.FromResult(new ConversationMutationResult(true, false, null));
 

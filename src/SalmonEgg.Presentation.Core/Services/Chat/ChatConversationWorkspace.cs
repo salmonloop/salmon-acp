@@ -193,42 +193,6 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         }
     }
 
-    public void RenameConversation(string conversationId, string newDisplayName)
-    {
-        ThrowIfDisposed();
-        if (string.IsNullOrWhiteSpace(conversationId))
-        {
-            return;
-        }
-
-        var sanitized = SessionNamePolicy.Sanitize(newDisplayName);
-        var finalName = string.IsNullOrEmpty(sanitized)
-            ? SessionNamePolicy.CreateDefault(conversationId)
-            : sanitized;
-
-        if (!_sessionManager.UpdateSession(conversationId, session => session.DisplayName = finalName, updateActivity: false))
-        {
-            return;
-        }
-
-        var conversationListChanged = false;
-        lock (_stateGate)
-        {
-            if (_conversationBindings.TryGetValue(conversationId, out var binding))
-            {
-                binding.LastUpdatedAt = DateTime.UtcNow;
-                conversationListChanged = true;
-            }
-        }
-
-        if (conversationListChanged)
-        {
-            NotifyConversationListChanged();
-        }
-
-        ScheduleSave();
-    }
-
     public void MoveConversationToProject(string conversationId, string projectId)
         => UpdateProjectAffinityOverride(conversationId, projectId);
 
@@ -582,6 +546,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
             new ConversationSessionInfoSnapshot
             {
                 Title = title,
+                HasTitle = true,
                 Cwd = cwd,
                 UpdatedAtUtc = updatedAtUtc
             },
@@ -678,6 +643,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                     mergedSessionInfo = new ConversationSessionInfoSnapshot
                     {
                         Title = mergedSessionInfo.Title,
+                        HasTitle = mergedSessionInfo.HasTitle,
                         Description = mergedSessionInfo.Description,
                         Cwd = establishedCwd,
                         UpdatedAtUtc = mergedSessionInfo.UpdatedAtUtc,
@@ -693,10 +659,11 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                     metadataChanged = true;
                 }
 
-                if (!string.IsNullOrWhiteSpace(mergedSessionInfo?.Title)
-                    && ShouldApplySessionInfoTitleToDisplayName(conversationId))
+                if (mergedSessionInfo.HasTitle)
                 {
-                    var sanitized = SessionNamePolicy.Sanitize(mergedSessionInfo.Title);
+                    var sanitized = string.IsNullOrWhiteSpace(mergedSessionInfo.Title)
+                        ? string.Empty
+                        : SessionNamePolicy.Sanitize(mergedSessionInfo.Title);
                     var finalName = string.IsNullOrWhiteSpace(sanitized)
                         ? SessionNamePolicy.CreateDefault(conversationId)
                         : sanitized;
@@ -980,9 +947,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                     ? null
                     : new ProjectAffinityOverride(conversation.ProjectAffinityOverrideProjectId);
 
-                var displayName = string.IsNullOrWhiteSpace(conversation.DisplayName)
-                    ? SessionNamePolicy.CreateDefault(conversation.ConversationId)
-                    : conversation.DisplayName.Trim();
+                var displayName = ResolveRestoredDisplayName(conversation);
 
                 _sessionManager.UpdateSession(
                     conversation.ConversationId,
@@ -1105,11 +1070,6 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
 
         return SessionNamePolicy.CreateDefault(conversationId);
     }
-
-    private bool ShouldApplySessionInfoTitleToDisplayName(string conversationId)
-        => SessionNamePolicy.IsUnsetOrDefault(
-            _sessionManager.GetSession(conversationId)?.DisplayName,
-            conversationId);
 
     private ConversationBinding RegisterConversationCore(
         string conversationId,
@@ -1253,6 +1213,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         }
 
         if (!string.Equals(left.Title, right.Title, StringComparison.Ordinal)
+            || left.HasTitle != right.HasTitle
             || !string.Equals(left.Description, right.Description, StringComparison.Ordinal)
             || !string.Equals(left.Cwd, right.Cwd, StringComparison.Ordinal)
             || left.UpdatedAtUtc != right.UpdatedAtUtc)
@@ -1323,6 +1284,7 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
         return new ConversationSessionInfoSnapshot
         {
             Title = sessionInfo.Title,
+            HasTitle = sessionInfo.HasTitle,
             Description = sessionInfo.Description,
             Cwd = normalizedCwd,
             UpdatedAtUtc = sessionInfo.UpdatedAtUtc,
@@ -1330,6 +1292,22 @@ public sealed class ChatConversationWorkspace : ObservableObject, IConversationC
                 ? null
                 : new Dictionary<string, object?>(sessionInfo.Meta, StringComparer.Ordinal)
         };
+    }
+
+    private static string ResolveRestoredDisplayName(ConversationRecord conversation)
+    {
+        var remoteTitle = conversation.SessionInfo?.HasTitle == true
+            ? conversation.SessionInfo.Title
+            : null;
+        var sanitized = string.IsNullOrWhiteSpace(remoteTitle)
+            ? string.Empty
+            : SessionNamePolicy.Sanitize(remoteTitle);
+        if (!string.IsNullOrWhiteSpace(sanitized))
+        {
+            return sanitized;
+        }
+
+        return SessionNamePolicy.CreateDefault(conversation.ConversationId);
     }
 
     private static DateTime ResolveCatalogUpdatedAt(ConversationBinding binding)

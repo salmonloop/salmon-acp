@@ -737,12 +737,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private string _presentedSessionHeaderDisplayName = string.Empty;
 
     [ObservableProperty]
-    private bool _isEditingSessionName;
-
-    [ObservableProperty]
-    private string _editingSessionName = string.Empty;
-
-    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CurrentAgentDisplayText))]
     private string? _agentName;
 
@@ -1623,12 +1617,6 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         else
         {
             RaiseOverlayStateChanged();
-        }
-
-        if (IsEditingSessionName)
-        {
-            IsEditingSessionName = false;
-            EditingSessionName = string.Empty;
         }
 
         SyncConversationPanelState(value);

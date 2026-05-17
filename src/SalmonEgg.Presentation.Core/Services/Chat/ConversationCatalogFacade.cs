@@ -103,12 +103,6 @@ public sealed class ConversationCatalogFacade : IConversationCatalog, IDisposabl
         _workspace.ScheduleSave();
     }
 
-    public void RenameConversation(string conversationId, string newDisplayName)
-    {
-        _workspace.RenameConversation(conversationId, newDisplayName);
-        RefreshCatalogPresenter();
-    }
-
     public void MoveConversationToProject(string conversationId, string projectId)
     {
         _workspace.MoveConversationToProject(conversationId, projectId);
