@@ -244,7 +244,7 @@ public sealed partial class StartViewModel : ObservableObject
     private async Task StartSessionAndSendAsync()
     {
         var promptText = (StartPrompt ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(promptText))
+        if (!CanStartSessionAndSend())
         {
             return;
         }
@@ -285,7 +285,8 @@ public sealed partial class StartViewModel : ObservableObject
     }
 
     private bool CanStartSessionAndSend()
-        => !IsStarting && !string.IsNullOrWhiteSpace(StartPrompt);
+        => _startSessionModeSnapshot.CanSubmitPrompt
+            && !string.IsNullOrWhiteSpace(StartPrompt);
 
     private void OnPreferencesPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -618,6 +619,12 @@ public sealed partial class StartViewModel : ObservableObject
         if (previousSnapshot.IsEnabled != nextSnapshot.IsEnabled)
         {
             OnPropertyChanged(nameof(IsStartModeSelectorEnabled));
+        }
+
+        if (previousSnapshot.CanSubmitPrompt != nextSnapshot.CanSubmitPrompt)
+        {
+            StartSessionAndSendCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanStartSessionAndSendUi));
         }
     }
 

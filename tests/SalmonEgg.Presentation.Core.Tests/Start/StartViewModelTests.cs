@@ -76,6 +76,7 @@ public sealed class StartViewModelTests
 
             using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
             var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+            await MakeStartDraftReadyAsync(chat, startViewModel);
 
             startViewModel.StartPrompt = "  hello  ";
 
@@ -105,6 +106,7 @@ public sealed class StartViewModelTests
 
             using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
             var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+            await MakeStartDraftReadyAsync(chat, startViewModel);
 
             startViewModel.StartPrompt = "hello";
 
@@ -522,6 +524,77 @@ public sealed class StartViewModelTests
     }
 
     [Fact]
+    public async Task StartSessionAndSendCommand_BeforeDraftReady_DisablesSubmitButKeepsTextInputAvailable()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(
+                chat.ViewModel,
+                preferences,
+                nav,
+                workflow.Object);
+
+            startViewModel.OnComposerLoaded();
+            startViewModel.StartPrompt = "draft";
+
+            Assert.True(startViewModel.IsInputEnabled);
+            Assert.False(startViewModel.IsStartModeSelectorEnabled);
+            Assert.False(startViewModel.StartSessionAndSendCommand.CanExecute(null));
+
+            await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
+
+            workflow.Verify(w => w.StartSessionAndSendAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task StartSessionAndSendCommand_WhenDraftBecomesReady_EnablesSubmitFromModePolicy()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(
+                chat.ViewModel,
+                preferences,
+                nav,
+                workflow.Object);
+
+            startViewModel.OnComposerLoaded();
+            startViewModel.StartPrompt = "draft";
+            Assert.False(startViewModel.StartSessionAndSendCommand.CanExecute(null));
+
+            await MakeStartDraftReadyAsync(chat, startViewModel);
+
+            Assert.True(startViewModel.IsInputEnabled);
+            Assert.True(startViewModel.IsStartModeSelectorEnabled);
+            Assert.True(startViewModel.StartSessionAndSendCommand.CanExecute(null));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task StartModeSelector_WhenProfileChanges_DisablesExistingModesUntilFreshDraftArrives()
     {
         var originalContext = SynchronizationContext.Current;
@@ -902,7 +975,7 @@ public sealed class StartViewModelTests
 
             using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
             var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
-            startViewModel.OnComposerLoaded();
+            await MakeStartDraftReadyAsync(chat, startViewModel);
             startViewModel.StartPrompt = "launch";
 
             var executeTask = startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
@@ -942,7 +1015,7 @@ public sealed class StartViewModelTests
             using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
             var loggerMock = new Mock<ILogger<StartViewModel>>();
             var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object, loggerMock.Object);
-            startViewModel.OnComposerLoaded();
+            await MakeStartDraftReadyAsync(chat, startViewModel);
             startViewModel.StartPrompt = "launch";
 
             await startViewModel.StartSessionAndSendCommand.ExecuteAsync(null);
@@ -1152,6 +1225,17 @@ public sealed class StartViewModelTests
             ShowConfigOptionsPanel: false,
             AvailableCommands: ImmutableList<ConversationAvailableCommandSnapshot>.Empty,
             SessionInfo: null);
+
+    private static async Task MakeStartDraftReadyAsync(
+        ChatViewModelHarness chat,
+        StartViewModel startViewModel)
+    {
+        await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
+        await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
+        await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
+        await chat.DispatchConnectionAsync(new SetNewSessionDraftAction(CreateReadyDraft("plan")));
+        await WaitForConditionAsync(() => startViewModel.StartModeOptions.Count == 2);
+    }
 
     private static async Task WaitForConditionAsync(Func<bool> predicate, int timeoutMilliseconds = 2000, int pollDelayMilliseconds = 20)
     {

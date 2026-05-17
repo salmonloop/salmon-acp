@@ -6,8 +6,14 @@ public static class StartSessionModePolicy
     {
         var stage = ResolveStage(state);
         var isEnabled = stage == StartSessionModeStage.Ready;
+        var canSubmitPrompt =
+            !state.IsStarting
+            && !state.IsDraftRefreshPending
+            && !state.IsDraftLoading
+            && state.IsConnectionReady
+            && state.IsDraftReady;
 
-        return new StartSessionModeSnapshot(stage, isEnabled);
+        return new StartSessionModeSnapshot(stage, isEnabled, canSubmitPrompt);
     }
 
     private static StartSessionModeStage ResolveStage(StartSessionModeState state)

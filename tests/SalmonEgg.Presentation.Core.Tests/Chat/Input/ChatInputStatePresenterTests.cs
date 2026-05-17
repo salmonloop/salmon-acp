@@ -35,7 +35,7 @@ public sealed class ChatInputStatePresenterTests
     }
 
     [Fact]
-    public void Present_WhenPromptInFlight_KeepsDraftEditingAvailableWhileBlockingResend()
+    public void Present_WhenPromptInFlight_DisablesComposerSurfaceWhileKeepingCancelAvailable()
     {
         var state = _sut.Present(new ChatInputStateInput(
             IsBusy: false,
@@ -52,9 +52,9 @@ public sealed class ChatInputStatePresenterTests
             IsVoiceInputSupported: true));
 
         Assert.Equal(ChatComposerMode.PromptInFlight, state.Mode);
-        Assert.True(state.IsTextInputEnabled);
-        Assert.True(state.AreComposerToolsEnabled);
-        Assert.True(state.IsInteractiveSurfaceEnabled);
+        Assert.False(state.IsTextInputEnabled);
+        Assert.False(state.AreComposerToolsEnabled);
+        Assert.False(state.IsInteractiveSurfaceEnabled);
         Assert.False(state.CanSendPrompt);
         Assert.False(state.CanStartVoiceInput);
         Assert.True(state.ShowCancelButton);

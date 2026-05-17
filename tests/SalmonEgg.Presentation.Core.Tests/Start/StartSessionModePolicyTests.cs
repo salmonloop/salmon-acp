@@ -18,6 +18,7 @@ public sealed class StartSessionModePolicyTests
 
         Assert.Equal(StartSessionModeStage.Unavailable, snapshot.Stage);
         Assert.False(snapshot.IsEnabled);
+        Assert.False(snapshot.CanSubmitPrompt);
     }
 
     [Fact]
@@ -33,6 +34,7 @@ public sealed class StartSessionModePolicyTests
 
         Assert.Equal(StartSessionModeStage.Loading, snapshot.Stage);
         Assert.False(snapshot.IsEnabled);
+        Assert.False(snapshot.CanSubmitPrompt);
     }
 
     [Fact]
@@ -48,6 +50,7 @@ public sealed class StartSessionModePolicyTests
 
         Assert.Equal(StartSessionModeStage.Ready, snapshot.Stage);
         Assert.True(snapshot.IsEnabled);
+        Assert.True(snapshot.CanSubmitPrompt);
     }
 
     [Fact]
@@ -63,6 +66,7 @@ public sealed class StartSessionModePolicyTests
 
         Assert.Equal(StartSessionModeStage.Loading, snapshot.Stage);
         Assert.False(snapshot.IsEnabled);
+        Assert.False(snapshot.CanSubmitPrompt);
     }
 
     [Fact]
@@ -78,5 +82,6 @@ public sealed class StartSessionModePolicyTests
 
         Assert.Equal(StartSessionModeStage.Unavailable, snapshot.Stage);
         Assert.False(snapshot.IsEnabled);
+        Assert.False(snapshot.CanSubmitPrompt);
     }
 }

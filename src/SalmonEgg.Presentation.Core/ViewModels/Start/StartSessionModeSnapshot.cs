@@ -2,4 +2,5 @@ namespace SalmonEgg.Presentation.ViewModels.Start;
 
 public sealed record StartSessionModeSnapshot(
     StartSessionModeStage Stage,
-    bool IsEnabled);
+    bool IsEnabled,
+    bool CanSubmitPrompt);

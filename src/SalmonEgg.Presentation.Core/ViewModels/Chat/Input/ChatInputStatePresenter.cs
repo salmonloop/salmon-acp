@@ -24,8 +24,8 @@ public sealed class ChatInputStatePresenter
         {
             return new ChatComposerPresentationState(
                 Mode: ChatComposerMode.PromptInFlight,
-                IsTextInputEnabled: true,
-                AreComposerToolsEnabled: true,
+                IsTextInputEnabled: false,
+                AreComposerToolsEnabled: false,
                 CanSendPrompt: false,
                 ShowCancelButton: true,
                 CanCancelPrompt: true,

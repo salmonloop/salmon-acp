@@ -855,7 +855,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ComposerState_WhenPromptInFlight_KeepsDraftEditingAvailableAndShowsCancel()
+    public async Task ComposerState_WhenPromptInFlight_DisablesComposerSurfaceAndShowsCancel()
     {
         await using var fixture = CreateViewModel();
 
@@ -864,9 +864,9 @@ public partial class ChatViewModelTests
         Assert.Equal(ChatComposerMode.PromptInFlight, fixture.ViewModel.ComposerState.Mode);
         Assert.True(fixture.ViewModel.ComposerState.ShowCancelButton);
         Assert.True(fixture.ViewModel.ComposerState.CanCancelPrompt);
-        Assert.True(fixture.ViewModel.ComposerState.IsTextInputEnabled);
-        Assert.True(fixture.ViewModel.ComposerState.AreComposerToolsEnabled);
-        Assert.True(fixture.ViewModel.ComposerState.IsInteractiveSurfaceEnabled);
+        Assert.False(fixture.ViewModel.ComposerState.IsTextInputEnabled);
+        Assert.False(fixture.ViewModel.ComposerState.AreComposerToolsEnabled);
+        Assert.False(fixture.ViewModel.ComposerState.IsInteractiveSurfaceEnabled);
         Assert.False(fixture.ViewModel.ComposerState.ShowVoiceStopButton);
     }
 
@@ -905,7 +905,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task ShouldShowSlashCommandsUi_WhenPromptInFlight_RemainsAvailableForNextDraft()
+    public async Task ShouldShowSlashCommandsUi_WhenPromptInFlight_HidesComposerToolsUntilDispatchSettles()
     {
         await using var fixture = CreateViewModel();
 
@@ -913,7 +913,7 @@ public partial class ChatViewModelTests
         Assert.True(fixture.ViewModel.ShouldShowSlashCommandsUi);
 
         fixture.ViewModel.IsPromptInFlight = true;
-        Assert.True(fixture.ViewModel.ShouldShowSlashCommandsUi);
+        Assert.False(fixture.ViewModel.ShouldShowSlashCommandsUi);
 
         fixture.ViewModel.IsPromptInFlight = false;
         Assert.True(fixture.ViewModel.ShouldShowSlashCommandsUi);
