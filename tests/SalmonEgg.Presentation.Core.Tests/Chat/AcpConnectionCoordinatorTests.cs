@@ -368,21 +368,14 @@ public sealed class AcpConnectionCoordinatorTests
                 Generation = 9
             });
 
+        var store = new ChatConnectionStore(connectionState);
         var coordinator = new AcpConnectionCoordinator(
-            new ChatConnectionStore(connectionState),
+            store,
             Mock.Of<ILogger<AcpConnectionCoordinator>>());
 
         await coordinator.SetConnectionInstanceIdAsync("conn-new");
 
-        await WaitForConditionAsync(async () =>
-        {
-            var state = await connectionState;
-            return state is not null
-                && string.Equals(state.ConnectionInstanceId, "conn-new", StringComparison.Ordinal)
-                && state.Generation == 10;
-        });
-
-        var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
+        var updated = await store.GetCurrentStateAsync();
         Assert.Equal(ConnectionPhase.Connected, updated.Phase);
         Assert.Equal("profile-1", updated.SettingsSelectedProfileId);
         Assert.Equal("conn-new", updated.ConnectionInstanceId);
@@ -402,21 +395,14 @@ public sealed class AcpConnectionCoordinatorTests
                 Generation = 3
             });
 
+        var store = new ChatConnectionStore(connectionState);
         var coordinator = new AcpConnectionCoordinator(
-            new ChatConnectionStore(connectionState),
+            store,
             Mock.Of<ILogger<AcpConnectionCoordinator>>());
 
         await coordinator.SetDisconnectedAsync("network down");
 
-        await WaitForConditionAsync(async () =>
-        {
-            var state = await connectionState;
-            return state is not null
-                && state.Phase == ConnectionPhase.Disconnected
-                && state.Generation == 4;
-        });
-
-        var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
+        var updated = await store.GetCurrentStateAsync();
         Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
         Assert.Equal("network down", updated.Error);
         Assert.Equal("conn-1", updated.ConnectionInstanceId);
@@ -436,36 +422,18 @@ public sealed class AcpConnectionCoordinatorTests
                 Generation = 5
             });
 
+        var store = new ChatConnectionStore(connectionState);
         var coordinator = new AcpConnectionCoordinator(
-            new ChatConnectionStore(connectionState),
+            store,
             Mock.Of<ILogger<AcpConnectionCoordinator>>());
 
         await coordinator.ResetAsync();
 
-        var updated = await connectionState ?? throw new InvalidOperationException("Connection state was not updated.");
+        var updated = await store.GetCurrentStateAsync();
         Assert.Equal(ConnectionPhase.Disconnected, updated.Phase);
         Assert.Equal("conn-1", updated.ConnectionInstanceId);
         Assert.Null(updated.ForegroundTransportProfileId);
         Assert.Equal(6, updated.Generation);
-    }
-
-    private static async Task WaitForConditionAsync(
-        Func<Task<bool>> predicate,
-        int timeoutMilliseconds = 30000,
-        int pollDelayMilliseconds = 10)
-    {
-        var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
-        while (DateTime.UtcNow < timeoutAt)
-        {
-            if (await predicate().ConfigureAwait(false))
-            {
-                return;
-            }
-
-            await Task.Delay(pollDelayMilliseconds).ConfigureAwait(false);
-        }
-
-        Assert.True(await predicate().ConfigureAwait(false), "Timed out waiting for expected asynchronous condition.");
     }
 
     private sealed class FakeSink : IAcpChatCoordinatorSink

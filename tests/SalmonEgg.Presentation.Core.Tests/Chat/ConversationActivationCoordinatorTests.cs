@@ -1067,7 +1067,7 @@ public sealed class ConversationActivationCoordinatorTests
         Assert.True(bindings.ClearedCalled);
         Assert.True(bindings.RestoreCalled);
         Assert.Equal(("session-1", "remote-1", "profile-1"), bindings.LastRestore);
-        var finalState = await state ?? ChatState.Empty;
+        var finalState = await chatStore.GetCurrentStateAsync();
         Assert.Equal("session-1", finalState.HydratedConversationId);
         Assert.NotNull(finalState.ResolveBinding("session-1"));
     }

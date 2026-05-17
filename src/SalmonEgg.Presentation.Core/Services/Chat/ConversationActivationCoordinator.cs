@@ -56,7 +56,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
                 return new ConversationActivationResult(false, sessionId, "WorkspaceSwitchRejected");
             }
 
-            var currentState = await _chatStore.State ?? ChatState.Empty;
+            var currentState = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
             var snapshot = hydrationMode is ConversationActivationHydrationMode.WorkspaceSnapshot
                 or ConversationActivationHydrationMode.MetadataOnly
                 ? _conversationWorkspace.GetConversationSnapshot(sessionId)
@@ -176,7 +176,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             return;
         }
 
-        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var currentState = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         var boundProfileId = currentState.ResolveBinding(conversationId)?.ProfileId
             ?? _conversationWorkspace.GetRemoteBinding(conversationId)?.BoundProfileId;
         if (string.IsNullOrWhiteSpace(boundProfileId))
@@ -233,7 +233,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
         string conversationId,
         string? activeConversationId)
     {
-        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var currentState = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         var hydratedConversationId = currentState.HydratedConversationId;
         var clearsActiveConversation = string.Equals(conversationId, hydratedConversationId, StringComparison.Ordinal)
             || string.Equals(activeConversationId, conversationId, StringComparison.Ordinal);

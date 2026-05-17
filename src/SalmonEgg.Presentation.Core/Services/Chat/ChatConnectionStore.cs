@@ -8,10 +8,20 @@ namespace SalmonEgg.Presentation.Core.Services.Chat;
 
 public interface IChatConnectionStore
 {
+    /// <summary>
+    /// Reactive projection for UI subscribers. It can observe committed state asynchronously.
+    /// </summary>
     IState<ChatConnectionState> State { get; }
 
+    /// <summary>
+    /// Applies an action to the authoritative connection state.
+    /// </summary>
     ValueTask Dispatch(ChatConnectionAction action);
 
+    /// <summary>
+    /// Returns the latest authoritative state committed by this store, including state that
+    /// downstream reactive projections may not have observed yet.
+    /// </summary>
     ValueTask<ChatConnectionState> GetCurrentStateAsync();
 }
 

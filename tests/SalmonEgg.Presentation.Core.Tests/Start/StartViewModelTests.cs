@@ -743,6 +743,8 @@ public sealed class StartViewModelTests
 
             uiDispatcher.RunAll();
             await cleanupTask;
+            Assert.Null((await chat.GetConnectionStateAsync()).NewSessionDraft);
+            uiDispatcher.RunAll();
 
             Assert.Empty(startViewModel.StartModeOptions);
             Assert.False(startViewModel.IsStartModeSelectorEnabled);
@@ -1303,6 +1305,9 @@ public sealed class StartViewModelTests
 
         public ValueTask DispatchConnectionAsync(ChatConnectionAction action)
             => _connectionStore.Dispatch(action);
+
+        public ValueTask<ChatConnectionState> GetConnectionStateAsync()
+            => _connectionStore.GetCurrentStateAsync();
 
         public void Dispose()
         {
