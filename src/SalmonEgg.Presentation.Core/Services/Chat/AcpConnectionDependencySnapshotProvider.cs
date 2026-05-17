@@ -38,7 +38,7 @@ public sealed class AcpConnectionDependencySnapshotProvider : IAcpConnectionDepe
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var chatState = await _chatStore.State ?? ChatState.Empty;
+        var chatState = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         var profiles = (chatState.Bindings ?? ImmutableDictionary<string, ConversationBindingSlice>.Empty)
             .Values

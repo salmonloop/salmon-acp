@@ -20,7 +20,21 @@ public static class ShellLayoutReducer
                 UserNavOpenIntent = r.IsOpen,
                 IsMinimalPaneOpen = r.IsOpen
             },
-            ContentContextChanged c => state with { IsChatContext = c.IsChatContext },
+            ContentContextChanged c when c.Version < state.ContentContextVersion => state,
+            ContentContextChanged { IsChatContext: false } c => state with
+            {
+                IsChatContext = false,
+                ContentContextVersion = c.Version,
+                DesiredRightPanelMode = RightPanelMode.None,
+                DesiredBottomPanelMode = BottomPanelMode.None,
+                LastAuxiliaryPanelArea = AuxiliaryPanelArea.None
+            },
+            ContentContextChanged { IsChatContext: true } c => state with
+            {
+                IsChatContext = true,
+                ContentContextVersion = c.Version
+            },
+            ToggleRightPanelRequested when !state.IsChatContext => state,
             ToggleRightPanelRequested t => state with
             {
                 DesiredRightPanelMode = state.DesiredRightPanelMode == t.TargetMode ? RightPanelMode.None : t.TargetMode,
@@ -28,6 +42,7 @@ public static class ShellLayoutReducer
                     ? state.LastAuxiliaryPanelArea
                     : AuxiliaryPanelArea.Right
             },
+            ToggleBottomPanelRequested when !state.IsChatContext => state,
             ToggleBottomPanelRequested when !state.SupportsLocalTerminal => state,
             ToggleBottomPanelRequested => state with
             {
@@ -38,17 +53,13 @@ public static class ShellLayoutReducer
                     ? AuxiliaryPanelArea.Bottom
                     : state.LastAuxiliaryPanelArea
             },
-            ClearAuxiliaryPanelsRequested => state with
-            {
-                DesiredRightPanelMode = RightPanelMode.None,
-                DesiredBottomPanelMode = BottomPanelMode.None,
-                LastAuxiliaryPanelArea = AuxiliaryPanelArea.None
-            },
+            RightPanelModeChanged when !state.IsChatContext => state,
             RightPanelModeChanged r => state with
             {
                 DesiredRightPanelMode = r.Mode,
                 LastAuxiliaryPanelArea = r.Mode == RightPanelMode.None ? state.LastAuxiliaryPanelArea : AuxiliaryPanelArea.Right
             },
+            BottomPanelModeChanged when !state.IsChatContext => state,
             BottomPanelModeChanged b => state with
             {
                 DesiredBottomPanelMode = b.Mode,

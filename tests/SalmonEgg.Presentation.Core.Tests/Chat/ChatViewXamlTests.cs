@@ -284,8 +284,20 @@ public sealed class ChatViewXamlTests
         var codeBehind = File.ReadAllText(Path.Combine(root, "SalmonEgg", "SalmonEgg", "MainPage.xaml.cs"));
 
         Assert.Contains("x:Load=\"{x:Bind LayoutVM.SupportsLocalTerminal, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ApplyBottomPanelVisualState", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind LayoutVM.BottomPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{x:Bind LayoutVM.RightPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("await _metricsSink.ReportContentContext(isChatPage, navigationVersion).ConfigureAwait(true);", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReportContentContext(IsChatPageType", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResetChatAuxiliaryPanelsOnChatExitAsync", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReportClearAuxiliaryPanels", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Storyboard", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DoubleAnimation", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"RightPanelTranslate\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"BottomPanelTranslate\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AuxiliaryPanelAnimation", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyBottomPanelVisualState", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("BottomPanelHost.Visibility =", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("RightPanelColumn.Visibility =", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]

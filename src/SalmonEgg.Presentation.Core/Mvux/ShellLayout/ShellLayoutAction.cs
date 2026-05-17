@@ -9,13 +9,11 @@ public sealed record TitleBarInsetsChanged(double Left, double Right, double Hei
 public sealed record NavToggleRequested(string Source) : ShellLayoutAction;
 public sealed record NavPaneOpenIntentRequested(bool IsOpen, string Source) : ShellLayoutAction;
 
-public sealed record ContentContextChanged(bool IsChatContext) : ShellLayoutAction;
+public sealed record ContentContextChanged(bool IsChatContext, long Version) : ShellLayoutAction;
 
 public sealed record ToggleRightPanelRequested(RightPanelMode TargetMode) : ShellLayoutAction;
 
 public sealed record ToggleBottomPanelRequested : ShellLayoutAction;
-
-public sealed record ClearAuxiliaryPanelsRequested : ShellLayoutAction;
 
 public sealed record RightPanelModeChanged(RightPanelMode Mode) : ShellLayoutAction;
 

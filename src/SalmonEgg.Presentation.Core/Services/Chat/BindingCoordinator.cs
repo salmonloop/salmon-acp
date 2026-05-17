@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using SalmonEgg.Domain.Models.Conversation;
@@ -31,20 +32,7 @@ public sealed class BindingCoordinator : IConversationBindingCommands
                 .GetKnownConversationIds()
                 .Contains(conversationId, StringComparer.Ordinal);
             var duplicateOwners = await FindDuplicateRemoteSessionOwnersAsync(conversationId, remoteSessionId).ConfigureAwait(false);
-            var state = await _chatStore.State ?? ChatState.Empty;
-
-            foreach (var duplicateOwner in duplicateOwners)
-            {
-                var preservedSessionInfo = ResolvePreservedSessionInfo(state, duplicateOwner)
-                    ?? _workspace.GetConversationSnapshot(duplicateOwner)?.SessionInfo;
-                await _chatStore.Dispatch(new ScrubConversationDerivedStateAction(
-                    duplicateOwner,
-                    preservedSessionInfo)).ConfigureAwait(false);
-                var clearedBinding = new ConversationBindingSlice(duplicateOwner, null, null);
-                await _chatStore.Dispatch(new SetBindingSliceAction(clearedBinding)).ConfigureAwait(false);
-                _workspace.ClearConversationRuntimeContent(duplicateOwner);
-                _workspace.UpdateRemoteBinding(duplicateOwner, remoteSessionId: null, boundProfileId: null);
-            }
+            var state = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
 
             var existingBinding = state.ResolveBinding(conversationId);
             if (existingBinding is null)
@@ -62,22 +50,43 @@ public sealed class BindingCoordinator : IConversationBindingCommands
             var replacesRemoteAuthority =
                 !string.IsNullOrWhiteSpace(existingBinding?.RemoteSessionId)
                 && !string.Equals(existingBinding.RemoteSessionId, remoteSessionId, StringComparison.Ordinal);
+
+            var scrubConversationIds = ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal);
+            var preservedSessionInfoByConversationId = ImmutableDictionary.CreateBuilder<string, ConversationSessionInfoSnapshot?>(
+                StringComparer.Ordinal);
+            foreach (var duplicateOwner in duplicateOwners)
+            {
+                scrubConversationIds.Add(duplicateOwner);
+                preservedSessionInfoByConversationId[duplicateOwner] = ResolvePreservedSessionInfo(state, duplicateOwner)
+                    ?? _workspace.GetConversationSnapshot(duplicateOwner)?.SessionInfo;
+            }
+
             if (replacesRemoteAuthority)
             {
-                var preservedSessionInfo = ResolvePreservedSessionInfo(state, conversationId)
+                scrubConversationIds.Add(conversationId);
+                preservedSessionInfoByConversationId[conversationId] = ResolvePreservedSessionInfo(state, conversationId)
                     ?? _workspace.GetConversationSnapshot(conversationId)?.SessionInfo;
-                await _chatStore.Dispatch(new ScrubConversationDerivedStateAction(
-                    conversationId,
-                    preservedSessionInfo)).ConfigureAwait(false);
-                _workspace.ClearConversationRuntimeContent(conversationId);
             }
 
             var binding = new ConversationBindingSlice(conversationId, remoteSessionId, boundProfileId);
-            await _chatStore.Dispatch(new SetBindingSliceAction(binding)).ConfigureAwait(false);
-            var projectionVisible = await WaitForProjectedBindingAsync(binding).ConfigureAwait(false);
-            if (!projectionVisible)
+            await _chatStore.Dispatch(new ApplyBindingUpdateAction(
+                binding,
+                preservedSessionInfoByConversationId.ToImmutable(),
+                scrubConversationIds.ToImmutable())).ConfigureAwait(false);
+            if (!await AreAuthoritativeBindingsVisibleAsync(binding, duplicateOwners).ConfigureAwait(false))
             {
-                return BindingUpdateResult.Error("BindingProjectionTimeout");
+                return BindingUpdateResult.Error("BindingStoreMismatch");
+            }
+
+            foreach (var duplicateOwner in duplicateOwners)
+            {
+                _workspace.ClearConversationRuntimeContent(duplicateOwner);
+                _workspace.UpdateRemoteBinding(duplicateOwner, remoteSessionId: null, boundProfileId: null);
+            }
+
+            if (replacesRemoteAuthority)
+            {
+                _workspace.ClearConversationRuntimeContent(conversationId);
             }
 
             if (conversationExists)
@@ -99,32 +108,42 @@ public sealed class BindingCoordinator : IConversationBindingCommands
     public ValueTask<BindingUpdateResult> ClearBindingAsync(string conversationId)
         => UpdateBindingAsync(conversationId, remoteSessionId: null, boundProfileId: null);
 
-    private async Task<bool> WaitForProjectedBindingAsync(
+    private async Task<bool> AreAuthoritativeBindingsVisibleAsync(
         ConversationBindingSlice expectedBinding,
-        int timeoutMilliseconds = 2000,
-        int pollDelayMilliseconds = 10)
+        IReadOnlyList<string> clearedDuplicateOwnerIds)
     {
-        var expectsClearedBinding = string.IsNullOrWhiteSpace(expectedBinding.RemoteSessionId)
-            && string.IsNullOrWhiteSpace(expectedBinding.ProfileId);
-        var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
-        while (DateTime.UtcNow < timeoutAt)
+        var currentState = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
+        if (!MatchesBinding(currentState.ResolveBinding(expectedBinding.ConversationId), expectedBinding))
         {
-            var state = await _chatStore.State;
-            var currentState = state ?? ChatState.Empty;
-            var actualBinding = currentState.ResolveBinding(expectedBinding.ConversationId);
-            if ((expectsClearedBinding && actualBinding is null) || actualBinding == expectedBinding)
-            {
-                return true;
-            }
-
-            await Task.Delay(pollDelayMilliseconds).ConfigureAwait(false);
+            return false;
         }
 
-        var finalStateValue = await _chatStore.State;
-        var finalState = finalStateValue ?? ChatState.Empty;
-        var finalBinding = finalState.ResolveBinding(expectedBinding.ConversationId);
-        return (expectsClearedBinding && finalBinding is null) || finalBinding == expectedBinding;
+        foreach (var conversationId in clearedDuplicateOwnerIds)
+        {
+            if (currentState.ResolveBinding(conversationId) is not null)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
+
+    private static bool MatchesBinding(
+        ConversationBindingSlice? actualBinding,
+        ConversationBindingSlice? expectedBinding)
+    {
+        if (expectedBinding is null || IsClearedBinding(expectedBinding))
+        {
+            return actualBinding is null;
+        }
+
+        return actualBinding == expectedBinding;
+    }
+
+    private static bool IsClearedBinding(ConversationBindingSlice binding)
+        => string.IsNullOrWhiteSpace(binding.RemoteSessionId)
+            && string.IsNullOrWhiteSpace(binding.ProfileId);
 
     private async Task<IReadOnlyList<string>> FindDuplicateRemoteSessionOwnersAsync(
         string conversationId,
@@ -136,7 +155,7 @@ public sealed class BindingCoordinator : IConversationBindingCommands
         }
 
         var duplicates = new HashSet<string>(StringComparer.Ordinal);
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         if (state.Bindings is not null)
         {
             foreach (var binding in state.Bindings)

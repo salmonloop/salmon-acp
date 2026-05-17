@@ -178,6 +178,7 @@ public partial class ChatViewModelTests
                     }));
 
             await WaitForPendingSessionUpdatesAsync(ViewModel);
+            await _fixture.ApplyCurrentStoreProjectionAsync();
             await WaitForConditionAsync(() =>
             {
                 _syncContext.RunAll();

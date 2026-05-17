@@ -106,6 +106,7 @@ public class ShellLayoutViewModelTests
         // User intent keeps both desired modes non-None, but policy suppresses the bottom panel.
         var desired = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             WindowMetrics = new WindowMetrics(1000, 650, 1000, 650),
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
@@ -124,7 +125,7 @@ public class ShellLayoutViewModelTests
     [Fact]
     public async Task ViewModel_ToggleRightPanelCommands_DispatchExpectedIntent()
     {
-        await using var store = new FakeShellLayoutStore();
+        await using var store = new FakeShellLayoutStore(ShellLayoutState.Default with { IsChatContext = true });
         using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await vm.ToggleDiffPanelCommand.ExecuteAsync(null);
@@ -139,7 +140,7 @@ public class ShellLayoutViewModelTests
     [Fact]
     public async Task ViewModel_ToggleBottomPanelCommand_DispatchExpectedIntent()
     {
-        await using var store = new FakeShellLayoutStore();
+        await using var store = new FakeShellLayoutStore(ShellLayoutState.Default with { IsChatContext = true });
         using var vm = new ShellLayoutViewModel(store, new ImmediateUiDispatcher());
 
         await vm.ToggleBottomPanelCommand.ExecuteAsync(null);

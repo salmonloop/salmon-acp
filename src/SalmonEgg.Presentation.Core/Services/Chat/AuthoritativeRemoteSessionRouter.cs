@@ -29,7 +29,7 @@ public sealed class AuthoritativeRemoteSessionRouter : IAuthoritativeRemoteSessi
             return null;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         return ResolveConversationId(state, remoteSessionId);
     }
 

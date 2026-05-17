@@ -36,6 +36,28 @@ public class ShellLayoutPolicyTests
     }
 
     [Fact]
+    public void Policy_HidesAndDisablesAuxiliaryPanelsOutsideChatContext()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            IsChatContext = false,
+            DesiredRightPanelMode = RightPanelMode.Diff,
+            DesiredBottomPanelMode = BottomPanelMode.Dock,
+            WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
+        };
+
+        var snapshot = ShellLayoutPolicy.Compute(state);
+
+        Assert.False(snapshot.RightPanelVisible);
+        Assert.False(snapshot.BottomPanelVisible);
+        Assert.Equal(RightPanelMode.None, snapshot.RightPanelMode);
+        Assert.Equal(BottomPanelMode.None, snapshot.BottomPanelMode);
+        Assert.False(snapshot.CanToggleDiffPanel);
+        Assert.False(snapshot.CanToggleTodoPanel);
+        Assert.False(snapshot.CanToggleBottomPanel);
+    }
+
+    [Fact]
     public void Policy_ChangesTitleBarInteractiveRegionToken_WhenSearchOrAuxVisibilityChanges()
     {
         var defaultSnapshot = ShellLayoutPolicy.Compute(ShellLayoutState.Default with
@@ -218,6 +240,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Todo,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
@@ -238,6 +261,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
@@ -257,6 +281,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
@@ -277,6 +302,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Right,
@@ -297,6 +323,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Right,
@@ -317,6 +344,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
@@ -337,6 +365,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             SupportsLocalTerminal = false,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
@@ -354,6 +383,7 @@ public class ShellLayoutPolicyTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             DesiredBottomPanelMode = BottomPanelMode.Dock,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
@@ -373,10 +403,95 @@ public class ShellLayoutPolicyTests
 public class ShellLayoutReducerBehaviorTests
 {
     [Fact]
+    public void ContentContextChangedFalseClearsAuxiliaryPanelState()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            IsChatContext = true,
+            DesiredRightPanelMode = RightPanelMode.Diff,
+            DesiredBottomPanelMode = BottomPanelMode.Dock,
+            LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
+            WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
+        };
+
+        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(false, Version: 1));
+
+        Assert.False(reduced.State.IsChatContext);
+        Assert.Equal(RightPanelMode.None, reduced.State.DesiredRightPanelMode);
+        Assert.Equal(BottomPanelMode.None, reduced.State.DesiredBottomPanelMode);
+        Assert.Equal(AuxiliaryPanelArea.None, reduced.State.LastAuxiliaryPanelArea);
+        Assert.False(reduced.Snapshot.RightPanelVisible);
+        Assert.False(reduced.Snapshot.BottomPanelVisible);
+    }
+
+    [Fact]
+    public void ContentContextChanged_IgnoresStaleNavigationVersion()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            IsChatContext = true,
+            ContentContextVersion = 2,
+            DesiredRightPanelMode = RightPanelMode.Diff,
+            DesiredBottomPanelMode = BottomPanelMode.Dock,
+            LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
+            WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
+        };
+
+        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(false, Version: 1));
+
+        Assert.True(reduced.State.IsChatContext);
+        Assert.Equal(2, reduced.State.ContentContextVersion);
+        Assert.Equal(RightPanelMode.Diff, reduced.State.DesiredRightPanelMode);
+        Assert.Equal(BottomPanelMode.Dock, reduced.State.DesiredBottomPanelMode);
+        Assert.Equal(AuxiliaryPanelArea.Bottom, reduced.State.LastAuxiliaryPanelArea);
+    }
+
+    [Fact]
+    public void ContentContextChanged_AcceptsLatestNavigationVersion()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            IsChatContext = true,
+            ContentContextVersion = 2,
+            DesiredRightPanelMode = RightPanelMode.Diff,
+            DesiredBottomPanelMode = BottomPanelMode.Dock,
+            LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom,
+            WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
+        };
+
+        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(false, Version: 3));
+
+        Assert.False(reduced.State.IsChatContext);
+        Assert.Equal(3, reduced.State.ContentContextVersion);
+        Assert.Equal(RightPanelMode.None, reduced.State.DesiredRightPanelMode);
+        Assert.Equal(BottomPanelMode.None, reduced.State.DesiredBottomPanelMode);
+        Assert.Equal(AuxiliaryPanelArea.None, reduced.State.LastAuxiliaryPanelArea);
+    }
+
+    [Fact]
+    public void AuxiliaryPanelCommandsDoNotOpenPanelsOutsideChatContext()
+    {
+        var state = ShellLayoutState.Default with
+        {
+            IsChatContext = false,
+            WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
+        };
+
+        var rightReduced = ShellLayoutReducer.Reduce(state, new ToggleRightPanelRequested(RightPanelMode.Diff));
+        var bottomReduced = ShellLayoutReducer.Reduce(state, new ToggleBottomPanelRequested());
+
+        Assert.Equal(RightPanelMode.None, rightReduced.State.DesiredRightPanelMode);
+        Assert.Equal(BottomPanelMode.None, bottomReduced.State.DesiredBottomPanelMode);
+        Assert.False(rightReduced.Snapshot.RightPanelVisible);
+        Assert.False(bottomReduced.Snapshot.BottomPanelVisible);
+    }
+
+    [Fact]
     public void ToggleBottomPanelSetsDesiredModeAndKeepsBottomWhenDualUnavailable()
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             DesiredRightPanelMode = RightPanelMode.Diff,
             LastAuxiliaryPanelArea = AuxiliaryPanelArea.Right,
             WindowMetrics = new WindowMetrics(1000, 680, 1000, 680)
@@ -397,6 +512,7 @@ public class ShellLayoutReducerBehaviorTests
     {
         var state = ShellLayoutState.Default with
         {
+            IsChatContext = true,
             SupportsLocalTerminal = false,
             WindowMetrics = new WindowMetrics(1280, 900, 1280, 900)
         };
@@ -409,24 +525,4 @@ public class ShellLayoutReducerBehaviorTests
         Assert.False(reduced.Snapshot.BottomPanelVisible);
     }
 
-    [Fact]
-    public void ClearAuxiliaryPanelsResetsDesiredModesAndArbitration()
-    {
-        var state = ShellLayoutState.Default with
-        {
-            DesiredRightPanelMode = RightPanelMode.Diff,
-            DesiredBottomPanelMode = BottomPanelMode.Dock,
-            LastAuxiliaryPanelArea = AuxiliaryPanelArea.Bottom
-        };
-
-        var reduced = ShellLayoutReducer.Reduce(state, new ClearAuxiliaryPanelsRequested());
-
-        Assert.Equal(RightPanelMode.None, reduced.State.DesiredRightPanelMode);
-        Assert.Equal(BottomPanelMode.None, reduced.State.DesiredBottomPanelMode);
-        Assert.Equal(AuxiliaryPanelArea.None, reduced.State.LastAuxiliaryPanelArea);
-        Assert.False(reduced.Snapshot.RightPanelVisible);
-        Assert.False(reduced.Snapshot.BottomPanelVisible);
-        Assert.Equal(RightPanelMode.None, reduced.Snapshot.RightPanelMode);
-        Assert.Equal(BottomPanelMode.None, reduced.Snapshot.BottomPanelMode);
-    }
 }

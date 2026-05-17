@@ -14,6 +14,7 @@ public sealed record ShellLayoutState(
     double NavCompactPaneLength,
     bool? UserNavOpenIntent,
     bool IsMinimalPaneOpen,
+    long ContentContextVersion = 0,
     bool SupportsLocalTerminal = true)
 {
     public static ShellLayoutState Default => new(

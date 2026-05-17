@@ -163,7 +163,7 @@ public class ShellLayoutReducerTests
     {
         var state = ShellLayoutState.Default with { IsChatContext = false };
 
-        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(IsChatContext: true));
+        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(IsChatContext: true, Version: 1));
 
         Assert.True(reduced.State.IsChatContext);
         Assert.True(reduced.Snapshot.ShowAuxiliaryTitleBarButtons);
@@ -175,7 +175,7 @@ public class ShellLayoutReducerTests
         var state = ShellLayoutState.Default with { IsChatContext = false };
         var before = ShellLayoutPolicy.Compute(state);
 
-        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(IsChatContext: true));
+        var reduced = ShellLayoutReducer.Reduce(state, new ContentContextChanged(IsChatContext: true, Version: 1));
 
         Assert.NotEqual(before.TitleBarInteractiveRegionToken, reduced.Snapshot.TitleBarInteractiveRegionToken);
     }

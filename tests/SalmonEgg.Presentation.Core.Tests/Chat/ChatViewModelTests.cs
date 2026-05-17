@@ -231,6 +231,7 @@ public partial class ChatViewModelTests
                 attentionState,
                 attentionStore,
                 chatStore,
+                uiDispatcher,
                 vmLogger);
         }
         finally
@@ -3865,6 +3866,18 @@ public partial class ChatViewModelTests
         return (Task)method!.Invoke(viewModel, null)!;
     }
 
+    private static Task ApplyCurrentStoreProjectionAsync(ChatViewModel viewModel)
+    {
+        var method = typeof(ChatViewModel).GetMethod(
+            "ApplyCurrentStoreProjectionAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: [typeof(long?)],
+            modifiers: null);
+        Assert.NotNull(method);
+        return (Task)method!.Invoke(viewModel, [null])!;
+    }
+
     private static JsonElement ParseJsonParams(string json)
     {
         using var document = JsonDocument.Parse(json);
@@ -4343,6 +4356,7 @@ public partial class ChatViewModelTests
         private readonly IChatStore _store;
         private readonly ChatConversationWorkspace _workspace;
         private readonly RecordingChatStore _chatStore;
+        private readonly IUiDispatcher _uiDispatcher;
         public ChatViewModel ViewModel { get; }
         public Mock<IConversationStore> ConversationStore { get; }
         public ChatConversationWorkspace Workspace => _workspace;
@@ -4364,6 +4378,7 @@ public partial class ChatViewModelTests
             IState<ConversationAttentionState> attentionState,
             IConversationAttentionStore conversationAttentionStore,
             RecordingChatStore chatStore,
+            IUiDispatcher uiDispatcher,
             Mock<ILogger<ChatViewModel>> viewModelLogger)
         {
             ViewModel = viewModel;
@@ -4378,6 +4393,7 @@ public partial class ChatViewModelTests
             Preferences = preferences;
             Profiles = profiles;
             _chatStore = chatStore;
+            _uiDispatcher = uiDispatcher;
             ViewModelLogger = viewModelLogger;
         }
 
@@ -4387,17 +4403,43 @@ public partial class ChatViewModelTests
 
         public async Task<ConversationAttentionState> GetAttentionStateAsync() => await _conversationAttentionStore.GetCurrentStateAsync();
 
-        public ValueTask DispatchAsync(ChatAction action) => _store.Dispatch(action);
+        public async ValueTask DispatchAsync(ChatAction action, bool applyProjection = true)
+        {
+            await _store.Dispatch(action);
+            if (applyProjection)
+            {
+                await ApplyCurrentStoreProjectionAsync();
+            }
+        }
 
         public ValueTask DispatchConnectionAsync(ChatConnectionAction action) => _connectionStore.Dispatch(action);
 
-        public async ValueTask UpdateStateAsync(Func<ChatState, ChatState> update)
+        public async ValueTask UpdateStateAsync(Func<ChatState, ChatState> update, bool applyProjection = true)
         {
             await _chatStore.SetStateAsync(update(_chatStore.LatestState));
             if (SynchronizationContext.Current is QueueingSynchronizationContext queueingContext)
             {
                 queueingContext.RunAll();
             }
+
+            if (!applyProjection)
+            {
+                return;
+            }
+
+            await ApplyCurrentStoreProjectionAsync();
+        }
+
+        public async Task ApplyCurrentStoreProjectionAsync()
+        {
+            var projectionTask = ChatViewModelTests.ApplyCurrentStoreProjectionAsync(ViewModel);
+            if (_uiDispatcher is QueueingSynchronizationContext queuedDispatcher)
+            {
+                await queuedDispatcher.RunUntilCompletedAsync(projectionTask);
+                return;
+            }
+
+            await projectionTask;
         }
 
         public async ValueTask DisposeAsync()
@@ -4469,7 +4511,7 @@ public partial class ChatViewModelTests
                 return new ConversationActivationResult(false, sessionId, "WorkspaceSwitchRejected");
             }
 
-            var state = await chatStore.State ?? ChatState.Empty;
+            var state = await chatStore.GetCurrentStateAsync();
             if (!string.Equals(state.HydratedConversationId, sessionId, StringComparison.Ordinal))
             {
                 await chatStore.Dispatch(new SelectConversationAction(sessionId)).ConfigureAwait(false);
@@ -13377,7 +13419,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task SwitchConversationAsync_RemoteBoundConversation_WhenBindingProjectionTimeout_UsesLocalFallbackToClearBinding()
+    public async Task SwitchConversationAsync_RemoteBoundConversation_WhenBindingClearFails_DoesNotApplyLocalFallback()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var sessions = new Dictionary<string, Session>(StringComparer.Ordinal);
@@ -13430,7 +13472,7 @@ public partial class ChatViewModelTests
         var bindingCommands = new Mock<IConversationBindingCommands>();
         bindingCommands
             .Setup(x => x.UpdateBindingAsync("conv-2", null, "profile-1"))
-            .Returns(new ValueTask<BindingUpdateResult>(BindingUpdateResult.Error("BindingProjectionTimeout")));
+            .Returns(new ValueTask<BindingUpdateResult>(BindingUpdateResult.Error("BindingStoreMismatch")));
 
         await using var fixture = CreateViewModel(
             syncContext,
@@ -13475,14 +13517,14 @@ public partial class ChatViewModelTests
         var workspaceBinding = fixture.Workspace.GetRemoteBinding("conv-2");
         Assert.NotNull(workspaceBinding);
         Assert.Null(workspaceBinding!.RemoteSessionId);
-        Assert.Equal("profile-1", workspaceBinding.BoundProfileId);
+        Assert.Null(workspaceBinding.BoundProfileId);
         var workspaceSnapshot = fixture.Workspace.GetConversationSnapshot("conv-2");
         Assert.NotNull(workspaceSnapshot);
         Assert.Empty(workspaceSnapshot!.Transcript);
         Assert.Empty(workspaceSnapshot.Plan);
 
         var state = await fixture.GetStateAsync();
-        Assert.Equal(new ConversationBindingSlice("conv-2", null, "profile-1"), state.ResolveBinding("conv-2"));
+        Assert.Equal(new ConversationBindingSlice("conv-2", "remote-2", "profile-1"), state.ResolveBinding("conv-2"));
         Assert.Empty(state.ResolveContentSlice("conv-2")?.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty);
     }
 
@@ -14136,7 +14178,7 @@ public partial class ChatViewModelTests
                         Timestamp = new DateTime(2026, 5, 10, 0, 0, 0, DateTimeKind.Utc).AddSeconds(index)
                     }
                 ]
-            }).AsTask());
+            }, applyProjection: false).AsTask());
         }
 
         await Task.WhenAll(updateTasks);

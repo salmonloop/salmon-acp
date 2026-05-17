@@ -13,19 +13,20 @@ public sealed class AuthoritativeRemoteSessionRouterTests
     [Fact]
     public async Task ResolveConversationIdAsync_WhenStoreBindingMatches_ReturnsConversationId()
     {
-        var state = State.Value(this, () => ChatState.Empty with
+        var state = ChatState.Empty with
         {
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty.Add(
                 "conv-store",
                 new ConversationBindingSlice("conv-store", "remote-store", "profile-1"))
-        });
+        };
         var chatStore = new Mock<IChatStore>();
-        chatStore.SetupGet(store => store.State).Returns(state);
+        chatStore.Setup(store => store.GetCurrentStateAsync()).ReturnsAsync(state);
         var router = new AuthoritativeRemoteSessionRouter(chatStore.Object);
 
         var conversationId = await router.ResolveConversationIdAsync("remote-store");
 
         Assert.Equal("conv-store", conversationId);
+        chatStore.Verify(store => store.GetCurrentStateAsync(), Times.Once);
     }
 
     [Fact]

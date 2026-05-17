@@ -924,48 +924,11 @@ public partial class ChatViewModel
             return;
         }
 
-        if (result.Status is BindingUpdateStatus.Error
-            && string.Equals(result.ErrorMessage, "BindingProjectionTimeout", StringComparison.Ordinal))
-        {
-            Logger.LogWarning(
-                "Binding projection timed out while clearing stale remote binding. Applying local fallback. ConversationId={ConversationId}",
-                conversationId);
-            await ApplyLocalBindingClearFallbackAsync(conversationId, boundProfileId).ConfigureAwait(false);
-            return;
-        }
-
         Logger.LogWarning(
             "Failed to clear stale remote binding after hydration error. ConversationId={ConversationId} Status={Status} Error={Error}",
             conversationId,
             result.Status,
             result.ErrorMessage);
-    }
-
-    private async Task ApplyLocalBindingClearFallbackAsync(string conversationId, string? boundProfileId)
-    {
-        try
-        {
-            var state = await _chatStore.GetCurrentStateAsync();
-            var preservedSessionInfo = string.Equals(state.HydratedConversationId, conversationId, StringComparison.Ordinal)
-                ? ConversationSessionInfoSnapshots.Clone(state.SessionInfo)
-                : ConversationSessionInfoSnapshots.Clone(state.ResolveSessionStateSlice(conversationId)?.SessionInfo);
-            await _chatStore.Dispatch(new ScrubConversationDerivedStateAction(
-                    conversationId,
-                    preservedSessionInfo))
-                .ConfigureAwait(false);
-            var clearedBinding = new ConversationBindingSlice(conversationId, null, boundProfileId);
-            await _chatStore.Dispatch(new SetBindingSliceAction(clearedBinding)).ConfigureAwait(false);
-            _conversationWorkspace.ClearConversationRuntimeContent(conversationId);
-            _conversationWorkspace.UpdateRemoteBinding(conversationId, remoteSessionId: null, boundProfileId);
-            _conversationWorkspace.ScheduleSave();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(
-                ex,
-                "Failed to apply local fallback after stale binding clear timeout. ConversationId={ConversationId}",
-                conversationId);
-        }
     }
 
     private void ApplySelectedProfile(ServerConfiguration profile)

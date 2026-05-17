@@ -20,15 +20,16 @@ public class ShellLayoutMetricsSinkTests
     }
 
     [Fact]
-    public async Task MetricsSink_Dispatches_ContentContext()
+    public async Task MetricsSink_Dispatches_VersionedContentContext()
     {
         await using var store = new CapturingStore();
         var sink = new ShellLayoutMetricsSink(store);
 
-        await sink.ReportContentContext(isChatContext: true);
+        await sink.ReportContentContext(isChatContext: true, version: 4);
 
         var action = Assert.IsType<ContentContextChanged>(store.LastAction);
         Assert.True(action.IsChatContext);
+        Assert.Equal(4, action.Version);
     }
 
     [Fact]

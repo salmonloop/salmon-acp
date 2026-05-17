@@ -87,7 +87,7 @@ public class RightPanelServiceTests
 
         public TestShellLayoutStore()
         {
-            CurrentState = ShellLayoutState.Default;
+            CurrentState = ShellLayoutState.Default with { IsChatContext = true };
             CurrentSnapshot = ShellLayoutPolicy.Compute(CurrentState);
             _state = Uno.Extensions.Reactive.State.Value(new object(), () => CurrentState);
             _snapshot = Uno.Extensions.Reactive.State.Value(new object(), () => CurrentSnapshot);

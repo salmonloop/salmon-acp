@@ -1278,7 +1278,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             ChatState? state = null;
             try
             {
-                state = await _chatStore.State;
+                state = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
             {

@@ -16,10 +16,8 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using SalmonEgg.Domain.Models.Session;
-using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Models.Search;
 using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Navigation;
@@ -53,17 +51,12 @@ public sealed partial class MainPage : Page
     private const double NavPaneAnimationDurationMs = 180;
     private const double RightPanelMinWidth = 240;
     private const double RightPanelMaxWidth = 520;
-    private const double RightPanelAnimationOffset = 16;
     private bool _isResizingRightPanel;
     private double _rightPanelResizeStartX;
     private double _rightPanelResizeStartWidth;
     private bool _isResizingLeftNav;
     private double _leftNavResizeStartX;
     private double _leftNavResizeStartWidth;
-
-    private bool _suppressPanelAnimations;
-    private readonly AuxiliaryPanelAnimationCoordinator _rightPanelAnimation = new();
-    private readonly AuxiliaryPanelAnimationCoordinator _bottomPanelAnimation = new();
 
     private readonly DeferredActionGate<string> _archiveOnFlyoutClosed = new(StringComparer.Ordinal);
     private readonly DeferredActionGate<string> _moveOnFlyoutClosed = new(StringComparer.Ordinal);
@@ -99,6 +92,7 @@ public sealed partial class MainPage : Page
     private readonly IShellStartupNavigationService _startupNavigation;
     private readonly ContentFrameNavigationAdapter _contentNavigation;
     private bool _isGamepadInputAttached;
+    private long _contentFrameNavigationVersion;
 
     public MainPage()
     {
@@ -126,7 +120,6 @@ public sealed partial class MainPage : Page
 
         this.InitializeComponent();
         _contentNavigation = new ContentFrameNavigationAdapter(ContentFrame);
-        InitializeAuxiliaryPanelVisualState();
         _mainNavigationViewAdapter = new MainNavigationViewAdapter(NavVM, navigationCoordinator);
         _titleBarAdapter = new MainWindowTitleBarAdapter(
             AppTitleBar,
@@ -489,41 +482,6 @@ public sealed partial class MainPage : Page
         return result;
     }
 
-    private void ResetChatAuxiliaryPanelsOnChatExit()
-    {
-        var needsSuppression = LayoutVM.RightPanelVisible
-            || LayoutVM.BottomPanelVisible
-            || IsTransitioning(_rightPanelAnimation.Phase)
-            || IsTransitioning(_bottomPanelAnimation.Phase);
-
-        if (IsTransitioning(_rightPanelAnimation.Phase))
-        {
-            DetachRightPanelStoryboardHandlers();
-            ((Microsoft.UI.Xaml.Media.Animation.Storyboard)Resources["RightPanelSlideIn"]).Stop();
-            ((Microsoft.UI.Xaml.Media.Animation.Storyboard)Resources["RightPanelSlideOut"]).Stop();
-        }
-
-        if (IsTransitioning(_bottomPanelAnimation.Phase))
-        {
-            DetachBottomPanelStoryboardHandlers();
-            ((Microsoft.UI.Xaml.Media.Animation.Storyboard)Resources["BottomPanelSlideUp"]).Stop();
-            ((Microsoft.UI.Xaml.Media.Animation.Storyboard)Resources["BottomPanelSlideDown"]).Stop();
-        }
-
-        if (needsSuppression)
-        {
-            _rightPanelAnimation.SnapTo(false, 0);
-            _bottomPanelAnimation.SnapTo(false, 0);
-            RightPanelColumn.Visibility = Visibility.Collapsed;
-            RightPanelColumn.Opacity = 1;
-            RightPanelTranslate.X = 0;
-            ApplyBottomPanelVisualState(false, 1, 0);
-            _suppressPanelAnimations = true;
-        }
-
-        _metricsSink.ReportClearAuxiliaryPanels();
-    }
-
     private async ValueTask<ShellNavigationResult> EnsureDiscoverSessionsContentAsync()
     {
         var pageType = typeof(SalmonEgg.Presentation.Views.Discover.DiscoverSessionsPage);
@@ -704,7 +662,6 @@ public sealed partial class MainPage : Page
         UpdateNavPaneToggleUi();
         NavVM.RebuildTree();
         UpdateMainNavAutomationSelectionState();
-        _ = _metricsSink.ReportContentContext(IsChatPageType(ContentFrame?.CurrentSourcePageType));
         await _startupNavigation.ActivateInitialContentAsync().ConfigureAwait(true);
         BootLogDebug("MainPage: initial shell content activated");
 #if WINDOWS
@@ -762,16 +719,21 @@ public sealed partial class MainPage : Page
 #endif
     }
 
-    private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
+    private async void OnContentFrameNavigated(object sender, NavigationEventArgs e)
     {
         BootLogDebug($"ContentFrame Navigated: {e.SourcePageType?.Name ?? "<null>"}");
-        if (!IsChatPageType(e.SourcePageType))
+        var navigationVersion = Interlocked.Increment(ref _contentFrameNavigationVersion);
+        var isChatPage = IsChatPageType(e.SourcePageType);
+        try
         {
-            ResetChatAuxiliaryPanelsOnChatExit();
+            await _metricsSink.ReportContentContext(isChatPage, navigationVersion).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Content frame navigation projection failed. IsChatPage={IsChatPage}", isChatPage);
         }
 
         _titleBarAdapter.UpdateBackButtonState();
-        _ = _metricsSink.ReportContentContext(IsChatPageType(e.SourcePageType));
     }
 
     private void OnContentFrameNavigationFailed(object sender, NavigationFailedEventArgs e)
@@ -1112,221 +1074,12 @@ public sealed partial class MainPage : Page
         LeftNavResizer.ReleasePointerCapture(pointer);
     }
 
-    private void InitializeAuxiliaryPanelVisualState()
-    {
-        ApplyRightPanelAnimationRequest(
-            _rightPanelAnimation.UpdateTarget(LayoutVM.RightPanelVisible, LayoutVM.RightPanelWidth, animationsEnabled: false));
-        ApplyBottomPanelAnimationRequest(
-            _bottomPanelAnimation.UpdateTarget(LayoutVM.BottomPanelVisible, LayoutVM.BottomPanelHeight, animationsEnabled: false));
-    }
-
-    private void ApplyRightPanelAnimationRequest(AuxiliaryPanelAnimationRequest request)
-    {
-        switch (request.Action)
-        {
-            case AuxiliaryPanelAnimationAction.None:
-                return;
-            case AuxiliaryPanelAnimationAction.Show:
-                RightPanelColumn.Visibility = Visibility.Visible;
-                RightPanelColumn.Opacity = 1;
-                RightPanelTranslate.X = 0;
-                _rightPanelAnimation.SnapTo(true, LayoutVM.RightPanelWidth);
-                return;
-            case AuxiliaryPanelAnimationAction.Hide:
-                RightPanelColumn.Visibility = Visibility.Collapsed;
-                RightPanelColumn.Opacity = 1;
-                RightPanelTranslate.X = 0;
-                _rightPanelAnimation.SnapTo(false, 0);
-                return;
-            case AuxiliaryPanelAnimationAction.StartOpening:
-            {
-                RightPanelTranslate.X = request.TravelDistance;
-                RightPanelColumn.Opacity = 0;
-                RightPanelColumn.Visibility = Visibility.Visible;
-                var storyboard = (Storyboard)Resources["RightPanelSlideIn"];
-                DetachRightPanelStoryboardHandlers();
-                storyboard.Completed += OnRightPanelStoryboardCompleted;
-                storyboard.Begin();
-                return;
-            }
-            case AuxiliaryPanelAnimationAction.StartClosing:
-            {
-                RightPanelColumn.Visibility = Visibility.Visible;
-                RightPanelColumn.Opacity = 1;
-                var storyboard = (Storyboard)Resources["RightPanelSlideOut"];
-                var translateAnim = (DoubleAnimation)storyboard.Children[0];
-                translateAnim.To = request.TravelDistance;
-                DetachRightPanelStoryboardHandlers();
-                storyboard.Completed += OnRightPanelStoryboardCompleted;
-                storyboard.Begin();
-                return;
-            }
-        }
-    }
-
-    private void ApplyBottomPanelAnimationRequest(AuxiliaryPanelAnimationRequest request)
-    {
-        switch (request.Action)
-        {
-            case AuxiliaryPanelAnimationAction.None:
-                return;
-            case AuxiliaryPanelAnimationAction.Show:
-                ApplyBottomPanelVisualState(true, 1, 0);
-                _bottomPanelAnimation.SnapTo(true, LayoutVM.BottomPanelHeight);
-                return;
-            case AuxiliaryPanelAnimationAction.Hide:
-                ApplyBottomPanelVisualState(false, 1, 0);
-                _bottomPanelAnimation.SnapTo(false, 0);
-                return;
-            case AuxiliaryPanelAnimationAction.StartOpening:
-            {
-                if (!TryApplyBottomPanelVisualState(true, 0, request.TravelDistance))
-                {
-                    _bottomPanelAnimation.SnapTo(false, 0);
-                    return;
-                }
-
-                var storyboard = (Storyboard)Resources["BottomPanelSlideUp"];
-                DetachBottomPanelStoryboardHandlers();
-                storyboard.Completed += OnBottomPanelStoryboardCompleted;
-                storyboard.Begin();
-                return;
-            }
-            case AuxiliaryPanelAnimationAction.StartClosing:
-            {
-                if (!TryApplyBottomPanelVisualState(true, 1, null))
-                {
-                    _bottomPanelAnimation.SnapTo(false, 0);
-                    return;
-                }
-
-                var storyboard = (Storyboard)Resources["BottomPanelSlideDown"];
-                var translateAnim = (DoubleAnimation)storyboard.Children[0];
-                translateAnim.To = request.TravelDistance;
-                DetachBottomPanelStoryboardHandlers();
-                storyboard.Completed += OnBottomPanelStoryboardCompleted;
-                storyboard.Begin();
-                return;
-            }
-        }
-    }
-
-    private void OnRightPanelStoryboardCompleted(object? sender, object e)
-    {
-        if (!DispatcherQueue.HasThreadAccess)
-        {
-            _ = DispatcherQueue.TryEnqueue(() => OnRightPanelStoryboardCompleted(sender, e));
-            return;
-        }
-
-        DetachRightPanelStoryboardHandlers();
-        ApplyRightPanelAnimationRequest(_rightPanelAnimation.CompleteAnimation());
-    }
-
-    private void OnBottomPanelStoryboardCompleted(object? sender, object e)
-    {
-        if (!DispatcherQueue.HasThreadAccess)
-        {
-            _ = DispatcherQueue.TryEnqueue(() => OnBottomPanelStoryboardCompleted(sender, e));
-            return;
-        }
-
-        DetachBottomPanelStoryboardHandlers();
-        ApplyBottomPanelAnimationRequest(_bottomPanelAnimation.CompleteAnimation());
-    }
-
-    private void DetachRightPanelStoryboardHandlers()
-    {
-        ((Storyboard)Resources["RightPanelSlideIn"]).Completed -= OnRightPanelStoryboardCompleted;
-        ((Storyboard)Resources["RightPanelSlideOut"]).Completed -= OnRightPanelStoryboardCompleted;
-    }
-
-    private void DetachBottomPanelStoryboardHandlers()
-    {
-        ((Storyboard)Resources["BottomPanelSlideUp"]).Completed -= OnBottomPanelStoryboardCompleted;
-        ((Storyboard)Resources["BottomPanelSlideDown"]).Completed -= OnBottomPanelStoryboardCompleted;
-    }
-
-    private static bool IsTransitioning(AuxiliaryPanelAnimationPhase phase)
-        => phase is AuxiliaryPanelAnimationPhase.Opening or AuxiliaryPanelAnimationPhase.Closing;
-
-    private void ApplyBottomPanelVisualState(bool visible, double opacity, double translateY)
-    {
-        _ = TryApplyBottomPanelVisualState(visible, opacity, translateY);
-    }
-
-    private bool TryApplyBottomPanelVisualState(bool visible, double opacity, double? translateY)
-    {
-        if (BottomPanelHost is not { } bottomPanelHost)
-        {
-            return false;
-        }
-
-        bottomPanelHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        bottomPanelHost.Opacity = opacity;
-
-        if (translateY.HasValue && BottomPanelTranslate is not null)
-        {
-            BottomPanelTranslate.Y = translateY.Value;
-        }
-
-        return true;
-    }
-
     private void OnLayoutViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (!DispatcherQueue.HasThreadAccess)
         {
             _ = DispatcherQueue.TryEnqueue(() => OnLayoutViewModelPropertyChanged(sender, e));
             return;
-        }
-
-        if (_suppressPanelAnimations)
-        {
-            if (e.PropertyName == nameof(ShellLayoutViewModel.RightPanelVisible))
-            {
-                RightPanelColumn.Visibility = LayoutVM.RightPanelVisible
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-                RightPanelColumn.Opacity = 1;
-                RightPanelTranslate.X = 0;
-                _rightPanelAnimation.SnapTo(LayoutVM.RightPanelVisible, LayoutVM.RightPanelWidth);
-            }
-
-            if (e.PropertyName == nameof(ShellLayoutViewModel.BottomPanelVisible))
-            {
-                ApplyBottomPanelVisualState(LayoutVM.BottomPanelVisible, 1, 0);
-                _bottomPanelAnimation.SnapTo(LayoutVM.BottomPanelVisible, LayoutVM.BottomPanelHeight);
-            }
-
-            if (!LayoutVM.RightPanelVisible && !LayoutVM.BottomPanelVisible)
-            {
-                _suppressPanelAnimations = false;
-            }
-
-            return;
-        }
-
-        if (e.PropertyName == nameof(ShellLayoutViewModel.RightPanelVisible))
-        {
-            ApplyRightPanelAnimationRequest(
-                _rightPanelAnimation.UpdateTarget(LayoutVM.RightPanelVisible, LayoutVM.RightPanelWidth, UiMotionController.Current.IsAnimationEnabled));
-        }
-
-        if (e.PropertyName == nameof(ShellLayoutViewModel.RightPanelWidth))
-        {
-            ApplyRightPanelAnimationRequest(_rightPanelAnimation.UpdateExtent(LayoutVM.RightPanelWidth));
-        }
-
-        if (e.PropertyName == nameof(ShellLayoutViewModel.BottomPanelVisible))
-        {
-            ApplyBottomPanelAnimationRequest(
-                _bottomPanelAnimation.UpdateTarget(LayoutVM.BottomPanelVisible, LayoutVM.BottomPanelHeight, UiMotionController.Current.IsAnimationEnabled));
-        }
-
-        if (e.PropertyName == nameof(ShellLayoutViewModel.BottomPanelHeight))
-        {
-            ApplyBottomPanelAnimationRequest(_bottomPanelAnimation.UpdateExtent(LayoutVM.BottomPanelHeight));
         }
 
         if (e.PropertyName == nameof(ShellLayoutViewModel.IsNavPaneOpen))

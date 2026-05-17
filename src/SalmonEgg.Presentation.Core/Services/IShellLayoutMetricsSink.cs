@@ -9,10 +9,9 @@ public interface IShellLayoutMetricsSink
     ValueTask ReportTitleBarInsets(double left, double right, double height);
     ValueTask ReportNavToggle(string source);
     ValueTask ReportNavPaneOpenIntent(bool isOpen, string source);
-    ValueTask ReportContentContext(bool isChatContext);
+    ValueTask ReportContentContext(bool isChatContext, long version);
     ValueTask ReportToggleRightPanel(RightPanelMode targetMode);
     ValueTask ReportToggleBottomPanel();
-    ValueTask ReportClearAuxiliaryPanels();
     ValueTask ReportRightPanelMode(RightPanelMode mode);
     ValueTask ReportBottomPanelMode(BottomPanelMode mode);
     ValueTask ReportRightPanelWidth(double width);
@@ -36,17 +35,14 @@ public sealed class ShellLayoutMetricsSink : IShellLayoutMetricsSink
     public ValueTask ReportNavPaneOpenIntent(bool isOpen, string source)
         => _store.Dispatch(new NavPaneOpenIntentRequested(isOpen, source));
 
-    public ValueTask ReportContentContext(bool isChatContext)
-        => _store.Dispatch(new ContentContextChanged(isChatContext));
+    public ValueTask ReportContentContext(bool isChatContext, long version)
+        => _store.Dispatch(new ContentContextChanged(isChatContext, version));
 
     public ValueTask ReportToggleRightPanel(RightPanelMode targetMode)
         => _store.Dispatch(new ToggleRightPanelRequested(targetMode));
 
     public ValueTask ReportToggleBottomPanel()
         => _store.Dispatch(new ToggleBottomPanelRequested());
-
-    public ValueTask ReportClearAuxiliaryPanels()
-        => _store.Dispatch(new ClearAuxiliaryPanelsRequested());
 
     public ValueTask ReportRightPanelMode(RightPanelMode mode)
         => _store.Dispatch(new RightPanelModeChanged(mode));

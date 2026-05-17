@@ -21,6 +21,7 @@ public static class ChatReducer
             {
                 Bindings = UpdateBindings(current.Bindings, setBinding.Binding)
             }),
+            ApplyBindingUpdateAction applyBindingUpdate => Mutate(current, ApplyBindingUpdate(current, applyBindingUpdate)),
             SetConversationRuntimeStateAction setRuntimeState when string.IsNullOrWhiteSpace(setRuntimeState.RuntimeState.ConversationId)
                 => current,
             SetConversationRuntimeStateAction setRuntimeState => Mutate(current, current with
@@ -207,6 +208,46 @@ public static class ChatReducer
         {
             Generation = checked(current.Generation + 1)
         };
+    }
+
+    private static ChatState ApplyBindingUpdate(
+        ChatState current,
+        ApplyBindingUpdateAction action)
+    {
+        var next = current with
+        {
+            Bindings = UpdateBindings(current.Bindings, action.Binding)
+        };
+
+        foreach (var conversationId in action.ScrubConversationIds)
+        {
+            if (string.IsNullOrWhiteSpace(conversationId))
+            {
+                continue;
+            }
+
+            action.PreservedSessionInfoByConversationId.TryGetValue(
+                conversationId,
+                out var preservedSessionInfo);
+            next = ScrubConversationDerivedState(
+                next,
+                new ScrubConversationDerivedStateAction(
+                    conversationId,
+                    preservedSessionInfo));
+
+            if (!string.Equals(conversationId, action.Binding.ConversationId, StringComparison.Ordinal)
+                || IsBindingEmpty(action.Binding))
+            {
+                next = next with
+                {
+                    Bindings = UpdateBindings(
+                        next.Bindings,
+                        new ConversationBindingSlice(conversationId, null, null))
+                };
+            }
+        }
+
+        return next;
     }
 
     private static ChatState ScrubConversationDerivedState(

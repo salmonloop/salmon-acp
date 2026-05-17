@@ -588,15 +588,31 @@ public class UiConventionsTests
     }
 
     [Fact]
-    public void MainPage_ShouldProjectAuxiliaryPanelExtentChangesIntoAnimationCoordinator()
+    public void MainPage_ShouldBindAuxiliaryPanelLayoutToShellLayoutViewModel()
     {
         var repoRoot = FindRepoRoot();
+        var mainPageXaml = File.ReadAllText(Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml"));
         var mainPageText = File.ReadAllText(Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml.cs"));
 
-        Assert.Contains("nameof(ShellLayoutViewModel.RightPanelWidth)", mainPageText);
-        Assert.Contains("_rightPanelAnimation.UpdateExtent(LayoutVM.RightPanelWidth)", mainPageText);
-        Assert.Contains("nameof(ShellLayoutViewModel.BottomPanelHeight)", mainPageText);
-        Assert.Contains("_bottomPanelAnimation.UpdateExtent(LayoutVM.BottomPanelHeight)", mainPageText);
+        Assert.Contains(
+            "Width=\"{x:Bind LayoutVM.RightPanelWidth, Mode=OneWay, Converter={StaticResource GridLengthConverter}}\"",
+            mainPageXaml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Height=\"{x:Bind LayoutVM.BottomPanelHeight, Mode=OneWay, Converter={StaticResource GridLengthConverter}}\"",
+            mainPageXaml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Visibility=\"{x:Bind LayoutVM.RightPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"",
+            mainPageXaml,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Visibility=\"{x:Bind LayoutVM.BottomPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"",
+            mainPageXaml,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("nameof(ShellLayoutViewModel.RightPanelWidth)", mainPageText, StringComparison.Ordinal);
+        Assert.DoesNotContain("nameof(ShellLayoutViewModel.BottomPanelHeight)", mainPageText, StringComparison.Ordinal);
+        Assert.DoesNotContain("AuxiliaryPanelAnimation", mainPageText, StringComparison.Ordinal);
     }
 
     [Fact]

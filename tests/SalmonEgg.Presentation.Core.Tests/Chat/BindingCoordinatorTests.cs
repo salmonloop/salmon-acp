@@ -43,14 +43,15 @@ public sealed class BindingCoordinatorTests
             LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
         workspace.UpdateRemoteBinding("session-1", "remote-old", "profile-old");
 
-        var state = State.Value(this, () => ChatState.Empty);
-        var chatStore = CreateChatStore(state);
+        var initialState = ChatState.Empty;
+        var state = State.Value(this, () => initialState);
+        var chatStore = CreateChatStore(state, initialState);
         var coordinator = new BindingCoordinator(workspace, chatStore.Object);
 
         var result = await coordinator.UpdateBindingAsync("session-1", "remote-new", "profile-new");
 
         Assert.Equal(BindingUpdateStatus.Success, result.Status);
-        var currentState = Assert.IsType<ChatState>(await state);
+        var currentState = await chatStore.Object.GetCurrentStateAsync();
         Assert.Equal(
             new ConversationBindingSlice("session-1", "remote-new", "profile-new"),
             currentState.ResolveBinding("session-1"));
@@ -122,7 +123,7 @@ public sealed class BindingCoordinatorTests
         workspace.UpdateRemoteBinding("session-1", "remote-shared", "profile-1");
         workspace.UpdateRemoteBinding("session-2", "remote-old", "profile-2");
 
-        var state = State.Value(this, () => ChatState.Empty with
+        var initialState = ChatState.Empty with
         {
             HydratedConversationId = "session-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
@@ -186,14 +187,15 @@ public sealed class BindingCoordinatorTests
             Usage = new ConversationUsageSnapshot { Used = 1, Size = 2 },
             ShowPlanPanel = true,
             PlanTitle = "Remote plan"
-        });
-        var chatStore = CreateChatStore(state);
+        };
+        var state = State.Value(this, () => initialState);
+        var chatStore = CreateChatStore(state, initialState);
         var coordinator = new BindingCoordinator(workspace, chatStore.Object);
 
         var result = await coordinator.UpdateBindingAsync("session-2", "remote-shared", "profile-2");
 
         Assert.Equal(BindingUpdateStatus.Success, result.Status);
-        var currentState = Assert.IsType<ChatState>(await state);
+        var currentState = await chatStore.Object.GetCurrentStateAsync();
         Assert.Null(currentState.ResolveBinding("session-1"));
         Assert.Equal(
             new ConversationBindingSlice("session-2", "remote-shared", "profile-2"),
@@ -268,7 +270,7 @@ public sealed class BindingCoordinatorTests
             ConversationWorkspaceSnapshotOrigin.RuntimeProjection);
         workspace.UpdateRemoteBinding("session-1", "remote-old", "profile-old");
 
-        var state = State.Value(this, () => ChatState.Empty with
+        var initialState = ChatState.Empty with
         {
             HydratedConversationId = "session-1",
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
@@ -313,14 +315,15 @@ public sealed class BindingCoordinatorTests
             }),
             SessionInfo = new ConversationSessionInfoSnapshot { Title = "Remote title", Cwd = @"C:\repo\one" },
             Usage = new ConversationUsageSnapshot { Used = 1, Size = 2 }
-        });
-        var chatStore = CreateChatStore(state);
+        };
+        var state = State.Value(this, () => initialState);
+        var chatStore = CreateChatStore(state, initialState);
         var coordinator = new BindingCoordinator(workspace, chatStore.Object);
 
         var result = await coordinator.ClearBindingAsync("session-1");
 
         Assert.Equal(BindingUpdateStatus.Success, result.Status);
-        var currentState = Assert.IsType<ChatState>(await state);
+        var currentState = await chatStore.Object.GetCurrentStateAsync();
         Assert.Null(currentState.ResolveBinding("session-1"));
         Assert.Empty(currentState.ResolveContentSlice("session-1")?.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty);
         Assert.Null(currentState.ResolveRuntimeState("session-1"));
@@ -361,6 +364,7 @@ public sealed class BindingCoordinatorTests
         var state = State.Value(this, () => ChatState.Empty);
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.GetCurrentStateAsync()).ReturnsAsync(ChatState.Empty);
         chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
             .ThrowsAsync(new InvalidOperationException("store dispatch failed"));
         var coordinator = new BindingCoordinator(workspace, chatStore.Object);
@@ -378,7 +382,7 @@ public sealed class BindingCoordinatorTests
     }
 
     [Fact]
-    public async Task UpdateBinding_WaitsUntilBindingProjectionIsVisible()
+    public async Task UpdateBinding_UsesAuthoritativeStoreSnapshotNotReactiveProjection()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var preferences = CreatePreferences(syncContext);
@@ -396,17 +400,15 @@ public sealed class BindingCoordinatorTests
             LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
 
         var state = State.Value(this, () => ChatState.Empty);
+        var authoritativeState = ChatState.Empty;
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.GetCurrentStateAsync())
+            .ReturnsAsync(() => authoritativeState);
         chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
             .Returns<ChatAction>(action =>
             {
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(50);
-                    await state.Update(s => ChatReducer.Reduce(s!, action), default);
-                });
-
+                authoritativeState = ChatReducer.Reduce(authoritativeState, action);
                 return ValueTask.CompletedTask;
             });
 
@@ -415,14 +417,15 @@ public sealed class BindingCoordinatorTests
         var result = await coordinator.UpdateBindingAsync("session-1", "remote-new", "profile-new");
 
         Assert.Equal(BindingUpdateStatus.Success, result.Status);
-        var currentState = Assert.IsType<ChatState>(await state);
         Assert.Equal(
             new ConversationBindingSlice("session-1", "remote-new", "profile-new"),
-            currentState.ResolveBinding("session-1"));
+            authoritativeState.ResolveBinding("session-1"));
+        Assert.Null((await state)?.ResolveBinding("session-1"));
+        chatStore.Verify(s => s.GetCurrentStateAsync(), Times.AtLeastOnce);
     }
 
     [Fact]
-    public async Task UpdateBinding_WhenProjectionIsSlowStillSucceedsBeforeTimingOut()
+    public async Task UpdateBinding_WhenDispatchDoesNotCommitAuthoritativeState_ReturnsStoreMismatch()
     {
         var syncContext = new ImmediateSynchronizationContext();
         var preferences = CreatePreferences(syncContext);
@@ -442,31 +445,141 @@ public sealed class BindingCoordinatorTests
         var state = State.Value(this, () => ChatState.Empty);
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.GetCurrentStateAsync()).ReturnsAsync(ChatState.Empty);
         chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
-            .Returns<ChatAction>(action =>
-            {
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(750);
-                    await state.Update(s => ChatReducer.Reduce(s!, action), default);
-                });
-
-                return ValueTask.CompletedTask;
-            });
+            .Returns(ValueTask.CompletedTask);
 
         var coordinator = new BindingCoordinator(workspace, chatStore.Object);
 
         var result = await coordinator.UpdateBindingAsync("session-1", "remote-new", "profile-new");
 
-        Assert.Equal(BindingUpdateStatus.Success, result.Status);
+        Assert.Equal(BindingUpdateStatus.Error, result.Status);
+        Assert.Equal("BindingStoreMismatch", result.ErrorMessage);
+        var workspaceBinding = workspace.GetRemoteBinding("session-1");
+        Assert.NotNull(workspaceBinding);
+        Assert.Null(workspaceBinding!.RemoteSessionId);
+        Assert.Null(workspaceBinding.BoundProfileId);
     }
 
-    private static Mock<IChatStore> CreateChatStore(IState<ChatState> state)
+    [Fact]
+    public async Task UpdateBinding_WhenFinalBindingMismatch_DoesNotPartiallyMutateWorkspace()
     {
+        var syncContext = new ImmediateSynchronizationContext();
+        var preferences = CreatePreferences(syncContext);
+        var workspaceStore = new CapturingConversationStore();
+        var sessionManager = new FakeSessionManager();
+        await sessionManager.CreateSessionAsync("session-1", @"C:\repo\one");
+        await sessionManager.CreateSessionAsync("session-2", @"C:\repo\two");
+        using var workspace = CreateWorkspace(workspaceStore, sessionManager, preferences, syncContext);
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-1",
+            Transcript:
+            [
+                new ConversationMessageSnapshot
+                {
+                    Id = "remote-1",
+                    ContentType = "text",
+                    TextContent = "remote transcript"
+                }
+            ],
+            Plan:
+            [
+                new ConversationPlanEntrySnapshot
+                {
+                    Content = "Plan",
+                    Status = PlanEntryStatus.Pending,
+                    Priority = PlanEntryPriority.Medium
+                }
+            ],
+            ShowPlanPanel: true,
+            PlanTitle: "Remote plan",
+            CreatedAt: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.UpsertConversationSnapshot(new ConversationWorkspaceSnapshot(
+            ConversationId: "session-2",
+            Transcript: [],
+            Plan: [],
+            ShowPlanPanel: false,
+            PlanTitle: null,
+            CreatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc),
+            LastUpdatedAt: new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc)));
+        workspace.UpdateRemoteBinding("session-1", "remote-shared", "profile-1");
+        workspace.UpdateRemoteBinding("session-2", "remote-old", "profile-2");
+
+        var initialState = ChatState.Empty with
+        {
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("session-1", new ConversationBindingSlice("session-1", "remote-shared", "profile-1"))
+                .Add("session-2", new ConversationBindingSlice("session-2", "remote-old", "profile-2")),
+            ConversationContents = ImmutableDictionary<string, ConversationContentSlice>.Empty.Add(
+                "session-1",
+                new ConversationContentSlice(
+                    ImmutableList.Create(new ConversationMessageSnapshot
+                    {
+                        Id = "remote-1",
+                        ContentType = "text",
+                        TextContent = "remote transcript"
+                    }),
+                    ImmutableList.Create(new ConversationPlanEntrySnapshot
+                    {
+                        Content = "Plan",
+                        Status = PlanEntryStatus.Pending,
+                        Priority = PlanEntryPriority.Medium
+                    }),
+                    true,
+                    "Remote plan"))
+        };
+        var state = State.Value(this, () => initialState);
+        var authoritativeState = initialState;
         var chatStore = new Mock<IChatStore>();
         chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.GetCurrentStateAsync())
+            .ReturnsAsync(() => authoritativeState);
         chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
-            .Returns<ChatAction>(action => state.Update(s => ChatReducer.Reduce(s!, action), default));
+            .Returns<ChatAction>(action =>
+            {
+                if (action is not ApplyBindingUpdateAction)
+                {
+                    authoritativeState = ChatReducer.Reduce(authoritativeState, action);
+                }
+
+                return ValueTask.CompletedTask;
+            });
+        var coordinator = new BindingCoordinator(workspace, chatStore.Object);
+
+        var result = await coordinator.UpdateBindingAsync("session-2", "remote-shared", "profile-2");
+
+        Assert.Equal(BindingUpdateStatus.Error, result.Status);
+        Assert.Equal("BindingStoreMismatch", result.ErrorMessage);
+        Assert.Equal("remote-shared", authoritativeState.ResolveBinding("session-1")?.RemoteSessionId);
+        Assert.Equal("profile-1", authoritativeState.ResolveBinding("session-1")?.ProfileId);
+        Assert.Equal("remote-old", authoritativeState.ResolveBinding("session-2")?.RemoteSessionId);
+        Assert.Equal("profile-2", authoritativeState.ResolveBinding("session-2")?.ProfileId);
+        Assert.NotEmpty(authoritativeState.ResolveContentSlice("session-1")?.Transcript ?? ImmutableList<ConversationMessageSnapshot>.Empty);
+        Assert.True(authoritativeState.ResolveContentSlice("session-1")?.ShowPlanPanel);
+        Assert.Equal("remote-shared", workspace.GetRemoteBinding("session-1")?.RemoteSessionId);
+        Assert.Equal("profile-1", workspace.GetRemoteBinding("session-1")?.BoundProfileId);
+        Assert.Equal("remote-old", workspace.GetRemoteBinding("session-2")?.RemoteSessionId);
+        Assert.Equal("profile-2", workspace.GetRemoteBinding("session-2")?.BoundProfileId);
+        var session1Snapshot = workspace.GetConversationSnapshot("session-1");
+        Assert.NotNull(session1Snapshot);
+        Assert.NotEmpty(session1Snapshot!.Transcript);
+        Assert.True(session1Snapshot.ShowPlanPanel);
+    }
+
+    private static Mock<IChatStore> CreateChatStore(IState<ChatState> state, ChatState initialState)
+    {
+        var authoritativeState = initialState;
+        var chatStore = new Mock<IChatStore>();
+        chatStore.Setup(s => s.State).Returns(state);
+        chatStore.Setup(s => s.GetCurrentStateAsync())
+            .ReturnsAsync(() => authoritativeState);
+        chatStore.Setup(s => s.Dispatch(It.IsAny<ChatAction>()))
+            .Returns<ChatAction>(async action =>
+            {
+                authoritativeState = ChatReducer.Reduce(authoritativeState, action);
+                await state.Update(_ => authoritativeState, default);
+            });
         return chatStore;
     }
 

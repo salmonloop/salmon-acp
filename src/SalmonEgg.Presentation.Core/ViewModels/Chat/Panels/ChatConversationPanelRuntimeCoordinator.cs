@@ -31,7 +31,7 @@ public sealed class ChatConversationPanelRuntimeCoordinator
             return null;
         }
 
-        var state = await chatStore.State ?? ChatState.Empty;
+        var state = await chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         var binding = state.ResolveBinding(conversationId);
         var isLocalSession = binding is null || string.IsNullOrWhiteSpace(binding.RemoteSessionId);
         var sessionInfoCwd = ResolveLocalTerminalSessionInfoCwd(sessionManager, conversationId, state);

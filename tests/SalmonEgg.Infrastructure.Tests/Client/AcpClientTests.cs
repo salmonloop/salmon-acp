@@ -67,15 +67,10 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 capabilities ?? new AgentCapabilities(loadSession: true)
             );
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("initialize"), It.IsAny<CancellationToken>()))
-                .Returns<string, CancellationToken>((_, _) =>
-                {
-                    var response = new JsonRpcResponse(1, JsonSerializer.SerializeToElement(initResponse, parser.Options));
-                    _transportMock.Raise(
-                        t => t.MessageReceived += null,
-                        new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-                    return Task.FromResult(true);
-                });
+            SetupJsonRpcResponse(
+                "initialize",
+                JsonSerializer.SerializeToElement(initResponse, parser.Options),
+                parser);
 
             await client.InitializeAsync(new InitializeParams(
                 new ClientInfo("Test", "1.0.0"),
@@ -99,18 +94,13 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 timeouts,
                 new AgentCapabilities(loadSession: true));
             
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            // Delay response for 200ms (exceeds default 50ms, but within session/new 500ms)
-            var responseTrigger = Task.Run(async () => {
-                await Task.Delay(200);
-                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/new",
+                JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options),
+                parser,
+                responseDelay: TimeSpan.FromMilliseconds(200));
 
             var result = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
-            await responseTrigger;
             Assert.Equal("session-123", result.SessionId);
         }
 
@@ -135,29 +125,20 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var client = new AcpClient(_transportMock.Object, parser, null, _errorLoggerMock.Object);
             string? sentInitialize = null;
 
-            _transportMock
-                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Callback<string, CancellationToken>((message, _) => sentInitialize = message)
-                .ReturnsAsync(true);
-
             var initResponse = new InitializeResponse(
                 1,
                 new AgentInfo("TestAgent", "1.0.0"),
                 new AgentCapabilities());
 
-            var initTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(1, JsonSerializer.SerializeToElement(initResponse, parser.Options));
-                _transportMock.Raise(
-                    t => t.MessageReceived += null,
-                    new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "initialize",
+                JsonSerializer.SerializeToElement(initResponse, parser.Options),
+                parser,
+                onSend: message => sentInitialize = message);
 
             await client.InitializeAsync(new InitializeParams(
                 new ClientInfo("Test", "1.0.0"),
                 ClientCapabilityDefaults.Create()));
-            await initTrigger;
 
             Assert.NotNull(sentInitialize);
 
@@ -180,28 +161,19 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = new AcpClient(_transportMock.Object, parser, null, _errorLoggerMock.Object);
 
-            _transportMock
-                .Setup(t => t.SendMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
             var initResponse = new InitializeResponse(
                 0,
                 new AgentInfo("TestAgent", "1.0.0"),
                 new AgentCapabilities());
 
-            var initTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(1, JsonSerializer.SerializeToElement(initResponse, parser.Options));
-                _transportMock.Raise(
-                    t => t.MessageReceived += null,
-                    new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "initialize",
+                JsonSerializer.SerializeToElement(initResponse, parser.Options),
+                parser);
 
             var response = await client.InitializeAsync(new InitializeParams(
                 new ClientInfo("Test", "1.0.0"),
                 ClientCapabilityDefaults.Create()));
-            await initTrigger;
 
             Assert.True(client.IsInitialized);
             Assert.Equal(0, response.ProtocolVersion);
@@ -269,18 +241,13 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync(timeouts);
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            // Delay response beyond the default budget, but keep it safely within session/load timeout.
-            var responseTrigger = Task.Run(async () => {
-                await Task.Delay(200);
-                var response = new JsonRpcResponse(2, ElementFromJson("{}"));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/load",
+                ElementFromJson("{}"),
+                parser,
+                responseDelay: TimeSpan.FromMilliseconds(200));
 
             var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
-            await responseTrigger;
 
             Assert.NotNull(result);
         }
@@ -359,20 +326,12 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    JsonSerializer.SerializeToElement<object?>(null, parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/load",
+                JsonSerializer.SerializeToElement<object?>(null, parser.Options),
+                parser);
 
             var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
-            await responseTrigger;
 
             Assert.Same(SessionLoadResponse.Completed, result);
         }
@@ -383,50 +342,42 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson(
-                        """
+            SetupJsonRpcResponse(
+                "session/load",
+                ElementFromJson(
+                    """
+                    {
+                      "modes": {
+                        "currentModeId": "plan",
+                        "availableModes": [
+                          {
+                            "id": "plan",
+                            "name": "Plan",
+                            "description": "Planning mode"
+                          }
+                        ]
+                      },
+                      "configOptions": [
                         {
-                          "modes": {
-                            "currentModeId": "plan",
-                            "availableModes": [
-                              {
-                                "id": "plan",
-                                "name": "Plan",
-                                "description": "Planning mode"
-                              }
-                            ]
-                          },
-                          "configOptions": [
+                          "id": "mode",
+                          "name": "Mode",
+                          "category": "mode",
+                          "type": "string",
+                          "currentValue": "plan",
+                          "options": [
                             {
-                              "id": "mode",
-                              "name": "Mode",
-                              "category": "mode",
-                              "type": "string",
-                              "currentValue": "plan",
-                              "options": [
-                                {
-                                  "value": "plan",
-                                  "name": "Plan",
-                                  "description": "Planning mode"
-                                }
-                              ]
+                              "value": "plan",
+                              "name": "Plan",
+                              "description": "Planning mode"
                             }
                           ]
                         }
-                        """));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+                      ]
+                    }
+                    """),
+                parser);
 
             var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
-            await responseTrigger;
 
             Assert.NotNull(result.Modes);
             Assert.Equal("plan", result.Modes!.CurrentModeId);
@@ -445,20 +396,9 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/load"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson("{}"));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse("session/load", ElementFromJson("{}"), parser);
 
             var result = await client.LoadSessionAsync(new SessionLoadParams("session-123", AbsoluteCwd, null));
-            await responseTrigger;
 
             Assert.NotNull(result);
             Assert.Null(result.Modes);
@@ -508,37 +448,26 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                     Resume = new SessionResumeCapabilities()
                 }));
 
-            _transportMock
-                .Setup(t => t.SendMessageAsync(It.IsRegex("session/resume"), It.IsAny<CancellationToken>()))
-                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson(
-                        """
-                        {
-                          "modes": {
-                            "currentModeId": "plan",
-                            "availableModes": [
-                              {
-                                "id": "plan",
-                                "name": "Plan"
-                              }
-                            ]
+            SetupJsonRpcResponse(
+                "session/resume",
+                ElementFromJson(
+                    """
+                    {
+                      "modes": {
+                        "currentModeId": "plan",
+                        "availableModes": [
+                          {
+                            "id": "plan",
+                            "name": "Plan"
                           }
-                        }
-                        """));
-                _transportMock.Raise(
-                    t => t.MessageReceived += null,
-                    new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+                        ]
+                      }
+                    }
+                    """),
+                parser,
+                onSend: message => sentMessages.Enqueue(message));
 
             var result = await client.ResumeSessionAsync(new SessionResumeParams("session-123", AbsoluteCwd));
-            await responseTrigger;
 
             Assert.NotNull(result.Modes);
             Assert.Equal("plan", result.Modes!.CurrentModeId);
@@ -577,24 +506,13 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                     Close = new SessionCloseCapabilities()
                 }));
 
-            _transportMock
-                .Setup(t => t.SendMessageAsync(It.IsRegex("session/close"), It.IsAny<CancellationToken>()))
-                .Callback<string, CancellationToken>((message, _) => sentMessages.Enqueue(message))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson("{}"));
-                _transportMock.Raise(
-                    t => t.MessageReceived += null,
-                    new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/close",
+                ElementFromJson("{}"),
+                parser,
+                onSend: message => sentMessages.Enqueue(message));
 
             var result = await client.CloseSessionAsync(new SessionCloseParams("session-123"));
-            await responseTrigger;
 
             Assert.NotNull(result);
             Assert.True(sentMessages.TryDequeue(out var requestJson));
@@ -633,28 +551,19 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var createResponseTrigger = Task.Run(async () => {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/new",
+                JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options),
+                parser);
 
             var createResult = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
-            await createResponseTrigger;
 
-            var promptResponseTrigger = Task.Run(async () => {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(3, JsonSerializer.SerializeToElement(new SessionPromptResponse(expected), parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/prompt",
+                JsonSerializer.SerializeToElement(new SessionPromptResponse(expected), parser.Options),
+                parser);
 
             var promptResult = await client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
-            await promptResponseTrigger;
 
             Assert.Equal(expected, promptResult.StopReason);
         }
@@ -671,13 +580,10 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var client = await CreateInitializedClientAsync(timeouts);
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
-                .Returns<string, CancellationToken>((_, _) =>
-                {
-                    var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
-                    _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-                    return Task.FromResult(true);
-                });
+            SetupJsonRpcResponse(
+                "session/new",
+                JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options),
+                parser);
             _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
@@ -706,20 +612,14 @@ namespace SalmonEgg.Infrastructure.Tests.Client
 
             var client = await CreateInitializedClientAsync(timeouts);
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/new"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
+            SetupJsonRpcResponse(
+                "session/new",
+                JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options),
+                parser);
             _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/prompt"), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
-            var createResponseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new SessionNewResponse("session-123"), parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
-
             var createResult = await client.CreateSessionAsync(new SessionNewParams(AbsoluteCwd, null));
-            await createResponseTrigger;
 
             var promptTask = client.SendPromptAsync(new SessionPromptParams(createResult.SessionId, new List<ContentBlock> { new TextContentBlock("hi") }));
 
@@ -1287,20 +1187,12 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var parser = new MessageParser();
             var client = await CreateInitializedClientAsync();
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    JsonSerializer.SerializeToElement(new SessionListResponse(), parser.Options));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+            SetupJsonRpcResponse(
+                "session/list",
+                JsonSerializer.SerializeToElement(new SessionListResponse(), parser.Options),
+                parser);
 
             var result = await client.ListSessionsAsync(new SessionListParams());
-            await responseTrigger;
 
             Assert.Empty(result.Sessions);
             _transportMock.Verify(
@@ -1336,32 +1228,24 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                     List = new SessionListCapabilities()
                 }));
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson(
-                        """
+            SetupJsonRpcResponse(
+                "session/list",
+                ElementFromJson(
+                    """
+                    {
+                      "sessions": [
                         {
-                          "sessions": [
-                            {
-                              "sessionId": "session-1",
-                              "cwd": "/repo",
-                              "title": "Imported"
-                            }
-                          ],
-                          "nextCursor": "cursor-2"
+                          "sessionId": "session-1",
+                          "cwd": "/repo",
+                          "title": "Imported"
                         }
-                        """));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+                      ],
+                      "nextCursor": "cursor-2"
+                    }
+                    """),
+                parser);
 
             var result = await client.ListSessionsAsync(new SessionListParams());
-            await responseTrigger;
 
             Assert.Equal("cursor-2", result.NextCursor);
         }
@@ -1376,30 +1260,22 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                     List = new SessionListCapabilities()
                 }));
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson(
-                        """
+            SetupJsonRpcResponse(
+                "session/list",
+                ElementFromJson(
+                    """
+                    {
+                      "sessions": [
                         {
-                          "sessions": [
-                            {
-                              "sessionId": "session-1",
-                              "title": "Imported"
-                            }
-                          ]
+                          "sessionId": "session-1",
+                          "title": "Imported"
                         }
-                        """));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+                      ]
+                    }
+                    """),
+                parser);
 
             var ex = await Assert.ThrowsAsync<AcpException>(() => client.ListSessionsAsync(new SessionListParams()));
-            await responseTrigger;
 
             Assert.Equal(JsonRpcErrorCode.ParseError, ex.ErrorCode);
         }
@@ -1414,31 +1290,23 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                     List = new SessionListCapabilities()
                 }));
 
-            _transportMock.Setup(t => t.SendMessageAsync(It.IsRegex("session/list"), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-
-            var responseTrigger = Task.Run(async () =>
-            {
-                await Task.Delay(10);
-                var response = new JsonRpcResponse(
-                    2,
-                    ElementFromJson(
-                        """
+            SetupJsonRpcResponse(
+                "session/list",
+                ElementFromJson(
+                    """
+                    {
+                      "sessions": [
                         {
-                          "sessions": [
-                            {
-                              "sessionId": "session-1",
-                              "cwd": "relative-path",
-                              "title": "Imported"
-                            }
-                          ]
+                          "sessionId": "session-1",
+                          "cwd": "relative-path",
+                          "title": "Imported"
                         }
-                        """));
-                _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
-            });
+                      ]
+                    }
+                    """),
+                parser);
 
             var ex = await Assert.ThrowsAsync<AcpException>(() => client.ListSessionsAsync(new SessionListParams()));
-            await responseTrigger;
 
             Assert.Equal(JsonRpcErrorCode.ParseError, ex.ErrorCode);
         }
@@ -1473,6 +1341,47 @@ namespace SalmonEgg.Infrastructure.Tests.Client
         {
             using var document = JsonDocument.Parse(json);
             return document.RootElement.Clone();
+        }
+
+        private void SetupJsonRpcResponse(
+            string methodPattern,
+            JsonElement? result,
+            MessageParser parser,
+            Action<string>? onSend = null,
+            TimeSpan? responseDelay = null)
+        {
+            _transportMock
+                .Setup(t => t.SendMessageAsync(It.IsRegex(methodPattern), It.IsAny<CancellationToken>()))
+                .Returns<string, CancellationToken>((message, cancellationToken) =>
+                {
+                    onSend?.Invoke(message);
+                    var request = parser.ParseRequest(message);
+                    var response = new JsonRpcResponse(request.Id, result);
+                    var serializedResponse = parser.SerializeMessage(response);
+
+                    if (responseDelay is { } delay)
+                    {
+                        _ = Task.Run(
+                            async () =>
+                        {
+                            await Task.Delay(delay).ConfigureAwait(false);
+                            RaiseTransportMessage(serializedResponse);
+                        });
+                    }
+                    else
+                    {
+                        RaiseTransportMessage(serializedResponse);
+                    }
+
+                    return Task.FromResult(true);
+                });
+        }
+
+        private void RaiseTransportMessage(string message)
+        {
+            _transportMock.Raise(
+                t => t.MessageReceived += null,
+                new MessageReceivedEventArgs(message));
         }
 
         private static async Task WaitForPublishedPermissionRequestAsync(
