@@ -64,10 +64,8 @@ public sealed class ChatStateProjector : IChatStateProjector
         var activeTurn = GetVisibleActiveTurn(storeState.ActiveTurn, hydratedConversationId);
         var isTurnStatusVisible = activeTurn is not null && activeTurn.Phase != ChatTurnPhase.Completed;
         var turnStatusText = GetTurnStatusText(activeTurn);
-        var isTurnStatusRunning = activeTurn is not null
-            && activeTurn.Phase is not ChatTurnPhase.Completed
-            && activeTurn.Phase is not ChatTurnPhase.Failed
-            && activeTurn.Phase is not ChatTurnPhase.Cancelled;
+        var isTurnStatusRunning = IsRunningTurn(activeTurn);
+        var isPromptSubmitInFlight = IsPromptSubmitInFlight(activeTurn);
         var contentSlice = storeState.ResolveContentSlice(hydratedConversationId);
         var sessionStateSlice = storeState.ResolveSessionStateSlice(hydratedConversationId);
         var toolingProjection = _sessionToolingProjector.Project(storeState, hydratedConversationId);
@@ -91,8 +89,8 @@ public sealed class ChatStateProjector : IChatStateProjector
             ForegroundTransportProfileId: foregroundTransportProfileId,
             RemoteSessionId: binding?.RemoteSessionId,
             IsSessionActive: !string.IsNullOrWhiteSpace(hydratedConversationId),
-            IsPromptInFlight: storeState.IsPromptInFlight,
-            IsPromptSubmitInFlight: storeState.IsPromptSubmitInFlight,
+            IsPromptInFlight: isTurnStatusRunning,
+            IsPromptSubmitInFlight: isPromptSubmitInFlight,
             IsConnecting: isConnecting,
             IsConnected: isConnected,
             IsInitializing: isInitializing,
@@ -139,6 +137,7 @@ public sealed class ChatStateProjector : IChatStateProjector
         return turn.Phase switch
         {
             ChatTurnPhase.CreatingRemoteSession => "Starting session...",
+            ChatTurnPhase.DispatchingPrompt => "Sending prompt...",
             ChatTurnPhase.WaitingForAgent => "Waiting for agent...",
             ChatTurnPhase.Thinking => "Thinking...",
             ChatTurnPhase.ToolPending => "Preparing tool call...",
@@ -150,6 +149,15 @@ public sealed class ChatStateProjector : IChatStateProjector
             _ => string.Empty
         };
     }
+
+    private static bool IsRunningTurn(ActiveTurnState? turn)
+        => turn is not null
+            && turn.Phase is not ChatTurnPhase.Completed
+            && turn.Phase is not ChatTurnPhase.Failed
+            && turn.Phase is not ChatTurnPhase.Cancelled;
+
+    private static bool IsPromptSubmitInFlight(ActiveTurnState? turn)
+        => turn?.Phase is ChatTurnPhase.CreatingRemoteSession or ChatTurnPhase.DispatchingPrompt;
 }
 
 public sealed record ChatUiProjection(

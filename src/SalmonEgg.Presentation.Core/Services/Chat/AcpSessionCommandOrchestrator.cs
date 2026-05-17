@@ -218,6 +218,8 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            await sink.NotifyPromptRequestDispatchedAsync(cancellationToken).ConfigureAwait(false);
             var response = await chatService.SendPromptAsync(promptParams, cancellationToken).ConfigureAwait(false);
             return new AcpPromptDispatchResult(promptParams.SessionId, response, RetriedAfterSessionRecovery: false);
         }
@@ -231,6 +233,8 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
                     ex);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+            await sink.NotifyPromptRequestDispatchedAsync(cancellationToken).ConfigureAwait(false);
             var response = await chatService.SendPromptAsync(promptParams, cancellationToken).ConfigureAwait(false);
             return new AcpPromptDispatchResult(promptParams.SessionId, response, RetriedAfterSessionRecovery: false);
         }
@@ -295,4 +299,3 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
     }
 
 }
-

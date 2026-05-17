@@ -23,20 +23,6 @@ public class ChatReducerTests
     }
 
     [Fact]
-    public void GivenState_WhenSetPromptInFlight_ThenIsPromptInFlightIsTrue()
-    {
-        // Arrange
-        var initialState = new ChatState(IsPromptInFlight: false);
-        var action = new SetPromptInFlightAction(true);
-
-        // Act
-        var newState = ChatReducer.Reduce(initialState, action);
-
-        // Assert
-        Assert.True(newState.IsPromptInFlight);
-    }
-
-    [Fact]
     public void GivenState_WhenSetDraftText_ThenDraftTextIsUpdated()
     {
         // Arrange

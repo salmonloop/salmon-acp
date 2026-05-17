@@ -620,8 +620,14 @@ public sealed class StartViewModelTests
             await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
             await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
             await chat.DispatchConnectionAsync(new SetNewSessionDraftAction(faultedDraft));
+            await WaitForConditionAsync(() => startViewModel.HasStartSessionDraftError);
 
             Assert.True(startViewModel.IsInputEnabled);
+            Assert.True(startViewModel.HasStartSessionDraftError);
+            Assert.Equal(
+                "Unable to load session configuration. Check the connection and try again.",
+                startViewModel.StartSessionDraftErrorMessage);
+            Assert.DoesNotContain("session/new failed", startViewModel.StartSessionDraftErrorMessage, StringComparison.Ordinal);
             Assert.False(startViewModel.IsStartModeSelectorEnabled);
             Assert.False(startViewModel.StartSessionAndSendCommand.CanExecute(null));
         }

@@ -41,8 +41,6 @@ public static class ChatReducer
             }),
             SetIsHydratingAction setIsHydrating => Mutate(current, current with { IsHydrating = setIsHydrating.IsHydrating }),
             SetDraftTextAction draftText => Mutate(current, current with { DraftText = draftText.Text }),
-            SetPromptInFlightAction setPromptInFlight => Mutate(current, current with { IsPromptInFlight = setPromptInFlight.IsInFlight }),
-            SetPromptSubmitInFlightAction setPromptSubmitInFlight => Mutate(current, current with { IsPromptSubmitInFlight = setPromptSubmitInFlight.IsInFlight }),
             BeginTurnAction begin => Mutate(current, current with
             {
                 ActiveTurn = new ActiveTurnState(
@@ -388,8 +386,6 @@ public static class ChatReducer
             SessionInfo = sessionState?.SessionInfo,
             Usage = sessionState?.Usage,
             IsHydrating = false,
-            IsPromptInFlight = false,
-            IsPromptSubmitInFlight = false,
             ActiveTurn = null
         };
     }

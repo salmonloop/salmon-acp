@@ -11,8 +11,6 @@ public record ChatState(
     IImmutableDictionary<string, ConversationRuntimeSlice>? RuntimeStates = null,
     ActiveTurnState? ActiveTurn = null,
     long Generation = 0,
-    bool IsPromptInFlight = false,
-    bool IsPromptSubmitInFlight = false,
     string? AgentProfileId = null,
     string? AgentName = null,
     string? AgentVersion = null,

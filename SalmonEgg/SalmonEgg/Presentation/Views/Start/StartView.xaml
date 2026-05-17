@@ -122,33 +122,40 @@
             </StackPanel>
         </Grid>
 
-        <controls:ChatInputArea x:Name="ComposerShell"
-                                Grid.Row="1"
-                                ViewModel="{x:Bind ViewModel.Chat, Mode=OneWay}"
-                                SubmitCommand="{x:Bind ViewModel.StartSessionAndSendCommand}"
-                                IsSubmitButtonEnabled="{x:Bind ViewModel.CanStartSessionAndSendUi, Mode=OneWay}"
-                                InputBoxAutomationId="StartView.PromptBox"
-                                ShowAgentSelector="True"
-                                AgentItemsSource="{x:Bind ViewModel.Chat.AcpProfileList, Mode=OneWay}"
-                                SelectedAgent="{x:Bind ViewModel.Chat.SelectedAcpProfile, Mode=TwoWay}"
-                                AgentSelectorAutomationId="StartView.AgentSelector"
-                                ShowModeSelector="True"
-                                ModeItemsSource="{x:Bind ViewModel.StartModeOptions, Mode=OneWay}"
-                                SelectedMode="{x:Bind ViewModel.SelectedStartMode, Mode=OneWay}"
-                                ModeSelectionCommand="{x:Bind ViewModel.SelectStartModeCommand}"
-                                IsModeSelectorEnabled="{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}"
-                                ModeSelectorAutomationId="StartView.ModeSelector"
-                                ShowProjectSelector="True"
-                                ProjectItemsSource="{x:Bind ViewModel.StartProjectOptions, Mode=OneWay}"
-                                SelectedProjectId="{x:Bind ViewModel.SelectedStartProjectId, Mode=TwoWay}"
-                                ProjectSelectorAutomationId="StartView.ProjectSelector" />
+        <Grid Grid.Row="1"
+              RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <InfoBar Grid.Row="1"
-                 Margin="24,0,24,112"
-                 VerticalAlignment="Bottom"
-                 Severity="Error"
-                 IsOpen="{x:Bind ViewModel.HasStartSessionDraftError, Mode=OneWay}"
-                 Message="{x:Bind ViewModel.StartSessionDraftErrorMessage, Mode=OneWay}" />
+            <InfoBar Grid.Row="0"
+                     Margin="24,0,24,0"
+                     Severity="Error"
+                     IsOpen="{x:Bind ViewModel.HasStartSessionDraftError, Mode=OneWay}"
+                     Message="{x:Bind ViewModel.StartSessionDraftErrorMessage, Mode=OneWay}" />
+
+            <controls:ChatInputArea x:Name="ComposerShell"
+                                    Grid.Row="1"
+                                    ViewModel="{x:Bind ViewModel.Chat, Mode=OneWay}"
+                                    SubmitCommand="{x:Bind ViewModel.StartSessionAndSendCommand}"
+                                    IsSubmitButtonEnabled="{x:Bind ViewModel.CanStartSessionAndSendUi, Mode=OneWay}"
+                                    InputBoxAutomationId="StartView.PromptBox"
+                                    ShowAgentSelector="True"
+                                    AgentItemsSource="{x:Bind ViewModel.Chat.AcpProfileList, Mode=OneWay}"
+                                    SelectedAgent="{x:Bind ViewModel.Chat.SelectedAcpProfile, Mode=TwoWay}"
+                                    AgentSelectorAutomationId="StartView.AgentSelector"
+                                    ShowModeSelector="True"
+                                    ModeItemsSource="{x:Bind ViewModel.StartModeOptions, Mode=OneWay}"
+                                    SelectedMode="{x:Bind ViewModel.SelectedStartMode, Mode=OneWay}"
+                                    ModeSelectionCommand="{x:Bind ViewModel.SelectStartModeCommand}"
+                                    IsModeSelectorEnabled="{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}"
+                                    ModeSelectorAutomationId="StartView.ModeSelector"
+                                    ShowProjectSelector="True"
+                                    ProjectItemsSource="{x:Bind ViewModel.StartProjectOptions, Mode=OneWay}"
+                                    SelectedProjectId="{x:Bind ViewModel.SelectedStartProjectId, Mode=TwoWay}"
+                                    ProjectSelectorAutomationId="StartView.ProjectSelector" />
+        </Grid>
 
         <Grid Grid.RowSpan="2"
               Background="{ThemeResource AppOverlayScrimBrush}"

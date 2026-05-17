@@ -466,6 +466,18 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void StartView_DraftErrorInfoBarUsesNativeLayoutFlow()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
+
+        Assert.Contains("<InfoBar Grid.Row=\"0\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsOpen=\"{x:Bind ViewModel.HasStartSessionDraftError, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Message=\"{x:Bind ViewModel.StartSessionDraftErrorMessage, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Margin=\"24,0,24,112\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("VerticalAlignment=\"Bottom\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void StartView_ComposerUsesSharedChatInputAreaWithoutPrivateInputControls()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");

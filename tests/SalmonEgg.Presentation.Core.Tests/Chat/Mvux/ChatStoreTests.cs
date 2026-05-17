@@ -39,7 +39,7 @@ public class ChatStoreTests
         var store = new ChatStore(state);
 
         // Act
-        await store.Dispatch(new SetPromptInFlightAction(true));
+        await store.Dispatch(new BeginTurnAction("initial", "turn-1", ChatTurnPhase.WaitingForAgent));
         await store.Dispatch(new SelectConversationAction("conv-1"));
 
         // Assert
@@ -47,9 +47,9 @@ public class ChatStoreTests
             state,
             current => current is not null
                 && string.Equals(current.HydratedConversationId, "conv-1", System.StringComparison.Ordinal)
-                && current.IsPromptInFlight == false);
+                && current.ActiveTurn is null);
         Assert.NotNull(currentState);
-        Assert.False(currentState.IsPromptInFlight);
+        Assert.Null(currentState.ActiveTurn);
         Assert.Equal("conv-1", currentState.HydratedConversationId);
     }
 

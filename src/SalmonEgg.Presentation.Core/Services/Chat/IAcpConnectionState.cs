@@ -133,6 +133,12 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
     {
     }
 
+    Task NotifyPromptRequestDispatchedAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
+    }
+
     Task ResetHydratedConversationForResyncAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

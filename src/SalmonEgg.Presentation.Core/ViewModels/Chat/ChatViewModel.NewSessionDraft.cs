@@ -579,7 +579,5 @@ public partial class ChatViewModel
             : profileId.Trim();
 
     private static string NormalizeNewSessionDraftError(string? error)
-        => string.IsNullOrWhiteSpace(error)
-            ? "Unable to load session configuration. Check the connection and try again."
-            : $"Unable to load session configuration: {error.Trim()}";
+        => "Unable to load session configuration. Check the connection and try again.";
 }

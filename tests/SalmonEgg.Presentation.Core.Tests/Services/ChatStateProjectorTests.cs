@@ -70,7 +70,29 @@ public sealed class ChatStateProjectorTests
         Assert.True(projection.IsTurnStatusVisible);
         Assert.Equal("Thinking...", projection.TurnStatusText);
         Assert.True(projection.IsTurnStatusRunning);
+        Assert.True(projection.IsPromptInFlight);
+        Assert.False(projection.IsPromptSubmitInFlight);
         Assert.Equal(ChatTurnPhase.Thinking, projection.TurnPhase);
+    }
+
+    [Theory]
+    [InlineData(ChatTurnPhase.CreatingRemoteSession, true)]
+    [InlineData(ChatTurnPhase.DispatchingPrompt, true)]
+    [InlineData(ChatTurnPhase.WaitingForAgent, false)]
+    public void Apply_DerivesPromptSubmitStateFromActiveTurnPhase(
+        ChatTurnPhase phase,
+        bool expectedSubmitInFlight)
+    {
+        var projector = new ChatStateProjector();
+        var storeState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState("conv-1", "turn-1", phase, DateTime.UtcNow, DateTime.UtcNow)
+        };
+
+        var projection = projector.Apply(storeState, ChatConnectionState.Empty, "conv-1", null);
+
+        Assert.Equal(expectedSubmitInFlight, projection.IsPromptSubmitInFlight);
+        Assert.True(projection.IsPromptInFlight);
     }
 
     [Fact]
@@ -103,6 +125,7 @@ public sealed class ChatStateProjectorTests
 
         Assert.True(projection.IsTurnStatusVisible);
         Assert.False(projection.IsTurnStatusRunning);
+        Assert.False(projection.IsPromptInFlight);
         Assert.Equal(ChatTurnPhase.Cancelled, projection.TurnPhase);
         Assert.Equal("Cancelled", projection.TurnStatusText);
     }

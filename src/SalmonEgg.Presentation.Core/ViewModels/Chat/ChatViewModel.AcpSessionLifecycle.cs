@@ -2063,6 +2063,18 @@ public partial class ChatViewModel
         await _chatStore.Dispatch(new CancelTurnAction(activeTurn.ConversationId, activeTurn.TurnId)).ConfigureAwait(true);
     }
 
+    private async Task PreemptivelyCancelOutstandingToolCallsAsync()
+    {
+        var state = await _chatStore.GetCurrentStateAsync();
+        var activeTurn = state.ActiveTurn;
+        if (activeTurn is null)
+        {
+            return;
+        }
+
+        await PreemptivelyCancelOutstandingToolCallsAsync(state, activeTurn).ConfigureAwait(true);
+    }
+
     private async Task PreemptivelyCancelOutstandingToolCallsAsync(ChatState state, ActiveTurnState activeTurn)
     {
         if (string.IsNullOrWhiteSpace(activeTurn.ConversationId))

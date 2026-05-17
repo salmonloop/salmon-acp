@@ -62,13 +62,6 @@ public sealed record SetAgentIdentityAction(string? ProfileId, string? AgentName
 /// </summary>
 public sealed record SetIsHydratingAction(bool IsHydrating) : ChatAction;
 
-/// <summary>
-/// Dispatched to update the prompt in-flight status.
-/// </summary>
-public sealed record SetPromptInFlightAction(bool IsInFlight) : ChatAction;
-
-public sealed record SetPromptSubmitInFlightAction(bool IsInFlight) : ChatAction;
-
 public sealed record BeginTurnAction(
     string ConversationId,
     string TurnId,
