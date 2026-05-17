@@ -2,7 +2,6 @@ using System.Text.Json;
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.Tool;
-using SalmonEgg.Infrastructure.Serialization;
 
 namespace SalmonEgg.Domain.Tests.Protocol;
 
@@ -20,9 +19,6 @@ public sealed class ToolCallUpdateTests
             PropertyNameCaseInsensitive = true,
             WriteIndented = false
         };
-        
-        // Add the JsonPropertyNameEnumConverterFactory to honor JsonPropertyName attributes on enums
-        _jsonOptions.Converters.Add(new JsonPropertyNameEnumConverterFactory());
     }
 
     [Test]

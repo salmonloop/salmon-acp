@@ -197,7 +197,7 @@ namespace SalmonEgg.Domain.Models.Protocol
     public class SessionLoadResponse
     {
         /// <summary>
-        /// 会话模式状态（可选，兼容旧 Agent 可能直接返回数组）。
+        /// 会话模式状态（可选，ACP 标准形态为 SessionModeState 对象）。
         /// </summary>
         [JsonPropertyName("modes")]
         [JsonConverter(typeof(SessionModesStateJsonConverter))]
@@ -286,7 +286,7 @@ namespace SalmonEgg.Domain.Models.Protocol
     public class SessionResumeResponse
     {
         /// <summary>
-        /// 会话模式状态（可选，兼容旧 Agent 可能直接返回数组）。
+        /// 会话模式状态（可选，ACP 标准形态为 SessionModeState 对象）。
         /// </summary>
         [JsonPropertyName("modes")]
         [JsonConverter(typeof(SessionModesStateJsonConverter))]

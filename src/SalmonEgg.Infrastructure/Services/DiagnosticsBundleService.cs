@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using SalmonEgg.Domain.Models.Diagnostics;
 using SalmonEgg.Domain.Services;
@@ -41,7 +42,7 @@ public sealed class DiagnosticsBundleService : IDiagnosticsBundleService
         try
         {
             var snapshotPath = Path.Combine(tempDir, "snapshot.json");
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(snapshot, DiagnosticsJsonContext.Default.DiagnosticsSnapshot);
             await File.WriteAllTextAsync(snapshotPath, json).ConfigureAwait(false);
 
             CopyIfExists(Path.Combine(_paths.AppDataRootPath, "boot.log"), Path.Combine(tempDir, "boot.log"));
@@ -111,4 +112,10 @@ public sealed class DiagnosticsBundleService : IDiagnosticsBundleService
         {
         }
     }
+}
+
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(DiagnosticsSnapshot))]
+internal partial class DiagnosticsJsonContext : JsonSerializerContext
+{
 }

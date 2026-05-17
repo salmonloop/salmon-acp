@@ -66,4 +66,67 @@ public sealed class SessionLoadTypesTests
         var json = JsonSerializer.Serialize(sessionParams);
         Assert.That(json, Does.Contain("\"mcpServers\":[]"));
     }
+
+    [Test]
+    public void SessionLoadResponse_Modes_Should_Deserialize_Standard_State_Object()
+    {
+        var json = """
+        {
+          "modes": {
+            "currentModeId": "review",
+            "availableModes": [
+              {
+                "id": "review",
+                "name": "Review"
+              }
+            ]
+          }
+        }
+        """;
+
+        var response = JsonSerializer.Deserialize<SessionLoadResponse>(json);
+
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Modes, Is.Not.Null);
+        Assert.That(response.Modes!.CurrentModeId, Is.EqualTo("review"));
+        Assert.That(response.Modes.AvailableModes, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void SessionLoadResponse_Modes_Should_Reject_Legacy_Array()
+    {
+        var json = """
+        {
+          "modes": [
+            {
+              "id": "review",
+              "name": "Review"
+            }
+          ]
+        }
+        """;
+
+        Assert.That(
+            () => JsonSerializer.Deserialize<SessionLoadResponse>(json),
+            Throws.TypeOf<JsonException>());
+    }
+
+    [Test]
+    public void SessionResumeResponse_Modes_Should_Reject_Legacy_Array()
+    {
+        var json = """
+        {
+          "modes": [
+            {
+              "id": "review",
+              "name": "Review"
+            }
+          ]
+        }
+        """;
+
+        Assert.That(
+            () => JsonSerializer.Deserialize<SessionResumeResponse>(json),
+            Throws.TypeOf<JsonException>());
+    }
 }

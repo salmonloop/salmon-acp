@@ -62,7 +62,11 @@ public sealed class DiscoverSessionsPageXamlTests
         Assert.Contains("x:Uid=\"DiscoverSessionsRefreshButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowBusyStatus, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Visibility=\"{x:Bind ViewModel.ShowSessionsSkeleton, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsEnabled=\"{Binding DataContext.AreSessionActionsEnabled, ElementName=RootPage}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{x:Bind LoadSessionCommand, Mode=OneTime}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CommandParameter=\"{x:Bind}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RootPage.ViewModel.LoadSessionCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RootPage.ViewModel.AreSessionActionsEnabled", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsEnabled=\"{x:Bind RootPage.ViewModel.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("SkeletonPulse", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("SkeletonPulse", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("Style=\"{StaticResource SubtleButtonStyle}\"", xaml, StringComparison.Ordinal);

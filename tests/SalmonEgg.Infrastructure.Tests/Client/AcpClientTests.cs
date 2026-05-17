@@ -275,7 +275,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             // Delay response beyond the default budget, but keep it safely within session/load timeout.
             var responseTrigger = Task.Run(async () => {
                 await Task.Delay(200);
-                var response = new JsonRpcResponse(2, JsonSerializer.SerializeToElement(new { }, parser.Options));
+                var response = new JsonRpcResponse(2, ElementFromJson("{}"));
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
@@ -391,44 +391,37 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(
-                        new
+                    ElementFromJson(
+                        """
                         {
-                            modes = new
+                          "modes": {
+                            "currentModeId": "plan",
+                            "availableModes": [
+                              {
+                                "id": "plan",
+                                "name": "Plan",
+                                "description": "Planning mode"
+                              }
+                            ]
+                          },
+                          "configOptions": [
                             {
-                                currentModeId = "plan",
-                                availableModes = new[]
+                              "id": "mode",
+                              "name": "Mode",
+                              "category": "mode",
+                              "type": "string",
+                              "currentValue": "plan",
+                              "options": [
                                 {
-                                    new
-                                    {
-                                        id = "plan",
-                                        name = "Plan",
-                                        description = "Planning mode"
-                                    }
+                                  "value": "plan",
+                                  "name": "Plan",
+                                  "description": "Planning mode"
                                 }
-                            },
-                            configOptions = new[]
-                            {
-                                new
-                                {
-                                    id = "mode",
-                                    name = "Mode",
-                                    category = "mode",
-                                    type = "string",
-                                    currentValue = "plan",
-                                    options = new[]
-                                    {
-                                        new
-                                        {
-                                            value = "plan",
-                                            name = "Plan",
-                                            description = "Planning mode"
-                                        }
-                                    }
-                                }
+                              ]
                             }
-                        },
-                        parser.Options));
+                          ]
+                        }
+                        """));
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
@@ -460,7 +453,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(new { }, parser.Options));
+                    ElementFromJson("{}"));
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
@@ -525,23 +518,20 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(
-                        new
+                    ElementFromJson(
+                        """
                         {
-                            modes = new
-                            {
-                                currentModeId = "plan",
-                                availableModes = new[]
-                                {
-                                    new
-                                    {
-                                        id = "plan",
-                                        name = "Plan"
-                                    }
-                                }
-                            }
-                        },
-                        parser.Options));
+                          "modes": {
+                            "currentModeId": "plan",
+                            "availableModes": [
+                              {
+                                "id": "plan",
+                                "name": "Plan"
+                              }
+                            ]
+                          }
+                        }
+                        """));
                 _transportMock.Raise(
                     t => t.MessageReceived += null,
                     new MessageReceivedEventArgs(parser.SerializeMessage(response)));
@@ -597,7 +587,7 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(new { }, parser.Options));
+                    ElementFromJson("{}"));
                 _transportMock.Raise(
                     t => t.MessageReceived += null,
                     new MessageReceivedEventArgs(parser.SerializeMessage(response)));
@@ -819,17 +809,25 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var request = new JsonRpcRequest(
                 301,
                 "session/request_permission",
-                JsonSerializer.SerializeToElement(
-                    new
+                ElementFromJson(
+                    """
                     {
-                        sessionId = "session-1",
-                        toolCall = new { toolName = "fs/read_text_file" },
-                        options = new[]
+                      "sessionId": "session-1",
+                      "toolCall": {
+                        "toolCallId": "call-1",
+                        "title": "Read file",
+                        "kind": "read",
+                        "status": "pending"
+                      },
+                      "options": [
                         {
-                            new { optionId = "allow", name = "Allow", kind = "allow_once" }
+                          "optionId": "allow",
+                          "name": "Allow",
+                          "kind": "allow_once"
                         }
-                    },
-                    parser.Options));
+                      ]
+                    }
+                    """));
 
             _transportMock.Raise(
                 t => t.MessageReceived += null,
@@ -1242,17 +1240,25 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             var request = new JsonRpcRequest(
                 205,
                 "session/request_permission",
-                JsonSerializer.SerializeToElement(
-                    new
+                ElementFromJson(
+                    """
                     {
-                        sessionId = "session-1",
-                        toolCall = new { toolName = "fs/read_text_file" },
-                        options = new[]
+                      "sessionId": "session-1",
+                      "toolCall": {
+                        "toolCallId": "call-1",
+                        "title": "Read file",
+                        "kind": "read",
+                        "status": "pending"
+                      },
+                      "options": [
                         {
-                            new { optionId = "allow", name = "Allow", kind = "allow_once" }
+                          "optionId": "allow",
+                          "name": "Allow",
+                          "kind": "allow_once"
                         }
-                    },
-                    parser.Options));
+                      ]
+                    }
+                    """));
 
             _transportMock.Raise(
                 t => t.MessageReceived += null,
@@ -1338,21 +1344,19 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(
-                        new
+                    ElementFromJson(
+                        """
                         {
-                            sessions = new[]
+                          "sessions": [
                             {
-                                new
-                                {
-                                    sessionId = "session-1",
-                                    cwd = "/repo",
-                                    title = "Imported"
-                                }
-                            },
-                            nextCursor = "cursor-2"
-                        },
-                        parser.Options));
+                              "sessionId": "session-1",
+                              "cwd": "/repo",
+                              "title": "Imported"
+                            }
+                          ],
+                          "nextCursor": "cursor-2"
+                        }
+                        """));
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
@@ -1380,19 +1384,17 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(
-                        new
+                    ElementFromJson(
+                        """
                         {
-                            sessions = new[]
+                          "sessions": [
                             {
-                                new
-                                {
-                                    sessionId = "session-1",
-                                    title = "Imported"
-                                }
+                              "sessionId": "session-1",
+                              "title": "Imported"
                             }
-                        },
-                        parser.Options));
+                          ]
+                        }
+                        """));
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
@@ -1420,20 +1422,18 @@ namespace SalmonEgg.Infrastructure.Tests.Client
                 await Task.Delay(10);
                 var response = new JsonRpcResponse(
                     2,
-                    JsonSerializer.SerializeToElement(
-                        new
+                    ElementFromJson(
+                        """
                         {
-                            sessions = new[]
+                          "sessions": [
                             {
-                                new
-                                {
-                                    sessionId = "session-1",
-                                    cwd = "relative-path",
-                                    title = "Imported"
-                                }
+                              "sessionId": "session-1",
+                              "cwd": "relative-path",
+                              "title": "Imported"
                             }
-                        },
-                        parser.Options));
+                          ]
+                        }
+                        """));
                 _transportMock.Raise(t => t.MessageReceived += null, new MessageReceivedEventArgs(parser.SerializeMessage(response)));
             });
 
@@ -1467,6 +1467,12 @@ namespace SalmonEgg.Infrastructure.Tests.Client
             }
 
             throw new TimeoutException($"Timed out waiting for JSON-RPC response {responseId}.");
+        }
+
+        private static JsonElement ElementFromJson(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
         }
 
         private static async Task WaitForPublishedPermissionRequestAsync(

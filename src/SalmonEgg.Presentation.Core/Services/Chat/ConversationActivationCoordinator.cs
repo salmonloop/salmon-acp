@@ -184,7 +184,7 @@ public sealed class ConversationActivationCoordinator : IConversationActivationC
             return;
         }
 
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         if (string.Equals(connectionState.SettingsSelectedProfileId, boundProfileId, StringComparison.Ordinal))
         {
             return;

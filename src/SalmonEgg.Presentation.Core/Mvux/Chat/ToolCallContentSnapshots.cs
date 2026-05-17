@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SalmonEgg.Domain.Models.Tool;
+using SalmonEgg.Domain.Models.Content;
 
 namespace SalmonEgg.Presentation.Core.Mvux.Chat;
 
@@ -24,8 +26,8 @@ internal static class ToolCallContentSnapshots
     public static ToolCallContent Clone(ToolCallContent content)
     {
         ArgumentNullException.ThrowIfNull(content);
-        var json = JsonSerializer.Serialize(content);
-        return JsonSerializer.Deserialize<ToolCallContent>(json)
+        var json = JsonSerializer.Serialize(content, ToolCallContentJsonContext.Default.ToolCallContent);
+        return JsonSerializer.Deserialize(json, ToolCallContentJsonContext.Default.ToolCallContent)
             ?? throw new InvalidOperationException("Failed to clone tool call content.");
     }
 
@@ -57,7 +59,7 @@ internal static class ToolCallContentSnapshots
 
     public static string? SerializePayload(IReadOnlyList<ToolCallContent>? content)
         => content is { Count: > 0 }
-            ? JsonSerializer.Serialize(content)
+            ? JsonSerializer.Serialize(content, ToolCallContentJsonContext.Default.IReadOnlyListToolCallContent)
             : null;
 
     private static bool JsonSequenceEquals<T>(
@@ -76,7 +78,7 @@ internal static class ToolCallContentSnapshots
 
         for (var i = 0; i < left.Count; i++)
         {
-            if (!string.Equals(JsonSerializer.Serialize(left[i]), JsonSerializer.Serialize(right[i]), StringComparison.Ordinal))
+            if (!string.Equals(SerializeValue(left[i]), SerializeValue(right[i]), StringComparison.Ordinal))
             {
                 return false;
             }
@@ -84,4 +86,38 @@ internal static class ToolCallContentSnapshots
 
         return true;
     }
+
+    private static string SerializeValue<T>(T value)
+        => value switch
+        {
+            ToolCallContent toolCallContent => JsonSerializer.Serialize(
+                toolCallContent,
+                ToolCallContentJsonContext.Default.ToolCallContent),
+            ToolCallLocation toolCallLocation => JsonSerializer.Serialize(
+                toolCallLocation,
+                ToolCallContentJsonContext.Default.ToolCallLocation),
+            _ => throw new InvalidOperationException($"Unsupported tool call snapshot value type: {typeof(T).FullName}")
+        };
+}
+
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+[JsonSerializable(typeof(ToolCallContent))]
+[JsonSerializable(typeof(ContentToolCallContent))]
+[JsonSerializable(typeof(DiffToolCallContent))]
+[JsonSerializable(typeof(TerminalToolCallContent))]
+[JsonSerializable(typeof(ToolCallLocation))]
+[JsonSerializable(typeof(IReadOnlyList<ToolCallContent>))]
+[JsonSerializable(typeof(List<ToolCallContent>))]
+[JsonSerializable(typeof(ContentBlock))]
+[JsonSerializable(typeof(TextContentBlock))]
+[JsonSerializable(typeof(ImageContentBlock))]
+[JsonSerializable(typeof(AudioContentBlock))]
+[JsonSerializable(typeof(ResourceContentBlock))]
+[JsonSerializable(typeof(ResourceLinkContentBlock))]
+[JsonSerializable(typeof(Annotations))]
+[JsonSerializable(typeof(EmbeddedResource))]
+internal partial class ToolCallContentJsonContext : JsonSerializerContext
+{
 }

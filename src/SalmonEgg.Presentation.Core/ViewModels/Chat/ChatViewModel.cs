@@ -1333,8 +1333,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
         try
         {
-            var latestConnectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
-            var projection = CreateProjection(state, latestConnectionState);
+            var latestState = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
+            var latestConnectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
+            var projection = CreateProjection(latestState, latestConnectionState);
             QueueLatestUiProjection(projection, token, ct);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested || ct.IsCancellationRequested)
@@ -1688,8 +1689,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
     private async Task ApplyCurrentStoreProjectionAsync(long? activationVersion = null)
     {
-        var state = await _chatStore.State ?? ChatState.Empty;
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         var projection = CreateProjection(state, connectionState);
         if (activationVersion.HasValue
             && !ShouldApplyStoreProjection(projection, activationVersion.Value))
@@ -1929,7 +1930,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             return;
         }
 
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(connectionState.SettingsSelectedProfileId))
         {
             return;
@@ -2227,7 +2228,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync().ConfigureAwait(false);
         var conversationId = ResolveActiveConversationId(state);
         if (string.IsNullOrWhiteSpace(conversationId))
         {
@@ -2240,7 +2241,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             return ToBindingState(binding);
         }
 
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         return new ConversationRemoteBindingState(
             conversationId,
             null,
@@ -2420,7 +2421,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             return;
         }
 
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         var profileId = connectionState.SettingsSelectedProfileId;
         if (string.IsNullOrWhiteSpace(profileId))
         {

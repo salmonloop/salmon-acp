@@ -56,7 +56,7 @@ namespace SalmonEgg.Domain.Models.Protocol
         public string SessionId { get; set; } = string.Empty;
 
         /// <summary>
-        /// 会话模式状态（可选，兼容旧 Agent 可能直接返回数组）。
+        /// 会话模式状态（可选，ACP 标准形态为 SessionModeState 对象）。
         /// </summary>
         [JsonPropertyName("modes")]
         [JsonConverter(typeof(SessionModesStateJsonConverter))]
@@ -101,7 +101,7 @@ namespace SalmonEgg.Domain.Models.Protocol
         /// 当前模式 ID。
         /// </summary>
         [JsonPropertyName("currentModeId")]
-        public string? CurrentModeId { get; set; }
+        public string CurrentModeId { get; set; } = string.Empty;
 
         /// <summary>
         /// 可用模式列表。
@@ -122,7 +122,7 @@ namespace SalmonEgg.Domain.Models.Protocol
         public string? Description { get; set; }
     }
 
-    internal sealed class SessionModesStateJsonConverter : JsonConverter<SessionModesState?>
+    public sealed class SessionModesStateJsonConverter : JsonConverter<SessionModesState?>
     {
         public override SessionModesState? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
@@ -131,29 +131,221 @@ namespace SalmonEgg.Domain.Models.Protocol
                 return null;
             }
 
-            if (reader.TokenType == JsonTokenType.StartArray)
-            {
-                var modes = JsonSerializer.Deserialize<List<SessionMode>>(ref reader, options) ?? new List<SessionMode>();
-                return new SessionModesState { AvailableModes = modes };
-            }
-
             if (reader.TokenType == JsonTokenType.StartObject)
             {
-                return JsonSerializer.Deserialize<SessionModesState>(ref reader, options);
+                return ReadModesObject(ref reader);
             }
 
-            using var doc = JsonDocument.ParseValue(ref reader);
-            return doc.RootElement.ValueKind switch
-            {
-                JsonValueKind.Array => new SessionModesState { AvailableModes = JsonSerializer.Deserialize<List<SessionMode>>(doc.RootElement.GetRawText(), options) ?? new List<SessionMode>() },
-                JsonValueKind.Object => JsonSerializer.Deserialize<SessionModesState>(doc.RootElement.GetRawText(), options),
-                _ => null
-            };
+            throw new JsonException("Session modes state must be a JSON object or null.");
         }
 
         public override void Write(Utf8JsonWriter writer, SessionModesState? value, JsonSerializerOptions options)
         {
-            JsonSerializer.Serialize(writer, value, options);
+            if (value == null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStartObject();
+            if (value.CurrentModeId != null)
+            {
+                writer.WriteString("currentModeId", value.CurrentModeId);
+            }
+            else if (ShouldWriteNull(options))
+            {
+                writer.WriteNull("currentModeId");
+            }
+
+            writer.WritePropertyName("availableModes");
+            writer.WriteStartArray();
+            foreach (var mode in value.AvailableModes)
+            {
+                WriteMode(writer, mode, options);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        private static SessionModesState ReadModesObject(ref Utf8JsonReader reader)
+        {
+            var state = new SessionModesState();
+            var hasCurrentModeId = false;
+            var hasAvailableModes = false;
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                {
+                    if (!hasCurrentModeId)
+                    {
+                        throw new JsonException("Session modes state is missing required currentModeId.");
+                    }
+
+                    if (!hasAvailableModes)
+                    {
+                        throw new JsonException("Session modes state is missing required availableModes.");
+                    }
+
+                    return state;
+                }
+
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                {
+                    throw new JsonException("Session modes state must contain JSON properties.");
+                }
+
+                var propertyName = reader.GetString();
+                if (!reader.Read())
+                {
+                    throw new JsonException("Unexpected end of session modes state.");
+                }
+
+                switch (propertyName)
+                {
+                    case "currentModeId":
+                        if (reader.TokenType != JsonTokenType.String)
+                        {
+                            throw new JsonException("Session modes currentModeId must be a string.");
+                        }
+
+                        state.CurrentModeId = reader.GetString() ?? string.Empty;
+                        hasCurrentModeId = true;
+                        break;
+                    case "availableModes":
+                        if (reader.TokenType != JsonTokenType.StartArray)
+                        {
+                            throw new JsonException("Session modes availableModes must be an array.");
+                        }
+
+                        state.AvailableModes = ReadModesArray(ref reader);
+                        hasAvailableModes = true;
+                        break;
+                    default:
+                        reader.Skip();
+                        break;
+                }
+            }
+
+            throw new JsonException("Unexpected end of session modes state.");
+        }
+
+        private static List<SessionMode> ReadModesArray(ref Utf8JsonReader reader)
+        {
+            var modes = new List<SessionMode>();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                {
+                    return modes;
+                }
+
+                if (reader.TokenType != JsonTokenType.StartObject)
+                {
+                    throw new JsonException("Session mode entry must be a JSON object.");
+                }
+
+                modes.Add(ReadModeObject(ref reader));
+            }
+
+            throw new JsonException("Unexpected end of session modes array.");
+        }
+
+        private static SessionMode ReadModeObject(ref Utf8JsonReader reader)
+        {
+            var mode = new SessionMode();
+            var hasId = false;
+            var hasName = false;
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                {
+                    if (!hasId)
+                    {
+                        throw new JsonException("Session mode is missing required id.");
+                    }
+
+                    if (!hasName)
+                    {
+                        throw new JsonException("Session mode is missing required name.");
+                    }
+
+                    return mode;
+                }
+
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                {
+                    throw new JsonException("Session mode must contain JSON properties.");
+                }
+
+                var propertyName = reader.GetString();
+                if (!reader.Read())
+                {
+                    throw new JsonException("Unexpected end of session mode.");
+                }
+
+                switch (propertyName)
+                {
+                    case "id":
+                        if (reader.TokenType != JsonTokenType.String)
+                        {
+                            throw new JsonException("Session mode id must be a string.");
+                        }
+
+                        mode.Id = reader.GetString() ?? string.Empty;
+                        hasId = true;
+                        break;
+                    case "name":
+                        if (reader.TokenType != JsonTokenType.String)
+                        {
+                            throw new JsonException("Session mode name must be a string.");
+                        }
+
+                        mode.Name = reader.GetString() ?? string.Empty;
+                        hasName = true;
+                        break;
+                    case "description":
+                        if (reader.TokenType != JsonTokenType.Null && reader.TokenType != JsonTokenType.String)
+                        {
+                            throw new JsonException("Session mode description must be a string or null.");
+                        }
+
+                        mode.Description = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                        break;
+                    default:
+                        reader.Skip();
+                        break;
+                }
+            }
+
+            throw new JsonException("Unexpected end of session mode.");
+        }
+
+        private static void WriteMode(Utf8JsonWriter writer, SessionMode mode, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", mode.Id);
+            writer.WriteString("name", mode.Name);
+
+            if (mode.Description != null)
+            {
+                writer.WriteString("description", mode.Description);
+            }
+            else if (ShouldWriteNull(options))
+            {
+                writer.WriteNull("description");
+            }
+
+            writer.WriteEndObject();
+        }
+
+        private static bool ShouldWriteNull(JsonSerializerOptions options)
+        {
+            return options.DefaultIgnoreCondition != JsonIgnoreCondition.WhenWritingNull
+                && options.DefaultIgnoreCondition != JsonIgnoreCondition.WhenWritingDefault;
         }
     }
 }

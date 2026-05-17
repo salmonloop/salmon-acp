@@ -1,5 +1,6 @@
 using System;
 using System.Reactive.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Serilog;
 using SalmonEgg.Application.Common;
@@ -48,9 +49,9 @@ namespace SalmonEgg.Application.Services
         /// 异步发送请求消息
         /// </summary>
         /// <param name="method">方法名</param>
-        /// <param name="parameters">请求参数</param>
+        /// <param name="parameters">已解析的 JSON 请求参数</param>
         /// <returns>包含响应消息的操作结果</returns>
-        public async Task<Result<AcpMessage>> SendRequestAsync(string? method, object? parameters)
+        public async Task<Result<AcpMessage>> SendRequestAsync(string? method, JsonElement? parameters)
         {
             _logger.Debug("MessageService: 调用 SendMessageUseCase，方法: {Method}", method);
             

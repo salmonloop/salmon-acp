@@ -201,6 +201,6 @@ public sealed class ChatLaunchWorkflowChatFacadeAdapter : IChatLaunchWorkflowCha
             return ChatConnectionState.Empty;
         }
 
-        return await _connectionStore.State ?? ChatConnectionState.Empty;
+        return await _connectionStore.GetCurrentStateAsync().ConfigureAwait(false);
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SalmonEgg.Domain.Models.Plan
@@ -159,30 +160,27 @@ namespace SalmonEgg.Domain.Models.Plan
     /// 计划条目状态枚举。
     /// 表示计划条目的当前状态。
     /// </summary>
+    [JsonConverter(typeof(PlanEntryStatusJsonConverter))]
     public enum PlanEntryStatus
     {
         /// <summary>
         /// 条目已创建但尚未开始。
         /// </summary>
-        [JsonPropertyName("pending")]
         Pending,
 
         /// <summary>
         /// 条目正在执行中。
         /// </summary>
-        [JsonPropertyName("in_progress")]
         InProgress,
 
         /// <summary>
         /// 条目已成功完成。
         /// </summary>
-        [JsonPropertyName("completed")]
         Completed,
 
         /// <summary>
         /// 条目执行失败。
         /// </summary>
-        [JsonPropertyName("failed")]
         Failed
     }
 
@@ -190,24 +188,84 @@ namespace SalmonEgg.Domain.Models.Plan
     /// 计划条目优先级枚举。
     /// 表示计划条目的重要程度。
     /// </summary>
+    [JsonConverter(typeof(PlanEntryPriorityJsonConverter))]
     public enum PlanEntryPriority
     {
         /// <summary>
         /// 低优先级。
         /// </summary>
-        [JsonPropertyName("low")]
         Low,
 
         /// <summary>
         /// 中等优先级。
         /// </summary>
-        [JsonPropertyName("medium")]
         Medium,
 
         /// <summary>
         /// 高优先级。
         /// </summary>
-        [JsonPropertyName("high")]
         High
+    }
+
+    public sealed class PlanEntryStatusJsonConverter : JsonConverter<PlanEntryStatus>
+    {
+        public override PlanEntryStatus Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException("Plan entry status must be a string.");
+            }
+
+            return reader.GetString() switch
+            {
+                "pending" => PlanEntryStatus.Pending,
+                "in_progress" => PlanEntryStatus.InProgress,
+                "completed" => PlanEntryStatus.Completed,
+                "failed" => PlanEntryStatus.Failed,
+                var value => throw new JsonException($"Unsupported plan entry status '{value}'.")
+            };
+        }
+
+        public override void Write(Utf8JsonWriter writer, PlanEntryStatus value, JsonSerializerOptions options)
+        {
+            writer.WriteStringValue(value switch
+            {
+                PlanEntryStatus.Pending => "pending",
+                PlanEntryStatus.InProgress => "in_progress",
+                PlanEntryStatus.Completed => "completed",
+                PlanEntryStatus.Failed => "failed",
+                _ => throw new JsonException($"Unsupported plan entry status '{value}'.")
+            });
+        }
+    }
+
+    public sealed class PlanEntryPriorityJsonConverter : JsonConverter<PlanEntryPriority>
+    {
+        public override PlanEntryPriority Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException("Plan entry priority must be a string.");
+            }
+
+            return reader.GetString() switch
+            {
+                "low" => PlanEntryPriority.Low,
+                "medium" => PlanEntryPriority.Medium,
+                "high" => PlanEntryPriority.High,
+                var value => throw new JsonException($"Unsupported plan entry priority '{value}'.")
+            };
+        }
+
+        public override void Write(Utf8JsonWriter writer, PlanEntryPriority value, JsonSerializerOptions options)
+        {
+            writer.WriteStringValue(value switch
+            {
+                PlanEntryPriority.Low => "low",
+                PlanEntryPriority.Medium => "medium",
+                PlanEntryPriority.High => "high",
+                _ => throw new JsonException($"Unsupported plan entry priority '{value}'.")
+            });
+        }
     }
 }

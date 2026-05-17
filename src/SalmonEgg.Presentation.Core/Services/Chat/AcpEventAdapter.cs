@@ -457,59 +457,6 @@ public sealed class AcpEventAdapter
         return hydrationAttemptId;
     }
 
-    public bool ReleaseBufferedUpdatesForReplayProjection(long hydrationAttemptId)
-    {
-        long? drainAttemptId = null;
-        var scheduleGlobalDrain = false;
-        lock (_gate)
-        {
-            if (_hydrationScopesByAttemptId.TryGetValue(hydrationAttemptId, out var scope))
-            {
-                if (scope.IsSuppressing)
-                {
-                    return false;
-                }
-
-                scope.IsReplayProjectionReleased = true;
-                scope.ResyncRaised = false;
-                scope.LowTrustReleaseLogged = false;
-                if (scope.Buffer.Count > 0 && !scope.DrainScheduled)
-                {
-                    scope.DrainScheduled = true;
-                    drainAttemptId = scope.AttemptId;
-                }
-            }
-            else
-            {
-                if (hydrationAttemptId != _hydrationAttemptId || _isSuppressing)
-                {
-                    return false;
-                }
-
-                _isReplayProjectionReleased = true;
-                _resyncRaised = false;
-                _lowTrustReleaseLogged = false;
-                if (_buffer.Count > 0 && !_drainScheduled)
-                {
-                    _drainScheduled = true;
-                    scheduleGlobalDrain = true;
-                }
-            }
-        }
-
-        if (drainAttemptId.HasValue)
-        {
-            PostDrain(drainAttemptId.Value);
-        }
-
-        if (scheduleGlobalDrain)
-        {
-            PostDrain();
-        }
-
-        return true;
-    }
-
     public void SuppressBufferedUpdates(string? reason = null)
     {
         long hydrationAttemptId;

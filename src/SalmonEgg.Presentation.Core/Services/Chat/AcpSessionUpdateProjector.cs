@@ -31,7 +31,7 @@ public sealed class AcpSessionUpdateProjector : IAcpSessionUpdateProjector
                 ShowPlanPanel: true,
                 PlanTitle: string.IsNullOrWhiteSpace(planUpdate.Title) ? null : planUpdate.Title.Trim()),
             CurrentModeUpdate modeUpdate => new AcpSessionUpdateDelta(
-                SelectedModeId: string.IsNullOrWhiteSpace(modeUpdate.NormalizedModeId) ? null : modeUpdate.NormalizedModeId),
+                SelectedModeId: string.IsNullOrWhiteSpace(modeUpdate.CurrentModeId) ? null : modeUpdate.CurrentModeId),
             AvailableCommandsUpdate availableCommandsUpdate => new AcpSessionUpdateDelta(
                 AvailableCommands: MapAvailableCommands(availableCommandsUpdate.AvailableCommands)),
             ConfigUpdateUpdate configUpdate => BuildConfigDelta(configUpdate.ConfigOptions),

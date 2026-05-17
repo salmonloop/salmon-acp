@@ -1,6 +1,7 @@
 using System;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -100,7 +101,8 @@ namespace SalmonEgg.Application.Tests.Services
         {
             // Arrange
             var method = "test.method";
-            var parameters = new { value = "test" };
+            using var parametersDocument = JsonDocument.Parse("""{"value":"test"}""");
+            var parameters = parametersDocument.RootElement.Clone();
             var messageId = string.Empty;
 
             _mockConnectionManager
@@ -312,16 +314,18 @@ namespace SalmonEgg.Application.Tests.Services
         {
             // Arrange
             var method = "complex.method";
-            var parameters = new
-            {
-                name = "test",
-                value = 42,
-                nested = new
+            using var parametersDocument = JsonDocument.Parse(
+                """
                 {
-                    flag = true,
-                    items = new[] { 1, 2, 3 }
+                  "name": "test",
+                  "value": 42,
+                  "nested": {
+                    "flag": true,
+                    "items": [1, 2, 3]
+                  }
                 }
-            };
+                """);
+            var parameters = parametersDocument.RootElement.Clone();
             var messageId = string.Empty;
 
             _mockConnectionManager

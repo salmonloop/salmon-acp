@@ -108,9 +108,9 @@ namespace SalmonEgg.Application.Services.Chat
                             }
                             break;
                         case CurrentModeUpdate modeChange:
-                            if (!string.IsNullOrEmpty(modeChange.NormalizedModeId))
+                            if (!string.IsNullOrEmpty(modeChange.CurrentModeId))
                             {
-                                _currentMode = new SessionModeState { CurrentModeId = modeChange.NormalizedModeId! };
+                                _currentMode = new SessionModeState { CurrentModeId = modeChange.CurrentModeId };
                             }
                             break;
                         case ConfigOptionUpdate configOption:
@@ -182,7 +182,7 @@ namespace SalmonEgg.Application.Services.Chat
                     entry.Title = planUpdate.Title;
                     break;
                 case CurrentModeUpdate modeChange:
-                    entry.ModeId = modeChange.NormalizedModeId;
+                    entry.ModeId = modeChange.CurrentModeId;
                     entry.Title = modeChange.Title;
                     break;
                 case SessionInfoUpdate sessionInfoUpdate:

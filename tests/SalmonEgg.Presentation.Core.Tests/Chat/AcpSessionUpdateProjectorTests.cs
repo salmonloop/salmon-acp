@@ -606,14 +606,14 @@ public class AcpSessionUpdateProjectorTests
     }
 
     [Fact]
-    public void Project_CurrentModeUpdate_MapsOfficialModeIdPayload()
+    public void Project_CurrentModeUpdate_MapsOfficialCurrentModeIdPayload()
     {
         var projector = new AcpSessionUpdateProjector();
         var delta = projector.Project(new SessionUpdateEventArgs(
             "remote-1",
             new CurrentModeUpdate
             {
-                LegacyModeId = "code"
+                CurrentModeId = "code"
             }));
 
         Assert.Equal("code", delta.SelectedModeId);

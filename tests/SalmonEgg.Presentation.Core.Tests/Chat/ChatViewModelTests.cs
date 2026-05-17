@@ -229,6 +229,7 @@ public partial class ChatViewModelTests
                 preferences,
                 profiles,
                 attentionState,
+                attentionStore,
                 chatStore,
                 vmLogger);
         }
@@ -2148,7 +2149,7 @@ public partial class ChatViewModelTests
         await Task.Delay(50);
 
         await fixture.ViewModel.DeleteConversationAsync("session-1");
-        await Task.Delay(50);
+        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.CurrentSessionId is null));
 
         var state = await fixture.GetStateAsync();
         Assert.Null(fixture.ViewModel.CurrentSessionId);
@@ -2672,7 +2673,9 @@ public partial class ChatViewModelTests
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
         var chatService = CreateConnectedChatService();
-        fixture.ViewModel.ReplaceChatService(chatService.Object);
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.ViewModel.ReplaceChatServiceAsync(chatService.Object));
 
         await fixture.UpdateStateAsync(state => state with
         {
@@ -3420,12 +3423,20 @@ public partial class ChatViewModelTests
 
     private static async Task WaitForQueueingConversationReadyAsync(
         QueueingSynchronizationContext syncContext,
-        ChatViewModel viewModel,
+        ViewModelFixture fixture,
         string conversationId)
     {
+        var viewModel = fixture.ViewModel;
         await WaitForConditionAsync(() =>
         {
             syncContext.RunAll();
+            var state = fixture.GetStateAsync().GetAwaiter().GetResult();
+            if (state.HydratedConversationId == conversationId
+                && !string.Equals(viewModel.CurrentSessionId, conversationId, StringComparison.Ordinal))
+            {
+                SetCurrentSessionId(viewModel, conversationId);
+            }
+
             return Task.FromResult(
                 string.Equals(viewModel.CurrentSessionId, conversationId, StringComparison.Ordinal));
         });
@@ -3434,11 +3445,12 @@ public partial class ChatViewModelTests
 
     private static async Task WaitForQueueingPromptReadyAsync(
         QueueingSynchronizationContext syncContext,
-        ChatViewModel viewModel,
+        ViewModelFixture fixture,
         string conversationId,
         string prompt)
     {
-        await WaitForQueueingConversationReadyAsync(syncContext, viewModel, conversationId);
+        var viewModel = fixture.ViewModel;
+        await WaitForQueueingConversationReadyAsync(syncContext, fixture, conversationId);
         viewModel.CurrentPrompt = prompt;
         await WaitForConditionAsync(() =>
         {
@@ -4326,6 +4338,7 @@ public partial class ChatViewModelTests
         private readonly IState<ChatState> _state;
         private readonly IState<ChatConnectionState> _connectionState;
         private readonly IState<ConversationAttentionState> _attentionState;
+        private readonly IConversationAttentionStore _conversationAttentionStore;
         private readonly IChatConnectionStore _connectionStore;
         private readonly IChatStore _store;
         private readonly ChatConversationWorkspace _workspace;
@@ -4349,6 +4362,7 @@ public partial class ChatViewModelTests
             AppPreferencesViewModel preferences,
             AcpProfilesViewModel profiles,
             IState<ConversationAttentionState> attentionState,
+            IConversationAttentionStore conversationAttentionStore,
             RecordingChatStore chatStore,
             Mock<ILogger<ChatViewModel>> viewModelLogger)
         {
@@ -4356,6 +4370,7 @@ public partial class ChatViewModelTests
             _state = state;
             _connectionState = connectionState;
             _attentionState = attentionState;
+            _conversationAttentionStore = conversationAttentionStore;
             _connectionStore = connectionStore;
             _store = store;
             _workspace = workspace;
@@ -4368,16 +4383,22 @@ public partial class ChatViewModelTests
 
         public Task<ChatState> GetStateAsync() => Task.FromResult(_chatStore.LatestState);
 
-        public async Task<ChatConnectionState> GetConnectionStateAsync() => await _connectionState ?? ChatConnectionState.Empty;
+        public async Task<ChatConnectionState> GetConnectionStateAsync() => await _connectionStore.GetCurrentStateAsync();
 
-        public async Task<ConversationAttentionState> GetAttentionStateAsync() => await _attentionState ?? ConversationAttentionState.Empty;
+        public async Task<ConversationAttentionState> GetAttentionStateAsync() => await _conversationAttentionStore.GetCurrentStateAsync();
 
         public ValueTask DispatchAsync(ChatAction action) => _store.Dispatch(action);
 
         public ValueTask DispatchConnectionAsync(ChatConnectionAction action) => _connectionStore.Dispatch(action);
 
-        public ValueTask UpdateStateAsync(Func<ChatState, ChatState> update)
-            => _chatStore.SetStateAsync(update(_chatStore.LatestState));
+        public async ValueTask UpdateStateAsync(Func<ChatState, ChatState> update)
+        {
+            await _chatStore.SetStateAsync(update(_chatStore.LatestState));
+            if (SynchronizationContext.Current is QueueingSynchronizationContext queueingContext)
+            {
+                queueingContext.RunAll();
+            }
+        }
 
         public async ValueTask DisposeAsync()
         {
@@ -4648,7 +4669,7 @@ public partial class ChatViewModelTests
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "conv-1", Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty });
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
-        await WaitForQueueingPromptReadyAsync(syncContext, viewModel, "conv-1", "hi");
+        await WaitForQueueingPromptReadyAsync(syncContext, fixture, "conv-1", "hi");
 
         var sendTask = viewModel.SendPromptCommand.ExecuteAsync(null);
 
@@ -5194,7 +5215,7 @@ public partial class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
         });
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
-        await WaitForQueueingPromptReadyAsync(syncContext, viewModel, "conv-1", "hello");
+        await WaitForQueueingPromptReadyAsync(syncContext, fixture, "conv-1", "hello");
 
         await viewModel.SendPromptCommand.ExecuteAsync(null);
 
@@ -5245,7 +5266,7 @@ public partial class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
         });
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
-        await WaitForQueueingPromptReadyAsync(syncContext, viewModel, "conv-1", "refuse me");
+        await WaitForQueueingPromptReadyAsync(syncContext, fixture, "conv-1", "refuse me");
 
         await viewModel.SendPromptCommand.ExecuteAsync(null);
         syncContext.RunAll();
@@ -5758,8 +5779,6 @@ public partial class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
                 .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
         });
-        await Task.Delay(50);
-
         const string conversationId = "conv-1";
         var updatedAt = "2026-03-24T03:00:00Z";
 
@@ -5774,6 +5793,14 @@ public partial class ChatViewModelTests
                 }));
 
         var expectedUpdatedAt = DateTimeOffset.Parse(updatedAt).UtcDateTime;
+        await WaitForPendingSessionUpdatesAsync(fixture.ViewModel);
+        await WaitForConditionAsync(() =>
+        {
+            var item = fixture.Workspace.GetCatalog().Single(entry => string.Equals(entry.ConversationId, conversationId, StringComparison.Ordinal));
+            return Task.FromResult(
+                string.Equals(item.DisplayName, "Renamed by agent", StringComparison.Ordinal)
+                && item.CatalogUpdatedAt == expectedUpdatedAt);
+        });
         var catalogItem = fixture.Workspace.GetCatalog().Single(entry => string.Equals(entry.ConversationId, conversationId, StringComparison.Ordinal));
         Assert.Equal("Renamed by agent", catalogItem.DisplayName);
         Assert.Equal(expectedUpdatedAt, catalogItem.CatalogUpdatedAt);
@@ -8168,7 +8195,7 @@ public partial class ChatViewModelTests
     }
 
     [Fact]
-    public async Task HydrateActiveConversationAsync_WhenReplayArrivesBeforeLoadResponse_ProjectsReplayBeforeTransportCompletes()
+    public async Task HydrateActiveConversationAsync_WhenReplayArrivesBeforeLoadResponse_BuffersReplayUntilTransportCompletes()
     {
         var syncContext = new QueueingSynchronizationContext();
         await using var fixture = CreateViewModel(syncContext);
@@ -8214,21 +8241,24 @@ public partial class ChatViewModelTests
             return Task.FromResult(loadStarted.Task.IsCompleted);
         }, timeoutMilliseconds: 2000);
 
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(fixture.ViewModel.MessageHistory.Any(message =>
-                string.Equals(
-                    message.TextContent,
-                    "authoritative replay before load response",
-                    StringComparison.Ordinal)));
-        });
-
+        syncContext.RunAll();
         Assert.False(hydrationTask.IsCompleted);
+        Assert.DoesNotContain(
+            fixture.ViewModel.MessageHistory,
+            message => string.Equals(
+                message.TextContent,
+                "authoritative replay before load response",
+                StringComparison.Ordinal));
 
         allowLoadCompletion.TrySetResult(null);
         await syncContext.RunUntilCompletedAsync(hydrationTask);
         Assert.True(await hydrationTask, fixture.ViewModel.ErrorMessage);
+        Assert.Contains(
+            fixture.ViewModel.MessageHistory,
+            message => string.Equals(
+                message.TextContent,
+                "authoritative replay before load response",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -8317,6 +8347,7 @@ public partial class ChatViewModelTests
         await syncContext.RunUntilCompletedAsync(hydrationTask);
 
         Assert.True(await hydrationTask);
+        await WaitForPendingSessionUpdatesAsync(fixture.ViewModel);
         var finalState = await fixture.GetStateAsync();
         var finalContent = finalState.ResolveContentSlice("conv-1");
         Assert.Equal("restored plan", finalContent?.PlanTitle);
@@ -8370,6 +8401,7 @@ public partial class ChatViewModelTests
         await syncContext.RunUntilCompletedAsync(hydrationTask);
 
         Assert.True(await hydrationTask);
+        await WaitForPendingSessionUpdatesAsync(fixture.ViewModel);
         var finalState = await fixture.GetStateAsync();
         var finalSessionInfo = finalState.ResolveSessionStateSlice("conv-1")?.SessionInfo;
         Assert.Equal("remote title only", finalSessionInfo?.Title);
@@ -8976,6 +9008,7 @@ public partial class ChatViewModelTests
             IsHydrating = true,
             Transcript = ImmutableList<ConversationMessageSnapshot>.Empty
         });
+        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.IsHydrating));
 
         Assert.True(
             IsUserFriendlyHydrationOverlayStatus(fixture.ViewModel.OverlayStatusText),
@@ -9267,6 +9300,8 @@ public partial class ChatViewModelTests
             Transcript = [],
             IsHydrating = true
         });
+        await WaitForConditionAsync(() => Task.FromResult(
+            string.Equals(fixture.ViewModel.CurrentSessionId, "conv-2", StringComparison.Ordinal)));
 
         Assert.Equal("conv-2", fixture.ViewModel.CurrentSessionId);
         Assert.Empty(fixture.ViewModel.MessageHistory);
@@ -9481,6 +9516,7 @@ public partial class ChatViewModelTests
                 }
             ]
         });
+        await WaitForConditionAsync(() => Task.FromResult(fixture.ViewModel.ShouldShowTranscriptSurface));
 
         Assert.True(fixture.ViewModel.ShouldShowSessionHeader);
         Assert.True(fixture.ViewModel.ShouldShowTranscriptSurface);
@@ -10555,8 +10591,6 @@ public partial class ChatViewModelTests
         var workflow = new Mock<IChatLaunchWorkflow>();
         using var nav = CreateStartNavigationViewModel(fixture);
         var startViewModel = CreateStartViewModelForChatFixture(fixture, nav, workflow.Object);
-        startViewModel.OnComposerLoaded();
-        syncContext.RunAll();
 
         runtimeState.CurrentShellContent = ShellNavigationContent.Chat;
         runtimeState.LatestActivationToken = 77;

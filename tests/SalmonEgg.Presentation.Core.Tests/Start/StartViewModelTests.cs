@@ -471,7 +471,6 @@ public sealed class StartViewModelTests
                 preferences,
                 nav,
                 workflow.Object);
-            startViewModel.OnComposerLoaded();
 
             await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
             await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
@@ -540,7 +539,6 @@ public sealed class StartViewModelTests
                 preferences,
                 nav,
                 workflow.Object);
-            startViewModel.OnComposerLoaded();
 
             await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
             await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
@@ -579,7 +577,6 @@ public sealed class StartViewModelTests
                 preferences,
                 nav,
                 workflow.Object);
-            startViewModel.OnComposerLoaded();
 
             await chat.DispatchConnectionAsync(new SetSettingsSelectedProfileAction("profile-1"));
             await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));

@@ -295,23 +295,16 @@ namespace SalmonEgg.Domain.Models.Protocol
     public class CurrentModeUpdate : SessionUpdate
     {
         [JsonPropertyName("currentModeId")]
-        public string? CurrentModeId { get; set; }
-
-        [JsonPropertyName("modeId")]
-        public string? LegacyModeId { get; set; }
+        public string CurrentModeId { get; set; } = string.Empty;
 
         [JsonPropertyName("title")]
         public string? Title { get; set; }
-
-        [JsonIgnore]
-        public string? NormalizedModeId =>
-            !string.IsNullOrWhiteSpace(CurrentModeId) ? CurrentModeId : LegacyModeId;
 
         public CurrentModeUpdate()
         {
         }
 
-        public CurrentModeUpdate(string? currentModeId = null, string? title = null)
+        public CurrentModeUpdate(string currentModeId, string? title = null)
         {
             CurrentModeId = currentModeId;
             Title = title;

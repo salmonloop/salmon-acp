@@ -178,7 +178,8 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Arrange
             string? messageId = null;
-            var parameters = new { name = "test", value = 123 };
+            using var parametersDocument = JsonDocument.Parse("""{"name":"test","value":123}""");
+            var parameters = parametersDocument.RootElement.Clone();
 
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))
@@ -219,7 +220,8 @@ namespace SalmonEgg.Application.Tests.UseCases
         {
             // Arrange
             AcpMessage? capturedMessage = null;
-            var parameters = new { name = "test", value = 123 };
+            using var parametersDocument = JsonDocument.Parse("""{"name":"test","value":123}""");
+            var parameters = parametersDocument.RootElement.Clone();
 
             _mockConnectionManager
                 .Setup(x => x.SendMessageAsync(It.IsAny<AcpMessage>(), It.IsAny<CancellationToken>()))

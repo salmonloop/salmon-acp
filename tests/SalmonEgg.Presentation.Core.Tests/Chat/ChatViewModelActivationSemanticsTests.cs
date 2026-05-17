@@ -917,15 +917,21 @@ public partial class ChatViewModelTests
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-old"));
 
         var firstRemoteSwitch = fixture.ViewModel.SwitchConversationAsync("conv-remote");
-        await oldLoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await WaitForConditionAsync(
+            () => Task.FromResult(oldLoadStarted.Task.IsCompleted),
+            timeoutMilliseconds: 5000);
 
         var localSwitch = await fixture.ViewModel.SwitchConversationAsync("conv-local");
         Assert.True(localSwitch);
         await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-new"));
 
         var secondRemoteSwitch = fixture.ViewModel.SwitchConversationAsync("conv-remote");
-        await newLoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await oldLoadCanceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await WaitForConditionAsync(
+            () => Task.FromResult(newLoadStarted.Task.IsCompleted),
+            timeoutMilliseconds: 5000);
+        await WaitForConditionAsync(
+            () => Task.FromResult(oldLoadCanceled.Task.IsCompleted),
+            timeoutMilliseconds: 5000);
 
         Assert.Equal(2, Volatile.Read(ref loadCount));
         Assert.True(await secondRemoteSwitch);

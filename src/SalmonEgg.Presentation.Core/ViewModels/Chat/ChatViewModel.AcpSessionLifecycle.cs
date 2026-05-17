@@ -166,7 +166,7 @@ public partial class ChatViewModel
                             "Ignoring legacy current mode update because config options are authoritative. conversationId={ConversationId} remoteSessionId={RemoteSessionId} modeId={ModeId}",
                             targetConversationId,
                             e.SessionId,
-                            modeChange.NormalizedModeId);
+                            modeChange.CurrentModeId);
                     }
 
                     return;
@@ -585,7 +585,7 @@ public partial class ChatViewModel
             return;
         }
 
-        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var currentState = await _chatStore.GetCurrentStateAsync();
         var transcript = currentState.ResolveContentSlice(conversationId)?.Transcript
             ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         var reconciled = _outgoingUserMessageProjector.TryReconcilePromptAcknowledgement(
@@ -694,7 +694,7 @@ public partial class ChatViewModel
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var binding = await ResolveConversationBindingAsync(sessionId, cancellationToken).ConfigureAwait(false);
         var runtimeState = ResolveWarmReuseRuntimeState(
             warmRuntimeSnapshot,
@@ -766,7 +766,7 @@ public partial class ChatViewModel
             return false;
         }
 
-        state = await _chatStore.State ?? ChatState.Empty;
+        state = await _chatStore.GetCurrentStateAsync();
         binding = await ResolveConversationBindingAsync(sessionId, cancellationToken).ConfigureAwait(false);
         currentConnection = await ResolveWarmReuseConnectionIdentityAsync(binding, cancellationToken).ConfigureAwait(false);
         var warmRuntimeAfterProfileReconnect = ResolveWarmReuseRuntimeState(
@@ -1188,7 +1188,7 @@ public partial class ChatViewModel
         CancellationToken cancellationToken = default)
     {
         var sessionId = request.ConversationId;
-        var activationStartState = await _chatStore.State ?? ChatState.Empty;
+        var activationStartState = await _chatStore.GetCurrentStateAsync();
         var hasCompetingNonWarmActivation =
             HasCompetingInFlightConversationActivation(activationStartState, sessionId);
         var warmRuntimeSnapshot = activationStartState.ResolveRuntimeState(sessionId);
@@ -1266,7 +1266,7 @@ public partial class ChatViewModel
 
         var warmReuseBinding = await ResolveConversationBindingAsync(sessionId, context.CancellationToken).ConfigureAwait(false);
         var warmReuseConnection = await ResolveWarmReuseConnectionIdentityAsync(warmReuseBinding, context.CancellationToken).ConfigureAwait(false);
-        var warmReuseState = await _chatStore.State ?? ChatState.Empty;
+        var warmReuseState = await _chatStore.GetCurrentStateAsync();
         var hasReusableWarmProjection = HasReusableWarmProjection(warmReuseState, sessionId);
         var warmRuntimeAfterSelection = ResolveWarmReuseRuntimeState(
             warmRuntimeSnapshot,
@@ -1631,8 +1631,12 @@ public partial class ChatViewModel
             return TryGetToolCallId(element);
         }
 
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(toolCall));
-        return TryGetToolCallId(document.RootElement);
+        if (toolCall is ToolCallUpdate update)
+        {
+            return string.IsNullOrWhiteSpace(update.ToolCallId) ? null : update.ToolCallId;
+        }
+
+        return null;
     }
 
     private static string? TryGetToolCallId(JsonElement element)
@@ -1790,7 +1794,7 @@ public partial class ChatViewModel
             return;
         }
 
-        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var currentState = await _chatStore.GetCurrentStateAsync();
         var transcript = currentState.ResolveContentSlice(conversationId)?.Transcript
             ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         var projection = _outgoingUserMessageProjector.ResolveAuthoritativeProjection(
@@ -1898,7 +1902,7 @@ public partial class ChatViewModel
             return;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var currentTranscript = state.ResolveContentSlice(conversationId)?.Transcript
             ?? ImmutableList<ConversationMessageSnapshot>.Empty;
         var existing = currentTranscript.LastOrDefault(message =>
@@ -2031,7 +2035,7 @@ public partial class ChatViewModel
 
     private async Task PreemptivelyCancelTurnAsync(string? expectedConversationId = null, string? expectedTurnId = null)
     {
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var activeTurn = state.ActiveTurn;
         if (activeTurn is null)
         {

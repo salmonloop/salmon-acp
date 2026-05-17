@@ -118,7 +118,8 @@ public sealed class WasmStartupAssetsTests
         var script = LoadFile(@"scripts\vercel-build.sh");
 
         Assert.Contains("dotnet workload list", script, StringComparison.Ordinal);
-        Assert.Contains("dotnet workload install wasm-tools --skip-manifest-update", script, StringComparison.Ordinal);
+        Assert.Contains("workload_install_args=(wasm-tools --skip-manifest-update --disable-parallel --no-http-cache)", script, StringComparison.Ordinal);
+        Assert.Contains("dotnet workload install \"${workload_install_args[@]}\"", script, StringComparison.Ordinal);
     }
 
     private static string LoadFile(string relativePath)

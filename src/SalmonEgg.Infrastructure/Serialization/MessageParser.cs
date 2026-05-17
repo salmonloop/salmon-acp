@@ -1,8 +1,8 @@
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using SalmonEgg.Domain.Interfaces;
-using System.Linq;
 using SalmonEgg.Domain.Models.JsonRpc;
 
 namespace SalmonEgg.Infrastructure.Serialization
@@ -34,13 +34,7 @@ namespace SalmonEgg.Infrastructure.Serialization
                 AllowTrailingCommas = false,
                 // ACP agents can be strict about optional fields; omit nulls rather than writing `"foo": null`.
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                Converters =
-                {
-                    // 添加 JsonRpcMessage 的多态转换器
-                    new JsonRpcMessageConverter(),
-                    // Allow enums to bind to the JsonPropertyName values used across ACP payloads.
-                    new JsonPropertyNameEnumConverterFactory()
-                }
+                TypeInfoResolver = AcpJsonContext.Default
             };
 
             EnableOutOfOrderMetadataProperties(_options);
@@ -56,10 +50,9 @@ namespace SalmonEgg.Infrastructure.Serialization
 
             EnableOutOfOrderMetadataProperties(_options);
 
-            // 确保添加了必要的转换器
-            if (!_options.Converters.OfType<JsonRpcMessageConverter>().Any())
+            if (_options.TypeInfoResolver == null)
             {
-                _options.Converters.Add(new JsonRpcMessageConverter());
+                _options.TypeInfoResolver = AcpJsonContext.Default;
             }
         }
 
@@ -89,19 +82,19 @@ namespace SalmonEgg.Infrastructure.Serialization
                 if (hasResult || hasError)
                 {
                     // 响应消息
-                    return JsonSerializer.Deserialize<JsonRpcResponse>(json, _options)
+                    return JsonSerializer.Deserialize(json, GetTypeInfo<JsonRpcResponse>())
                         ?? throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to parse response");
                 }
                 else if (hasId)
                 {
                     // 请求消息
-                    return JsonSerializer.Deserialize<JsonRpcRequest>(json, _options)
+                    return JsonSerializer.Deserialize(json, GetTypeInfo<JsonRpcRequest>())
                         ?? throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to parse request");
                 }
                 else
                 {
                     // 通知消息（无 id）
-                    return JsonSerializer.Deserialize<JsonRpcNotification>(json, _options)
+                    return JsonSerializer.Deserialize(json, GetTypeInfo<JsonRpcNotification>())
                         ?? throw new AcpException(JsonRpcErrorCode.ParseError, "Failed to parse notification");
                 }
             }
@@ -190,7 +183,13 @@ namespace SalmonEgg.Infrastructure.Serialization
 
             try
             {
-                return JsonSerializer.Serialize(message, message.GetType(), _options);
+                return message switch
+                {
+                    JsonRpcRequest request => JsonSerializer.Serialize(request, GetTypeInfo<JsonRpcRequest>()),
+                    JsonRpcNotification notification => JsonSerializer.Serialize(notification, GetTypeInfo<JsonRpcNotification>()),
+                    JsonRpcResponse response => JsonSerializer.Serialize(response, GetTypeInfo<JsonRpcResponse>()),
+                    _ => throw new JsonException($"Unknown JsonRpcMessage type: {message.GetType().Name}")
+                };
             }
             catch (JsonException ex)
             {
@@ -201,13 +200,13 @@ namespace SalmonEgg.Infrastructure.Serialization
             }
         }
 
+        private JsonTypeInfo<T> GetTypeInfo<T>()
+        {
+            return (JsonTypeInfo<T>)_options.GetTypeInfo(typeof(T));
+        }
+
         private static void EnableOutOfOrderMetadataProperties(JsonSerializerOptions options)
         {
-            if (options == null)
-            {
-                throw new ArgumentNullException(nameof(options));
-            }
-
             // ACP session/update payloads may place protocol extension fields like `_meta`
             // before the polymorphic discriminator (`sessionUpdate`).
             // Newer System.Text.Json versions expose an opt-in switch for this, but our
@@ -217,57 +216,6 @@ namespace SalmonEgg.Infrastructure.Serialization
             if (property?.CanWrite == true && property.PropertyType == typeof(bool))
             {
                 property.SetValue(options, true);
-            }
-        }
-    }
-
-    /// <summary>
-    /// JsonRpcMessage 的多态 JSON 转换器。
-    /// 根据消息结构自动选择正确的派生类型进行反序列化。
-    /// </summary>
-    public class JsonRpcMessageConverter : JsonConverter<JsonRpcMessage>
-    {
-        public override JsonRpcMessage? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            using var doc = JsonDocument.ParseValue(ref reader);
-            var root = doc.RootElement;
-
-            // 检测消息类型
-            var hasId = root.TryGetProperty("id", out _);
-            var hasResult = root.TryGetProperty("result", out _);
-            var hasError = root.TryGetProperty("error", out _);
-
-            var json = root.GetRawText();
-
-            if (hasResult || hasError)
-            {
-                return JsonSerializer.Deserialize<JsonRpcResponse>(json, options);
-            }
-            else if (hasId)
-            {
-                return JsonSerializer.Deserialize<JsonRpcRequest>(json, options);
-            }
-            else
-            {
-                return JsonSerializer.Deserialize<JsonRpcNotification>(json, options);
-            }
-        }
-
-        public override void Write(Utf8JsonWriter writer, JsonRpcMessage value, JsonSerializerOptions options)
-        {
-            switch (value)
-            {
-                case JsonRpcRequest request:
-                    JsonSerializer.Serialize(writer, request, options);
-                    break;
-                case JsonRpcNotification notification:
-                    JsonSerializer.Serialize(writer, notification, options);
-                    break;
-                case JsonRpcResponse response:
-                    JsonSerializer.Serialize(writer, response, options);
-                    break;
-                default:
-                    throw new JsonException($"Unknown JsonRpcMessage type: {value.GetType().Name}");
             }
         }
     }

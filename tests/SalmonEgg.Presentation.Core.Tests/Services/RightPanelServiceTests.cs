@@ -54,7 +54,7 @@ public class RightPanelServiceTests
         using var signal = new ManualResetEventSlim(false);
         service.ModeChanged += (_, _) => signal.Set();
         await store.Dispatch(new RightPanelModeChanged(RightPanelMode.Diff));
-        Assert.True(signal.Wait(TimeSpan.FromSeconds(5)));
+        await WaitForConditionAsync(() => service.CurrentMode == RightPanelMode.Diff);
         var modeChangedCalled = 0;
         service.ModeChanged += (_, _) => modeChangedCalled++;
 
@@ -62,6 +62,22 @@ public class RightPanelServiceTests
 
         Assert.Equal(RightPanelMode.Diff, service.CurrentMode);
         Assert.Equal(0, modeChangedCalled);
+    }
+
+    private static async Task WaitForConditionAsync(Func<bool> predicate, int timeoutMilliseconds = 5000)
+    {
+        var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+        while (DateTime.UtcNow < timeoutAt)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        Assert.True(predicate(), "Timed out waiting for expected asynchronous condition.");
     }
 
     private sealed class TestShellLayoutStore : IShellLayoutStore, IDisposable

@@ -704,8 +704,6 @@ public sealed class AcpConnectionCoordinatorTests
 
         public long BeginHydrationBufferingScope(string? sessionId) => 1;
 
-        public bool ReleaseBufferedUpdatesForReplayProjection(long hydrationAttemptId) => false;
-
         public void SuppressBufferedUpdates(long hydrationAttemptId, string? reason = null)
         {
             SuppressReasons.Add(reason ?? string.Empty);

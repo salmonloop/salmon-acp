@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -177,8 +178,12 @@ public partial class MainViewModel : ViewModelBase
                 IsOutgoing = true
             });
 
-            var result = await
-_messageService.SendRequestAsync(Method, Parameters);
+            using var parametersDocument = string.IsNullOrWhiteSpace(Parameters)
+                ? null
+                : JsonDocument.Parse(Parameters);
+            var parameters = parametersDocument?.RootElement.Clone();
+
+            var result = await _messageService.SendRequestAsync(Method, parameters);
 
             if (result.IsSuccess && result.Value != null)
             {

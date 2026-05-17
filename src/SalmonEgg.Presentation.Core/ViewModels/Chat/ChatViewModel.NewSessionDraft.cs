@@ -35,7 +35,7 @@ public partial class ChatViewModel
         try
         {
             await TryAutoConnectAsync(cancellationToken).ConfigureAwait(false);
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             var chatService = _chatService;
             var normalizedRequiredProfileId = NormalizeNewSessionDraftProfileId(requiredProfileId);
             var foregroundProfileId = connectionState.ForegroundTransportProfileId;
@@ -91,7 +91,7 @@ public partial class ChatViewModel
                 isConfigAuthoritative: false);
             await _chatConnectionStore.Dispatch(new SetNewSessionDraftAction(creatingDraft)).ConfigureAwait(false);
             await ApplyNewSessionDraftProjectionAsync(
-                (await _chatConnectionStore.State) ?? ChatConnectionState.Empty).ConfigureAwait(false);
+                await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false)).ConfigureAwait(false);
 
             SessionNewResponse response;
             try
@@ -129,7 +129,7 @@ public partial class ChatViewModel
                 response.ConfigOptions is not null);
             await _chatConnectionStore.Dispatch(new SetNewSessionDraftAction(readyDraft)).ConfigureAwait(false);
             await ApplyNewSessionDraftProjectionAsync(
-                (await _chatConnectionStore.State) ?? ChatConnectionState.Empty).ConfigureAwait(false);
+                await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -138,7 +138,7 @@ public partial class ChatViewModel
         catch (Exception ex)
         {
             Logger.LogDebug(ex, "Failed to prepare ACP new-session draft.");
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             var failed = connectionState.NewSessionDraft is null
                 ? null
                 : connectionState.NewSessionDraft with
@@ -148,7 +148,7 @@ public partial class ChatViewModel
                 };
             await _chatConnectionStore.Dispatch(new SetNewSessionDraftAction(failed)).ConfigureAwait(false);
             await ApplyNewSessionDraftProjectionAsync(
-                (await _chatConnectionStore.State) ?? ChatConnectionState.Empty).ConfigureAwait(false);
+                await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false)).ConfigureAwait(false);
         }
         finally
         {
@@ -163,7 +163,7 @@ public partial class ChatViewModel
         await _newSessionDraftGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             var draft = connectionState.NewSessionDraft;
             if (draft is null)
             {
@@ -191,7 +191,7 @@ public partial class ChatViewModel
         await _newSessionDraftGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             var draft = connectionState.NewSessionDraft;
             if (draft is null
                 || draft.Phase != NewSessionDraftPhase.Ready
@@ -276,7 +276,7 @@ public partial class ChatViewModel
         await _newSessionDraftGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             var draft = connectionState.NewSessionDraft;
             if (draft is null
                 || draft.Phase != NewSessionDraftPhase.Ready
@@ -324,7 +324,7 @@ public partial class ChatViewModel
             var updatedDraft = MergeNewSessionDraftDelta(draft, delta);
             await _chatConnectionStore.Dispatch(new SetNewSessionDraftAction(updatedDraft)).ConfigureAwait(false);
             await ApplyNewSessionDraftProjectionAsync(
-                (await _chatConnectionStore.State) ?? ChatConnectionState.Empty).ConfigureAwait(false);
+                await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -333,7 +333,7 @@ public partial class ChatViewModel
         {
             Logger.LogWarning(ex, "Failed to switch ACP new-session draft mode.");
             await ApplyNewSessionDraftProjectionAsync(
-                (await _chatConnectionStore.State) ?? ChatConnectionState.Empty).ConfigureAwait(false);
+                await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false)).ConfigureAwait(false);
         }
         finally
         {
@@ -373,7 +373,7 @@ public partial class ChatViewModel
 
     private async Task ClearNewSessionDraftStateAsync()
     {
-        var current = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var current = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         if (current.NewSessionDraft is null)
         {
             await ApplyNewSessionDraftProjectionAsync(current).ConfigureAwait(false);
@@ -382,7 +382,7 @@ public partial class ChatViewModel
 
         await _chatConnectionStore.Dispatch(new ClearNewSessionDraftAction()).ConfigureAwait(false);
         await ApplyNewSessionDraftProjectionAsync(
-            (await _chatConnectionStore.State) ?? ChatConnectionState.Empty).ConfigureAwait(false);
+            await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     private void SetSelectedNewSessionDraftModeWithoutDispatch(SessionModeViewModel? mode)

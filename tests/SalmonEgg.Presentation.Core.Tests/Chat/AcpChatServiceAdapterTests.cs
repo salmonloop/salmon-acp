@@ -82,7 +82,7 @@ public sealed class AcpChatServiceAdapterTests
     }
 
     [Fact]
-    public async Task ReleaseBufferedUpdatesForReplayProjectionAsync_WhenAttemptIsCurrent_PublishesTargetReplayBeforeFinalHydration()
+    public async Task SessionLoadReplay_RemainsBufferedUntilHydrationIsAuthoritativelyMarked()
     {
         var dispatcher = new QueueingUiDispatcher();
         var inner = new FakeChatService();
@@ -93,32 +93,31 @@ public sealed class AcpChatServiceAdapterTests
         adapter.MarkHydrated();
         var attemptId = adapter.BeginHydrationBufferingScope("remote-1");
 
-        var released = adapter.ReleaseBufferedUpdatesForReplayProjection(attemptId);
         inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new PlanUpdate(title: "replay")));
         inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-2", new PlanUpdate(title: "other")));
         while (dispatcher.RunNext())
         {
         }
 
-        await adapter.WaitForBufferedUpdatesDrainedAsync(attemptId).WaitAsync(TimeSpan.FromSeconds(1));
-        Assert.True(released);
-        Assert.Equal(2, updates.Count);
-        Assert.Equal("remote-1", updates[0].SessionId);
-        Assert.Equal("remote-2", updates[1].SessionId);
+        Assert.Single(updates);
+        Assert.Equal("remote-2", updates[0].SessionId);
 
         inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new PlanUpdate(title: "late")));
         while (dispatcher.RunNext())
         {
         }
 
-        Assert.Equal(3, updates.Count);
-        Assert.Equal("late", Assert.IsType<PlanUpdate>(updates[2].Update).Title);
+        Assert.Single(updates);
         Assert.True(adapter.TryMarkHydrated(attemptId));
         while (dispatcher.RunNext())
         {
         }
 
+        await adapter.WaitForBufferedUpdatesDrainedAsync(attemptId).WaitAsync(TimeSpan.FromSeconds(1));
         Assert.Equal(3, updates.Count);
+        Assert.Equal("remote-1", updates[1].SessionId);
+        Assert.Equal("replay", Assert.IsType<PlanUpdate>(updates[1].Update).Title);
+        Assert.Equal("late", Assert.IsType<PlanUpdate>(updates[2].Update).Title);
     }
 
     [Fact]
@@ -328,7 +327,7 @@ public sealed class AcpChatServiceAdapterTests
     }
 
     [Fact]
-    public void SuppressBufferedUpdates_WhenReplayWasReleased_RemovesScopeAndRestoresSteadyState()
+    public void SuppressBufferedUpdates_WhenReplayIsPending_RemovesScopeAndRestoresSteadyState()
     {
         var uiDispatcher = new QueueingUiDispatcher();
         var inner = new FakeChatService();
@@ -337,9 +336,7 @@ public sealed class AcpChatServiceAdapterTests
         adapter.SessionUpdateReceived += (_, args) => updates.Add(args);
 
         var attemptId = adapter.BeginHydrationBufferingScope("remote-1");
-        inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new PlanUpdate(title: "released")));
-        Assert.True(adapter.ReleaseBufferedUpdatesForReplayProjection(attemptId));
-
+        inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-1", new PlanUpdate(title: "pending")));
         adapter.SuppressBufferedUpdates(attemptId, "failed");
         inner.RaiseSessionUpdate(new SessionUpdateEventArgs("remote-2", new PlanUpdate(title: "steady-state")));
         while (uiDispatcher.RunNext())

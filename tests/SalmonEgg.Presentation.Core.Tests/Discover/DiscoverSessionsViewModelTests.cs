@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SalmonEgg.Application.Services.Chat;
@@ -79,6 +80,7 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.Equal(2, viewModel.AgentSessions.Count);
 
             var needsMappingRow = Assert.Single(viewModel.AgentSessions.Where(row => row.Id == "remote-needs-mapping"));
+            Assert.Same(viewModel.LoadSessionCommand, needsMappingRow.LoadSessionCommand);
             Assert.Equal(ProjectAffinitySource.NeedsMapping, needsMappingRow.AffinitySource);
             Assert.Equal("Needs mapping", needsMappingRow.ProjectAffinityBadgeText);
             Assert.True(needsMappingRow.NeedsUserAttention);
@@ -619,6 +621,7 @@ public sealed class DiscoverSessionsViewModelTests
             Assert.False(viewModel.ShowSessionsSkeleton);
             Assert.False(viewModel.CanRefreshSessions);
             Assert.False(viewModel.AreSessionActionsEnabled);
+            Assert.False(viewModel.LoadSessionCommand.CanExecute(CreateSessionItem()));
             Assert.Equal("正在导入会话...", viewModel.LoadingStatus);
 
             allowActivationCompletion.TrySetResult(null);
@@ -631,6 +634,30 @@ public sealed class DiscoverSessionsViewModelTests
     }
 
     [Fact]
+    public void LoadSessionCommand_CanExecute_FollowsSelectedProfileAndLoadPhase()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubNavigationCoordinator());
+        var item = CreateSessionItem();
+
+        Assert.True(viewModel.LoadSessionCommand.CanExecute(item));
+
+        viewModel.SelectedProfile = null;
+        Assert.False(viewModel.LoadSessionCommand.CanExecute(item));
+
+        viewModel.SelectedProfile = profile;
+        viewModel.LoadPhase = DiscoverSessionsLoadPhase.ImportingSession;
+        Assert.False(viewModel.LoadSessionCommand.CanExecute(item));
+
+        viewModel.LoadPhase = DiscoverSessionsLoadPhase.Loaded;
+        Assert.True(viewModel.LoadSessionCommand.CanExecute(item));
+    }
+
+    [Fact]
     public void DiscoverSessionItemViewModel_OptionalMetadata_ProjectsVisibilityBoundaries()
     {
         var withoutMetadata = new DiscoverSessionItemViewModel(
@@ -638,12 +665,14 @@ public sealed class DiscoverSessionsViewModelTests
             "Remote Session",
             "Imported from ACP",
             null,
+            new AsyncRelayCommand<DiscoverSessionItemViewModel?>(_ => Task.CompletedTask),
             null);
         var withMetadata = new DiscoverSessionItemViewModel(
             "remote-session-2",
             "Remote Session 2",
             "Imported from ACP",
             new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
+            new AsyncRelayCommand<DiscoverSessionItemViewModel?>(_ => Task.CompletedTask),
             @"C:\repo\remote");
 
         Assert.False(withoutMetadata.HasFormattedDate);
@@ -1041,6 +1070,7 @@ public sealed class DiscoverSessionsViewModelTests
             "Remote Session",
             "Imported from ACP",
             new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Local),
+            new AsyncRelayCommand<DiscoverSessionItemViewModel?>(_ => Task.CompletedTask),
             @"C:\repo\remote");
 
     private static void SetSelectedProfileWithoutNotification(

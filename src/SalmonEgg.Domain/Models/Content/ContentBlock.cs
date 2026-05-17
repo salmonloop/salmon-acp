@@ -77,17 +77,16 @@ namespace SalmonEgg.Domain.Models.Content
                 throw new JsonException("ContentBlock payload must contain a string 'type' discriminator.");
             }
 
-            var rawJson = root.GetRawText();
             var discriminator = typeElement.GetString() ?? throw new JsonException("ContentBlock type discriminator cannot be null.");
 
             return discriminator switch
             {
-                "text" => JsonSerializer.Deserialize<TextContentBlock>(rawJson, options),
-                "image" => JsonSerializer.Deserialize<ImageContentBlock>(rawJson, options),
-                "audio" => JsonSerializer.Deserialize<AudioContentBlock>(rawJson, options),
-                "resource_link" => JsonSerializer.Deserialize<ResourceLinkContentBlock>(rawJson, options),
-                "resource" => JsonSerializer.Deserialize<ResourceContentBlock>(rawJson, options),
-                _ => ReadUnknown(rawJson, discriminator, options)
+                "text" => ReadText(root),
+                "image" => ReadImage(root),
+                "audio" => ReadAudio(root),
+                "resource_link" => ReadResourceLink(root),
+                "resource" => ReadResource(root),
+                _ => ReadUnknown(root, discriminator)
             };
         }
 
@@ -96,19 +95,19 @@ namespace SalmonEgg.Domain.Models.Content
             switch (value)
             {
                 case TextContentBlock text:
-                    WriteKnown(writer, text.Type, text, options);
+                    WriteText(writer, text, options);
                     return;
                 case ImageContentBlock image:
-                    WriteKnown(writer, image.Type, image, options);
+                    WriteImage(writer, image, options);
                     return;
                 case AudioContentBlock audio:
-                    WriteKnown(writer, audio.Type, audio, options);
+                    WriteAudio(writer, audio, options);
                     return;
                 case ResourceLinkContentBlock resourceLink:
-                    WriteKnown(writer, resourceLink.Type, resourceLink, options);
+                    WriteResourceLink(writer, resourceLink, options);
                     return;
                 case ResourceContentBlock resource:
-                    WriteKnown(writer, resource.Type, resource, options);
+                    WriteResource(writer, resource, options);
                     return;
                 default:
                     WriteUnknown(writer, value, options);
@@ -116,38 +115,343 @@ namespace SalmonEgg.Domain.Models.Content
             }
         }
 
-        private static ContentBlock ReadUnknown(string rawJson, string discriminator, JsonSerializerOptions options)
+        private static TextContentBlock ReadText(JsonElement root)
         {
-            var payload = JsonSerializer.Deserialize<UnknownContentBlockPayload>(rawJson, options)
-                ?? throw new JsonException("Failed to deserialize unknown content payload.");
+            var block = new TextContentBlock
+            {
+                Text = ReadString(root, "text")!,
+                Annotations = ReadAnnotations(root)
+            };
+            block.ExtensionData = ReadExtensionData(root, "text");
+            return block;
+        }
 
+        private static ImageContentBlock ReadImage(JsonElement root)
+        {
+            var block = new ImageContentBlock
+            {
+                Data = ReadString(root, "data")!,
+                MimeType = ReadString(root, "mimeType")!,
+                Uri = ReadString(root, "uri"),
+                Annotations = ReadAnnotations(root)
+            };
+            block.ExtensionData = ReadExtensionData(root, "data", "mimeType", "uri");
+            return block;
+        }
+
+        private static AudioContentBlock ReadAudio(JsonElement root)
+        {
+            var block = new AudioContentBlock
+            {
+                Data = ReadString(root, "data")!,
+                MimeType = ReadString(root, "mimeType")!,
+                Annotations = ReadAnnotations(root)
+            };
+            block.ExtensionData = ReadExtensionData(root, "data", "mimeType");
+            return block;
+        }
+
+        private static ResourceLinkContentBlock ReadResourceLink(JsonElement root)
+        {
+            var block = new ResourceLinkContentBlock
+            {
+                Uri = ReadString(root, "uri")!,
+                Name = ReadString(root, "name"),
+                MimeType = ReadString(root, "mimeType"),
+                Title = ReadString(root, "title"),
+                Description = ReadString(root, "description"),
+                Size = ReadInt64(root, "size"),
+                Annotations = ReadAnnotations(root)
+            };
+            block.ExtensionData = ReadExtensionData(root, "uri", "name", "mimeType", "title", "description", "size");
+            return block;
+        }
+
+        private static ResourceContentBlock ReadResource(JsonElement root)
+        {
+            var block = new ResourceContentBlock
+            {
+                Resource = root.TryGetProperty("resource", out var resourceElement)
+                    ? ReadEmbeddedResource(resourceElement)
+                    : null!,
+                Annotations = ReadAnnotations(root)
+            };
+            block.ExtensionData = ReadExtensionData(root, "resource");
+            return block;
+        }
+
+        private static ContentBlock ReadUnknown(JsonElement root, string discriminator)
+        {
             return new ContentBlock
             {
                 UnknownTypeDiscriminator = discriminator,
-                Annotations = payload.Annotations,
-                ExtensionData = payload.ExtensionData
+                Annotations = ReadAnnotations(root),
+                ExtensionData = ReadExtensionData(root)
             };
         }
 
-        private static void WriteKnown<TContent>(Utf8JsonWriter writer, string discriminator, TContent value, JsonSerializerOptions options)
-            where TContent : ContentBlock
+        private static EmbeddedResource ReadEmbeddedResource(JsonElement element)
         {
-            var element = JsonSerializer.SerializeToElement(value, value.GetType(), options);
-
-            writer.WriteStartObject();
-            writer.WriteString("type", discriminator);
-
-            foreach (var property in element.EnumerateObject())
+            if (element.ValueKind != JsonValueKind.Object)
             {
-                if (string.Equals(property.Name, "type", StringComparison.Ordinal))
+                throw new JsonException("Embedded resource payload must be a JSON object.");
+            }
+
+            return new EmbeddedResource
+            {
+                Uri = ReadString(element, "uri")!,
+                MimeType = ReadString(element, "mimeType")!,
+                Text = ReadString(element, "text"),
+                Blob = ReadString(element, "blob")
+            };
+        }
+
+        private static Annotations? ReadAnnotations(JsonElement root)
+        {
+            if (!root.TryGetProperty("annotations", out var annotationsElement)
+                || annotationsElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                return null;
+            }
+
+            if (annotationsElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new JsonException("ContentBlock annotations must be a JSON object.");
+            }
+
+            var annotations = new Annotations
+            {
+                Audience = ReadStringList(annotationsElement, "audience"),
+                Priority = ReadDecimal(annotationsElement, "priority"),
+                LastModified = ReadString(annotationsElement, "lastModified")
+            };
+
+            return annotations;
+        }
+
+        private static List<string>? ReadStringList(JsonElement root, string propertyName)
+        {
+            if (!root.TryGetProperty(propertyName, out var property)
+                || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                return null;
+            }
+
+            if (property.ValueKind != JsonValueKind.Array)
+            {
+                throw new JsonException($"ContentBlock '{propertyName}' must be a JSON array.");
+            }
+
+            var values = new List<string>();
+            foreach (var item in property.EnumerateArray())
+            {
+                values.Add(item.GetString()!);
+            }
+
+            return values;
+        }
+
+        private static string? ReadString(JsonElement root, string propertyName)
+        {
+            return root.TryGetProperty(propertyName, out var property)
+                ? property.ValueKind == JsonValueKind.Null ? null : property.GetString()
+                : null;
+        }
+
+        private static decimal? ReadDecimal(JsonElement root, string propertyName)
+        {
+            return root.TryGetProperty(propertyName, out var property)
+                && property.ValueKind == JsonValueKind.Number
+                && property.TryGetDecimal(out var value)
+                    ? value
+                    : null;
+        }
+
+        private static long? ReadInt64(JsonElement root, string propertyName)
+        {
+            return root.TryGetProperty(propertyName, out var property)
+                && property.ValueKind == JsonValueKind.Number
+                && property.TryGetInt64(out var value)
+                    ? value
+                    : null;
+        }
+
+        private static Dictionary<string, JsonElement>? ReadExtensionData(JsonElement root, params string[] knownPropertyNames)
+        {
+            Dictionary<string, JsonElement>? extensionData = null;
+
+            foreach (var property in root.EnumerateObject())
+            {
+                if (IsKnownProperty(property.Name, knownPropertyNames))
                 {
                     continue;
                 }
 
-                property.WriteTo(writer);
+                extensionData ??= new Dictionary<string, JsonElement>();
+                extensionData[property.Name] = property.Value.Clone();
             }
 
+            return extensionData;
+        }
+
+        private static bool IsKnownProperty(string propertyName, string[] knownPropertyNames)
+        {
+            if (string.Equals(propertyName, "type", StringComparison.Ordinal)
+                || string.Equals(propertyName, "annotations", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            for (var i = 0; i < knownPropertyNames.Length; i++)
+            {
+                if (string.Equals(propertyName, knownPropertyNames[i], StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void WriteText(Utf8JsonWriter writer, TextContentBlock value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", value.Type);
+            WriteAnnotations(writer, value.Annotations, options);
+            writer.WriteString("text", value.Text);
+            WriteExtensionData(writer, value.ExtensionData, "text");
             writer.WriteEndObject();
+        }
+
+        private static void WriteImage(Utf8JsonWriter writer, ImageContentBlock value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", value.Type);
+            WriteAnnotations(writer, value.Annotations, options);
+            writer.WriteString("data", value.Data);
+            WriteNullableString(writer, "uri", value.Uri, options);
+            writer.WriteString("mimeType", value.MimeType);
+            WriteExtensionData(writer, value.ExtensionData, "data", "mimeType", "uri");
+            writer.WriteEndObject();
+        }
+
+        private static void WriteAudio(Utf8JsonWriter writer, AudioContentBlock value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", value.Type);
+            WriteAnnotations(writer, value.Annotations, options);
+            writer.WriteString("data", value.Data);
+            writer.WriteString("mimeType", value.MimeType);
+            WriteExtensionData(writer, value.ExtensionData, "data", "mimeType");
+            writer.WriteEndObject();
+        }
+
+        private static void WriteResourceLink(Utf8JsonWriter writer, ResourceLinkContentBlock value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", value.Type);
+            WriteAnnotations(writer, value.Annotations, options);
+            writer.WriteString("uri", value.Uri);
+            WriteNullableString(writer, "name", value.Name, options);
+            WriteNullableString(writer, "mimeType", value.MimeType, options);
+            WriteNullableString(writer, "title", value.Title, options);
+            WriteNullableString(writer, "description", value.Description, options);
+            WriteNullableNumber(writer, "size", value.Size, options);
+            WriteExtensionData(writer, value.ExtensionData, "uri", "name", "mimeType", "title", "description", "size");
+            writer.WriteEndObject();
+        }
+
+        private static void WriteResource(Utf8JsonWriter writer, ResourceContentBlock value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", value.Type);
+            WriteAnnotations(writer, value.Annotations, options);
+            writer.WritePropertyName("resource");
+            WriteEmbeddedResource(writer, value.Resource, options);
+            WriteExtensionData(writer, value.ExtensionData, "resource");
+            writer.WriteEndObject();
+        }
+
+        private static void WriteEmbeddedResource(Utf8JsonWriter writer, EmbeddedResource value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("uri", value.Uri);
+            writer.WriteString("mimeType", value.MimeType);
+            WriteNullableString(writer, "text", value.Text, options);
+            WriteNullableString(writer, "blob", value.Blob, options);
+            writer.WriteEndObject();
+        }
+
+        private static void WriteAnnotations(Utf8JsonWriter writer, Annotations? value, JsonSerializerOptions options)
+        {
+            if (value == null)
+            {
+                if (ShouldWriteNull(options))
+                {
+                    writer.WriteNull("annotations");
+                }
+
+                return;
+            }
+
+            writer.WritePropertyName("annotations");
+            writer.WriteStartObject();
+
+            if (value.Audience != null)
+            {
+                writer.WritePropertyName("audience");
+                writer.WriteStartArray();
+                foreach (var audience in value.Audience)
+                {
+                    writer.WriteStringValue(audience);
+                }
+
+                writer.WriteEndArray();
+            }
+            else if (ShouldWriteNull(options))
+            {
+                writer.WriteNull("audience");
+            }
+
+            if (value.Priority.HasValue)
+            {
+                writer.WriteNumber("priority", value.Priority.Value);
+            }
+            else if (ShouldWriteNull(options))
+            {
+                writer.WriteNull("priority");
+            }
+
+            WriteNullableString(writer, "lastModified", value.LastModified, options);
+            writer.WriteEndObject();
+        }
+
+        private static void WriteNullableString(Utf8JsonWriter writer, string propertyName, string? value, JsonSerializerOptions options)
+        {
+            if (value != null)
+            {
+                writer.WriteString(propertyName, value);
+                return;
+            }
+
+            if (ShouldWriteNull(options))
+            {
+                writer.WriteNull(propertyName);
+            }
+        }
+
+        private static void WriteNullableNumber(Utf8JsonWriter writer, string propertyName, long? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue)
+            {
+                writer.WriteNumber(propertyName, value.Value);
+                return;
+            }
+
+            if (ShouldWriteNull(options))
+            {
+                writer.WriteNull(propertyName);
+            }
         }
 
         private static void WriteUnknown(Utf8JsonWriter writer, ContentBlock value, JsonSerializerOptions options)
@@ -162,35 +466,40 @@ namespace SalmonEgg.Domain.Models.Content
 
             if (value.Annotations != null)
             {
-                writer.WritePropertyName("annotations");
-                JsonSerializer.Serialize(writer, value.Annotations, options);
+                WriteAnnotations(writer, value.Annotations, options);
             }
-
-            if (value.ExtensionData != null)
+            else if (ShouldWriteNull(options))
             {
-                foreach (var property in value.ExtensionData)
-                {
-                    if (string.Equals(property.Key, "type", StringComparison.Ordinal)
-                        || string.Equals(property.Key, "annotations", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    writer.WritePropertyName(property.Key);
-                    property.Value.WriteTo(writer);
-                }
+                writer.WriteNull("annotations");
             }
 
+            WriteExtensionData(writer, value.ExtensionData);
             writer.WriteEndObject();
         }
 
-        private sealed class UnknownContentBlockPayload
+        private static void WriteExtensionData(Utf8JsonWriter writer, Dictionary<string, JsonElement>? extensionData, params string[] knownPropertyNames)
         {
-            [JsonPropertyName("annotations")]
-            public Annotations? Annotations { get; set; }
+            if (extensionData == null)
+            {
+                return;
+            }
 
-            [JsonExtensionData]
-            public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+            foreach (var property in extensionData)
+            {
+                if (IsKnownProperty(property.Key, knownPropertyNames))
+                {
+                    continue;
+                }
+
+                writer.WritePropertyName(property.Key);
+                property.Value.WriteTo(writer);
+            }
+        }
+
+        private static bool ShouldWriteNull(JsonSerializerOptions options)
+        {
+            return options.DefaultIgnoreCondition != JsonIgnoreCondition.WhenWritingNull
+                && options.DefaultIgnoreCondition != JsonIgnoreCondition.WhenWritingDefault;
         }
     }
 }

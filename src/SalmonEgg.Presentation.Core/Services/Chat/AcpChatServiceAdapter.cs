@@ -150,9 +150,6 @@ public sealed class AcpChatServiceAdapter : IChatService, IAcpSessionUpdateBuffe
     public long BeginHydrationBufferingScope(string? sessionId)
         => _eventAdapter.BeginHydrationBuffering(sessionId);
 
-    public bool ReleaseBufferedUpdatesForReplayProjection(long hydrationAttemptId)
-        => _eventAdapter.ReleaseBufferedUpdatesForReplayProjection(hydrationAttemptId);
-
     public void SuppressBufferedUpdates(string? reason = null)
         => _eventAdapter.SuppressBufferedUpdates(reason);
 

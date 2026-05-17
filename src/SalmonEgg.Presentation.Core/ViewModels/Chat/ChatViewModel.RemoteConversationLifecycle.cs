@@ -199,7 +199,7 @@ public partial class ChatViewModel
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var conversationId = ResolveActiveConversationId(state);
         if (string.IsNullOrWhiteSpace(conversationId))
         {
@@ -284,7 +284,7 @@ public partial class ChatViewModel
             return false;
         }
 
-        var stateBeforeHydration = await _chatStore.State ?? ChatState.Empty;
+        var stateBeforeHydration = await _chatStore.GetCurrentStateAsync();
         var currentConnectionBeforeHydration = new ConversationWarmReuseConnectionIdentity(
             resolvedConnection.ProfileId,
             resolvedConnection.ConnectionInstanceId);
@@ -751,7 +751,7 @@ public partial class ChatViewModel
             return false;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var workspaceBinding = _conversationWorkspace.GetRemoteBinding(sessionId);
         var binding = state.ResolveBinding(sessionId)
             ?? (workspaceBinding is null
@@ -789,7 +789,7 @@ public partial class ChatViewModel
             return false;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         if (!string.Equals(state.HydratedConversationId, sessionId, StringComparison.Ordinal)
             || !string.Equals(ResolvePresentedSessionConversationId(), sessionId, StringComparison.Ordinal))
         {
@@ -945,7 +945,7 @@ public partial class ChatViewModel
     {
         try
         {
-            var state = await _chatStore.State ?? ChatState.Empty;
+            var state = await _chatStore.GetCurrentStateAsync();
             var preservedSessionInfo = string.Equals(state.HydratedConversationId, conversationId, StringComparison.Ordinal)
                 ? ConversationSessionInfoSnapshots.Clone(state.SessionInfo)
                 : ConversationSessionInfoSnapshots.Clone(state.ResolveSessionStateSlice(conversationId)?.SessionInfo);
@@ -1194,7 +1194,7 @@ public partial class ChatViewModel
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var storeState = await _chatStore.State ?? ChatState.Empty;
+        var storeState = await _chatStore.GetCurrentStateAsync();
         var preservedSessionState = storeState.ResolveSessionStateSlice(conversationId);
         var preservedSessionInfo = ConversationSessionInfoSnapshots.Clone(
             preservedSessionState?.SessionInfo);
@@ -1323,7 +1323,7 @@ public partial class ChatViewModel
         }
 
         var snapshot = _conversationWorkspace.GetConversationSnapshot(conversationId);
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var snapshotOrigin = _conversationWorkspace.GetConversationSnapshotOrigin(conversationId);
         var currentConnectionInstanceId = await ResolveProjectionRestoreConnectionInstanceIdAsync().ConfigureAwait(false);
         if (!RemoteConversationWorkspaceSnapshotPolicy.CanRestoreCachedTranscriptAfterInterruptedHydration(
@@ -1406,7 +1406,7 @@ public partial class ChatViewModel
                 }).ConfigureAwait(false);
             }
 
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             var hasPendingConnection = connectionState.Phase is ConnectionPhase.Connecting or ConnectionPhase.Initializing
                 || IsConnecting
                 || IsInitializing;
@@ -1431,7 +1431,7 @@ public partial class ChatViewModel
                     return true;
                 }
 
-                var finalConnectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+                var finalConnectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(finalConnectionState.Error))
                 {
                     await ApplyCurrentStoreProjectionAsync(activationVersion).ConfigureAwait(false);
@@ -1611,7 +1611,7 @@ public partial class ChatViewModel
             return true;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var currentConnection = new ConversationWarmReuseConnectionIdentity(
             resolvedConnection.ProfileId,
             resolvedConnection.ConnectionInstanceId);
@@ -1683,7 +1683,7 @@ public partial class ChatViewModel
             return null;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var binding = state.ResolveBinding(conversationId);
         if (binding != null)
         {
@@ -1833,14 +1833,6 @@ public partial class ChatViewModel
             binding.RemoteSessionId,
             binding.ProfileId,
             connectionInstanceId);
-        if (adapter != null
-            && existing.HasStarted
-            && existing.HydrationAttemptId.HasValue
-            && existing.BufferingStarted)
-        {
-            adapter.ReleaseBufferedUpdatesForReplayProjection(existing.HydrationAttemptId.Value);
-        }
-
         startResult = CreateRemoteSessionRecoveryStartResult(
             existing,
             new AcpSessionRecoveryBufferScope(
@@ -2040,14 +2032,6 @@ public partial class ChatViewModel
             remoteSessionId);
         try
         {
-            await TryReleaseRemoteSessionReplayProjectionAsync(
-                    conversationId,
-                    binding,
-                    connectionInstanceId,
-                    adapter,
-                    hydrationAttemptId,
-                    requestToken)
-                .ConfigureAwait(false);
             var projection = AcpSessionRecoveryProjection.FromLoad(
                 await loadTask
                     .WaitAsync(RemoteSessionLoadTimeout, requestToken)
@@ -2204,40 +2188,6 @@ public partial class ChatViewModel
                 recoveryMode,
                 remoteSessionId);
         }
-    }
-
-    private async Task TryReleaseRemoteSessionReplayProjectionAsync(
-        string conversationId,
-        ConversationBindingSlice expectedBinding,
-        string? expectedConnectionInstanceId,
-        IAcpSessionUpdateBufferController? adapter,
-        long? hydrationAttemptId,
-        CancellationToken cancellationToken)
-    {
-        if (adapter is null || !hydrationAttemptId.HasValue)
-        {
-            return;
-        }
-
-        var currentBinding = await ResolveConversationBindingAsync(conversationId, cancellationToken).ConfigureAwait(false);
-        if (currentBinding is null
-            || !string.Equals(currentBinding.RemoteSessionId, expectedBinding.RemoteSessionId, StringComparison.Ordinal)
-            || !string.Equals(currentBinding.ProfileId, expectedBinding.ProfileId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var currentConnection = await ResolveAuthoritativeForegroundConnectionAsync(
-                expectedBinding.ProfileId,
-                cancellationToken)
-            .ConfigureAwait(false);
-        if (currentConnection is null
-            || !string.Equals(currentConnection.Value.ConnectionInstanceId, expectedConnectionInstanceId, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        adapter.ReleaseBufferedUpdatesForReplayProjection(hydrationAttemptId.Value);
     }
 
     private async Task AwaitConflictingRemoteSessionRecoveryCompletionAsync(
@@ -2410,7 +2360,7 @@ public partial class ChatViewModel
             return 0;
         }
 
-        var state = await _chatStore.State ?? ChatState.Empty;
+        var state = await _chatStore.GetCurrentStateAsync();
         var projectedTranscript = state.ResolveContentSlice(conversationId)?.Transcript
             ?? (string.Equals(state.HydratedConversationId, conversationId, StringComparison.Ordinal)
                 ? state.Transcript
@@ -2489,7 +2439,7 @@ public partial class ChatViewModel
 
     private async Task<string?> ResolveProjectionRestoreConnectionInstanceIdAsync()
     {
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         return ConversationProjectionRestoreConnectionPolicy.ResolveCurrentConnectionInstanceId(
             connectionState,
             ConnectionInstanceId);
@@ -2502,7 +2452,7 @@ public partial class ChatViewModel
         while (!await IsRemoteConnectionReadyAsync(requiredProfileId, cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+            var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
             if (connectionState.Phase is not ConnectionPhase.Connecting
                 && connectionState.Phase is not ConnectionPhase.Initializing)
             {
@@ -2520,7 +2470,7 @@ public partial class ChatViewModel
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var connectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var connectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         return _authoritativeConnectionResolver.TryResolveReadyForegroundConnection(
             _chatService,
             connectionState,
@@ -2557,7 +2507,7 @@ public partial class ChatViewModel
             return;
         }
 
-        var currentState = await _chatStore.State ?? ChatState.Empty;
+        var currentState = await _chatStore.GetCurrentStateAsync();
         var existingRuntime = currentState.ResolveRuntimeState(conversationId);
         var preserveExistingConnectionInstanceId =
             connectionInstanceId is null
@@ -2708,7 +2658,7 @@ public partial class ChatViewModel
             return;
         }
 
-        var currentConnectionState = await _chatConnectionStore.State ?? ChatConnectionState.Empty;
+        var currentConnectionState = await _chatConnectionStore.GetCurrentStateAsync().ConfigureAwait(false);
         var currentConnectionInstanceId = !string.IsNullOrWhiteSpace(currentConnectionState.ConnectionInstanceId)
             ? currentConnectionState.ConnectionInstanceId
             : ConnectionInstanceId;
@@ -2755,7 +2705,7 @@ public partial class ChatViewModel
             return;
         }
 
-        var storeState = await _chatStore.State ?? ChatState.Empty;
+        var storeState = await _chatStore.GetCurrentStateAsync();
         var sessionInfo = ConversationSessionInfoSnapshots.Clone(storeState.ResolveSessionStateSlice(conversationId)?.SessionInfo);
         if (sessionInfo is null)
         {

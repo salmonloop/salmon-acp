@@ -42,6 +42,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     [NotifyPropertyChangedFor(nameof(ShowBusyStatus))]
     [NotifyPropertyChangedFor(nameof(CanRefreshSessions))]
     [NotifyPropertyChangedFor(nameof(AreSessionActionsEnabled))]
+    [NotifyCanExecuteChangedFor(nameof(LoadSessionCommand))]
     private DiscoverSessionsLoadPhase _loadPhase = DiscoverSessionsLoadPhase.Idle;
 
     [ObservableProperty]
@@ -93,6 +94,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
     [NotifyPropertyChangedFor(nameof(HasNoSelectedProfile))]
     [NotifyPropertyChangedFor(nameof(ShowDetailsPane))]
+    [NotifyCanExecuteChangedFor(nameof(LoadSessionCommand))]
     private ServerConfiguration? _selectedProfile;
 
     public bool ShowProfilesPane => LayoutMode == DiscoverLayoutMode.Wide || ActivePaneMode == DiscoverPaneMode.List;
@@ -312,6 +314,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                         string.IsNullOrWhiteSpace(session.Title) ? "未命名会话" : session.Title,
                         string.IsNullOrWhiteSpace(session.Description) ? "暂无描述" : session.Description,
                         AcpSessionTimestampPolicy.ParseUpdatedAtUtc(session.UpdatedAt),
+                        LoadSessionCommand,
                         session.Cwd,
                         ResolveAffinityBadgeText(affinityResolution, projects),
                         ResolveAffinityStatusText(affinityResolution),
@@ -362,7 +365,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanLoadSession))]
     private async Task LoadSessionAsync(DiscoverSessionItemViewModel? session)
     {
         var selectedProfile = SelectedProfile;
@@ -443,6 +446,11 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             }).ConfigureAwait(false);
         }
     }
+
+    private bool CanLoadSession(DiscoverSessionItemViewModel? session)
+        => session != null
+            && SelectedProfile != null
+            && AreSessionActionsEnabled;
 
     public void Dispose()
     {
@@ -650,6 +658,8 @@ public sealed class DiscoverSessionItemViewModel
 
     public DateTime? LastModified { get; }
 
+    public IAsyncRelayCommand<DiscoverSessionItemViewModel?> LoadSessionCommand { get; }
+
     public string? SessionCwd { get; }
 
     public string ProjectAffinityBadgeText { get; }
@@ -677,6 +687,7 @@ public sealed class DiscoverSessionItemViewModel
         string title,
         string description,
         DateTime? lastModified,
+        IAsyncRelayCommand<DiscoverSessionItemViewModel?> loadSessionCommand,
         string? sessionCwd = null,
         string? projectAffinityBadgeText = null,
         string? affinityStatusText = null,
@@ -687,6 +698,7 @@ public sealed class DiscoverSessionItemViewModel
         Title = title;
         Description = description;
         LastModified = lastModified;
+        LoadSessionCommand = loadSessionCommand ?? throw new ArgumentNullException(nameof(loadSessionCommand));
         SessionCwd = sessionCwd;
         ProjectAffinityBadgeText = string.IsNullOrWhiteSpace(projectAffinityBadgeText)
             ? "Unclassified"

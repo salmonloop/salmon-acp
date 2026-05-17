@@ -1,7 +1,6 @@
 using System.Text.Json;
 using NUnit.Framework;
 using SalmonEgg.Domain.Models.Protocol;
-using SalmonEgg.Infrastructure.Serialization;
 
 namespace SalmonEgg.Domain.Tests.Protocol;
 
@@ -22,7 +21,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new MessageParser().Options);
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, CreateJsonOptions());
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.SessionId, Is.EqualTo("s1"));
@@ -106,7 +105,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new MessageParser().Options);
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, CreateJsonOptions());
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
@@ -137,7 +136,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var serializerOptions = new MessageParser().Options;
+        var serializerOptions = CreateJsonOptions();
         var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, serializerOptions);
 
         Assert.That(parsed, Is.Not.Null);
@@ -161,7 +160,7 @@ public sealed class SessionUpdatePolymorphismTests
         }
         """;
 
-        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, new MessageParser().Options);
+        var parsed = JsonSerializer.Deserialize<SessionUpdateParams>(json, CreateJsonOptions());
 
         Assert.That(parsed, Is.Not.Null);
         Assert.That(parsed!.Update, Is.TypeOf<SessionInfoUpdate>());
@@ -177,7 +176,7 @@ public sealed class SessionUpdatePolymorphismTests
     }
 
     [Test]
-    public void Deserialize_CurrentModeUpdate_LegacyModeId_Works()
+    public void Deserialize_CurrentModeUpdate_WithLegacyModeId_DoesNotPopulateCurrentModeId()
     {
         var json = """
         {
@@ -198,7 +197,7 @@ public sealed class SessionUpdatePolymorphismTests
         Assert.That(parsed!.Update, Is.TypeOf<CurrentModeUpdate>());
 
         var update = (CurrentModeUpdate)parsed.Update!;
-        Assert.That(update.NormalizedModeId, Is.EqualTo("legacy-mode"));
+        Assert.That(update.CurrentModeId, Is.Empty);
     }
 
     [Test]
@@ -242,12 +241,10 @@ public sealed class SessionUpdatePolymorphismTests
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
-        var options = new JsonSerializerOptions
+        return new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         };
-        options.Converters.Add(new JsonPropertyNameEnumConverterFactory());
-        return options;
     }
 
     private static string? ReadMetaValue(object? value)

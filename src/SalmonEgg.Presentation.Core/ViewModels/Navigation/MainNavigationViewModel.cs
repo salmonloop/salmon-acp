@@ -1071,5 +1071,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         public IState<ConversationAttentionState> State => EmptyState;
 
         public ValueTask Dispatch(ConversationAttentionAction action) => ValueTask.CompletedTask;
+
+        public ValueTask<ConversationAttentionState> GetCurrentStateAsync()
+            => ValueTask.FromResult(ConversationAttentionState.Empty);
     }
 }

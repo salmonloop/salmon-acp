@@ -287,7 +287,7 @@ public sealed class ChatServiceSessionTests
     }
 
     [Fact]
-    public void SessionUpdate_CurrentModeUpdate_UsesNormalizedModeIdForLegacyPayload()
+    public void SessionUpdate_CurrentModeUpdate_UsesOfficialCurrentModeId()
     {
         var acpClient = new Mock<IAcpClient>(MockBehavior.Loose);
         var errorLogger = new Mock<IErrorLogger>(MockBehavior.Loose);
@@ -299,14 +299,14 @@ public sealed class ChatServiceSessionTests
             client => client.SessionUpdateReceived += null,
             new SessionUpdateEventArgs("s1", new CurrentModeUpdate
             {
-                LegacyModeId = "legacy-mode",
-                Title = "Legacy mode"
+                CurrentModeId = "code",
+                Title = "Code mode"
             }));
 
-        Assert.Equal("legacy-mode", sut.CurrentMode?.CurrentModeId);
+        Assert.Equal("code", sut.CurrentMode?.CurrentModeId);
         var session = sessionManager.GetSession("s1");
         Assert.NotNull(session);
-        Assert.Equal("legacy-mode", session!.History.Single().ModeId);
+        Assert.Equal("code", session!.History.Single().ModeId);
 
         sut.Dispose();
     }

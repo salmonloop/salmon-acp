@@ -12,8 +12,6 @@ public interface IAcpSessionUpdateBufferController
 {
     long BeginHydrationBufferingScope(string? sessionId);
 
-    bool ReleaseBufferedUpdatesForReplayProjection(long hydrationAttemptId);
-
     void SuppressBufferedUpdates(long hydrationAttemptId, string? reason = null);
 
     bool TryMarkHydrated(long hydrationAttemptId, bool lowTrust = false, string? reason = null);

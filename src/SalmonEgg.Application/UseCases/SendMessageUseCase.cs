@@ -1,5 +1,6 @@
 using System;
 using System.Reactive.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
@@ -36,9 +37,9 @@ namespace SalmonEgg.Application.UseCases
         /// 执行发送消息的操作
         /// </summary>
         /// <param name="method">方法名</param>
-        /// <param name="parameters">参数对象</param>
+        /// <param name="parameters">已解析的 JSON 参数</param>
         /// <returns>包含响应消息的操作结果</returns>
-        public async Task<Result<AcpMessage>> ExecuteAsync(string? method, object? parameters)
+        public async Task<Result<AcpMessage>> ExecuteAsync(string? method, JsonElement? parameters)
         {
             return await ExecuteAsync(method, parameters, DefaultTimeoutSeconds);
         }
@@ -47,10 +48,10 @@ namespace SalmonEgg.Application.UseCases
         /// 执行发送消息的操作（带自定义超时）
         /// </summary>
         /// <param name="method">方法名</param>
-        /// <param name="parameters">参数对象</param>
+        /// <param name="parameters">已解析的 JSON 参数</param>
         /// <param name="timeoutSeconds">超时时间（秒）</param>
         /// <returns>包含响应消息的操作结果</returns>
-        public async Task<Result<AcpMessage>> ExecuteAsync(string? method, object? parameters, int timeoutSeconds)
+        public async Task<Result<AcpMessage>> ExecuteAsync(string? method, JsonElement? parameters, int timeoutSeconds)
         {
             try
             {
@@ -89,9 +90,7 @@ namespace SalmonEgg.Application.UseCases
                     Id = Guid.NewGuid().ToString(),
                     Type = "request",
                     Method = methodValue,
-                    Params = parameters != null 
-                        ? System.Text.Json.JsonSerializer.SerializeToElement(parameters) 
-                        : (System.Text.Json.JsonElement?)null,
+                    Params = parameters.HasValue ? parameters.Value.Clone() : null,
                     ProtocolVersion = "1.0",
                     Timestamp = DateTime.UtcNow
                 };

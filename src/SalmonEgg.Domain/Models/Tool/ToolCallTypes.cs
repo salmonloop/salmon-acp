@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -17,31 +14,26 @@ namespace SalmonEgg.Domain.Models.Tool
         /// <summary>
         /// 工具调用已创建但尚未开始执行。
         /// </summary>
-        [JsonPropertyName("pending")]
         Pending,
 
         /// <summary>
         /// 工具调用正在执行中。
         /// </summary>
-        [JsonPropertyName("in_progress")]
         InProgress,
 
         /// <summary>
         /// 工具调用已成功完成。
         /// </summary>
-        [JsonPropertyName("completed")]
         Completed,
 
         /// <summary>
         /// 工具调用失败或出错。
         /// </summary>
-        [JsonPropertyName("failed")]
         Failed,
 
         /// <summary>
         /// 工具调用已被取消。
         /// </summary>
-        [JsonPropertyName("cancelled")]
         Cancelled
     }
 
@@ -55,179 +47,129 @@ namespace SalmonEgg.Domain.Models.Tool
         /// <summary>
         /// 文件读取操作。
         /// </summary>
-        [JsonPropertyName("read")]
         Read,
 
         /// <summary>
         /// 文件编辑操作。
         /// </summary>
-        [JsonPropertyName("edit")]
         Edit,
 
         /// <summary>
         /// 文件删除操作。
         /// </summary>
-        [JsonPropertyName("delete")]
         Delete,
 
         /// <summary>
         /// 文件移动或重命名操作。
         /// </summary>
-        [JsonPropertyName("move")]
         Move,
 
         /// <summary>
         /// 搜索操作。
         /// </summary>
-        [JsonPropertyName("search")]
         Search,
 
         /// <summary>
         /// 终端命令执行操作。
         /// </summary>
-        [JsonPropertyName("execute")]
         Execute,
 
         /// <summary>
         /// 会话模式切换操作。
         /// </summary>
-        [JsonPropertyName("switch_mode")]
         SwitchMode,
 
         /// <summary>
         /// 思考或推理操作（不执行实际动作）。
         /// </summary>
-        [JsonPropertyName("think")]
         Think,
 
         /// <summary>
         /// 网络请求或数据获取操作。
         /// </summary>
-        [JsonPropertyName("fetch")]
         Fetch,
 
         /// <summary>
         /// 其他未分类的工具调用。
         /// </summary>
-        [JsonPropertyName("other")]
         Other
     }
 
-    public sealed class ToolCallStatusJsonConverter : JsonPropertyNameEnumJsonConverter<ToolCallStatus>
+    public sealed class ToolCallStatusJsonConverter : JsonConverter<ToolCallStatus>
     {
-    }
-
-    public sealed class ToolCallKindJsonConverter : JsonPropertyNameEnumJsonConverter<ToolCallKind>
-    {
-    }
-
-    public abstract class JsonPropertyNameEnumJsonConverter<TEnum> : JsonConverter<TEnum>
-        where TEnum : struct, Enum
-    {
-        private static readonly Dictionary<string, TEnum> ReadMap = BuildReadMap();
-        private static readonly Dictionary<TEnum, string> WriteMap = BuildWriteMap();
-
-        public override TEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override ToolCallStatus Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            return reader.TokenType switch
+            if (reader.TokenType != JsonTokenType.String)
             {
-                JsonTokenType.String => ReadFromString(reader.GetString()),
-                JsonTokenType.Number when reader.TryGetInt64(out var value) => (TEnum)Enum.ToObject(typeof(TEnum), value),
-                _ => default
+                throw new JsonException("Tool call status must be a string.");
+            }
+
+            return reader.GetString() switch
+            {
+                "pending" => ToolCallStatus.Pending,
+                "in_progress" => ToolCallStatus.InProgress,
+                "completed" => ToolCallStatus.Completed,
+                "failed" => ToolCallStatus.Failed,
+                "cancelled" => ToolCallStatus.Cancelled,
+                var value => throw new JsonException($"Unsupported tool call status '{value}'.")
             };
         }
 
-        public override void Write(Utf8JsonWriter writer, TEnum value, JsonSerializerOptions options)
+        public override void Write(Utf8JsonWriter writer, ToolCallStatus value, JsonSerializerOptions options)
         {
-            if (WriteMap.TryGetValue(value, out var serialized))
+            writer.WriteStringValue(value switch
             {
-                writer.WriteStringValue(serialized);
-                return;
+                ToolCallStatus.Pending => "pending",
+                ToolCallStatus.InProgress => "in_progress",
+                ToolCallStatus.Completed => "completed",
+                ToolCallStatus.Failed => "failed",
+                ToolCallStatus.Cancelled => "cancelled",
+                _ => throw new JsonException($"Unsupported tool call status '{value}'.")
+            });
+        }
+    }
+
+    public sealed class ToolCallKindJsonConverter : JsonConverter<ToolCallKind>
+    {
+        public override ToolCallKind Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException("Tool call kind must be a string.");
             }
 
-            writer.WriteStringValue(value.ToString());
+            return reader.GetString() switch
+            {
+                "read" => ToolCallKind.Read,
+                "edit" => ToolCallKind.Edit,
+                "delete" => ToolCallKind.Delete,
+                "move" => ToolCallKind.Move,
+                "search" => ToolCallKind.Search,
+                "execute" => ToolCallKind.Execute,
+                "switch_mode" => ToolCallKind.SwitchMode,
+                "think" => ToolCallKind.Think,
+                "fetch" => ToolCallKind.Fetch,
+                "other" => ToolCallKind.Other,
+                var value => throw new JsonException($"Unsupported tool call kind '{value}'.")
+            };
         }
 
-        private static TEnum ReadFromString(string? value)
+        public override void Write(Utf8JsonWriter writer, ToolCallKind value, JsonSerializerOptions options)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            writer.WriteStringValue(value switch
             {
-                return default;
-            }
-
-            if (ReadMap.TryGetValue(value, out var match))
-            {
-                return match;
-            }
-
-            var normalized = value.Trim().Replace("-", "_", StringComparison.Ordinal).Replace(" ", "_", StringComparison.Ordinal);
-            return ReadMap.TryGetValue(normalized, out match)
-                ? match
-                : Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed)
-                    ? parsed
-                    : default;
-        }
-
-        private static Dictionary<string, TEnum> BuildReadMap()
-        {
-            var map = new Dictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase);
-            foreach (var field in typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static))
-            {
-                var enumValue = (TEnum)field.GetValue(null)!;
-                map[field.Name] = enumValue;
-
-                var jsonName = field.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name;
-                if (!string.IsNullOrWhiteSpace(jsonName))
-                {
-                    map[jsonName] = enumValue;
-                }
-            }
-
-            return map;
-        }
-
-        private static Dictionary<TEnum, string> BuildWriteMap()
-        {
-            var map = new Dictionary<TEnum, string>();
-            foreach (var field in typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static))
-            {
-                var enumValue = (TEnum)field.GetValue(null)!;
-                var jsonName = field.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name;
-                map[enumValue] = !string.IsNullOrWhiteSpace(jsonName)
-                    ? jsonName
-                    : ToSnakeCase(field.Name);
-            }
-
-            return map;
-        }
-
-        private static string ToSnakeCase(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return value;
-            }
-
-            var chars = new List<char>(value.Length + 8);
-            for (var i = 0; i < value.Length; i++)
-            {
-                var current = value[i];
-                if (char.IsUpper(current))
-                {
-                    if (i > 0 && value[i - 1] != '_' && !char.IsUpper(value[i - 1]))
-                    {
-                        chars.Add('_');
-                    }
-
-                    chars.Add(char.ToLower(current, CultureInfo.InvariantCulture));
-                }
-                else
-                {
-                    chars.Add(current);
-                }
-            }
-
-            return new string(chars.ToArray());
+                ToolCallKind.Read => "read",
+                ToolCallKind.Edit => "edit",
+                ToolCallKind.Delete => "delete",
+                ToolCallKind.Move => "move",
+                ToolCallKind.Search => "search",
+                ToolCallKind.Execute => "execute",
+                ToolCallKind.SwitchMode => "switch_mode",
+                ToolCallKind.Think => "think",
+                ToolCallKind.Fetch => "fetch",
+                ToolCallKind.Other => "other",
+                _ => throw new JsonException($"Unsupported tool call kind '{value}'.")
+            });
         }
     }
 }
