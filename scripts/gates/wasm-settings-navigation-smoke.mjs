@@ -31,13 +31,13 @@ try {
   await page.waitForSelector('[aria-label="StartView.Title"]', { timeout: 60_000 });
 
   await clickVisibleText(page, ["设置", "Settings"]);
-  await page.waitForTimeout(3_000);
+  await waitForBodyText(page, /常规|General|外观|Appearance|ACP \/ Agent/, "settings shell");
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForTimeout(2_000);
+  await waitForBodyText(page, /常规|General|外观|Appearance|ACP \/ Agent/, "settings shell at mobile viewport");
 
   await clickTopNavigationOverflow(page);
-  await page.waitForTimeout(2_000);
+  await waitForBodyText(page, /数据与存储|快捷键|诊断与日志|Data|Shortcuts|Diagnostics/, "settings overflow menu");
 
   const overflowText = await page.locator("body").innerText();
   if (!/数据与存储|快捷键|诊断与日志|Data|Shortcuts|Diagnostics/.test(overflowText)) {
@@ -70,43 +70,137 @@ function normalizeBaseUrl(value) {
 }
 
 async function clickTopNavigationOverflow(page) {
-  const point = await page.evaluate(() => {
-    const candidates = Array.from(document.querySelectorAll("body *"))
+  await page.waitForFunction(findTopNavigationOverflowPoint, null, { timeout: 30_000 });
+  const point = await page.evaluate(findTopNavigationOverflowPoint);
+
+  if (!point) {
+    const candidates = await page.evaluate(collectTopNavigationButtonCandidateDebug);
+    throw new Error(`Settings overflow button was not visible at mobile viewport. Candidates: ${JSON.stringify(candidates)}`);
+  }
+
+  await page.mouse.click(point.x, point.y);
+}
+
+async function waitForBodyText(page, pattern, label) {
+  await page.waitForFunction(
+    source => new RegExp(source).test(document.body?.innerText ?? ""),
+    pattern.source,
+    { timeout: 30_000 });
+
+  const bodyText = await page.locator("body").innerText();
+  if (!pattern.test(bodyText)) {
+    throw new Error(`Expected ${label} text was not visible.`);
+  }
+}
+
+function findTopNavigationOverflowPoint() {
+  function collectTopNavigationButtonCandidates() {
+    return Array.from(document.querySelectorAll("body *"))
       .map(element => {
         const rect = element.getBoundingClientRect();
         return {
           element,
-          rect,
-          text: (element.textContent ?? "").trim()
+          rect: {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          },
+          text: (element.textContent ?? "").trim(),
+          aria: element.getAttribute("aria-label") ?? "",
+          title: element.getAttribute("title") ?? "",
+          role: element.getAttribute("role") ?? "",
+          className: element.className?.toString?.() ?? ""
         };
       })
       .filter(candidate =>
-        candidate.text === "\uE10C"
-        && candidate.rect.width > 0
+        candidate.rect.width > 0
         && candidate.rect.height > 0
         && candidate.rect.left >= 0
-        && candidate.rect.right <= innerWidth
-        && candidate.rect.top >= 40
-        && candidate.rect.top <= 140);
-
-    const target = candidates[0]?.element;
-    if (!target) {
-      return null;
-    }
-
-    const clickable = target.closest(".uno-button") ?? target;
-    const rect = clickable.getBoundingClientRect();
-    return {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2
-    };
-  });
-
-  if (!point) {
-    throw new Error("Settings overflow button was not visible at mobile viewport.");
+        && candidate.rect.top >= 16
+        && candidate.rect.top <= 96
+        && candidate.rect.right <= innerWidth + 1
+        && candidate.rect.width <= 80
+        && candidate.rect.height <= 80
+        && (
+          candidate.role === "button"
+          || candidate.className.includes("uno-button")
+          || candidate.text === "\uE10C"
+          || candidate.text === "\uE712"
+          || /more|overflow|ellipsis|更多|溢出|展开/i.test(candidate.aria)
+          || /more|overflow|ellipsis|更多|溢出|展开/i.test(candidate.title)))
+      .sort((left, right) => right.rect.right - left.rect.right);
   }
 
-  await page.mouse.click(point.x, point.y);
+  const explicitTarget = collectTopNavigationButtonCandidates().find(candidate =>
+    candidate.text === "\uE10C"
+    || candidate.text === "\uE712"
+    || /more|overflow|ellipsis|更多|溢出|展开/i.test(candidate.aria)
+    || /more|overflow|ellipsis|更多|溢出|展开/i.test(candidate.title));
+  const target = explicitTarget?.element;
+  if (!target) {
+    return null;
+  }
+
+  const clickable = target.closest(".uno-button") ?? target;
+  const rect = clickable.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  };
+}
+
+function collectTopNavigationButtonCandidateDebug() {
+  function collectTopNavigationButtonCandidates() {
+    return Array.from(document.querySelectorAll("body *"))
+      .map(element => {
+        const rect = element.getBoundingClientRect();
+        return {
+          element,
+          rect: {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          },
+          text: (element.textContent ?? "").trim(),
+          aria: element.getAttribute("aria-label") ?? "",
+          title: element.getAttribute("title") ?? "",
+          role: element.getAttribute("role") ?? "",
+          className: element.className?.toString?.() ?? ""
+        };
+      })
+      .filter(candidate =>
+        candidate.rect.width > 0
+        && candidate.rect.height > 0
+        && candidate.rect.left >= 0
+        && candidate.rect.top >= 16
+        && candidate.rect.top <= 96
+        && candidate.rect.right <= innerWidth + 1
+        && candidate.rect.width <= 80
+        && candidate.rect.height <= 80
+        && (
+          candidate.role === "button"
+          || candidate.className.includes("uno-button")
+          || candidate.text === "\uE10C"
+          || candidate.text === "\uE712"
+          || /more|overflow|ellipsis|更多|溢出|展开/i.test(candidate.aria)
+          || /more|overflow|ellipsis|更多|溢出|展开/i.test(candidate.title)))
+      .sort((left, right) => right.rect.right - left.rect.right);
+  }
+
+  return collectTopNavigationButtonCandidates().map(candidate => ({
+    text: candidate.text,
+    aria: candidate.aria,
+    title: candidate.title,
+    role: candidate.role,
+    className: candidate.className,
+    rect: candidate.rect
+  }));
 }
 
 async function clickVisibleText(page, labels) {
