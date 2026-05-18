@@ -523,6 +523,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             var projected = Assert.IsType<SessionNavItemViewModel>(navVm.ProjectedControlSelectedItem);
             Assert.Equal("session-25", projected.SessionId);
+            AssertProjectedSelectionIsMaterializedInMenuSource(navVm);
             Assert.Contains(project.ChildrenMenuItems.OfType<SessionNavItemViewModel>(), item => item.SessionId == "session-25");
             Assert.True(project.IsActiveDescendant);
             var selection = Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
@@ -1755,6 +1756,29 @@ public sealed class MainNavigationViewModelSelectionTests
 
     private static void SetSessionSelection(ShellSelectionStateStore selectionStore, string sessionId)
         => selectionStore.SetSelection(new NavigationSelectionState.Session(sessionId));
+
+    private static void AssertProjectedSelectionIsMaterializedInMenuSource(MainNavigationViewModel navVm)
+    {
+        var selectedItem = navVm.ProjectedControlSelectedItem;
+        Assert.NotNull(selectedItem);
+        Assert.Contains(EnumerateProjectedMenuSourceItems(navVm), item => ReferenceEquals(item, selectedItem));
+    }
+
+    private static IEnumerable<MainNavItemViewModel> EnumerateProjectedMenuSourceItems(MainNavigationViewModel navVm)
+    {
+        foreach (var item in navVm.MenuItems.Concat(navVm.FooterMenuItems))
+        {
+            yield return item;
+
+            if (item is ProjectNavItemViewModel project)
+            {
+                foreach (var child in project.ChildrenMenuItems)
+                {
+                    yield return child;
+                }
+            }
+        }
+    }
 
     private static Mock<ISessionManager> CreateSessionManager(params Session[] sessions)
     {

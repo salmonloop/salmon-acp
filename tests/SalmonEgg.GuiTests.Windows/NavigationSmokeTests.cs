@@ -118,6 +118,58 @@ public sealed class NavigationSmokeTests
     }
 
     [SkippableFact]
+    public void SearchOverflowSession_MaterializesNativeNavSelection_AndSubsequentNavigationWorks()
+    {
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(sessionCount: 25, withContent: true);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        const string targetSessionId = "MainNav.Session.gui-session-25";
+        const string projectId = "MainNav.Project.project-1";
+        const string startId = "MainNav.Start";
+
+        Assert.Null(session.TryFindByAutomationId(targetSessionId, TimeSpan.FromSeconds(2)));
+
+        var startItem = session.FindByAutomationId(startId);
+        session.FocusElement(startItem);
+        session.PressShortcut(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_K);
+
+        Assert.True(
+            session.IsFocusWithinAutomationId("TopSearchBox"),
+            $"Expected Ctrl+K to focus the native AutoSuggestBox before typing.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        session.TypeText("TopSearchBox", "GUI Session 25");
+
+        Assert.True(
+            WaitForSearchSuggestion(session, "SearchSuggestion.Result.gui-session-25", TimeSpan.FromSeconds(8)),
+            $"Expected native search suggestions to include GUI Session 25 before submit.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        session.PressEnter();
+
+        var chatHeader = session.FindByAutomationId("ChatView.CurrentSessionTitle", TimeSpan.FromSeconds(12));
+        Assert.Contains("GUI Session 25", chatHeader.Name, StringComparison.Ordinal);
+
+        Assert.True(
+            session.WaitUntilOnscreen(targetSessionId, TimeSpan.FromSeconds(8)),
+            $"Expected searched overflow session to be materialized into the native nav menu source.{Environment.NewLine}{DumpSelectionSnapshot(session, targetSessionId, projectId, startId)}{Environment.NewLine}{DumpProjectSnapshot(session, projectId)}{Environment.NewLine}{DumpAutomationSelectionState(session)}{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.True(
+            WaitForVisibleSelected(session, [targetSessionId, projectId, startId], TimeSpan.FromSeconds(6), out var selectedAfterSearch),
+            $"Expected a visible nav selection after search activation. winner={selectedAfterSearch ?? "<null>"}{Environment.NewLine}{DumpSelectionSnapshot(session, targetSessionId, projectId, startId)}{Environment.NewLine}{DumpProjectSnapshot(session, projectId)}{Environment.NewLine}{DumpAutomationSelectionState(session)}{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.Equal(targetSessionId, selectedAfterSearch);
+
+        var automationState = session.TryGetElementName("MainNav.Automation.SelectionState", TimeSpan.FromMilliseconds(500)) ?? string.Empty;
+        Assert.Contains("Semantic=Session:gui-session-25", automationState, StringComparison.Ordinal);
+        Assert.Contains("NavSelected=Session:gui-session-25", automationState, StringComparison.Ordinal);
+
+        session.ActivateElement(session.FindByAutomationId(startId));
+        Assert.NotNull(session.FindByAutomationId("StartView.Title", TimeSpan.FromSeconds(10)));
+        Assert.True(
+            WaitForVisibleSelected(session, [targetSessionId, projectId, startId], TimeSpan.FromSeconds(6), out var selectedAfterStart),
+            $"Expected navigation to remain ordered after leaving searched session. winner={selectedAfterStart ?? "<null>"}{Environment.NewLine}{DumpSelectionSnapshot(session, targetSessionId, projectId, startId)}{Environment.NewLine}{DumpProjectSnapshot(session, projectId)}{Environment.NewLine}{DumpAutomationSelectionState(session)}{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.Equal(startId, selectedAfterStart);
+    }
+
+    [SkippableFact]
     public void ShortcutRecorder_UpdatesSearchBindingImmediately_AndDropsPreviousBinding()
     {
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
@@ -594,6 +646,22 @@ public sealed class NavigationSmokeTests
         }
 
         winner = null;
+        return false;
+    }
+
+    private static bool WaitForSearchSuggestion(WindowsGuiAppSession session, string automationId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (session.TryFindByAutomationIdAnywhere(automationId, TimeSpan.FromMilliseconds(200)) is not null)
+            {
+                return true;
+            }
+
+            Thread.Sleep(120);
+        }
+
         return false;
     }
 

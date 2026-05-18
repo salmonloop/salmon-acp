@@ -319,6 +319,18 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"Element '{automationId}' does not support ValuePattern for text entry.");
     }
 
+    public void TypeText(string automationId, string text)
+    {
+        var element = FindByAutomationId(automationId);
+        FocusElement(element);
+        Thread.Sleep(100);
+
+        foreach (var character in text)
+        {
+            TypeCharacter(character);
+        }
+    }
+
     public void ActivateElement(AutomationElement element)
     {
         if (element.Patterns.SelectionItem.IsSupported)
@@ -755,6 +767,44 @@ internal sealed class WindowsGuiAppSession : IDisposable
     {
         Keyboard.Press(key);
         Keyboard.Release(key);
+    }
+
+    private static void TypeCharacter(char character)
+    {
+        if (character == ' ')
+        {
+            PressKey(VirtualKeyShort.SPACE);
+            return;
+        }
+
+        if (character >= 'a' && character <= 'z')
+        {
+            PressKey((VirtualKeyShort)char.ToUpperInvariant(character));
+            return;
+        }
+
+        if (character >= 'A' && character <= 'Z')
+        {
+            Keyboard.Press(VirtualKeyShort.SHIFT);
+            try
+            {
+                PressKey((VirtualKeyShort)character);
+            }
+            finally
+            {
+                Keyboard.Release(VirtualKeyShort.SHIFT);
+            }
+
+            return;
+        }
+
+        if (character >= '0' && character <= '9')
+        {
+            PressKey((VirtualKeyShort)character);
+            return;
+        }
+
+        throw new NotSupportedException($"Unsupported GUI keyboard input character: '{character}'.");
     }
 
     private static string NormalizeVisibleText(string? value)

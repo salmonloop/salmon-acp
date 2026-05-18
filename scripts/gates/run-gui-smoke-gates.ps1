@@ -52,5 +52,6 @@ dotnet build tests/SalmonEgg.GuiTests.Windows/SalmonEgg.GuiTests.Windows.csproj 
 Invoke-DotNetTestWithRetry -Filter "FullyQualifiedName~RandomSwitchWithOneSecondCadence_FinalSelectionAlwaysDrivesRightPane"
 Invoke-DotNetTestWithRetry -Filter "FullyQualifiedName~SelectAcrossProfilesAndLocal_OneSecondCadence_FinalIntentAlwaysWins"
 Invoke-DotNetTestWithRetry -Filter "FullyQualifiedName~SelectRemoteSession_RepeatedClicksWithLocalDetour_DoesNotHangAndHydratesLatestSelection"
+Invoke-DotNetTestWithRetry -Filter "FullyQualifiedName~SearchOverflowSession_MaterializesNativeNavSelection_AndSubsequentNavigationWorks"
 
 Write-Host "[gate] GUI smoke gates passed"
