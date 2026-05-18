@@ -16,6 +16,7 @@ using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Models.Tool;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
@@ -24,6 +25,7 @@ using SalmonEgg.Presentation.Models.Navigation;
 using SalmonEgg.Presentation.Services;
 using SalmonEgg.Presentation.ViewModels.Discover;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using Uno.Extensions.Reactive;
 using Xunit;
 
 namespace SalmonEgg.Presentation.Core.Tests.Discover;
@@ -887,6 +889,33 @@ public sealed class DiscoverSessionsViewModelTests
     }
 
     [Fact]
+    public async Task ShellLayoutMetrics_DriveDiscoverLayoutMode()
+    {
+        var profile = CreateProfile();
+        var profilesViewModel = CreateProfilesViewModel(profile);
+        var initialState = ShellLayoutState.Default with
+        {
+            WindowMetrics = new WindowMetrics(500, 700, 500, 700)
+        };
+        var store = CreateShellLayoutStore(initialState);
+        using var viewModel = CreateViewModel(
+            profilesViewModel,
+            new FakeDiscoverSessionsConnectionFacade(),
+            new StubNavigationCoordinator(),
+            store);
+
+        Assert.Equal(DiscoverLayoutMode.Narrow, viewModel.LayoutMode);
+        Assert.True(viewModel.ShowProfilesPane);
+        Assert.False(viewModel.ShowDetailsPane);
+
+        await store.Dispatch(new WindowMetricsChanged(900, 700, 900, 700));
+        await WaitForConditionAsync(() => viewModel.LayoutMode == DiscoverLayoutMode.Wide);
+
+        Assert.True(viewModel.ShowProfilesPane);
+        Assert.True(viewModel.ShowDetailsPane);
+    }
+
+    [Fact]
     public async Task RefreshSessionsAsync_WhenProfileChangesDuringRefresh_DropsStaleResults()
     {
         var syncContext = new CountingSynchronizationContext();
@@ -1007,7 +1036,8 @@ public sealed class DiscoverSessionsViewModelTests
     private static DiscoverSessionsViewModel CreateViewModel(
         AcpProfilesViewModel profilesViewModel,
         IDiscoverSessionsConnectionFacade connectionFacade,
-        INavigationCoordinator navigationCoordinator)
+        INavigationCoordinator navigationCoordinator,
+        IShellLayoutStore? shellLayoutStore = null)
     {
         var projectPreferences = new NavigationProjectPreferencesAdapter(CreatePreferences());
         var uiDispatcher = SynchronizationContext.Current as IUiDispatcher ?? new ImmediateUiDispatcher();
@@ -1017,7 +1047,33 @@ public sealed class DiscoverSessionsViewModelTests
             projectPreferences,
             profilesViewModel,
             connectionFacade,
-            uiDispatcher);
+            uiDispatcher,
+            shellLayoutStore);
+    }
+
+    private static ShellLayoutStore CreateShellLayoutStore(ShellLayoutState initialState)
+    {
+        var initialSnapshot = ShellLayoutPolicy.Compute(initialState);
+        return new ShellLayoutStore(
+            State.Value(new object(), () => initialState),
+            State.Value(new object(), () => initialSnapshot),
+            initialState,
+            initialSnapshot);
+    }
+
+    private static async Task WaitForConditionAsync(Func<bool> predicate, int attempts = 20, int delayMilliseconds = 10)
+    {
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(delayMilliseconds);
+        }
+
+        Assert.True(predicate());
     }
 
     private static AcpProfilesViewModel CreateProfilesViewModel(ServerConfiguration profile)

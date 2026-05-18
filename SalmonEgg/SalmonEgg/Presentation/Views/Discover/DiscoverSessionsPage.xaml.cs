@@ -16,18 +16,10 @@ public sealed partial class DiscoverSessionsPage : Page
         DataContext = ViewModel;
 
         Loaded += OnLoaded;
-        SizeChanged += OnSizeChanged;
-    }
-
-    private void OnSizeChanged(object sender, Microsoft.UI.Xaml.SizeChangedEventArgs e)
-    {
-        var isNarrow = e.NewSize.Width < 768;
-        ViewModel.SetLayoutMode(isNarrow ? DiscoverLayoutMode.Narrow : DiscoverLayoutMode.Wide);
     }
 
     private async void OnLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        ViewModel.SetLayoutMode(ActualWidth < 768 ? DiscoverLayoutMode.Narrow : DiscoverLayoutMode.Wide);
         if (ViewModel.InitializeCommand.CanExecute(null))
         {
             await ViewModel.InitializeCommand.ExecuteAsync(null);

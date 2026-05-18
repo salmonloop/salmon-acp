@@ -464,7 +464,16 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILogger<GlobalSearchViewModel>>()));
 
         // Discover sessions
-        services.AddTransient<SalmonEgg.Presentation.ViewModels.Discover.DiscoverSessionsViewModel>();
+        services.AddTransient(sp =>
+            new SalmonEgg.Presentation.ViewModels.Discover.DiscoverSessionsViewModel(
+                sp.GetRequiredService<ILogger<SalmonEgg.Presentation.ViewModels.Discover.DiscoverSessionsViewModel>>(),
+                sp.GetRequiredService<INavigationCoordinator>(),
+                sp.GetRequiredService<INavigationProjectPreferences>(),
+                sp.GetRequiredService<AcpProfilesViewModel>(),
+                sp.GetRequiredService<IDiscoverSessionsConnectionFacade>(),
+                sp.GetRequiredService<IUiDispatcher>(),
+                sp.GetRequiredService<IShellLayoutStore>(),
+                sp.GetRequiredService<IProjectAffinityResolver>()));
 
         // Start page orchestrator (Start creates session and submits)
         services.AddSingleton<StartViewModel>(sp =>

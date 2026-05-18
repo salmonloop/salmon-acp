@@ -217,7 +217,8 @@ public sealed class XamlComplianceTests
 
         var formRow = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ResponsiveFormRow.xaml");
         Assert.Contains("x:Class=\"SalmonEgg.Controls.ResponsiveFormRow\"", formRow, StringComparison.Ordinal);
-        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind LayoutRoot}\" MinWidth=\"560\" />", formRow, StringComparison.Ordinal);
+        Assert.Contains("<AdaptiveTrigger MinWindowWidth=\"560\" />", formRow, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinActualWidthTrigger", formRow, StringComparison.Ordinal);
         Assert.Contains("<Setter Target=\"ValuePresenter.(Grid.Row)\" Value=\"1\" />", formRow, StringComparison.Ordinal);
         Assert.Contains("<Setter Target=\"LabelColumn.Width\" Value=\"220\" />", formRow, StringComparison.Ordinal);
     }
@@ -371,10 +372,10 @@ public sealed class XamlComplianceTests
         Assert.Contains("x:Name=\"BottomToolsStrip\"", xaml);
         Assert.Contains("x:Name=\"ToolSelectorsPanel\"", xaml);
         Assert.Contains("x:Name=\"ActionButtonsPanel\"", xaml);
-        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind ComposerLayoutRoot}\" MinWidth=\"640\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<AdaptiveTrigger MinWindowWidth=\"640\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Target=\"ToolSelectorsPanel.Orientation\" Value=\"Vertical\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Target=\"ActionButtonsPanel.(Grid.Row)\" Value=\"1\" />", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"640\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinActualWidthTrigger", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

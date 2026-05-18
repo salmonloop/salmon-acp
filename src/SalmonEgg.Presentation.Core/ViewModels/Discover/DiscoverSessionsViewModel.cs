@@ -9,11 +9,13 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Protocol;
+using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Utilities;
 using SalmonEgg.Presentation.ViewModels.Settings;
+using Uno.Extensions.Reactive;
 
 namespace SalmonEgg.Presentation.ViewModels.Discover;
 
@@ -26,7 +28,10 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly IDiscoverSessionsConnectionFacade _connectionFacade;
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly IUiDispatcher _uiDispatcher;
+    private readonly IState<ShellLayoutState>? _layoutState;
     private CancellationTokenSource? _refreshSessionsCts;
+    private readonly CancellationTokenSource _layoutProjectionCts = new();
+    private IDisposable? _layoutSubscription;
     private int _refreshGeneration;
     private int _loadSessionGeneration;
     private bool _disposed;
@@ -135,6 +140,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         AcpProfilesViewModel profilesViewModel,
         IDiscoverSessionsConnectionFacade connectionFacade,
         IUiDispatcher uiDispatcher,
+        IShellLayoutStore? shellLayoutStore = null,
         IProjectAffinityResolver? projectAffinityResolver = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -144,6 +150,35 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _connectionFacade = connectionFacade ?? throw new ArgumentNullException(nameof(connectionFacade));
         _projectAffinityResolver = projectAffinityResolver ?? new ProjectAffinityResolver();
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+        if (shellLayoutStore is not null)
+        {
+            SetLayoutMode(ResolveLayoutMode(shellLayoutStore.CurrentState.WindowMetrics));
+            _layoutState = State.FromFeed(this, shellLayoutStore.State);
+            _layoutState.ForEach(async (state, ct) =>
+            {
+                if (state is null || _disposed || _layoutProjectionCts.IsCancellationRequested || ct.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await PostToUiAsync(() =>
+                    {
+                        if (_disposed || _layoutProjectionCts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        SetLayoutMode(ResolveLayoutMode(state.WindowMetrics));
+                    }).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_layoutProjectionCts.IsCancellationRequested || ct.IsCancellationRequested)
+                {
+                }
+            }, out _layoutSubscription);
+        }
+
         _selectedProfile = ResolvePreferredSelectedProfile();
     }
 
@@ -460,6 +495,9 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         }
 
         _disposed = true;
+        _layoutProjectionCts.Cancel();
+        _layoutSubscription?.Dispose();
+        _layoutProjectionCts.Dispose();
         _refreshSessionsCts?.Cancel();
         _refreshSessionsCts?.Dispose();
     }
@@ -559,6 +597,12 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             DiscoverSessionsLoadPhase.ImportingSession or
             DiscoverSessionsLoadPhase.ActivatingSession or
             DiscoverSessionsLoadPhase.HydratingSession;
+
+    private static DiscoverLayoutMode ResolveLayoutMode(WindowMetrics metrics)
+    {
+        var width = metrics.EffectiveWidth > 0 ? metrics.EffectiveWidth : metrics.Width;
+        return width < 768 ? DiscoverLayoutMode.Narrow : DiscoverLayoutMode.Wide;
+    }
 
     private async Task PostToUiAsync(Action action)
     {

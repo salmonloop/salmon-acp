@@ -102,15 +102,14 @@ public sealed class ChatViewXamlTests
     }
 
     [Fact]
-    public void ChatViewSessionHeader_UsesActualHeaderWidthInsteadOfWindowAdaptiveTriggers()
+    public void ChatViewSessionHeader_UsesNativeAdaptiveTriggers()
     {
         var xaml = LoadChatViewXaml();
         var codeBehind = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
 
-        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"720\" />", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"1080\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind SessionHeaderRoot}\" MinWidth=\"720\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind SessionHeaderRoot}\" MinWidth=\"1080\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<AdaptiveTrigger MinWindowWidth=\"720\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<AdaptiveTrigger MinWindowWidth=\"1080\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinActualWidthTrigger", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OnSessionHeaderRootLoaded", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OnSessionHeaderRootUnloaded", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("SizeChanged += OnSessionHeaderRootSizeChanged;", codeBehind, StringComparison.Ordinal);

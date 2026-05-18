@@ -44,12 +44,15 @@ public sealed class DiscoverSessionsPageXamlTests
     {
         // Arrange
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml");
+        var codeBehind = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Discover\DiscoverSessionsPage.xaml.cs");
 
         // Assert
         Assert.Contains("VisualStateGroup x:Name=\"AdaptiveStates\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind LayoutRoot}\" MinWidth=\"768\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<AdaptiveTrigger MinWindowWidth=\"768\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Uid=\"DiscoverSessionsBackButton\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"768\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinActualWidthTrigger", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActualWidth", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("SizeChanged", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("ActionBtn.Opacity", xaml, StringComparison.Ordinal);
     }
 

@@ -9,7 +9,6 @@
     xmlns:startVm="using:SalmonEgg.Presentation.ViewModels.Start"
     xmlns:models="using:SalmonEgg.Presentation.Models"
     xmlns:domain="using:SalmonEgg.Domain.Models"
-    xmlns:utils="using:SalmonEgg.Presentation.Utilities"
     XYFocusKeyboardNavigation="Enabled"
     mc:Ignorable="d">
 
@@ -44,7 +43,7 @@
                     </VisualState>
                     <VisualState x:Name="Wide">
                         <VisualState.StateTriggers>
-                            <utils:MinActualWidthTrigger TargetElement="{x:Bind ComposerLayoutRoot}" MinWidth="640" />
+                            <AdaptiveTrigger MinWindowWidth="640" />
                         </VisualState.StateTriggers>
                         <VisualState.Setters>
                             <Setter Target="BottomToolsStrip.ColumnSpacing" Value="12" />
