@@ -573,6 +573,81 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
+    public void AddProjectCommand_WhenFolderPickerUnsupported_IsDisabled()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog();
+            var ui = new Mock<IUiInteractionService>();
+            ui.SetupGet(service => service.CanPickFolder).Returns(false);
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                Mock.Of<ISessionManager>(),
+                preferences,
+                navState,
+                out _,
+                out _,
+                uiOverride: ui.Object);
+
+            Assert.False(navVm.CanAddProject);
+            Assert.False(navVm.AddProjectCommand.CanExecute(null));
+            Assert.False(navVm.AddProjectItem.IsEnabled);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
+    public async Task AddProjectCommand_WhenFolderPickerSupported_AddsPickedProject()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            var preferences = CreatePreferencesWithProject();
+            var chatCatalog = CreateChatSessionCatalog();
+            var ui = new Mock<IUiInteractionService>();
+            ui.SetupGet(service => service.CanPickFolder).Returns(true);
+            var pickedPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                $"salmonegg-new-project-{Guid.NewGuid():N}");
+            ui.Setup(service => service.PickFolderAsync()).ReturnsAsync(pickedPath);
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                Mock.Of<ISessionManager>(),
+                preferences,
+                navState,
+                out _,
+                out _,
+                uiOverride: ui.Object);
+
+            await navVm.AddProjectCommand.ExecuteAsync(null);
+
+            Assert.Contains(preferences.Projects, project =>
+                string.Equals(
+                    project.RootPath,
+                    NavTimeFormatter.NormalizePathForPrefixMatch(pickedPath).TrimEnd(System.IO.Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(project.Name, System.IO.Path.GetFileName(pickedPath), StringComparison.Ordinal));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public void RebuildTree_KeepsLastUpdatedOrderingWhenOnlyAccessTimesChange()
     {
         var originalContext = SynchronizationContext.Current;
@@ -1584,9 +1659,11 @@ public sealed class MainNavigationViewModelSelectionTests
         FakeNavigationPaneState navState,
         out ShellSelectionStateStore selectionStore,
         out ShellNavigationRuntimeStateStore runtimeState,
-        IConversationCatalogDisplayReadModel? presenterOverride = null)
+        IConversationCatalogDisplayReadModel? presenterOverride = null,
+        IUiInteractionService? uiOverride = null)
     {
         var ui = new Mock<IUiInteractionService>();
+        ui.SetupGet(service => service.CanPickFolder).Returns(true);
         var navigationCoordinator = new StubNavigationCoordinator();
         var navLogger = new Mock<ILogger<MainNavigationViewModel>>();
         var metricsSink = new Mock<IShellLayoutMetricsSink>();
@@ -1598,7 +1675,7 @@ public sealed class MainNavigationViewModelSelectionTests
         return new MainNavigationViewModel(
             chatCatalog,
             CreateProjectPreferences(preferences),
-            ui.Object,
+            uiOverride ?? ui.Object,
             navigationCoordinator,
             navLogger.Object,
             navState,

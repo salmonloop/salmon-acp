@@ -393,6 +393,24 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void FolderPickerCapability_DoesNotFallbackToManualPathInputWhenUnsupported()
+    {
+        var uiService = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Services\UiInteractionService.cs");
+        var navigationViewModel = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\Navigation\MainNavigationViewModel.cs");
+        var dependencyInjection = LoadFile(@"SalmonEgg\SalmonEgg\DependencyInjection.cs");
+
+        var unsupportedCheckIndex = uiService.IndexOf("if (!_folderPicker.IsSupported)", StringComparison.Ordinal);
+        var promptFallbackIndex = uiService.IndexOf("return await PromptTextAsync(", StringComparison.Ordinal);
+
+        Assert.True(unsupportedCheckIndex >= 0, "Folder picker support must be checked before UI fallback.");
+        Assert.True(promptFallbackIndex > unsupportedCheckIndex, "Manual path input must not run before capability gating.");
+        Assert.Contains("return null;", uiService.Substring(unsupportedCheckIndex, promptFallbackIndex - unsupportedCheckIndex), StringComparison.Ordinal);
+        Assert.Contains("public bool CanAddProject => _ui.CanPickFolder;", navigationViewModel, StringComparison.Ordinal);
+        Assert.Contains("new AsyncRelayCommand(AddProjectAsync, () => CanAddProject)", navigationViewModel, StringComparison.Ordinal);
+        Assert.Contains("services.AddSingleton<IFolderPickerService, UnavailableFolderPickerService>();", dependencyInjection, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainNavigationViewAdapter_ItemInvoked_OwnsDestinationActivationPath()
     {
         var code = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Navigation\MainNavigationViewAdapter.cs");

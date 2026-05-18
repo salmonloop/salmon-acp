@@ -24,6 +24,8 @@ public interface IUiInteractionService
 
     Task<string?> PickFolderAsync();
 
+    bool CanPickFolder { get; }
+
     Task ShowSessionsListDialogAsync(
         string title,
         IReadOnlyList<SessionNavItemViewModel> sessions,

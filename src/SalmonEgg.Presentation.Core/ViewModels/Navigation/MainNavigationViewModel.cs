@@ -100,6 +100,8 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     public MainNavItemViewModel? ProjectedControlSelectedItem => _projection.ControlSelectedItem;
 
+    public bool CanAddProject => _ui.CanPickFolder;
+
     public string? PendingProjectIdForNewSession
     {
         get => _pendingProjectIdForNewSession;
@@ -193,7 +195,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         _readOnlyItems = new ReadOnlyObservableCollection<MainNavItemViewModel>(_items);
         _readOnlyFooterItems = new ReadOnlyObservableCollection<MainNavItemViewModel>(_footerItems);
-        AddProjectCommand = new AsyncRelayCommand(AddProjectAsync);
+        AddProjectCommand = new AsyncRelayCommand(AddProjectAsync, () => CanAddProject);
 
         StartItem = new StartNavItemViewModel(_navigationState, _uiDispatcher);
         DiscoverSessionsItem = new DiscoverSessionsNavItemViewModel(_navigationState, _uiDispatcher);
@@ -442,6 +444,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private async Task AddProjectAsync()
     {
+        if (!CanAddProject)
+        {
+            return;
+        }
+
         var pickedPath = await _ui.PickFolderAsync().ConfigureAwait(true);
         if (string.IsNullOrWhiteSpace(pickedPath))
         {

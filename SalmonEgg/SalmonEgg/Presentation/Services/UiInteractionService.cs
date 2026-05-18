@@ -13,6 +13,14 @@ namespace SalmonEgg.Presentation.Services;
 public sealed class UiInteractionService : IUiInteractionService
 {
     private static readonly ResourceLoader ResourceLoader = ResourceLoader.GetForViewIndependentUse();
+    private readonly IFolderPickerService _folderPicker;
+
+    public UiInteractionService(IFolderPickerService folderPicker)
+    {
+        _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
+    }
+
+    public bool CanPickFolder => _folderPicker.IsSupported;
 
     public async Task ShowInfoAsync(string message)
     {
@@ -99,26 +107,22 @@ public sealed class UiInteractionService : IUiInteractionService
 
     public async Task<string?> PickFolderAsync()
     {
+        if (!_folderPicker.IsSupported)
+        {
+            return null;
+        }
+
         try
         {
-            var picker = new Windows.Storage.Pickers.FolderPicker();
-            picker.FileTypeFilter.Add("*");
-
-#if WINDOWS
-            var window = App.MainWindowInstance;
-            if (window != null)
+            var pickedFolder = await _folderPicker.PickFolderAsync().ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(pickedFolder))
             {
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+                return pickedFolder;
             }
-#endif
-
-            var folder = await picker.PickSingleFolderAsync();
-            return folder?.Path;
         }
         catch
         {
-            // Fall back to manual input below.
+            // Supported native picker failures keep the user on the same explicit path input flow.
         }
 
         return await PromptTextAsync(

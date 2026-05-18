@@ -575,6 +575,11 @@ public static class DependencyInjection
         services.AddSingleton<IRightPanelService, RightPanelService>();
 
         // UI interaction helpers (ContentDialog, FolderPicker)
+#if WINDOWS
+        services.AddSingleton<IFolderPickerService, WindowsFolderPickerService>();
+#else
+        services.AddSingleton<IFolderPickerService, UnavailableFolderPickerService>();
+#endif
         services.AddSingleton<IUiInteractionService, UiInteractionService>();
 
         // UI runtime bridge (animations, shell reload)
