@@ -481,6 +481,62 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
+    public void SessionSelection_MaterializesOverflowSessionBeforeProjectingNativeSelection()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var navState = new FakeNavigationPaneState();
+            navState.SetPaneOpen(true);
+            var preferences = CreatePreferencesWithProject();
+            var sessionIds = Enumerable.Range(1, 25)
+                .Select(index => $"session-{index:00}")
+                .ToArray();
+            var chatCatalog = CreateChatSessionCatalog(sessionIds);
+            var presenter = new MutableConversationCatalogDisplayReadModel();
+            presenter.SetLoading(false);
+            var baseline = new DateTime(2026, 4, 21, 12, 0, 0, DateTimeKind.Utc);
+            presenter.Refresh(sessionIds.Select((id, index) => new ConversationCatalogItem(
+                id,
+                $"Session {index + 1:00}",
+                @"C:\repo\demo",
+                baseline.AddMinutes(-index),
+                baseline.AddMinutes(-index),
+                baseline.AddMinutes(-index))));
+
+            using var navVm = CreateNavigationViewModel(
+                chatCatalog,
+                Mock.Of<ISessionManager>(),
+                preferences,
+                navState,
+                out var selectionStore,
+                out _,
+                presenter);
+
+            navVm.RebuildTree();
+            var project = Assert.Single(navVm.Items.OfType<ProjectNavItemViewModel>(), item => item.ProjectId == "project-1");
+            Assert.DoesNotContain(project.Children.OfType<SessionNavItemViewModel>(), item => item.SessionId == "session-25");
+
+            SetSessionSelection(selectionStore, "session-25");
+
+            var projected = Assert.IsType<SessionNavItemViewModel>(navVm.ProjectedControlSelectedItem);
+            Assert.Equal("session-25", projected.SessionId);
+            Assert.Contains(project.ChildrenMenuItems.OfType<SessionNavItemViewModel>(), item => item.SessionId == "session-25");
+            Assert.True(project.IsActiveDescendant);
+            var selection = Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
+            Assert.Equal("session-25", selection.SessionId);
+            var more = Assert.Single(project.ChildrenMenuItems.OfType<MoreSessionsNavItemViewModel>());
+            Assert.Equal(4, more.Count);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public void RebuildTree_UsesCatalogSnapshotAsSingleReadSource()
     {
         var originalContext = SynchronizationContext.Current;

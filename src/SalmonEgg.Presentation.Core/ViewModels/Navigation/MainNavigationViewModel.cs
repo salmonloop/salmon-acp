@@ -29,6 +29,7 @@ namespace SalmonEgg.Presentation.ViewModels.Navigation;
 public sealed partial class MainNavigationViewModel : ObservableObject, IDisposable
 {
     public const string UnclassifiedProjectId = NavigationProjectIds.Unclassified;
+    private const int VisibleSessionsPerProjectLimit = 20;
 
     public event EventHandler? TreeRebuilt;
 
@@ -282,6 +283,11 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             OnPropertyChanged(nameof(CurrentSelection));
             OnPropertyChanged(nameof(IsSettingsSelected));
+            if (TryMaterializeSelectedSession())
+            {
+                return;
+            }
+
             NormalizeSelectionAfterRebuild();
             return;
         }
@@ -661,7 +667,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private void SyncSessions(ProjectNavItemViewModel projectVm, List<ConversationCatalogDisplayItem> sessions, Dictionary<string, SessionNavItemViewModel> targetSessionIndex)
     {
-        var top = sessions.Take(20).ToList();
+        var top = BuildVisibleSessionsForProject(sessions);
         var remainingCount = Math.Max(0, sessions.Count - top.Count);
         var children = projectVm.MutableChildren;
 
@@ -769,6 +775,26 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }
     }
 
+    private List<ConversationCatalogDisplayItem> BuildVisibleSessionsForProject(List<ConversationCatalogDisplayItem> sessions)
+    {
+        var visible = sessions.Take(VisibleSessionsPerProjectLimit).ToList();
+        if (CurrentSelection is not NavigationSelectionState.Session currentSession
+            || string.IsNullOrWhiteSpace(currentSession.SessionId)
+            || visible.Any(item => string.Equals(item.ConversationId, currentSession.SessionId, StringComparison.Ordinal)))
+        {
+            return visible;
+        }
+
+        var selected = sessions.FirstOrDefault(
+            item => string.Equals(item.ConversationId, currentSession.SessionId, StringComparison.Ordinal));
+        if (selected is not null)
+        {
+            visible.Add(selected);
+        }
+
+        return visible;
+    }
+
     private List<(ProjectDefinition Project, bool IsSystem)> GetProjectDefinitions()
     {
         var projects = new List<(ProjectDefinition Project, bool IsSystem)>
@@ -872,6 +898,36 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
         return CurrentSelection;
     }
+
+    private bool TryMaterializeSelectedSession()
+    {
+        if (CurrentSelection is not NavigationSelectionState.Session currentSession
+            || string.IsNullOrWhiteSpace(currentSession.SessionId)
+            || _sessionIndex.ContainsKey(currentSession.SessionId)
+            || !CanMaterializeSelectedSession(currentSession.SessionId))
+        {
+            return false;
+        }
+
+        RebuildTreeCore();
+        return true;
+    }
+
+    private bool CanMaterializeSelectedSession(string sessionId)
+    {
+        var selected = _conversationCatalogPresenter.Snapshot.FirstOrDefault(
+            item => string.Equals(item.ConversationId, sessionId, StringComparison.Ordinal));
+        if (selected is null)
+        {
+            return false;
+        }
+
+        var projectId = ResolveEffectiveProjectId(selected);
+        return _projectIndex.ContainsKey(projectId)
+            || GetProjectDefinitions().Any(
+                project => string.Equals(project.Project.ProjectId, projectId, StringComparison.Ordinal));
+    }
+
     private void ApplyVisualSelectionState(NavigationViewProjection projection)
     {
         // Visual selection state is now handled by NavigationView's native projection behavior
