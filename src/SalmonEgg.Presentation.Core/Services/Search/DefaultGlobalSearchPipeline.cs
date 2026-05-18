@@ -95,7 +95,7 @@ public sealed class DefaultGlobalSearchPipeline : IGlobalSearchPipeline
 
         return new GlobalSearchGroupSnapshot(
             Name: "sessions",
-            Title: _localizer["Search_Sessions"],
+            Title: ResolveLocalizedValue("Search_Sessions", "Sessions"),
             Priority: 100,
             Items: matches);
     }
@@ -103,11 +103,12 @@ public sealed class DefaultGlobalSearchPipeline : IGlobalSearchPipeline
     private GlobalSearchGroupSnapshot SearchProjects(string normalizedQuery, ImmutableArray<GlobalSearchProjectSource> projects)
     {
         var items = new List<GlobalSearchItemSnapshot>();
-        if (MatchScore(_localizer["Nav_Unclassified"], normalizedQuery) > 0)
+        var unclassifiedTitle = ResolveLocalizedValue("Nav_Unclassified", NavigationProjectIds.Unclassified);
+        if (MatchScore(unclassifiedTitle, normalizedQuery) > 0)
         {
             items.Add(new GlobalSearchItemSnapshot(
                 NavigationProjectIds.Unclassified,
-                _localizer["Nav_Unclassified"],
+                unclassifiedTitle,
                 Subtitle: null,
                 SearchResultKind.Project,
                 "\uE8F1",
@@ -133,25 +134,31 @@ public sealed class DefaultGlobalSearchPipeline : IGlobalSearchPipeline
 
         return new GlobalSearchGroupSnapshot(
             Name: "projects",
-            Title: _localizer["Search_Projects"],
+            Title: ResolveLocalizedValue("Search_Projects", "Projects"),
             Priority: 90,
             Items: items.ToImmutableArray());
     }
 
     private GlobalSearchGroupSnapshot SearchSettings(string normalizedQuery)
     {
-        var settingsItems = new (string Id, string Title, string Subtitle)[]
+        var settingsItems = new (string Id, string TitleResourceKey, string SubtitleResourceKey)[]
         {
-            (SettingsSectionCatalog.GeneralKey, "通用设置", "主题、语言、启动选项"),
-            (SettingsSectionCatalog.ShortcutsKey, "快捷键", "自定义键盘快捷键"),
-            (SettingsSectionCatalog.AppearanceKey, "外观", "主题和背景效果"),
-            (SettingsSectionCatalog.DataStorageKey, "数据与存储", "历史记录和缓存管理"),
-            (SettingsSectionCatalog.AgentAcpKey, "ACP 配置", "服务器和连接配置"),
-            (SettingsSectionCatalog.DiagnosticsKey, "诊断", "日志和调试信息"),
-            (SettingsSectionCatalog.AboutKey, "关于", "版本和许可证信息")
+            (SettingsSectionCatalog.GeneralKey, "SettingsSection_General", "SettingsSearchSubtitle_General"),
+            (SettingsSectionCatalog.ShortcutsKey, "SettingsSection_Shortcuts", "SettingsSearchSubtitle_Shortcuts"),
+            (SettingsSectionCatalog.AppearanceKey, "SettingsSection_Appearance", "SettingsSearchSubtitle_Appearance"),
+            (SettingsSectionCatalog.DataStorageKey, "SettingsSection_DataStorage", "SettingsSearchSubtitle_DataStorage"),
+            (SettingsSectionCatalog.AgentAcpKey, "SettingsSection_AgentAcp", "SettingsSearchSubtitle_AgentAcp"),
+            (SettingsSectionCatalog.DiagnosticsKey, "SettingsSection_Diagnostics", "SettingsSearchSubtitle_Diagnostics"),
+            (SettingsSectionCatalog.AboutKey, "SettingsSection_About", "SettingsSearchSubtitle_About")
         };
 
         var items = settingsItems
+            .Select(item => new
+            {
+                item.Id,
+                Title = ResolveLocalizedValue(item.TitleResourceKey, item.Id),
+                Subtitle = ResolveLocalizedValue(item.SubtitleResourceKey, string.Empty)
+            })
             .Where(item =>
                 MatchScore(item.Title, normalizedQuery) > 0
                 || MatchScore(item.Subtitle, normalizedQuery) > 0
@@ -167,21 +174,36 @@ public sealed class DefaultGlobalSearchPipeline : IGlobalSearchPipeline
 
         return new GlobalSearchGroupSnapshot(
             Name: "settings",
-            Title: _localizer["Search_Settings"],
+            Title: ResolveLocalizedValue("Search_Settings", "Settings"),
             Priority: 80,
             Items: items);
     }
 
+    private string ResolveLocalizedValue(string resourceKey, string fallback)
+    {
+        var localized = _localizer[resourceKey];
+        return localized is null || string.IsNullOrWhiteSpace(localized.Value) || localized.ResourceNotFound
+            ? fallback
+            : localized.Value;
+    }
+
     private GlobalSearchGroupSnapshot SearchCommands(string normalizedQuery)
     {
-        var commands = new (string Id, string Title, string Subtitle, string Tag)[]
+        var commands = new (string Id, string TitleResourceKey, string TitleFallback, string SubtitleResourceKey, string SubtitleFallback, string Tag)[]
         {
-            ("new_session", "新建会话", "创建新的聊天会话", "new"),
-            ("new_project", "新建项目", "添加新的项目文件夹", "project"),
-            ("toggle_theme", "切换主题", "在亮色/暗色/系统主题间切换", "theme")
+            ("new_session", "SearchCommand_NewSessionTitle", "New session", "SearchCommand_NewSessionSubtitle", "Create a new chat session", "new"),
+            ("new_project", "SearchCommand_NewProjectTitle", "New project", "SearchCommand_NewProjectSubtitle", "Add a project folder", "project"),
+            ("toggle_theme", "SearchCommand_ToggleThemeTitle", "Toggle theme", "SearchCommand_ToggleThemeSubtitle", "Switch between light, dark, and system theme", "theme")
         };
 
         var items = commands
+            .Select(command => new
+            {
+                command.Id,
+                Title = ResolveLocalizedValue(command.TitleResourceKey, command.TitleFallback),
+                Subtitle = ResolveLocalizedValue(command.SubtitleResourceKey, command.SubtitleFallback),
+                command.Tag
+            })
             .Where(command =>
                 MatchScore(command.Title, normalizedQuery) > 0
                 || MatchScore(command.Subtitle, normalizedQuery) > 0
@@ -197,7 +219,7 @@ public sealed class DefaultGlobalSearchPipeline : IGlobalSearchPipeline
 
         return new GlobalSearchGroupSnapshot(
             Name: "commands",
-            Title: _localizer["Search_Commands"],
+            Title: ResolveLocalizedValue("Search_Commands", "Commands"),
             Priority: 70,
             Items: items);
     }

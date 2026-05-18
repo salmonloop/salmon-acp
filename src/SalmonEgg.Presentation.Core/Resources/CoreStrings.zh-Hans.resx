@@ -73,6 +73,45 @@
   <data name="Search_History" xml:space="preserve">
     <value>最近搜索</value>
   </data>
+  <data name="SearchCommand_NewSessionTitle" xml:space="preserve">
+    <value>新建会话</value>
+  </data>
+  <data name="SearchCommand_NewSessionSubtitle" xml:space="preserve">
+    <value>创建新的聊天会话</value>
+  </data>
+  <data name="SearchCommand_NewProjectTitle" xml:space="preserve">
+    <value>新建项目</value>
+  </data>
+  <data name="SearchCommand_NewProjectSubtitle" xml:space="preserve">
+    <value>添加新的项目文件夹</value>
+  </data>
+  <data name="SearchCommand_ToggleThemeTitle" xml:space="preserve">
+    <value>切换主题</value>
+  </data>
+  <data name="SearchCommand_ToggleThemeSubtitle" xml:space="preserve">
+    <value>在亮色、暗色和系统主题间切换</value>
+  </data>
+  <data name="SettingsSearchSubtitle_General" xml:space="preserve">
+    <value>主题、语言、启动选项</value>
+  </data>
+  <data name="SettingsSearchSubtitle_Shortcuts" xml:space="preserve">
+    <value>自定义键盘快捷键</value>
+  </data>
+  <data name="SettingsSearchSubtitle_Appearance" xml:space="preserve">
+    <value>主题和背景效果</value>
+  </data>
+  <data name="SettingsSearchSubtitle_DataStorage" xml:space="preserve">
+    <value>历史记录和缓存管理</value>
+  </data>
+  <data name="SettingsSearchSubtitle_AgentAcp" xml:space="preserve">
+    <value>服务器和连接配置</value>
+  </data>
+  <data name="SettingsSearchSubtitle_Diagnostics" xml:space="preserve">
+    <value>日志和调试信息</value>
+  </data>
+  <data name="SettingsSearchSubtitle_About" xml:space="preserve">
+    <value>版本和许可证信息</value>
+  </data>
 
   <!-- Settings: About -->
   <data name="About_ReleaseNotesTitle" xml:space="preserve">

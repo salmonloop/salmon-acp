@@ -36,6 +36,57 @@
   <data name="SettingsSection_About" xml:space="preserve">
     <value>About</value>
   </data>
+  <data name="Search_Sessions" xml:space="preserve">
+    <value>Sessions</value>
+  </data>
+  <data name="Search_Projects" xml:space="preserve">
+    <value>Projects</value>
+  </data>
+  <data name="Search_Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Search_Commands" xml:space="preserve">
+    <value>Commands</value>
+  </data>
+  <data name="SearchCommand_NewSessionTitle" xml:space="preserve">
+    <value>New session</value>
+  </data>
+  <data name="SearchCommand_NewSessionSubtitle" xml:space="preserve">
+    <value>Create a new chat session</value>
+  </data>
+  <data name="SearchCommand_NewProjectTitle" xml:space="preserve">
+    <value>New project</value>
+  </data>
+  <data name="SearchCommand_NewProjectSubtitle" xml:space="preserve">
+    <value>Add a project folder</value>
+  </data>
+  <data name="SearchCommand_ToggleThemeTitle" xml:space="preserve">
+    <value>Toggle theme</value>
+  </data>
+  <data name="SearchCommand_ToggleThemeSubtitle" xml:space="preserve">
+    <value>Switch between light, dark, and system theme</value>
+  </data>
+  <data name="SettingsSearchSubtitle_General" xml:space="preserve">
+    <value>Theme, language, and startup options</value>
+  </data>
+  <data name="SettingsSearchSubtitle_Shortcuts" xml:space="preserve">
+    <value>Customize keyboard shortcuts</value>
+  </data>
+  <data name="SettingsSearchSubtitle_Appearance" xml:space="preserve">
+    <value>Theme and backdrop effects</value>
+  </data>
+  <data name="SettingsSearchSubtitle_DataStorage" xml:space="preserve">
+    <value>History and cache management</value>
+  </data>
+  <data name="SettingsSearchSubtitle_AgentAcp" xml:space="preserve">
+    <value>Servers and connection configuration</value>
+  </data>
+  <data name="SettingsSearchSubtitle_Diagnostics" xml:space="preserve">
+    <value>Logs and diagnostics</value>
+  </data>
+  <data name="SettingsSearchSubtitle_About" xml:space="preserve">
+    <value>Version and license information</value>
+  </data>
   <data name="About_ReleaseNotesTitle" xml:space="preserve">
     <value>release notes</value>
   </data>

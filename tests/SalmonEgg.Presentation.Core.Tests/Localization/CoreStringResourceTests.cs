@@ -20,6 +20,23 @@ public sealed class CoreStringResourceTests
     [InlineData("SettingsSection_Shortcuts")]
     [InlineData("SettingsSection_Diagnostics")]
     [InlineData("SettingsSection_About")]
+    [InlineData("Search_Sessions")]
+    [InlineData("Search_Projects")]
+    [InlineData("Search_Settings")]
+    [InlineData("Search_Commands")]
+    [InlineData("SearchCommand_NewSessionTitle")]
+    [InlineData("SearchCommand_NewSessionSubtitle")]
+    [InlineData("SearchCommand_NewProjectTitle")]
+    [InlineData("SearchCommand_NewProjectSubtitle")]
+    [InlineData("SearchCommand_ToggleThemeTitle")]
+    [InlineData("SearchCommand_ToggleThemeSubtitle")]
+    [InlineData("SettingsSearchSubtitle_General")]
+    [InlineData("SettingsSearchSubtitle_Shortcuts")]
+    [InlineData("SettingsSearchSubtitle_Appearance")]
+    [InlineData("SettingsSearchSubtitle_DataStorage")]
+    [InlineData("SettingsSearchSubtitle_AgentAcp")]
+    [InlineData("SettingsSearchSubtitle_Diagnostics")]
+    [InlineData("SettingsSearchSubtitle_About")]
     public void CoreMessages_ArePresentInAllCoreStringResources(string key)
     {
         foreach (var relativePath in CoreStringResourcePaths)
