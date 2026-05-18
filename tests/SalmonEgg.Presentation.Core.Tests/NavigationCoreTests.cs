@@ -449,6 +449,8 @@ public sealed class NavigationCoreTests
 
         Assert.Contains("AutomationProperties.AutomationId=\"StartView.Title\"", xaml, StringComparison.Ordinal);
         Assert.Contains("InputBoxAutomationId=\"StartView.PromptBox\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("LinearGradientBrush", xaml, StringComparison.Ordinal);
+        Assert.Contains("SystemAccentColorLight2", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

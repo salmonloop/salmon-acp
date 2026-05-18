@@ -14,8 +14,9 @@
     IsPrimaryButtonEnabled="{x:Bind HasSelection, Mode=OneWay}">
 
     <StackPanel Spacing="14"
-                MinWidth="400"
-                MaxHeight="540">
+                MaxWidth="560"
+                MaxHeight="540"
+                HorizontalAlignment="Stretch">
         <Border Padding="16"
                 CornerRadius="12"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

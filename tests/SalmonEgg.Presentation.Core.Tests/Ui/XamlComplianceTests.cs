@@ -167,6 +167,40 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void SettingsPages_UseSharedResponsiveContentAndFormRows()
+    {
+        var settingsFiles = Directory.GetFiles(
+            Path.Combine(FindRepoRoot(), "SalmonEgg", "SalmonEgg", "Presentation", "Views", "Settings"),
+            "*.xaml",
+            SearchOption.TopDirectoryOnly);
+        var generalSettings = Path.Combine(
+            FindRepoRoot(),
+            "SalmonEgg",
+            "SalmonEgg",
+            "Presentation",
+            "Views",
+            "GeneralSettingsPage.xaml");
+
+        foreach (var file in settingsFiles.Append(generalSettings))
+        {
+            var xaml = File.ReadAllText(file);
+            Assert.Contains("ResponsiveContentHost", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("ResponsiveSettingsHost", xaml, StringComparison.Ordinal);
+            Assert.DoesNotContain("<ColumnDefinition Width=\"220\"", xaml, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("ResponsiveFormRow", LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AboutPage.xaml"), StringComparison.Ordinal);
+        Assert.Contains("ResponsiveFormRow", LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DiagnosticsSettingsPage.xaml"), StringComparison.Ordinal);
+        Assert.Contains("ResponsiveFormRow", LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\ShortcutsSettingsPage.xaml"), StringComparison.Ordinal);
+
+        var formRow = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ResponsiveFormRow.xaml");
+        Assert.Contains("x:Class=\"SalmonEgg.Controls.ResponsiveFormRow\"", formRow, StringComparison.Ordinal);
+        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind LayoutRoot}\" MinWidth=\"560\" />", formRow, StringComparison.Ordinal);
+        Assert.Contains("<Setter Target=\"ValuePresenter.(Grid.Row)\" Value=\"1\" />", formRow, StringComparison.Ordinal);
+        Assert.Contains("<Setter Target=\"LabelColumn.Width\" Value=\"220\" />", formRow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TitleBarButtons_UseSharedIconTemplates()
     {
         var mainPageXaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
@@ -304,6 +338,21 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
 
         Assert.DoesNotContain("Width=\"140\"", xaml);
+    }
+
+    [Fact]
+    public void ChatInputArea_UsesContainerWidthForResponsiveToolLayout()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");
+
+        Assert.Contains("x:Name=\"ComposerLayoutRoot\"", xaml);
+        Assert.Contains("x:Name=\"BottomToolsStrip\"", xaml);
+        Assert.Contains("x:Name=\"ToolSelectorsPanel\"", xaml);
+        Assert.Contains("x:Name=\"ActionButtonsPanel\"", xaml);
+        Assert.Contains("<utils:MinActualWidthTrigger TargetElement=\"{x:Bind ComposerLayoutRoot}\" MinWidth=\"640\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Target=\"ToolSelectorsPanel.Orientation\" Value=\"Vertical\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Target=\"ActionButtonsPanel.(Grid.Row)\" Value=\"1\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<AdaptiveTrigger MinWindowWidth=\"640\" />", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -568,6 +617,21 @@ public sealed class XamlComplianceTests
         Assert.Contains("SelectedItem=\"{x:Bind SelectedOption, Mode=TwoWay}\"", xaml);
         Assert.DoesNotContain("<RadioButtons", xaml);
         Assert.DoesNotContain("<SymbolIcon Symbol=\"Folder\"", xaml);
+    }
+
+    [Fact]
+    public void Dialogs_DoNotForceDesktopMinimumWidth()
+    {
+        var sessionsDialog = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Navigation\SessionsListDialog.xaml");
+        var projectDialog = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Navigation\ConversationProjectPickerDialog.xaml");
+        var configurationDialog = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\ConfigurationEditorDialog.xaml");
+
+        Assert.DoesNotContain("MinWidth=\"420\"", sessionsDialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"400\"", projectDialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"400\"", configurationDialog, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"560\"", sessionsDialog, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"560\"", projectDialog, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"560\"", configurationDialog, StringComparison.Ordinal);
     }
 
     [Fact]

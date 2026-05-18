@@ -13,8 +13,8 @@
 
     <ScrollViewer Padding="0"
                   HorizontalScrollBarVisibility="Disabled">
-        <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
-            <controls:ResponsiveSettingsHost.Child>
+        <controls:ResponsiveContentHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
+            <controls:ResponsiveContentHost.Child>
                 <StackPanel Spacing="24"
                             Padding="{StaticResource SettingsPageVerticalPadding}">
                     <StackPanel Spacing="8">
@@ -59,33 +59,33 @@
                                           SelectionMode="None">
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ShortcutEntryViewModel">
-                                            <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="220"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
+                                            <controls:ResponsiveFormRow>
+                                                <controls:ResponsiveFormRow.Label>
+                                                    <StackPanel VerticalAlignment="Center" Spacing="4">
+                                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                                                   Style="{StaticResource SettingsRowTitleTextStyle}"/>
+                                                        <TextBlock Text="{x:Bind DefaultGesture, Mode=OneWay}"
+                                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                                    </StackPanel>
+                                                </controls:ResponsiveFormRow.Label>
+                                                <controls:ResponsiveFormRow.Value>
+                                                    <Grid ColumnDefinitions="*,Auto"
+                                                          ColumnSpacing="8">
+                                                        <controls:ShortcutRecorder Grid.Column="0"
+                                                                                   x:Uid="Shortcuts_GestureRecorder"
+                                                                                   Gesture="{x:Bind Gesture, Mode=TwoWay}"
+                                                                                   RecorderAutomationId="{x:Bind RecorderAutomationId, Mode=OneWay}"
+                                                                                   HorizontalAlignment="Stretch"
+                                                                                   VerticalAlignment="Center"/>
 
-                                                <StackPanel VerticalAlignment="Center" Spacing="4">
-                                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}"
-                                                               Style="{StaticResource SettingsRowTitleTextStyle}"/>
-                                                    <TextBlock Text="{x:Bind DefaultGesture, Mode=OneWay}"
-                                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                                </StackPanel>
-
-                                                <controls:ShortcutRecorder Grid.Column="1"
-                                                                           x:Uid="Shortcuts_GestureRecorder"
-                                                                           Gesture="{x:Bind Gesture, Mode=TwoWay}"
-                                                                           RecorderAutomationId="{x:Bind RecorderAutomationId, Mode=OneWay}"
-                                                                           HorizontalAlignment="Stretch"
-                                                                           VerticalAlignment="Center"/>
-
-                                                <Button Grid.Column="2"
-                                                        x:Uid="Shortcuts_RestoreSingle"
-                                                        Content="恢复"
-                                                        Command="{x:Bind RestoreDefaultCommand}"
-                                                        VerticalAlignment="Center"/>
-                                            </Grid>
+                                                        <Button Grid.Column="1"
+                                                                x:Uid="Shortcuts_RestoreSingle"
+                                                                Content="恢复"
+                                                                Command="{x:Bind RestoreDefaultCommand}"
+                                                                VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </controls:ResponsiveFormRow.Value>
+                                            </controls:ResponsiveFormRow>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>
@@ -113,7 +113,7 @@
                         </Border>
                     </StackPanel>
                 </StackPanel>
-            </controls:ResponsiveSettingsHost.Child>
-        </controls:ResponsiveSettingsHost>
+            </controls:ResponsiveContentHost.Child>
+        </controls:ResponsiveContentHost>
     </ScrollViewer>
 </views:SettingsPageBase>

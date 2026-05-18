@@ -16,7 +16,10 @@
     </ContentDialog.Resources>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Spacing="12" MinWidth="400" Padding="4">
+        <StackPanel Spacing="12"
+                    MaxWidth="560"
+                    Padding="4"
+                    HorizontalAlignment="Stretch">
             <InfoBar IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
                      Severity="Error"
                      IsClosable="True"

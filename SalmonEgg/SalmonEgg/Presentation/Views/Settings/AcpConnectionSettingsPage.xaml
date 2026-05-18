@@ -27,8 +27,8 @@
 
     <ScrollViewer Padding="0"
                   HorizontalScrollBarVisibility="Disabled">
-        <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
-            <controls:ResponsiveSettingsHost.Child>
+        <controls:ResponsiveContentHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
+            <controls:ResponsiveContentHost.Child>
                 <StackPanel Spacing="28">
                     <StackPanel Spacing="8">
                         <TextBlock x:Uid="Acp_PageTitle"
@@ -275,7 +275,7 @@
                         </Border>
                     </StackPanel>
                 </StackPanel>
-            </controls:ResponsiveSettingsHost.Child>
-        </controls:ResponsiveSettingsHost>
+            </controls:ResponsiveContentHost.Child>
+        </controls:ResponsiveContentHost>
     </ScrollViewer>
 </views:SettingsPageBase>

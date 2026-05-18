@@ -13,8 +13,9 @@
     DefaultButton="Close">
 
     <Grid RowDefinitions="Auto,*"
-          MinWidth="420"
-          MaxHeight="560">
+          MaxWidth="560"
+          MaxHeight="560"
+          HorizontalAlignment="Stretch">
         <TextBox x:Uid="SessionsDialogSearchBox"
                  AutomationProperties.AutomationId="SessionsDialog.SearchBox"
                  Text="{x:Bind FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -52,4 +53,3 @@
         </ListView>
     </Grid>
 </ContentDialog>
-

@@ -9,6 +9,7 @@
     xmlns:viewModels="using:SalmonEgg.Presentation.ViewModels.Discover"
     xmlns:models="using:SalmonEgg.Domain.Models"
     xmlns:converters="using:SalmonEgg.Presentation.Converters"
+    xmlns:utils="using:SalmonEgg.Presentation.Utilities"
     mc:Ignorable="d"
     NavigationCacheMode="Required"
     Background="Transparent">
@@ -32,7 +33,7 @@
             <VisualStateGroup x:Name="AdaptiveStates">
                 <VisualState x:Name="WideState">
                     <VisualState.StateTriggers>
-                        <AdaptiveTrigger MinWindowWidth="768" />
+                        <utils:MinActualWidthTrigger TargetElement="{x:Bind LayoutRoot}" MinWidth="768" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
                         <Setter Target="ProfilesPane.(Grid.Column)" Value="0" />

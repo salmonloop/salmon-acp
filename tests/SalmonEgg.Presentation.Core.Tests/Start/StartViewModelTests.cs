@@ -474,6 +474,7 @@ public sealed class StartViewModelTests
                 nav,
                 workflow.Object);
 
+            await chat.DispatchConnectionAsync(new SetSettingsSelectedProfileAction("profile-1"));
             await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
             await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
             await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
@@ -1289,6 +1290,7 @@ public sealed class StartViewModelTests
         ChatViewModelHarness chat,
         StartViewModel startViewModel)
     {
+        await chat.DispatchConnectionAsync(new SetSettingsSelectedProfileAction("profile-1"));
         await chat.DispatchConnectionAsync(new SetForegroundTransportProfileAction("profile-1"));
         await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));

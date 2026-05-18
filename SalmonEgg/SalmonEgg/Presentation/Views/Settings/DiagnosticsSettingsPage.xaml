@@ -18,8 +18,8 @@
 
     <ScrollViewer Padding="0"
                   HorizontalScrollBarVisibility="Disabled">
-        <controls:ResponsiveSettingsHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
-            <controls:ResponsiveSettingsHost.Child>
+        <controls:ResponsiveContentHost MaxContentWidth="{StaticResource SettingsContentMaxWidth}">
+            <controls:ResponsiveContentHost.Child>
                 <StackPanel Spacing="28"
                             Padding="{StaticResource SettingsPageVerticalPadding}">
                     <StackPanel Spacing="4">
@@ -38,71 +38,63 @@
 
                         <Border Style="{StaticResource SettingsSectionContainerStyle}">
                             <StackPanel>
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_OsLabel"
-                                               Text="OS"
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.OsDescription, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_OsLabel"
+                                                   Text="OS"
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.OsDescription, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_FrameworkLabel"
-                                               Text=".NET"
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.FrameworkDescription, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_FrameworkLabel"
+                                                   Text=".NET"
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.FrameworkDescription, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_AppVersionLabel"
-                                               Text="应用版本："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_AppVersionLabel"
+                                                   Text="应用版本："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.AppVersion, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_ProtocolVersionLabel"
-                                               Text="协议版本："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.ProtocolVersion, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_ProtocolVersionLabel"
+                                                   Text="协议版本："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.ProtocolVersion, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -114,37 +106,33 @@
 
                         <Border Style="{StaticResource SettingsSectionContainerStyle}">
                             <StackPanel>
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_LogsFolderLabel"
-                                               Text="日志目录："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.LogsDirectoryPath, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_LogsFolderLabel"
+                                                   Text="日志目录："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.LogsDirectoryPath, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_LatestLogLabel"
-                                               Text="最新日志文件："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.LatestLogFilePath, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_LatestLogLabel"
+                                                   Text="最新日志文件："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.LatestLogFilePath, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
@@ -248,62 +236,52 @@
 
                         <Border Style="{StaticResource SettingsSectionContainerStyle}">
                             <StackPanel>
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_ConnectionStatusLabel"
-                                               Text="当前状态："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.Chat.IsConnected, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_ConnectionStatusLabel"
+                                                   Text="当前状态："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.Chat.IsConnected, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_AgentLabel"
-                                               Text="Agent："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.Chat.AgentName, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                    <TextBlock Grid.Column="1"
-                                               Grid.Row="1"
-                                               Text="{x:Bind ViewModel.Chat.AgentVersion, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_AgentLabel"
+                                                   Text="Agent："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="{x:Bind ViewModel.Chat.AgentName, Mode=OneWay}"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                            <TextBlock Text="{x:Bind ViewModel.Chat.AgentVersion, Mode=OneWay}"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </StackPanel>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
 
                                 <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
 
-                                <Grid Style="{StaticResource SettingsRowGridStyle}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock x:Uid="Diagnostics_SessionLabel"
-                                               Text="会话："
-                                               Style="{StaticResource SettingsRowTitleTextStyle}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind ViewModel.Chat.CurrentSessionId, Mode=OneWay}"
-                                               Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
-                                </Grid>
+                                <controls:ResponsiveFormRow>
+                                    <controls:ResponsiveFormRow.Label>
+                                        <TextBlock x:Uid="Diagnostics_SessionLabel"
+                                                   Text="会话："
+                                                   Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </controls:ResponsiveFormRow.Label>
+                                    <controls:ResponsiveFormRow.Value>
+                                        <TextBlock Text="{x:Bind ViewModel.Chat.CurrentSessionId, Mode=OneWay}"
+                                                   Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                    </controls:ResponsiveFormRow.Value>
+                                </controls:ResponsiveFormRow>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -334,7 +312,7 @@
                         </Border>
                     </StackPanel>
                 </StackPanel>
-            </controls:ResponsiveSettingsHost.Child>
-        </controls:ResponsiveSettingsHost>
+            </controls:ResponsiveContentHost.Child>
+        </controls:ResponsiveContentHost>
     </ScrollViewer>
 </views:SettingsPageBase>
