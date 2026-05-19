@@ -596,12 +596,25 @@ public class UiConventionsTests
         var mainPageText = File.ReadAllText(Path.Combine(repoRoot, "SalmonEgg", "SalmonEgg", "MainPage.xaml.cs"));
         var rightPanelSplitView = FindElementByXName(mainPage, "SplitView", "RightPanelSplitView");
         var rightPanelPane = FindElementByXName(mainPage, "Grid", "RightPanelPane");
+        var mainNavView = FindElementByXName(mainPage, "NavigationView", "MainNavView");
 
         Assert.Equal("Right", GetAttributeValueByLocalName(rightPanelSplitView, "PanePlacement"));
         Assert.Equal("Inline", GetAttributeValueByLocalName(rightPanelSplitView, "DisplayMode"));
         Assert.Equal("0", GetAttributeValueByLocalName(rightPanelSplitView, "CompactPaneLength"));
         Assert.Equal("{x:Bind LayoutVM.RightPanelVisible, Mode=OneWay}", GetAttributeValueByLocalName(rightPanelSplitView, "IsPaneOpen"));
         Assert.Equal("{x:Bind LayoutVM.RightPanelOpenPaneLength, Mode=OneWay}", GetAttributeValueByLocalName(rightPanelSplitView, "OpenPaneLength"));
+        Assert.Equal("NavigationView.Content", rightPanelSplitView.Parent?.Name.LocalName);
+        Assert.Equal(mainNavView, rightPanelSplitView.Parent?.Parent);
+        Assert.False(
+            mainNavView.Ancestors().Any(element => string.Equals(element.Name.LocalName, "SplitView", StringComparison.Ordinal)),
+            "MainNavView must remain the outer native navigation shell; right panel SplitView belongs inside NavigationView.Content.");
+        Assert.Contains(
+            rightPanelSplitView.Descendants(),
+            element => string.Equals(element.Name.LocalName, "Frame", StringComparison.Ordinal)
+                && string.Equals(GetAttributeValueByXamlName(element, "Name"), "ContentFrame", StringComparison.Ordinal));
+        Assert.Contains(
+            rightPanelSplitView.Descendants(),
+            element => string.Equals(element.Name.LocalName, "BottomPanelHost", StringComparison.Ordinal));
         Assert.Null(GetAttributeValueByLocalName(rightPanelPane, "Visibility"));
         Assert.DoesNotContain("RightPanelColumnDefinition", mainPageXaml, StringComparison.Ordinal);
         Assert.Contains(

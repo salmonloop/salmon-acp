@@ -449,39 +449,38 @@
             </Grid>
         </Border>
 
-        <SplitView x:Name="RightPanelSplitView"
-                   Grid.Row="1"
-                   Background="Transparent"
-                   PanePlacement="Right"
-                   DisplayMode="Inline"
-                   CompactPaneLength="0"
-                   IsPaneOpen="{x:Bind LayoutVM.RightPanelVisible, Mode=OneWay}"
-                   OpenPaneLength="{x:Bind LayoutVM.RightPanelOpenPaneLength, Mode=OneWay}">
-            <SplitView.Content>
-                <Grid>
-                    <NavigationView x:Name="MainNavView"
-                                    Background="Transparent"
-                                    AutomationProperties.AutomationId="MainNavView"
-                                    CompactPaneLength="{x:Bind LayoutVM.NavCompactPaneLength, Mode=OneWay}"
-                                    OpenPaneLength="{x:Bind LayoutVM.NavOpenPaneLength, Mode=OneWay}"
-                                    PaneDisplayMode="Auto"
-                                    CompactModeThresholdWidth="640"
-                                    ExpandedModeThresholdWidth="1000"
-                                    IsPaneOpen="{x:Bind LayoutVM.IsNavPaneOpen, Mode=OneWay}"
-                                    IsBackButtonVisible="Collapsed"
-                                    IsPaneToggleButtonVisible="False"
-                                    IsSettingsVisible="False"
-                                    AlwaysShowHeader="False"
-                                    SelectedItem="{x:Bind NavVM.ProjectedControlSelectedItem, Mode=OneWay}"
-                                    Padding="{x:Bind LayoutVM.NavViewPadding, Mode=OneWay, Converter={StaticResource PaddingConverter}}"
-                                    MenuItemsSource="{x:Bind NavVM.Items, Mode=OneWay}"
-                                    FooterMenuItemsSource="{x:Bind NavVM.FooterItems, Mode=OneWay}"
-                                    MenuItemTemplateSelector="{StaticResource MainNavItemTemplateSelector}"
-                                    ItemInvoked="OnMainNavItemInvoked"
-                                    DisplayModeChanged="OnMainNavPanePresentationChanged"
-                                    PaneOpened="OnMainNavPanePresentationChanged"
-                                    PaneClosed="OnMainNavPanePresentationChanged">
-                        <NavigationView.Content>
+        <Grid Grid.Row="1">
+            <NavigationView x:Name="MainNavView"
+                            Background="Transparent"
+                            AutomationProperties.AutomationId="MainNavView"
+                            CompactPaneLength="{x:Bind LayoutVM.NavCompactPaneLength, Mode=OneWay}"
+                            OpenPaneLength="{x:Bind LayoutVM.NavOpenPaneLength, Mode=OneWay}"
+                            PaneDisplayMode="Auto"
+                            CompactModeThresholdWidth="640"
+                            ExpandedModeThresholdWidth="1000"
+                            IsPaneOpen="{x:Bind LayoutVM.IsNavPaneOpen, Mode=OneWay}"
+                            IsBackButtonVisible="Collapsed"
+                            IsPaneToggleButtonVisible="False"
+                            IsSettingsVisible="False"
+                            AlwaysShowHeader="False"
+                            SelectedItem="{x:Bind NavVM.ProjectedControlSelectedItem, Mode=OneWay}"
+                            Padding="{x:Bind LayoutVM.NavViewPadding, Mode=OneWay, Converter={StaticResource PaddingConverter}}"
+                            MenuItemsSource="{x:Bind NavVM.Items, Mode=OneWay}"
+                            FooterMenuItemsSource="{x:Bind NavVM.FooterItems, Mode=OneWay}"
+                            MenuItemTemplateSelector="{StaticResource MainNavItemTemplateSelector}"
+                            ItemInvoked="OnMainNavItemInvoked"
+                            DisplayModeChanged="OnMainNavPanePresentationChanged"
+                            PaneOpened="OnMainNavPanePresentationChanged"
+                            PaneClosed="OnMainNavPanePresentationChanged">
+                <NavigationView.Content>
+                    <SplitView x:Name="RightPanelSplitView"
+                               Background="Transparent"
+                               PanePlacement="Right"
+                               DisplayMode="Inline"
+                               CompactPaneLength="0"
+                               IsPaneOpen="{x:Bind LayoutVM.RightPanelVisible, Mode=OneWay}"
+                               OpenPaneLength="{x:Bind LayoutVM.RightPanelOpenPaneLength, Mode=OneWay}">
+                        <SplitView.Content>
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*" />
@@ -541,115 +540,113 @@
                                                            Visibility="{x:Bind LayoutVM.BottomPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
                                                            LocalTerminalSession="{x:Bind ChatVM.ActiveLocalTerminalSession, Mode=OneWay}" />
                             </Grid>
-                        </NavigationView.Content>
-                    </NavigationView>
+                        </SplitView.Content>
 
-                    <Button x:Name="AutomationArchiveSelectedButton"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Top"
-                            Width="1"
-                            Height="1"
-                            Opacity="0.01"
-                            Visibility="{x:Bind IsGuiAutomationMode, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"
-                            AutomationProperties.AutomationId="MainNav.Session.AutomationArchiveSelected"
-                            Click="OnAutomationArchiveSelectedClick" />
+                        <SplitView.Pane>
+                            <Grid x:Name="RightPanelPane"
+                                  AutomationProperties.AutomationId="RightPanel.Root"
+                                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                  BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                  BorderThickness="1,0,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
 
-                    <TextBlock x:Name="MainNavAutomationSelectionStateText"
-                               HorizontalAlignment="Left"
-                               VerticalAlignment="Top"
-                               Width="1"
-                               Height="1"
-                               Opacity="0.01"
-                               Visibility="{x:Bind IsGuiAutomationMode, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"
-                               AutomationProperties.AutomationId="MainNav.Automation.SelectionState" />
+                                <Grid Grid.Row="0" Height="48" Padding="16,0,8,0">
+                                    <TextBlock x:Name="RightPanelTitle"
+                                               AutomationProperties.AutomationId="RightPanel.Title"
+                                               Text="{x:Bind GetRightPanelTitle(LayoutVM.RightPanelMode), Mode=OneWay}"
+                                               VerticalAlignment="Center" 
+                                               Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                </Grid>
 
-                    <controls:ResizeGrip x:Name="LeftNavResizer"
-                                         HorizontalAlignment="Left"
-                                         VerticalAlignment="Stretch"
-                                         Width="6"
-                                         Background="Transparent"
-                                         Style="{StaticResource SubMenuResizerThumbStyle}"
-                                         Visibility="{x:Bind LayoutVM.IsNavResizerVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
-                                         PointerPressed="OnLeftNavResizerPointerPressed"
-                                         PointerMoved="OnLeftNavResizerPointerMoved"
-                                         PointerReleased="OnLeftNavResizerPointerReleased"
-                                         PointerCaptureLost="OnLeftNavResizerPointerCaptureLost">
-                        <controls:ResizeGrip.RenderTransform>
-                            <TranslateTransform x:Name="LeftNavResizerTransform" X="{x:Bind LayoutVM.LeftNavResizerLeft, Mode=OneWay}" />
-                        </controls:ResizeGrip.RenderTransform>
-                    </controls:ResizeGrip>
-                </Grid>
-            </SplitView.Content>
+                                <Grid Grid.Row="1">
+                                    <Grid Visibility="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Diff}">
+                                         <TextBlock x:Uid="DiffPanelPlaceholder" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"/>
+                                    </Grid>
 
-            <SplitView.Pane>
-                <Grid x:Name="RightPanelPane"
-                      AutomationProperties.AutomationId="RightPanel.Root"
-                      Background="{ThemeResource LayerFillColorDefaultBrush}"
-                      BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                      BorderThickness="1,0,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+                                    <Grid Visibility="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Todo}">
+                                        <ScrollViewer>
+                                            <Grid Padding="16">
+                                                <ListView ItemsSource="{x:Bind ChatVM.PlanEntries, Mode=OneWay}" SelectionMode="None">
+                                                    <ListView.ItemTemplate>
+                                                        <DataTemplate x:DataType="chatVm:PlanEntryViewModel">
+                                                            <Border Margin="0,0,0,8" Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{x:Bind Status, Converter={StaticResource PlanStatusToColorConverter}}" />
+                                                                    <TextBlock Grid.Column="1" Text="{x:Bind Content}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{x:Bind StatusDisplayName}" FontSize="11" Opacity="0.8" HorizontalAlignment="Right" />
+                                                                        <TextBlock Text="{x:Bind PriorityDisplayName}" FontSize="10" Opacity="0.5" HorizontalAlignment="Right" />
+                                                                    </StackPanel>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ListView.ItemTemplate>
+                                                </ListView>
 
-                <Grid Grid.Row="0" Height="48" Padding="16,0,8,0">
-                    <TextBlock x:Name="RightPanelTitle"
-                               AutomationProperties.AutomationId="RightPanel.Title"
-                               Text="{x:Bind GetRightPanelTitle(LayoutVM.RightPanelMode), Mode=OneWay}"
-                               VerticalAlignment="Center" 
-                               Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                                <StackPanel Visibility="{x:Bind ChatVM.ShouldShowPlanEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40">
+                                                    <TextBlock x:Uid="PlanEmptyTitle" AutomationProperties.AutomationId="RightPanel.TodoEmptyTitle" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                                    <TextBlock x:Uid="PlanEmptySubtitle" Opacity="0.7" Margin="0,8,0,0" TextAlignment="Center" HorizontalAlignment="Center" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Grid>
 
-
-                </Grid>
-
-                <Grid Grid.Row="1">
-                    <Grid Visibility="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Diff}">
-                         <TextBlock x:Uid="DiffPanelPlaceholder" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"/>
-                    </Grid>
-
-                    <Grid Visibility="{x:Bind LayoutVM.RightPanelMode, Mode=OneWay, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Todo}">
-                        <ScrollViewer>
-                            <Grid Padding="16">
-                                <ListView ItemsSource="{x:Bind ChatVM.PlanEntries, Mode=OneWay}" SelectionMode="None">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate x:DataType="chatVm:PlanEntryViewModel">
-                                            <Border Margin="0,0,0,8" Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{x:Bind Status, Converter={StaticResource PlanStatusToColorConverter}}" />
-                                                    <TextBlock Grid.Column="1" Text="{x:Bind Content}" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                                        <TextBlock Text="{x:Bind StatusDisplayName}" FontSize="11" Opacity="0.8" HorizontalAlignment="Right" />
-                                                        <TextBlock Text="{x:Bind PriorityDisplayName}" FontSize="10" Opacity="0.5" HorizontalAlignment="Right" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-
-                                <StackPanel Visibility="{x:Bind ChatVM.ShouldShowPlanEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40">
-                                    <TextBlock x:Uid="PlanEmptyTitle" AutomationProperties.AutomationId="RightPanel.TodoEmptyTitle" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                    <TextBlock x:Uid="PlanEmptySubtitle" Opacity="0.7" Margin="0,8,0,0" TextAlignment="Center" HorizontalAlignment="Center" />
-                                </StackPanel>
+                                <controls:ResizeGrip x:Name="RightPanelResizer" 
+                                                     Grid.Row="0"
+                                                     Grid.RowSpan="2"
+                                                     HorizontalAlignment="Left" 
+                                                     VerticalAlignment="Stretch" 
+                                                     Width="6" 
+                                                     Background="Transparent" 
+                                                     Style="{StaticResource RightPanelResizerThumbStyle}" 
+                                                     PointerPressed="OnRightPanelResizerPointerPressed" 
+                                                     PointerMoved="OnRightPanelResizerPointerMoved"
+                                                     PointerReleased="OnRightPanelResizerPointerReleased"
+                                                     PointerCaptureLost="OnRightPanelResizerPointerCaptureLost" />
                             </Grid>
-                        </ScrollViewer>
-                    </Grid>
-                </Grid>
+                        </SplitView.Pane>
+                    </SplitView>
+                </NavigationView.Content>
+            </NavigationView>
 
-                <controls:ResizeGrip x:Name="RightPanelResizer" 
-                                     Grid.Row="0"
-                                     Grid.RowSpan="2"
-                                     HorizontalAlignment="Left" 
-                                     VerticalAlignment="Stretch" 
-                                     Width="6" 
-                                     Background="Transparent" 
-                                     Style="{StaticResource RightPanelResizerThumbStyle}" 
-                                     PointerPressed="OnRightPanelResizerPointerPressed" 
-                                     PointerMoved="OnRightPanelResizerPointerMoved"
-                                     PointerReleased="OnRightPanelResizerPointerReleased"
-                                     PointerCaptureLost="OnRightPanelResizerPointerCaptureLost" />
-                </Grid>
-            </SplitView.Pane>
-        </SplitView>
+            <Button x:Name="AutomationArchiveSelectedButton"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Width="1"
+                    Height="1"
+                    Opacity="0.01"
+                    Visibility="{x:Bind IsGuiAutomationMode, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"
+                    AutomationProperties.AutomationId="MainNav.Session.AutomationArchiveSelected"
+                    Click="OnAutomationArchiveSelectedClick" />
+
+            <TextBlock x:Name="MainNavAutomationSelectionStateText"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top"
+                       Width="1"
+                       Height="1"
+                       Opacity="0.01"
+                       Visibility="{x:Bind IsGuiAutomationMode, Mode=OneTime, Converter={StaticResource BoolToVisibilityConverter}}"
+                       AutomationProperties.AutomationId="MainNav.Automation.SelectionState" />
+
+            <controls:ResizeGrip x:Name="LeftNavResizer"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Stretch"
+                                 Width="6"
+                                 Background="Transparent"
+                                 Style="{StaticResource SubMenuResizerThumbStyle}"
+                                 Visibility="{x:Bind LayoutVM.IsNavResizerVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"
+                                 PointerPressed="OnLeftNavResizerPointerPressed"
+                                 PointerMoved="OnLeftNavResizerPointerMoved"
+                                 PointerReleased="OnLeftNavResizerPointerReleased"
+                                 PointerCaptureLost="OnLeftNavResizerPointerCaptureLost">
+                <controls:ResizeGrip.RenderTransform>
+                    <TranslateTransform x:Name="LeftNavResizerTransform" X="{x:Bind LayoutVM.LeftNavResizerLeft, Mode=OneWay}" />
+                </controls:ResizeGrip.RenderTransform>
+            </controls:ResizeGrip>
+        </Grid>
     </Grid>
 </Page>
