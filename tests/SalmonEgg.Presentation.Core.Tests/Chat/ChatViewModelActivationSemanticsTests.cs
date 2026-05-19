@@ -159,15 +159,13 @@ public partial class ChatViewModelTests
             });
             await DispatchConnectedAsync(fixture, "profile-1");
             await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
-            await WaitForConditionAsync(() =>
-                Task.FromResult(string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)));
+            await fixture.ApplyCurrentStoreProjectionAsync();
+            Assert.Equal("conn-1", fixture.ViewModel.ConnectionInstanceId);
 
             var switchedRemote = await fixture.ViewModel.SwitchConversationAsync("conv-remote");
 
             Assert.True(switchedRemote);
-            await WaitForConditionAsync(() => Task.FromResult(
-                string.Equals(fixture.ViewModel.CurrentSessionId, "conv-remote", StringComparison.Ordinal)),
-                timeoutMilliseconds: 15000);
+            Assert.Equal("conv-remote", fixture.ViewModel.CurrentSessionId);
             Assert.True(Volatile.Read(ref remoteLoadCount) <= 1);
             var finalState = await fixture.GetStateAsync();
             var finalRuntime = finalState.ResolveRuntimeState("conv-remote");
@@ -348,15 +346,13 @@ public partial class ChatViewModelTests
             await fixture.DispatchConnectionAsync(new SetSettingsSelectedProfileAction("profile-2"));
             await DispatchConnectedAsync(fixture, "profile-1");
             await fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
-            await WaitForConditionAsync(() =>
-                Task.FromResult(string.Equals(fixture.ViewModel.ConnectionInstanceId, "conn-1", StringComparison.Ordinal)));
+            await fixture.ApplyCurrentStoreProjectionAsync();
+            Assert.Equal("conn-1", fixture.ViewModel.ConnectionInstanceId);
 
             var switchedRemote = await fixture.ViewModel.SwitchConversationAsync("conv-remote");
 
             Assert.True(switchedRemote);
-            await WaitForConditionAsync(() => Task.FromResult(
-                string.Equals(fixture.ViewModel.CurrentSessionId, "conv-remote", StringComparison.Ordinal)),
-                timeoutMilliseconds: 15000);
+            Assert.Equal("conv-remote", fixture.ViewModel.CurrentSessionId);
             Assert.True(Volatile.Read(ref remoteLoadCount) <= 1);
             var finalState = await fixture.GetStateAsync();
             var finalRuntime = finalState.ResolveRuntimeState("conv-remote");

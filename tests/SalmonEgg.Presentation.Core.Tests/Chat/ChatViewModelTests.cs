@@ -70,9 +70,12 @@ public partial class ChatViewModelTests
         IAcpConnectionSessionRegistry? connectionSessionRegistry = null,
         ISlashCommandSource? localSlashCommandSource = null)
     {
-        var state = State.Value(new object(), () => ChatState.Empty);
-        var connectionState = State.Value(new object(), () => ChatConnectionState.Empty);
-        var attentionState = State.Value(new object(), () => ConversationAttentionState.Empty);
+        var stateOwner = new object();
+        var connectionStateOwner = new object();
+        var attentionStateOwner = new object();
+        var state = State.Value(stateOwner, () => ChatState.Empty);
+        var connectionState = State.Value(connectionStateOwner, () => ChatConnectionState.Empty);
+        var attentionState = State.Value(attentionStateOwner, () => ConversationAttentionState.Empty);
         var attentionStore = new ConversationAttentionStore(attentionState);
         var connectionStore = new ChatConnectionStore(connectionState);
         var chatStore = new RecordingChatStore(state);
@@ -232,7 +235,10 @@ public partial class ChatViewModelTests
                 attentionStore,
                 chatStore,
                 uiDispatcher,
-                vmLogger);
+                vmLogger,
+                stateOwner,
+                connectionStateOwner,
+                attentionStateOwner);
         }
         finally
         {
@@ -2112,10 +2118,9 @@ public partial class ChatViewModelTests
             LastUpdatedAt: new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc)));
 
         await fixture.UpdateStateAsync(state => state with { HydratedConversationId = "session-1" });
-        await Task.Delay(50);
 
         await fixture.ViewModel.ArchiveConversationAsync("session-1");
-        await Task.Delay(50);
+        await fixture.ApplyCurrentStoreProjectionAsync();
 
         var state = await fixture.GetStateAsync();
         Assert.Null(fixture.ViewModel.CurrentSessionId);
@@ -2155,18 +2160,15 @@ public partial class ChatViewModelTests
     [Fact]
     public async Task SelectedAcpProfile_Change_QueuesNextConnectAttemptWithoutConcurrentOverlap()
     {
-        var firstStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var secondStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var firstGate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var connectCalls = 0;
-        var commands = new Mock<IAcpConnectionCommands>();
-        commands
-            .Setup(x => x.ConnectToProfileAsync(
-                It.IsAny<ServerConfiguration>(),
-                It.IsAny<IAcpTransportConfiguration>(),
-                It.IsAny<IAcpChatCoordinatorSink>(),
-                It.IsAny<CancellationToken>()))
-            .Returns<ServerConfiguration, IAcpTransportConfiguration, IAcpChatCoordinatorSink, CancellationToken>(async (_, _, _, _) =>
+        var syncContext = new ImmediateSynchronizationContext();
+        await RunWithSynchronizationContextAsync(syncContext, async () =>
+        {
+            var firstStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var secondStarted = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var firstGate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var connectCalls = 0;
+            var commands = new Mock<IAcpConnectionCommands>();
+            async Task<AcpTransportApplyResult> ApplyProfileConnectionAsync()
             {
                 var callNumber = Interlocked.Increment(ref connectCalls);
                 if (callNumber == 1)
@@ -2180,24 +2182,43 @@ public partial class ChatViewModelTests
                 }
 
                 return new AcpTransportApplyResult(Mock.Of<IChatService>(), new InitializeResponse());
-            });
+            }
 
-        await using var fixture = CreateViewModel(acpConnectionCommands: commands.Object);
-        var profileA = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
-        var profileB = new ServerConfiguration { Id = "profile-b", Name = "Profile B", Transport = TransportType.Stdio };
-        fixture.Profiles.Profiles.Add(profileA);
-        fixture.Profiles.Profiles.Add(profileB);
+            commands
+                .Setup(x => x.ConnectToProfileAsync(
+                    It.IsAny<ServerConfiguration>(),
+                    It.IsAny<IAcpTransportConfiguration>(),
+                    It.IsAny<IAcpChatCoordinatorSink>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns<ServerConfiguration, IAcpTransportConfiguration, IAcpChatCoordinatorSink, CancellationToken>(
+                    (_, _, _, _) => ApplyProfileConnectionAsync());
+            commands
+                .Setup(x => x.ConnectToProfileAsync(
+                    It.IsAny<ServerConfiguration>(),
+                    It.IsAny<IAcpTransportConfiguration>(),
+                    It.IsAny<IAcpChatCoordinatorSink>(),
+                    It.IsAny<AcpConnectionContext>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns<ServerConfiguration, IAcpTransportConfiguration, IAcpChatCoordinatorSink, AcpConnectionContext, CancellationToken>(
+                    (_, _, _, _, _) => ApplyProfileConnectionAsync());
 
-        fixture.ViewModel.SelectedAcpProfile = profileA;
-        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await using var fixture = CreateViewModel(syncContext, acpConnectionCommands: commands.Object);
+            var profileA = new ServerConfiguration { Id = "profile-a", Name = "Profile A", Transport = TransportType.Stdio };
+            var profileB = new ServerConfiguration { Id = "profile-b", Name = "Profile B", Transport = TransportType.Stdio };
+            fixture.Profiles.Profiles.Add(profileA);
+            fixture.Profiles.Profiles.Add(profileB);
 
-        fixture.ViewModel.SelectedAcpProfile = profileB;
-        await Task.Delay(100);
+            var firstConnectTask = fixture.ViewModel.ConnectToAcpProfileCommand.ExecuteAsync(profileA);
+            await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.Equal(1, connectCalls);
-        firstGate.TrySetResult(null);
-        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.Equal(2, connectCalls);
+            fixture.ViewModel.SelectedAcpProfile = profileB;
+
+            Assert.Equal(1, connectCalls);
+            firstGate.TrySetResult(null);
+            await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await Assert.ThrowsAsync<OperationCanceledException>(() => firstConnectTask);
+            Assert.Equal(2, connectCalls);
+        });
     }
 
     [Fact]
@@ -3363,13 +3384,42 @@ public partial class ChatViewModelTests
             await task;
             RunAll();
         }
+
+        public async Task RunUntilIdleAsync(int spinDelayMs = 10, int idleChecks = 2)
+        {
+            var remainingIdleChecks = idleChecks;
+            while (remainingIdleChecks > 0)
+            {
+                if (PendingCount == 0)
+                {
+                    remainingIdleChecks--;
+                    await Task.Delay(spinDelayMs);
+                    continue;
+                }
+
+                RunAll();
+                remainingIdleChecks = idleChecks;
+            }
+        }
     }
 
     private sealed class ImmediateSynchronizationContext : SynchronizationContext, IUiDispatcher
     {
         public bool HasThreadAccess => true;
 
-        public override void Post(SendOrPostCallback d, object? state) => d(state);
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            var originalContext = Current;
+            try
+            {
+                SetSynchronizationContext(this);
+                d(state);
+            }
+            finally
+            {
+                SetSynchronizationContext(originalContext);
+            }
+        }
 
         public void Enqueue(Action action) => action();
 
@@ -3422,19 +3472,13 @@ public partial class ChatViewModelTests
         string conversationId)
     {
         var viewModel = fixture.ViewModel;
-        await WaitForConditionAsync(() =>
+        await fixture.ApplyCurrentStoreProjectionAsync();
+        if (!string.Equals(viewModel.CurrentSessionId, conversationId, StringComparison.Ordinal))
         {
-            syncContext.RunAll();
-            var state = fixture.GetStateAsync().GetAwaiter().GetResult();
-            if (state.HydratedConversationId == conversationId
-                && !string.Equals(viewModel.CurrentSessionId, conversationId, StringComparison.Ordinal))
-            {
-                SetCurrentSessionId(viewModel, conversationId);
-            }
+            SetCurrentSessionId(viewModel, conversationId);
+        }
 
-            return Task.FromResult(
-                string.Equals(viewModel.CurrentSessionId, conversationId, StringComparison.Ordinal));
-        });
+        Assert.Equal(conversationId, viewModel.CurrentSessionId);
         viewModel.IsSessionActive = true;
     }
 
@@ -3809,7 +3853,7 @@ public partial class ChatViewModelTests
         try
         {
             SynchronizationContext.SetSynchronizationContext(syncContext);
-            await action().ConfigureAwait(false);
+            await action();
         }
         finally
         {
@@ -3870,6 +3914,18 @@ public partial class ChatViewModelTests
             modifiers: null);
         Assert.NotNull(method);
         return (Task)method!.Invoke(viewModel, [null])!;
+    }
+
+    private static Task ApplyNewSessionDraftProjectionAsync(ChatViewModel viewModel, ChatConnectionState connectionState)
+    {
+        var method = typeof(ChatViewModel).GetMethod(
+            "ApplyNewSessionDraftProjectionAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: [typeof(ChatConnectionState)],
+            modifiers: null);
+        Assert.NotNull(method);
+        return (Task)method!.Invoke(viewModel, [connectionState])!;
     }
 
     private static JsonElement ParseJsonParams(string json)
@@ -4362,6 +4418,9 @@ public partial class ChatViewModelTests
         private readonly ChatConversationWorkspace _workspace;
         private readonly RecordingChatStore _chatStore;
         private readonly IUiDispatcher _uiDispatcher;
+        private readonly object _stateOwner;
+        private readonly object _connectionStateOwner;
+        private readonly object _attentionStateOwner;
         public ChatViewModel ViewModel { get; }
         public Mock<IConversationStore> ConversationStore { get; }
         public ChatConversationWorkspace Workspace => _workspace;
@@ -4384,7 +4443,10 @@ public partial class ChatViewModelTests
             IConversationAttentionStore conversationAttentionStore,
             RecordingChatStore chatStore,
             IUiDispatcher uiDispatcher,
-            Mock<ILogger<ChatViewModel>> viewModelLogger)
+            Mock<ILogger<ChatViewModel>> viewModelLogger,
+            object stateOwner,
+            object connectionStateOwner,
+            object attentionStateOwner)
         {
             ViewModel = viewModel;
             _state = state;
@@ -4400,6 +4462,9 @@ public partial class ChatViewModelTests
             _chatStore = chatStore;
             _uiDispatcher = uiDispatcher;
             ViewModelLogger = viewModelLogger;
+            _stateOwner = stateOwner;
+            _connectionStateOwner = connectionStateOwner;
+            _attentionStateOwner = attentionStateOwner;
         }
 
         public Task<ChatState> GetStateAsync() => Task.FromResult(_chatStore.LatestState);
@@ -4447,6 +4512,23 @@ public partial class ChatViewModelTests
             await projectionTask;
         }
 
+        public async Task ApplyNewSessionDraftProjectionAsync()
+        {
+            if (_uiDispatcher is QueueingSynchronizationContext queuedDispatcher)
+            {
+                await queuedDispatcher.RunUntilIdleAsync();
+                var latestConnectionState = await GetConnectionStateAsync();
+                await queuedDispatcher.RunUntilCompletedAsync(
+                    ChatViewModelTests.ApplyNewSessionDraftProjectionAsync(ViewModel, latestConnectionState));
+                await queuedDispatcher.RunUntilIdleAsync();
+                return;
+            }
+
+            var connectionState = await GetConnectionStateAsync();
+            var projectionTask = ChatViewModelTests.ApplyNewSessionDraftProjectionAsync(ViewModel, connectionState);
+            await projectionTask;
+        }
+
         public async ValueTask DisposeAsync()
         {
             ViewModel.Dispose();
@@ -4454,6 +4536,9 @@ public partial class ChatViewModelTests
             await _connectionState.DisposeAsync();
             await _attentionState.DisposeAsync();
             await _state.DisposeAsync();
+            GC.KeepAlive(_stateOwner);
+            GC.KeepAlive(_connectionStateOwner);
+            GC.KeepAlive(_attentionStateOwner);
         }
 
         public void Dispose()
@@ -4825,14 +4910,10 @@ public partial class ChatViewModelTests
             Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
         });
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
-        SetCurrentSessionId(viewModel, "conv-1");
-        viewModel.IsSessionActive = true;
+        await fixture.ApplyCurrentStoreProjectionAsync();
         viewModel.CurrentPrompt = "hello";
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(viewModel.CanSendPromptUi);
-        });
+
+        Assert.True(viewModel.CanSendPromptUi);
 
         await AwaitWithSynchronizationContextAsync(
             syncContext,
@@ -5551,16 +5632,8 @@ public partial class ChatViewModelTests
         await fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
         await WaitForQueueingPromptReadyAsync(syncContext, fixture, "conv-1", "hello");
 
-        await viewModel.SendPromptCommand.ExecuteAsync(null);
-
-        await WaitForConditionAsync(async () =>
-        {
-            syncContext.RunAll();
-            var transcript = (await fixture.GetStateAsync()).ResolveContentSlice("conv-1")?.Transcript
-                ?? ImmutableList<ConversationMessageSnapshot>.Empty;
-            return transcript.Count == 1
-                && string.Equals(transcript[0].ProtocolMessageId, "user-auth-1", StringComparison.Ordinal);
-        }, timeoutMilliseconds: 30000);
+        await syncContext.RunUntilCompletedAsync(viewModel.SendPromptCommand.ExecuteAsync(null));
+        await fixture.ApplyCurrentStoreProjectionAsync();
 
         var state = await fixture.GetStateAsync();
         var transcript = state.ResolveContentSlice("conv-1")?.Transcript
@@ -6743,29 +6816,17 @@ public partial class ChatViewModelTests
                     ]
                 }));
 
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(
-                viewModel.AvailableSlashCommands.Count == 1
-                && string.Equals(viewModel.AvailableSlashCommands[0].Name, "plan", StringComparison.Ordinal));
-        });
+        await syncContext.RunUntilCompletedAsync(WaitForPendingSessionUpdatesAsync(viewModel));
+        await fixture.ApplyCurrentStoreProjectionAsync();
+        Assert.Single(viewModel.AvailableSlashCommands);
+        Assert.Equal("plan", viewModel.AvailableSlashCommands[0].Name);
 
         await fixture.DispatchAsync(new SelectConversationAction("conv-2"));
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(viewModel.AvailableSlashCommands.Count == 0);
-        });
+        Assert.Empty(viewModel.AvailableSlashCommands);
 
         await fixture.DispatchAsync(new SelectConversationAction("conv-1"));
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(
-                viewModel.AvailableSlashCommands.Count == 1
-                && string.Equals(viewModel.AvailableSlashCommands[0].Name, "plan", StringComparison.Ordinal));
-        });
+        Assert.Single(viewModel.AvailableSlashCommands);
+        Assert.Equal("plan", viewModel.AvailableSlashCommands[0].Name);
 
         var state = await fixture.GetStateAsync();
         var sessionState = Assert.NotNull(state.ResolveSessionStateSlice("conv-1"));
@@ -11196,9 +11257,9 @@ public partial class ChatViewModelTests
         await WaitForConditionAsync(() =>
         {
             syncContext.RunAll();
-                return Task.FromResult(
-                    (loadStarted.Task.IsCompleted || string.Equals(fixture.ViewModel.CurrentSessionId, "conv-remote", StringComparison.Ordinal))
-                    && runtimeState.ActiveSessionActivation is { SessionId: "existing-owner", Phase: SessionActivationPhase.RemoteHydrationPending }
+            return Task.FromResult(
+                (loadStarted.Task.IsCompleted || string.Equals(fixture.ViewModel.CurrentSessionId, "conv-remote", StringComparison.Ordinal))
+                && runtimeState.ActiveSessionActivation is { SessionId: "existing-owner", Phase: SessionActivationPhase.RemoteHydrationPending }
                 && runtimeState.IsSessionActivationInProgress
                 && runtimeState.LatestActivationToken == 41
                 && string.Equals(runtimeState.DesiredSessionId, "existing-owner", StringComparison.Ordinal));
@@ -14461,14 +14522,10 @@ public partial class ChatViewModelTests
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1")).AsTask());
         await AwaitWithSynchronizationContextAsync(syncContext, fixture.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected)).AsTask());
 
-        await fixture.DispatchConnectionAsync(new SetNewSessionDraftAction(draft));
-        Assert.Empty(fixture.ViewModel.NewSessionDraftModeOptions);
-
-        await WaitForConditionAsync(() =>
-        {
-            syncContext.RunAll();
-            return Task.FromResult(fixture.ViewModel.NewSessionDraftModeOptions.Count == 1);
-        });
+        await AwaitWithSynchronizationContextAsync(
+            syncContext,
+            fixture.DispatchConnectionAsync(new SetNewSessionDraftAction(draft)).AsTask());
+        await fixture.ApplyNewSessionDraftProjectionAsync();
 
         var mode = Assert.Single(fixture.ViewModel.NewSessionDraftModeOptions);
         Assert.Equal("code", mode.ModeId);
