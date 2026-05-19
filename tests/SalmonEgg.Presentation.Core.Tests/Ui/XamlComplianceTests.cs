@@ -1473,6 +1473,18 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void WindowsGamepadInputService_DelegatesRepeatAndDeadzonePolicyToCoreProcessor()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadInputService.cs");
+
+        Assert.Contains("GamepadIntentProcessor", code);
+        Assert.DoesNotContain("InitialRepeatDelay", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("RepeatInterval", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ThumbstickDeadzone", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("PressState", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainPage_GamepadNavigation_UsesServiceAndDoesNotMaintainSyntheticSelectionState()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");

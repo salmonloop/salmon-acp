@@ -11,15 +11,11 @@ namespace SalmonEgg.Presentation.Services.Input;
 public sealed class WindowsGamepadInputService : IGamepadInputService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan InitialRepeatDelay = TimeSpan.FromMilliseconds(350);
-    private static readonly TimeSpan RepeatInterval = TimeSpan.FromMilliseconds(120);
-
-    private const double ThumbstickDeadzone = 0.5;
 
     private readonly ILogger<WindowsGamepadInputService> _logger;
     private readonly WindowsRawGameControllerMapper _rawMapper;
+    private readonly GamepadIntentProcessor _intentProcessor = new();
     private readonly object _sync = new();
-    private readonly Dictionary<GamepadNavigationIntent, PressState> _pressedStates = new();
     private readonly List<Gamepad> _connectedGamepads = new();
     private readonly List<RawGameController> _connectedRawControllers = new();
 
@@ -113,7 +109,7 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
                 _timer = null;
             }
 
-            _pressedStates.Clear();
+            _intentProcessor.Reset();
             _connectedGamepads.Clear();
             _connectedRawControllers.Clear();
             _isStarted = false;
@@ -153,11 +149,11 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
 
     private void OnTick(DispatcherQueueTimer sender, object args)
     {
-        if (!TryGetActiveIntents(out var activeIntents))
+        if (!TryGetActiveReading(out var reading))
         {
             lock (_sync)
             {
-                _pressedStates.Clear();
+                _intentProcessor.Reset();
                 UpdateInputPath(InputPath.None);
             }
 
@@ -168,40 +164,15 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
 
         lock (_sync)
         {
-            foreach (var intent in activeIntents)
+            var raisedIntents = _intentProcessor.Process(reading, now);
+            foreach (var intent in raisedIntents)
             {
-                if (!_pressedStates.TryGetValue(intent, out var state))
-                {
-                    EmitIntent(intent);
-                    _pressedStates[intent] = new PressState(now, now);
-                    continue;
-                }
-
-                if (now - state.PressedSince >= InitialRepeatDelay
-                    && now - state.LastRaised >= RepeatInterval)
-                {
-                    EmitIntent(intent);
-                    _pressedStates[intent] = state with { LastRaised = now };
-                }
-            }
-
-            var released = new List<GamepadNavigationIntent>();
-            foreach (var pressedIntent in _pressedStates.Keys)
-            {
-                if (!activeIntents.Contains(pressedIntent))
-                {
-                    released.Add(pressedIntent);
-                }
-            }
-
-            foreach (var releasedIntent in released)
-            {
-                _pressedStates.Remove(releasedIntent);
+                EmitIntent(intent);
             }
         }
     }
 
-    private bool TryGetActiveIntents(out HashSet<GamepadNavigationIntent> activeIntents)
+    private bool TryGetActiveReading(out GamepadInputReading reading)
     {
         Gamepad[] gamepads;
         RawGameController[] rawControllers;
@@ -213,8 +184,8 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
 
         foreach (var gamepad in gamepads)
         {
-            activeIntents = GetActiveIntents(gamepad.GetCurrentReading());
-            if (activeIntents.Count > 0)
+            reading = GetInputReading(gamepad.GetCurrentReading());
+            if (GamepadIntentProcessor.GetActiveIntents(reading).Count > 0)
             {
                 UpdateInputPath(InputPath.Gamepad);
                 return true;
@@ -228,15 +199,15 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
                 continue;
             }
 
-            activeIntents = _rawMapper.GetActiveIntents(controller);
-            if (activeIntents.Count > 0)
+            reading = _rawMapper.GetInputReading(controller);
+            if (GamepadIntentProcessor.GetActiveIntents(reading).Count > 0)
             {
                 UpdateInputPath(InputPath.RawGameController);
                 return true;
             }
         }
 
-        activeIntents = new HashSet<GamepadNavigationIntent>();
+        reading = default;
         return false;
     }
 
@@ -272,58 +243,17 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
         }
     }
 
-    private static HashSet<GamepadNavigationIntent> GetActiveIntents(GamepadReading reading)
+    private static GamepadInputReading GetInputReading(GamepadReading reading)
     {
-        var intents = new HashSet<GamepadNavigationIntent>();
-
-        if (reading.Buttons.HasFlag(GamepadButtons.DPadUp))
-        {
-            intents.Add(GamepadNavigationIntent.MoveUp);
-        }
-
-        if (reading.Buttons.HasFlag(GamepadButtons.DPadDown))
-        {
-            intents.Add(GamepadNavigationIntent.MoveDown);
-        }
-
-        if (reading.Buttons.HasFlag(GamepadButtons.DPadLeft))
-        {
-            intents.Add(GamepadNavigationIntent.MoveLeft);
-        }
-
-        if (reading.Buttons.HasFlag(GamepadButtons.DPadRight))
-        {
-            intents.Add(GamepadNavigationIntent.MoveRight);
-        }
-
-        if (Math.Abs(reading.LeftThumbstickX) >= ThumbstickDeadzone
-            || Math.Abs(reading.LeftThumbstickY) >= ThumbstickDeadzone)
-        {
-            if (Math.Abs(reading.LeftThumbstickX) > Math.Abs(reading.LeftThumbstickY))
-            {
-                intents.Add(reading.LeftThumbstickX >= 0
-                    ? GamepadNavigationIntent.MoveRight
-                    : GamepadNavigationIntent.MoveLeft);
-            }
-            else
-            {
-                intents.Add(reading.LeftThumbstickY >= 0
-                    ? GamepadNavigationIntent.MoveUp
-                    : GamepadNavigationIntent.MoveDown);
-            }
-        }
-
-        if (reading.Buttons.HasFlag(GamepadButtons.A))
-        {
-            intents.Add(GamepadNavigationIntent.Activate);
-        }
-
-        if (reading.Buttons.HasFlag(GamepadButtons.B))
-        {
-            intents.Add(GamepadNavigationIntent.Back);
-        }
-
-        return intents;
+        return new GamepadInputReading(
+            MoveUp: reading.Buttons.HasFlag(GamepadButtons.DPadUp),
+            MoveDown: reading.Buttons.HasFlag(GamepadButtons.DPadDown),
+            MoveLeft: reading.Buttons.HasFlag(GamepadButtons.DPadLeft),
+            MoveRight: reading.Buttons.HasFlag(GamepadButtons.DPadRight),
+            Activate: reading.Buttons.HasFlag(GamepadButtons.A),
+            Back: reading.Buttons.HasFlag(GamepadButtons.B),
+            ThumbstickX: reading.LeftThumbstickX,
+            ThumbstickY: reading.LeftThumbstickY);
     }
 
     private void EmitIntent(GamepadNavigationIntent intent)
@@ -352,8 +282,6 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
     }
-
-    private readonly record struct PressState(DateTimeOffset PressedSince, DateTimeOffset LastRaised);
 
     private enum InputPath
     {

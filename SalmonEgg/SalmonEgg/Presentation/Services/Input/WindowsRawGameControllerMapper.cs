@@ -9,9 +9,13 @@ namespace SalmonEgg.Presentation.Services.Input;
 public sealed class WindowsRawGameControllerMapper
 {
     private const double CenteredAxisValue = 0.5;
-    private const double AxisDeadzone = 0.18;
 
     public HashSet<GamepadNavigationIntent> GetActiveIntents(RawGameController controller)
+    {
+        return GamepadIntentProcessor.GetActiveIntents(GetInputReading(controller));
+    }
+
+    public GamepadInputReading GetInputReading(RawGameController controller)
     {
         ArgumentNullException.ThrowIfNull(controller);
 
@@ -20,7 +24,7 @@ public sealed class WindowsRawGameControllerMapper
         var axes = new double[controller.AxisCount];
         controller.GetCurrentReading(buttons, switches, axes);
 
-        var intents = new HashSet<GamepadNavigationIntent>();
+        var reading = default(GamepadInputReading);
 
         for (var i = 0; i < buttons.Length; i++)
         {
@@ -29,7 +33,7 @@ public sealed class WindowsRawGameControllerMapper
                 continue;
             }
 
-            MapButtonLabel(controller.GetButtonLabel(i), intents);
+            reading = MapButtonLabel(controller.GetButtonLabel(i), reading);
         }
 
         for (var i = 0; i < switches.Length; i++)
@@ -37,88 +41,49 @@ public sealed class WindowsRawGameControllerMapper
             var position = switches[i];
             if ((position & GameControllerSwitchPosition.Up) == GameControllerSwitchPosition.Up)
             {
-                intents.Add(GamepadNavigationIntent.MoveUp);
+                reading = reading with { MoveUp = true };
             }
 
             if ((position & GameControllerSwitchPosition.Down) == GameControllerSwitchPosition.Down)
             {
-                intents.Add(GamepadNavigationIntent.MoveDown);
+                reading = reading with { MoveDown = true };
             }
 
             if ((position & GameControllerSwitchPosition.Left) == GameControllerSwitchPosition.Left)
             {
-                intents.Add(GamepadNavigationIntent.MoveLeft);
+                reading = reading with { MoveLeft = true };
             }
 
             if ((position & GameControllerSwitchPosition.Right) == GameControllerSwitchPosition.Right)
             {
-                intents.Add(GamepadNavigationIntent.MoveRight);
+                reading = reading with { MoveRight = true };
             }
         }
 
         if (axes.Length >= 2)
         {
-            MapAxisPair(axes[0], axes[1], intents);
+            reading = reading with
+            {
+                ThumbstickX = axes[0] - CenteredAxisValue,
+                ThumbstickY = CenteredAxisValue - axes[1]
+            };
         }
 
-        return intents;
+        return reading;
     }
 
-    private static void MapButtonLabel(GameControllerButtonLabel label, ISet<GamepadNavigationIntent> intents)
+    private static GamepadInputReading MapButtonLabel(GameControllerButtonLabel label, GamepadInputReading reading)
     {
-        switch (label)
+        return label switch
         {
-            case GameControllerButtonLabel.XboxUp:
-            case GameControllerButtonLabel.Up:
-                intents.Add(GamepadNavigationIntent.MoveUp);
-                break;
-            case GameControllerButtonLabel.XboxDown:
-            case GameControllerButtonLabel.Down:
-                intents.Add(GamepadNavigationIntent.MoveDown);
-                break;
-            case GameControllerButtonLabel.XboxLeft:
-            case GameControllerButtonLabel.Left:
-                intents.Add(GamepadNavigationIntent.MoveLeft);
-                break;
-            case GameControllerButtonLabel.XboxRight:
-            case GameControllerButtonLabel.Right:
-                intents.Add(GamepadNavigationIntent.MoveRight);
-                break;
-            case GameControllerButtonLabel.XboxA:
-            case GameControllerButtonLabel.Cross:
-            case GameControllerButtonLabel.LetterA:
-                intents.Add(GamepadNavigationIntent.Activate);
-                break;
-            case GameControllerButtonLabel.XboxB:
-            case GameControllerButtonLabel.Circle:
-            case GameControllerButtonLabel.LetterB:
-            case GameControllerButtonLabel.Back:
-                intents.Add(GamepadNavigationIntent.Back);
-                break;
-        }
-    }
-
-    private static void MapAxisPair(double x, double y, ISet<GamepadNavigationIntent> intents)
-    {
-        var offsetX = x - CenteredAxisValue;
-        var offsetY = y - CenteredAxisValue;
-        if (Math.Abs(offsetX) < AxisDeadzone && Math.Abs(offsetY) < AxisDeadzone)
-        {
-            return;
-        }
-
-        if (Math.Abs(offsetX) > Math.Abs(offsetY))
-        {
-            intents.Add(offsetX > 0
-                ? GamepadNavigationIntent.MoveRight
-                : GamepadNavigationIntent.MoveLeft);
-        }
-        else
-        {
-            intents.Add(offsetY < 0
-                ? GamepadNavigationIntent.MoveUp
-                : GamepadNavigationIntent.MoveDown);
-        }
+            GameControllerButtonLabel.XboxUp or GameControllerButtonLabel.Up => reading with { MoveUp = true },
+            GameControllerButtonLabel.XboxDown or GameControllerButtonLabel.Down => reading with { MoveDown = true },
+            GameControllerButtonLabel.XboxLeft or GameControllerButtonLabel.Left => reading with { MoveLeft = true },
+            GameControllerButtonLabel.XboxRight or GameControllerButtonLabel.Right => reading with { MoveRight = true },
+            GameControllerButtonLabel.XboxA or GameControllerButtonLabel.Cross or GameControllerButtonLabel.LetterA => reading with { Activate = true },
+            GameControllerButtonLabel.XboxB or GameControllerButtonLabel.Circle or GameControllerButtonLabel.LetterB or GameControllerButtonLabel.Back => reading with { Back = true },
+            _ => reading
+        };
     }
 }
 #endif
