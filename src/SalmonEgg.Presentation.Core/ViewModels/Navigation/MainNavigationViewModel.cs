@@ -55,31 +55,13 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectIndex = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ProjectNavItemViewModel> _projectVms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ConversationCatalogDisplayItem> _conversationCatalogIndex = new(StringComparer.Ordinal);
-    private readonly ObservableCollection<MainNavItemViewModel> _items = new();
-    private readonly ObservableCollection<MainNavItemViewModel> _footerItems = new();
-    private readonly ReadOnlyObservableCollection<MainNavItemViewModel> _readOnlyItems;
-    private readonly ReadOnlyObservableCollection<MainNavItemViewModel> _readOnlyFooterItems;
     private string? _pendingProjectIdForNewSession;
     private long _pendingProjectIntentVersion;
     private int _rebuildPending;
     private int _rebuildScheduled;
-    private IReadOnlyList<MainNavItemViewModel> _menuItems = Array.Empty<MainNavItemViewModel>();
-    private IReadOnlyList<MainNavItemViewModel> _footerMenuItems = Array.Empty<MainNavItemViewModel>();
 
-    public IReadOnlyList<MainNavItemViewModel> Items => _readOnlyItems;
-    public IReadOnlyList<MainNavItemViewModel> FooterItems => _readOnlyFooterItems;
-
-    public IReadOnlyList<MainNavItemViewModel> MenuItems
-    {
-        get => _menuItems;
-        private set => SetProperty(ref _menuItems, value);
-    }
-
-    public IReadOnlyList<MainNavItemViewModel> FooterMenuItems
-    {
-        get => _footerMenuItems;
-        private set => SetProperty(ref _footerMenuItems, value);
-    }
+    public ObservableCollection<MainNavItemViewModel> Items { get; } = new();
+    public ObservableCollection<MainNavItemViewModel> FooterItems { get; } = new();
 
     public StartNavItemViewModel StartItem { get; }
     public DiscoverSessionsNavItemViewModel DiscoverSessionsItem { get; }
@@ -194,8 +176,6 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         _conversationCatalogPresenter = conversationCatalogPresenter ?? throw new ArgumentNullException(nameof(conversationCatalogPresenter));
         _projectAffinityResolver = projectAffinityResolver ?? throw new ArgumentNullException(nameof(projectAffinityResolver));
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
-        _readOnlyItems = new ReadOnlyObservableCollection<MainNavItemViewModel>(_items);
-        _readOnlyFooterItems = new ReadOnlyObservableCollection<MainNavItemViewModel>(_footerItems);
         AddProjectCommand = new AsyncRelayCommand(AddProjectAsync, () => CanAddProject);
 
         StartItem = new StartNavItemViewModel(_navigationState, _uiDispatcher);
@@ -204,19 +184,17 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         SessionsLabelItem = new SessionsLabelNavItemViewModel(_navigationState, _uiDispatcher, localizer["Nav_Sessions"]);
         AddProjectItem = new AddProjectNavItemViewModel(AddProjectCommand, _navigationState, _uiDispatcher);
 
-        _footerItems.Add(DiscoverSessionsItem);
-        _footerItems.Add(SettingsItem);
+        FooterItems.Add(DiscoverSessionsItem);
+        FooterItems.Add(SettingsItem);
 
-        _items.Add(StartItem);
-        _items.Add(SessionsLabelItem);
-        _items.Add(AddProjectItem);
+        Items.Add(StartItem);
+        Items.Add(SessionsLabelItem);
+        Items.Add(AddProjectItem);
 
         // Show a lightweight placeholder until conversations are restored.
         var placeholderProject = CreateUnclassifiedProject();
-        placeholderProject.MutableChildren.Add(CreateLoadingPlaceholder());
-        placeholderProject.PublishChildrenMenuSnapshot();
-        _items.Add(placeholderProject);
-        PublishMenuSnapshots();
+        placeholderProject.Children.Add(CreateLoadingPlaceholder());
+        Items.Add(placeholderProject);
 
         ApplySelectionProjection();
 
@@ -246,11 +224,10 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         ((INotifyCollectionChanged)_projectPreferences.ProjectPathMappings).CollectionChanged -= _projectsChangedHandler;
         _relativeTimeTimer.Dispose();
 
-        var itemsToDispose = _items.Concat(_footerItems).ToArray();
-        _items.Clear();
-        _footerItems.Clear();
+        var itemsToDispose = Items.Concat(FooterItems).ToArray();
+        Items.Clear();
+        FooterItems.Clear();
         _projectVms.Clear();
-        PublishMenuSnapshots();
 
         foreach (var item in itemsToDispose)
         {
@@ -527,13 +504,13 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         try
         {
             // Ensure we have the base items
-            if (_items.Count < 3)
+            if (Items.Count < 3)
             {
-                foreach (var item in _items) DisposeItem(item);
-                _items.Clear();
-                _items.Add(StartItem);
-                _items.Add(SessionsLabelItem);
-                _items.Add(AddProjectItem);
+                foreach (var item in Items) DisposeItem(item);
+                Items.Clear();
+                Items.Add(StartItem);
+                Items.Add(SessionsLabelItem);
+                Items.Add(AddProjectItem);
             }
 
             // Build the new indexes in local scope first, then swap atomically.
@@ -587,24 +564,24 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 newProjectIndex[projectId] = projectVm;
 
                 // Ensure the project VM is at the correct position in the Items collection
-                if (itemIndex < _items.Count)
+                if (itemIndex < Items.Count)
                 {
-                    if (!ReferenceEquals(_items[itemIndex], projectVm))
+                    if (!ReferenceEquals(Items[itemIndex], projectVm))
                     {
                         // If it's elsewhere, remove it first (should be rare)
-                        int existingIndex = _items.IndexOf(projectVm);
+                        int existingIndex = Items.IndexOf(projectVm);
                         if (existingIndex != -1)
                         {
                             // Note: We don't dispose projectVm here because it's still being used (moved)
-                            _items.RemoveAt(existingIndex);
+                            Items.RemoveAt(existingIndex);
                         }
 
-                        _items.Insert(itemIndex, projectVm);
+                        Items.Insert(itemIndex, projectVm);
                     }
                 }
                 else
                 {
-                    _items.Add(projectVm);
+                    Items.Add(projectVm);
                 }
 
                 SyncSessions(projectVm, sessionsByProject.TryGetValue(projectId, out var s) ? s : new List<ConversationCatalogDisplayItem>(), newSessionIndex);
@@ -612,10 +589,10 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             }
 
             // Remove orphans
-            while (_items.Count > itemIndex)
+            while (Items.Count > itemIndex)
             {
-                var removedItem = _items[_items.Count - 1];
-                _items.RemoveAt(_items.Count - 1);
+                var removedItem = Items[Items.Count - 1];
+                Items.RemoveAt(Items.Count - 1);
                 removedItemsToDispose.Add(removedItem);
             }
 
@@ -648,7 +625,6 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
                 _projectIndex[kvp.Key] = kvp.Value;
             }
 
-            PublishMenuSnapshots();
             foreach (var item in removedItemsToDispose)
             {
                 DisposeItem(item);
@@ -669,7 +645,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         var top = BuildVisibleSessionsForProject(sessions);
         var remainingCount = Math.Max(0, sessions.Count - top.Count);
-        var children = projectVm.MutableChildren;
+        var children = projectVm.Children;
 
         int childIndex = 0;
         foreach (var session in top)
@@ -830,7 +806,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
     {
         try
         {
-            ApplySelectionProjection(forceSelectedItemNotification: true);
+            ApplySelectionProjection();
         }
         catch
         {
@@ -847,7 +823,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         }
     }
 
-    private void ApplySelectionProjection(bool forceSelectedItemNotification = false)
+    private void ApplySelectionProjection()
     {
         var previousProjection = _projection;
         var projectedSelection = GetProjectedSelectionState();
@@ -881,7 +857,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
             OnPropertyChanged(nameof(IsSettingsSelected));
         }
 
-        if (forceSelectedItemNotification || !ReferenceEquals(previousProjection.ControlSelectedItem, _projection.ControlSelectedItem))
+        if (!ReferenceEquals(previousProjection.ControlSelectedItem, _projection.ControlSelectedItem))
         {
             OnPropertyChanged(nameof(ProjectedControlSelectedItem));
         }
@@ -956,7 +932,7 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
 
     private void RefreshRelativeTimes()
     {
-        foreach (var item in _items)
+        foreach (var item in Items)
         {
             RefreshRelativeTimes(item);
         }
@@ -990,17 +966,6 @@ public sealed partial class MainNavigationViewModel : ObservableObject, IDisposa
         {
             RefreshRelativeTimes(child);
         }
-    }
-
-    private void PublishMenuSnapshots()
-    {
-        foreach (var project in _projectVms.Values)
-        {
-            project.PublishChildrenMenuSnapshot();
-        }
-
-        MenuItems = _items.ToArray();
-        FooterMenuItems = _footerItems.ToArray();
     }
 
     private ProjectNavItemViewModel CreateUnclassifiedProject()

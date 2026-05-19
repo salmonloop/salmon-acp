@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,26 +10,14 @@ namespace SalmonEgg.Presentation.ViewModels.Navigation;
 
 public abstract partial class MainNavItemViewModel : ObservableObject, IDisposable
 {
-    private readonly ObservableCollection<MainNavItemViewModel> _children = new();
-    private readonly ReadOnlyObservableCollection<MainNavItemViewModel> _readOnlyChildren;
     protected readonly INavigationPaneState NavigationState;
     private readonly IUiDispatcher _uiDispatcher;
-    private IReadOnlyList<MainNavItemViewModel> _childrenMenuItems = Array.Empty<MainNavItemViewModel>();
     private bool _isLogicallySelected;
 
-    public IReadOnlyList<MainNavItemViewModel> Children => _readOnlyChildren;
-
-    public IReadOnlyList<MainNavItemViewModel> ChildrenMenuItems
-    {
-        get => _childrenMenuItems;
-        private set => SetProperty(ref _childrenMenuItems, value);
-    }
-
-    internal ObservableCollection<MainNavItemViewModel> MutableChildren => _children;
+    public ObservableCollection<MainNavItemViewModel> Children { get; } = new();
 
     protected MainNavItemViewModel(INavigationPaneState navigationState, IUiDispatcher uiDispatcher)
     {
-        _readOnlyChildren = new ReadOnlyObservableCollection<MainNavItemViewModel>(_children);
         NavigationState = navigationState;
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         NavigationState.PaneStateChanged += OnServicePaneStateChanged;
@@ -62,18 +49,14 @@ public abstract partial class MainNavItemViewModel : ObservableObject, IDisposab
     {
     }
 
-    internal void PublishChildrenMenuSnapshot()
-        => ChildrenMenuItems = _children.ToArray();
-
     public virtual void Dispose()
     {
         NavigationState.PaneStateChanged -= OnServicePaneStateChanged;
-        foreach (var child in _children)
+        foreach (var child in Children)
         {
             child.Dispose();
         }
-        _children.Clear();
-        PublishChildrenMenuSnapshot();
+        Children.Clear();
     }
 }
 

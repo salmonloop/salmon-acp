@@ -149,7 +149,7 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
-    public void RebuildTree_RepublishesSelectedItemBinding_WhenMenuSourceSnapshotChanges()
+    public void RebuildTree_DoesNotRepublishSelectedItemBinding_WhenNativeMenuSourceStaysStable()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -182,9 +182,7 @@ public sealed class MainNavigationViewModelSelectionTests
 
             navVm.RebuildTree();
 
-            Assert.True(
-                selectedItemChanges > 0,
-                "MenuItemsSource republish can make NavigationView clear native SelectedItem; the VM must re-emit the same SSOT selected item.");
+            Assert.Equal(0, selectedItemChanges);
             Assert.Same(projectedBefore, navVm.ProjectedControlSelectedItem);
         }
         finally
@@ -373,7 +371,7 @@ public sealed class MainNavigationViewModelSelectionTests
     }
 
     [Fact]
-    public async Task RebuildTree_PreservesPreviouslyBoundMenuSnapshots_WhenNavigationTreeChanges()
+    public async Task RebuildTree_UpdatesStableNativeMenuSourceCollectionsInPlace()
     {
         var originalContext = SynchronizationContext.Current;
         var syncContext = new ImmediateSynchronizationContext();
@@ -404,24 +402,27 @@ public sealed class MainNavigationViewModelSelectionTests
                 presenter);
             navVm.RebuildTree();
 
-            var firstMenuSnapshot = navVm.MenuItems;
-            var project = Assert.Single(firstMenuSnapshot.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
-            var firstChildrenSnapshot = project.ChildrenMenuItems;
+            var nativeMenuSource = navVm.Items;
+            var nativeFooterSource = navVm.FooterItems;
+            var project = Assert.Single(nativeMenuSource.OfType<ProjectNavItemViewModel>(), p => p.ProjectId == "project-1");
+            var nativeChildrenSource = project.Children;
             Assert.Same(project, navVm.Items.OfType<ProjectNavItemViewModel>().Single(p => p.ProjectId == "project-1"));
-            Assert.Equal(["session-1", "session-2"], firstChildrenSnapshot.OfType<SessionNavItemViewModel>().Select(item => item.SessionId).ToArray());
+            Assert.Equal(["session-1", "session-2"], nativeChildrenSource.OfType<SessionNavItemViewModel>().Select(item => item.SessionId).ToArray());
 
             presenter.Refresh(CreateSnapshot(["session-1"]));
 
-            Assert.Equal(["session-1", "session-2"], firstChildrenSnapshot.OfType<SessionNavItemViewModel>().Select(item => item.SessionId).ToArray());
-            Assert.Contains(project, firstMenuSnapshot);
-            Assert.Same(project, navVm.MenuItems.OfType<ProjectNavItemViewModel>().Single(p => p.ProjectId == "project-1"));
-            Assert.Equal(["session-1"], project.ChildrenMenuItems.OfType<SessionNavItemViewModel>().Select(item => item.SessionId).ToArray());
+            Assert.Same(nativeMenuSource, navVm.Items);
+            Assert.Same(nativeFooterSource, navVm.FooterItems);
+            Assert.Same(nativeChildrenSource, project.Children);
+            Assert.Contains(project, nativeMenuSource);
+            Assert.Same(project, navVm.Items.OfType<ProjectNavItemViewModel>().Single(p => p.ProjectId == "project-1"));
+            Assert.Equal(["session-1"], project.Children.OfType<SessionNavItemViewModel>().Select(item => item.SessionId).ToArray());
 
             navVm.Dispose();
 
-            Assert.Empty(navVm.MenuItems);
-            Assert.Empty(navVm.FooterMenuItems);
-            Assert.Empty(project.ChildrenMenuItems);
+            Assert.Empty(navVm.Items);
+            Assert.Empty(navVm.FooterItems);
+            Assert.Empty(project.Children);
         }
         finally
         {
@@ -569,11 +570,11 @@ public sealed class MainNavigationViewModelSelectionTests
             var projected = Assert.IsType<SessionNavItemViewModel>(navVm.ProjectedControlSelectedItem);
             Assert.Equal("session-25", projected.SessionId);
             AssertProjectedSelectionIsMaterializedInMenuSource(navVm);
-            Assert.Contains(project.ChildrenMenuItems.OfType<SessionNavItemViewModel>(), item => item.SessionId == "session-25");
+            Assert.Contains(project.Children.OfType<SessionNavItemViewModel>(), item => item.SessionId == "session-25");
             Assert.True(project.IsActiveDescendant);
             var selection = Assert.IsType<NavigationSelectionState.Session>(navVm.CurrentSelection);
             Assert.Equal("session-25", selection.SessionId);
-            var more = Assert.Single(project.ChildrenMenuItems.OfType<MoreSessionsNavItemViewModel>());
+            var more = Assert.Single(project.Children.OfType<MoreSessionsNavItemViewModel>());
             Assert.Equal(4, more.Count);
         }
         finally
@@ -1811,13 +1812,13 @@ public sealed class MainNavigationViewModelSelectionTests
 
     private static IEnumerable<MainNavItemViewModel> EnumerateProjectedMenuSourceItems(MainNavigationViewModel navVm)
     {
-        foreach (var item in navVm.MenuItems.Concat(navVm.FooterMenuItems))
+        foreach (var item in navVm.Items.Concat(navVm.FooterItems))
         {
             yield return item;
 
             if (item is ProjectNavItemViewModel project)
             {
-                foreach (var child in project.ChildrenMenuItems)
+                foreach (var child in project.Children)
                 {
                     yield return child;
                 }

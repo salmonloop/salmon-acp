@@ -115,16 +115,32 @@ public sealed class XamlComplianceTests
             .Single(element => string.Equals(element.Name.LocalName, "NavigationViewItem", StringComparison.Ordinal));
         var xaml = document.ToString(SaveOptions.DisableFormatting);
 
-        Assert.Equal("{x:Bind NavVM.MenuItems, Mode=OneWay}", mainNavView.Attribute("MenuItemsSource")?.Value);
-        Assert.Equal("{x:Bind NavVM.FooterMenuItems, Mode=OneWay}", mainNavView.Attribute("FooterMenuItemsSource")?.Value);
-        Assert.Equal("{x:Bind ChildrenMenuItems, Mode=OneWay}", projectNavItem.Attribute("MenuItemsSource")?.Value);
+        Assert.Equal("{x:Bind NavVM.Items, Mode=OneWay}", mainNavView.Attribute("MenuItemsSource")?.Value);
+        Assert.Equal("{x:Bind NavVM.FooterItems, Mode=OneWay}", mainNavView.Attribute("FooterMenuItemsSource")?.Value);
+        Assert.Equal("{x:Bind Children, Mode=OneWay}", projectNavItem.Attribute("MenuItemsSource")?.Value);
         Assert.Equal("{x:Bind IsExpanded, Mode=TwoWay}", projectNavItem.Attribute("IsExpanded")?.Value);
-        Assert.DoesNotContain("MenuItemsSource=\"{x:Bind NavVM.Items, Mode=OneWay}\"", xaml);
-        Assert.DoesNotContain("FooterMenuItemsSource=\"{x:Bind NavVM.FooterItems, Mode=OneWay}\"", xaml);
-        Assert.DoesNotContain("MenuItemsSource=\"{x:Bind Children, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("MenuItemsSource=\"{x:Bind NavVM.MenuItems, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("FooterMenuItemsSource=\"{x:Bind NavVM.FooterMenuItems, Mode=OneWay}\"", xaml);
+        Assert.DoesNotContain("MenuItemsSource=\"{x:Bind ChildrenMenuItems, Mode=OneWay}\"", xaml);
         Assert.DoesNotContain("IsExpanded=\"{x:Bind IsExpanded, Mode=OneWay}\"", xaml);
         Assert.DoesNotContain("Expanding=\"OnMainNavItemExpanding\"", xaml);
         Assert.DoesNotContain("Collapsed=\"OnMainNavItemCollapsed\"", xaml);
+    }
+
+    [Fact]
+    public void MainNavigationViewModel_DoesNotPublishNavigationViewMenuSnapshots()
+    {
+        var navVm = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Navigation\MainNavigationViewModel.cs");
+        var navItemVm = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Navigation\MainNavItemViewModel.cs");
+
+        Assert.Contains("ObservableCollection<MainNavItemViewModel> Items", navVm, StringComparison.Ordinal);
+        Assert.Contains("ObservableCollection<MainNavItemViewModel> FooterItems", navVm, StringComparison.Ordinal);
+        Assert.Contains("ObservableCollection<MainNavItemViewModel> Children", navItemVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("public IReadOnlyList<MainNavItemViewModel> MenuItems", navVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("public IReadOnlyList<MainNavItemViewModel> FooterMenuItems", navVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChildrenMenuItems", navItemVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("PublishMenuSnapshots", navVm, StringComparison.Ordinal);
+        Assert.DoesNotContain("forceSelectedItemNotification", navVm, StringComparison.Ordinal);
     }
 
     [Fact]
