@@ -679,6 +679,49 @@ public class UiConventionsTests
     }
 
     [Fact]
+    public void Xaml_ShouldNotOverrideNativeControlMotionThemeResourceKeys()
+    {
+        var repoRoot = FindRepoRoot();
+        var xamlFiles = EnumerateUiXamlFiles(repoRoot);
+
+        var forbiddenKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ControlNormalAnimationDuration",
+            "ControlFastAnimationDuration",
+            "ControlFastAnimationAfterDuration",
+            "ControlFasterAnimationDuration",
+            "ComboBoxItemScaleAnimationDuration",
+            "ScrollBarColorChangeDuration",
+            "ScrollBarContractDuration",
+            "ScrollBarExpandDuration",
+            "ScrollBarOpacityChangeDuration",
+            "ScrollViewerSeparatorContractDuration",
+            "ScrollViewerSeparatorExpandDuration",
+            "ScrollViewScrollBarsNoTouchDuration",
+            "ScrollViewScrollBarsSeparatorContractDuration",
+            "ScrollViewScrollBarsSeparatorExpandDuration",
+            "SplitViewPaneAnimationCloseDuration",
+            "SplitViewPaneAnimationOpenDuration",
+            "SplitViewPaneAnimationOpenPreDuration"
+        };
+
+        var violations = new List<string>();
+        foreach (var file in xamlFiles)
+        {
+            var keys = ReadXamlKeys(file);
+            var hit = keys.Where(forbiddenKeys.Contains).ToArray();
+            if (hit.Length > 0)
+            {
+                violations.Add($"{file}: {string.Join(", ", hit)}");
+            }
+        }
+
+        Assert.True(
+            violations.Count == 0,
+            "Do not override native WinUI control motion resources in app XAML; bind application-owned transitions instead." + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
     public void Xaml_ShouldNotSetPaneBackgroundForNavigationShell()
     {
         var repoRoot = FindRepoRoot();

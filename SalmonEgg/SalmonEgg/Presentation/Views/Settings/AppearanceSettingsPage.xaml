@@ -81,10 +81,10 @@
 
                                 <StackPanel VerticalAlignment="Center" Spacing="4">
                                     <TextBlock x:Uid="Appearance_MotionToggleTitle"
-                                               Text="全局过渡动画"
+                                               Text="动画效果"
                                                Style="{StaticResource SettingsRowTitleTextStyle}"/>
                                     <TextBlock x:Uid="Appearance_MotionToggleDescription"
-                                               Text="开启后，页面切换将使用平滑过渡效果"
+                                               Text="控制页面切换和应用内状态提示动画；系统关闭动画时也会自动关闭"
                                                Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
                                 </StackPanel>
 

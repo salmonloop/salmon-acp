@@ -127,10 +127,10 @@
     <value>Interaction</value>
   </data>
   <data name="Appearance_MotionToggleTitle.Text" xml:space="preserve">
-    <value>Page transitions</value>
+    <value>Animations</value>
   </data>
   <data name="Appearance_MotionToggleDescription.Text" xml:space="preserve">
-    <value>When enabled, page transitions use smooth animations.</value>
+    <value>Controls animations for page changes and in-app status cues. If system animations are off, these turn off automatically.</value>
   </data>
   <data name="Appearance_MotionToggle.OnContent" xml:space="preserve">
     <value>On</value>

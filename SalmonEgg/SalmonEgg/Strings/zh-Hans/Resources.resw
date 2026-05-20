@@ -40,10 +40,10 @@
     <value>交互体验</value>
   </data>
   <data name="Appearance_MotionToggleTitle.Text" xml:space="preserve">
-    <value>全局过渡动画</value>
+    <value>动画效果</value>
   </data>
   <data name="Appearance_MotionToggleDescription.Text" xml:space="preserve">
-    <value>开启后，页面切换将使用平滑过渡效果</value>
+    <value>控制页面切换和应用内状态提示动画；系统关闭动画时也会自动关闭</value>
   </data>
   <data name="Appearance_MotionToggle.OnContent" xml:space="preserve">
     <value>已开启</value>

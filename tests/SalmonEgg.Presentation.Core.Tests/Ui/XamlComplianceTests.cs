@@ -20,6 +20,22 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void SessionGuiRegressionScript_CoversInstalledMsixRightPanelAuxiliaryPanelPath()
+    {
+        var script = LoadText(@".tools\run-session-gui-regression.ps1");
+
+        Assert.Contains(
+            ".tools\\run-winui3-msix.ps1",
+            script,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("-SkipInstall", script, StringComparison.Ordinal);
+        Assert.Contains(
+            "FullyQualifiedName~ChatSkeletonSmokeTests.AuxiliaryPanels_AfterCloseAndReopen_RetainContentInsteadOfBlankSurface",
+            script,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainPage_DoesNotDisableFocusOnInteraction()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
@@ -594,6 +610,80 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\App.xaml");
 
         Assert.DoesNotContain("<models:UiMotionController x:Key=", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppMotionPreference_DoesNotOverrideNativeControlTemplateMotion()
+    {
+        var appCode = LoadText(@"SalmonEgg\SalmonEgg\App.xaml.cs");
+        var uiRuntimeCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\UiRuntimeService.cs");
+        var motionCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Models\UiMotionController.cs");
+        var repoRoot = FindRepoRoot();
+        var reducedMotionDictionary = Path.Combine(
+            repoRoot,
+            "SalmonEgg",
+            "SalmonEgg",
+            "Styles",
+            "ReducedMotion.xaml");
+
+        Assert.False(
+            File.Exists(reducedMotionDictionary),
+            "Application motion settings must not override native WinUI control-template animation resources.");
+        Assert.DoesNotContain("ReducedMotionDictionary", appCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyReducedMotion", appCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("FeatureConfiguration.ThemeAnimation.DefaultThemeAnimationDuration", appCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyReducedMotion", uiRuntimeCode, StringComparison.Ordinal);
+        Assert.Contains("IsSystemAnimationEnabled", motionCode, StringComparison.Ordinal);
+        Assert.Contains("IsEffectiveAnimationEnabled", motionCode, StringComparison.Ordinal);
+        Assert.Contains("Timeline.AllowDependentAnimations", uiRuntimeCode, StringComparison.Ordinal);
+        Assert.Contains("UISettings", uiRuntimeCode, StringComparison.Ordinal);
+        Assert.Contains("AnimationsEnabledChanged", uiRuntimeCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProductCSharp_DoesNotOverrideNativeControlTemplateMotion()
+    {
+        var forbiddenTokens = new[]
+        {
+            "ReducedMotionDictionary",
+            "ApplyReducedMotion",
+            "FeatureConfiguration.ThemeAnimation.DefaultThemeAnimationDuration",
+            "ThemeAnimation.DefaultThemeAnimationDuration",
+            "UISettingsController",
+            "ControlNormalAnimationDuration",
+            "ControlFastAnimationDuration",
+            "ControlFastAnimationAfterDuration",
+            "ControlFasterAnimationDuration",
+            "ComboBoxItemScaleAnimationDuration",
+            "ScrollBarColorChangeDuration",
+            "ScrollBarContractDuration",
+            "ScrollBarExpandDuration",
+            "ScrollBarOpacityChangeDuration",
+            "ScrollViewerSeparatorContractDuration",
+            "ScrollViewerSeparatorExpandDuration",
+            "ScrollViewScrollBarsNoTouchDuration",
+            "ScrollViewScrollBarsSeparatorContractDuration",
+            "ScrollViewScrollBarsSeparatorExpandDuration",
+            "SplitViewPaneAnimationCloseDuration",
+            "SplitViewPaneAnimationOpenDuration",
+            "SplitViewPaneAnimationOpenPreDuration"
+        };
+
+        var violations = EnumerateProductCSharpFiles()
+            .SelectMany(file =>
+            {
+                var content = File.ReadAllText(file);
+                return forbiddenTokens
+                    .Where(token => content.Contains(token, StringComparison.Ordinal))
+                    .Select(token => $"{Path.GetRelativePath(FindRepoRoot(), file)}: {token}");
+            })
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "Product C# must not override native WinUI/Uno control-template motion; bind only application-owned transitions."
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -1454,6 +1544,65 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void AppearanceSettingsPage_MotionPreferenceCopyUsesUserLanguage()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AppearanceSettingsPage.xaml");
+
+        Assert.DoesNotContain("全局过渡动画", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("依赖动画", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("dependent", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("动画效果", xaml, StringComparison.Ordinal);
+        Assert.Contains("页面切换", xaml, StringComparison.Ordinal);
+        Assert.Contains("应用内状态提示", xaml, StringComparison.Ordinal);
+        Assert.Contains("系统关闭动画时也会自动关闭", xaml, StringComparison.Ordinal);
+
+        string[] resourceFiles =
+        [
+            @"SalmonEgg\SalmonEgg\Strings\zh-Hans\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\en\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\en-US\Resources.resw"
+        ];
+
+        foreach (var resourceFile in resourceFiles)
+        {
+            var resources = XDocument.Parse(LoadText(resourceFile));
+            var title = GetResourceValue(resources, "Appearance_MotionToggleTitle.Text");
+            var description = GetResourceValue(resources, "Appearance_MotionToggleDescription.Text");
+            var combinedText = $"{title} {description}";
+
+            Assert.DoesNotContain("依赖动画", combinedText, StringComparison.Ordinal);
+            Assert.DoesNotContain("dependent", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("native control", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("全局", combinedText, StringComparison.Ordinal);
+            Assert.DoesNotContain("global", combinedText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                resourceFile.Contains("zh-Hans", StringComparison.Ordinal)
+                    ? "页面"
+                    : "page",
+                combinedText,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                resourceFile.Contains("zh-Hans", StringComparison.Ordinal)
+                    ? "状态"
+                    : "status",
+                combinedText,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                resourceFile.Contains("zh-Hans", StringComparison.Ordinal)
+                    ? "系统关闭动画"
+                    : "system animations are off",
+                combinedText,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                resourceFile.Contains("zh-Hans", StringComparison.Ordinal)
+                    ? "自动关闭"
+                    : "turn off automatically",
+                combinedText,
+                StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public void DataStorageSettingsPage_SeparatesRoutineStorageAndDangerActions()
     {
         var document = XDocument.Parse(LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DataStorageSettingsPage.xaml"));
@@ -1778,6 +1927,23 @@ public sealed class XamlComplianceTests
         return File.ReadAllText(fullPath);
     }
 
+    private static string[] EnumerateProductCSharpFiles()
+    {
+        var root = FindRepoRoot();
+        var sourceRoots = new[]
+        {
+            Path.Combine(root, "src"),
+            Path.Combine(root, "SalmonEgg", "SalmonEgg")
+        };
+
+        return sourceRoots
+            .Where(Directory.Exists)
+            .SelectMany(sourceRoot => Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
     private static string ExtractSection(string content, string startMarker, string? endMarker = null)
     {
         var start = content.IndexOf(startMarker, StringComparison.Ordinal);
@@ -1866,6 +2032,17 @@ public sealed class XamlComplianceTests
 
     private static bool HasAttributeByLocalName(XElement element, string localName)
         => element.Attributes().Any(attribute => string.Equals(attribute.Name.LocalName, localName, StringComparison.Ordinal));
+
+    private static string GetResourceValue(XDocument resources, string name)
+    {
+        var value = resources.Descendants("data")
+            .FirstOrDefault(data => string.Equals((string?)data.Attribute("name"), name, StringComparison.Ordinal))
+            ?.Element("value")
+            ?.Value;
+
+        Assert.False(string.IsNullOrWhiteSpace(value), $"Resource '{name}' must define a non-empty value.");
+        return value!;
+    }
 
     private static string? GetAttributeByLocalName(XElement element, string localName)
         => element.Attributes()

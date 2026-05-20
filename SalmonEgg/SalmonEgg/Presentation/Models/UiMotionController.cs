@@ -8,9 +8,10 @@ public sealed partial class UiMotionController : ObservableObject
     public static UiMotionController Current { get; } = new();
 
     private bool _isAnimationEnabled = true;
+    private bool _isSystemAnimationEnabled = true;
 
     /// <summary>
-    /// Single owner for whether application motion is enabled.
+    /// User preference for whether application-owned motion is enabled.
     /// </summary>
     public bool IsAnimationEnabled
     {
@@ -19,20 +20,33 @@ public sealed partial class UiMotionController : ObservableObject
         {
             if (SetProperty(ref _isAnimationEnabled, value))
             {
-                // Notify that all transition properties might have changed (from null to collection or vice versa)
-                OnPropertyChanged(nameof(NavItemTransitions));
-                OnPropertyChanged(nameof(ListItemTransitions));
-                OnPropertyChanged(nameof(ToolCallTransitions));
-                OnPropertyChanged(nameof(StatusIconTransitions));
+                NotifyMotionPolicyChanged();
             }
         }
     }
 
     /// <summary>
-    /// Native Frame navigation transition selected by the global motion preference. Uno maps this WinUI API per platform.
+    /// System accessibility preference for whether UI animations are enabled.
+    /// </summary>
+    public bool IsSystemAnimationEnabled
+    {
+        get => _isSystemAnimationEnabled;
+        set
+        {
+            if (SetProperty(ref _isSystemAnimationEnabled, value))
+            {
+                NotifyMotionPolicyChanged();
+            }
+        }
+    }
+
+    public bool IsEffectiveAnimationEnabled => IsAnimationEnabled && IsSystemAnimationEnabled;
+
+    /// <summary>
+    /// Native Frame navigation transition selected by the effective motion preference. Uno maps this WinUI API per platform.
     /// </summary>
     public NavigationTransitionInfo CreateNavigationTransitionInfo()
-        => IsAnimationEnabled
+        => IsEffectiveAnimationEnabled
             ? new EntranceNavigationTransitionInfo()
             : new SuppressNavigationTransitionInfo();
 
@@ -40,25 +54,20 @@ public sealed partial class UiMotionController : ObservableObject
     /// Entrance transitions for sidebar items.
     /// </summary>
     public TransitionCollection? NavItemTransitions =>
-        IsAnimationEnabled ? CreateEntranceTransitions(8, 0) : null;
-
-    /// <summary>
-    /// Standard list add/remove/reposition transitions.
-    /// </summary>
-    public TransitionCollection? ListItemTransitions =>
-        IsAnimationEnabled ? CreateListTransitions() : null;
-
-    /// <summary>
-    /// Transitions for Tool Call expand/collapse and state changes.
-    /// </summary>
-    public TransitionCollection? ToolCallTransitions =>
-        IsAnimationEnabled ? CreateToolCallTransitions() : null;
+        IsEffectiveAnimationEnabled ? CreateEntranceTransitions(8, 0) : null;
 
     /// <summary>
     /// Transitions for small status icon changes.
     /// </summary>
     public TransitionCollection? StatusIconTransitions =>
-        IsAnimationEnabled ? CreateStatusIconTransitions() : null;
+        IsEffectiveAnimationEnabled ? CreateStatusIconTransitions() : null;
+
+    private void NotifyMotionPolicyChanged()
+    {
+        OnPropertyChanged(nameof(IsEffectiveAnimationEnabled));
+        OnPropertyChanged(nameof(NavItemTransitions));
+        OnPropertyChanged(nameof(StatusIconTransitions));
+    }
 
     private static TransitionCollection CreateEntranceTransitions(double fromHorizontal, double fromVertical)
     {
@@ -69,24 +78,6 @@ public sealed partial class UiMotionController : ObservableObject
                 FromHorizontalOffset = fromHorizontal,
                 FromVerticalOffset = fromVertical
             }
-        };
-    }
-
-    private static TransitionCollection CreateListTransitions()
-    {
-        return new TransitionCollection
-        {
-            new AddDeleteThemeTransition(),
-            new RepositionThemeTransition()
-        };
-    }
-
-    private static TransitionCollection CreateToolCallTransitions()
-    {
-        return new TransitionCollection
-        {
-            new EntranceThemeTransition { FromVerticalOffset = 8 },
-            new RepositionThemeTransition()
         };
     }
 

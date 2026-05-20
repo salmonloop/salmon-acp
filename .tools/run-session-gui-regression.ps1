@@ -22,6 +22,7 @@ if (-not $SkipMsixRefresh)
 $env:SALMONEGG_GUI = '1'
 
 $deterministicFilters = @(
+    'FullyQualifiedName~ChatSkeletonSmokeTests.AuxiliaryPanels_AfterCloseAndReopen_RetainContentInsteadOfBlankSurface'
     'FullyQualifiedName~ChatSkeletonSmokeTests.SelectRemoteSessionWithSlowReplay_AutoScrollsToLatestMessageAfterHydration'
     'FullyQualifiedName~ChatSkeletonSmokeTests.HydratedRemoteSession_NavigateToDiscoverAndBack_ReturnsHotWithoutRemoteReload'
     'FullyQualifiedName~ChatSkeletonSmokeTests.HydratedRemoteSession_SwitchToOtherRemoteSessionAndBack_ReturnsHotWithoutRemoteReload'
