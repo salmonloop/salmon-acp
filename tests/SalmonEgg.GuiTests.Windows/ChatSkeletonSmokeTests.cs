@@ -710,14 +710,18 @@ public sealed class ChatSkeletonSmokeTests
         using var session = WindowsGuiAppSession.LaunchFresh();
         EnsureMainWindowWideForTitleBarCommands(session);
 
-        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15));
-        session.ActivateElement(sessionItem);
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
+            "Session nav item did not become onscreen before auxiliary panel smoke activation.");
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(2));
+        session.FocusElement(sessionItem);
+        session.PressEnter();
         var header = WaitForSessionHeader(
             session,
-            "GUI Session 01",
+            "gui-sess",
             "auxiliary-panels-reopen-header",
             appData);
-        Assert.Contains("GUI Session 01", header.Name, StringComparison.Ordinal);
+        Assert.Contains("gui-sess", header.Name, StringComparison.Ordinal);
 
         _ = EnsureTerminalPanelVisible(session, appData, "auxiliary-panels-bottom-initial-open");
         ToggleButton(session, "TitleBar.BottomPanel");
@@ -736,6 +740,7 @@ public sealed class ChatSkeletonSmokeTests
                 TimeSpan.FromSeconds(15)),
             $"Bottom panel reopened without terminal content. terminalName='{session.TryGetElementName("BottomPanel.TerminalWebView", TimeSpan.FromMilliseconds(150)) ?? string.Empty}'");
 
+        var beforeRightPanelOpen = CaptureAuxiliaryPanelLayout(session);
         ToggleButton(session, "TitleBar.TodoPanel");
         Assert.True(
             session.WaitUntilVisible("RightPanel.Title", TimeSpan.FromSeconds(5)),
@@ -750,11 +755,21 @@ public sealed class ChatSkeletonSmokeTests
         Assert.True(
             session.WaitUntilVisible("RightPanel.TodoEmptyTitle", TimeSpan.FromSeconds(5)),
             "Todo panel empty title did not render on first open.");
+        var withRightPanelOpen = WaitForRightPanelLayoutToApply(
+            session,
+            beforeRightPanelOpen,
+            TimeSpan.FromSeconds(5));
+        AssertRightPanelLayoutApplied(beforeRightPanelOpen, withRightPanelOpen);
 
         ToggleButton(session, "TitleBar.TodoPanel");
         Assert.True(
             WaitUntilOffscreenOrMissing(session, "RightPanel.Title", TimeSpan.FromSeconds(5)),
             "Todo panel did not hide after close toggle.");
+        var afterRightPanelClose = WaitForBottomPanelWidthToRestore(
+            session,
+            beforeRightPanelOpen,
+            TimeSpan.FromSeconds(5));
+        AssertBottomPanelWidthRestored(beforeRightPanelOpen, afterRightPanelClose);
 
         ToggleButton(session, "TitleBar.TodoPanel");
         Assert.True(
@@ -3592,6 +3607,109 @@ public sealed class ChatSkeletonSmokeTests
 
         return false;
     }
+
+    private static AuxiliaryPanelLayoutSnapshot CaptureAuxiliaryPanelLayout(WindowsGuiAppSession session)
+    {
+        var chatBounds = session
+            .FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(5))
+            .BoundingRectangle;
+        var bottomBounds = session
+            .FindByAutomationId("BottomPanel.TerminalWebView", TimeSpan.FromSeconds(5))
+            .BoundingRectangle;
+        var rightPanelTitle = session.TryFindByAutomationId("RightPanel.Title", TimeSpan.FromMilliseconds(150));
+        var rightPanelTitleLeft = rightPanelTitle?.BoundingRectangle.Left;
+
+        return new AuxiliaryPanelLayoutSnapshot(
+            chatBounds.Right,
+            chatBounds.Width,
+            bottomBounds.Right,
+            bottomBounds.Width,
+            rightPanelTitleLeft);
+    }
+
+    private static AuxiliaryPanelLayoutSnapshot WaitForRightPanelLayoutToApply(
+        WindowsGuiAppSession session,
+        AuxiliaryPanelLayoutSnapshot before,
+        TimeSpan timeout)
+    {
+        var latest = CaptureAuxiliaryPanelLayout(session);
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            latest = CaptureAuxiliaryPanelLayout(session);
+            if (latest.RightPanelTitleLeft is { } rightPanelLeft
+                && latest.BottomPanelWidth <= before.BottomPanelWidth - 80
+                && latest.ChatRight <= rightPanelLeft + 8
+                && latest.BottomPanelRight <= rightPanelLeft + 8)
+            {
+                return latest;
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return latest;
+    }
+
+    private static AuxiliaryPanelLayoutSnapshot WaitForBottomPanelWidthToRestore(
+        WindowsGuiAppSession session,
+        AuxiliaryPanelLayoutSnapshot before,
+        TimeSpan timeout)
+    {
+        var latest = CaptureAuxiliaryPanelLayout(session);
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            latest = CaptureAuxiliaryPanelLayout(session);
+            if (latest.BottomPanelWidth >= before.BottomPanelWidth - 32)
+            {
+                return latest;
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return latest;
+    }
+
+    private static void AssertRightPanelLayoutApplied(
+        AuxiliaryPanelLayoutSnapshot before,
+        AuxiliaryPanelLayoutSnapshot after)
+    {
+        var bottomDelta = before.BottomPanelWidth - after.BottomPanelWidth;
+
+        Assert.True(
+            bottomDelta > 80,
+            $"Opening the right panel did not shrink the bottom panel column. before={before} after={after}");
+        Assert.True(
+            after.RightPanelTitleLeft is { },
+            $"Right panel title was not visible after opening the right panel. before={before} after={after}");
+        var rightPanelLeft = after.RightPanelTitleLeft.GetValueOrDefault();
+        Assert.True(
+            after.ChatRight <= rightPanelLeft + 8,
+            $"Chat content overlapped the right panel after open. before={before} after={after}");
+        Assert.True(
+            after.BottomPanelRight <= rightPanelLeft + 8,
+            $"Bottom panel content overlapped the right panel after open. before={before} after={after}");
+    }
+
+    private static void AssertBottomPanelWidthRestored(
+        AuxiliaryPanelLayoutSnapshot before,
+        AuxiliaryPanelLayoutSnapshot after)
+    {
+        var bottomDelta = Math.Abs(before.BottomPanelWidth - after.BottomPanelWidth);
+
+        Assert.True(
+            bottomDelta <= 32,
+            $"Closing the right panel did not restore the bottom panel column width. before={before} after={after}");
+    }
+
+    private readonly record struct AuxiliaryPanelLayoutSnapshot(
+        double ChatRight,
+        double ChatWidth,
+        double BottomPanelRight,
+        double BottomPanelWidth,
+        double? RightPanelTitleLeft);
 
     private static void ToggleButton(WindowsGuiAppSession session, string automationId)
     {
