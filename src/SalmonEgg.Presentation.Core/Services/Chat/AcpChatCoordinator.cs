@@ -72,7 +72,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
             ?? NoopAcpConnectionDependencySnapshotProvider.Instance;
         _sessionCommandOrchestrator = sessionCommandOrchestrator ?? new AcpSessionCommandOrchestrator(
             NullLogger<AcpSessionCommandOrchestrator>.Instance);
-        _mcpServerProvider = mcpServerProvider ?? AcpProfileMcpServerProvider.Instance;
+        _mcpServerProvider = mcpServerProvider ?? EmptyAcpMcpServerProvider.Instance;
         _transportSupportPolicy = transportSupportPolicy ?? throw new ArgumentNullException(nameof(transportSupportPolicy));
         _sessionUpdateBufferLimit = sessionUpdateBufferLimit;
     }
@@ -108,7 +108,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         ArgumentNullException.ThrowIfNull(sink);
 
         EnsureTransportSupported(profile.Transport);
-        sink.SetCurrentMcpServers(_mcpServerProvider.GetMcpServers(profile, cancellationToken));
+        sink.SetCurrentMcpServers(
+            await _mcpServerProvider.GetMcpServersAsync(profile, cancellationToken).ConfigureAwait(false));
         await sink.SelectProfileAsync(profile, cancellationToken).ConfigureAwait(false);
         ApplyProfileToTransportConfiguration(profile, transportConfiguration);
 

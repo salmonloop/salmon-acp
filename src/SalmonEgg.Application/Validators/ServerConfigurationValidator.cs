@@ -1,6 +1,5 @@
 using FluentValidation;
 using SalmonEgg.Domain.Models;
-using SalmonEgg.Domain.Models.Mcp;
 
 namespace SalmonEgg.Application.Validators
 {
@@ -75,10 +74,6 @@ namespace SalmonEgg.Application.Validators
                     .Must(BeValidProxyUrl)
                     .WithMessage("Invalid proxy URL format");
             });
-
-            RuleForEach(x => x.McpServers)
-                .Must(BeValidMcpServer)
-                .WithMessage("MCP server configuration is invalid");
         }
 
         /// <summary>
@@ -111,13 +106,6 @@ namespace SalmonEgg.Application.Validators
             // 代理通常使用 HTTP 或 HTTPS
             var scheme = uri.Scheme.ToLowerInvariant();
             return scheme == "http" || scheme == "https";
-        }
-
-        private bool BeValidMcpServer(McpServer? server)
-        {
-            return McpServerSupportPolicy.Validate(
-                server,
-                McpServerSupportPolicy.SupportAllTransports).IsSupported;
         }
     }
 }

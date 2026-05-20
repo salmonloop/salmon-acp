@@ -1,32 +1,50 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Mcp;
+using SalmonEgg.Domain.Services;
 
 namespace SalmonEgg.Presentation.Core.Services.Chat;
 
 public interface IAcpMcpServerProvider
 {
-    IReadOnlyList<McpServer> GetMcpServers(
+    Task<IReadOnlyList<McpServer>> GetMcpServersAsync(
         ServerConfiguration? profile,
         CancellationToken cancellationToken = default);
 }
 
-public sealed class AcpProfileMcpServerProvider : IAcpMcpServerProvider
+public sealed class EmptyAcpMcpServerProvider : IAcpMcpServerProvider
 {
-    public static AcpProfileMcpServerProvider Instance { get; } = new();
+    public static EmptyAcpMcpServerProvider Instance { get; } = new();
 
-    public IReadOnlyList<McpServer> GetMcpServers(
+    public Task<IReadOnlyList<McpServer>> GetMcpServersAsync(
         ServerConfiguration? profile,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (profile?.McpServers == null)
-        {
-            return Array.Empty<McpServer>();
-        }
+        return Task.FromResult<IReadOnlyList<McpServer>>(Array.Empty<McpServer>());
+    }
+}
 
-        return McpServerJsonConverter.CloneServers(profile.McpServers);
+public sealed class GlobalAcpMcpServerProvider : IAcpMcpServerProvider
+{
+    private readonly IMcpSettingsService _settingsService;
+
+    public GlobalAcpMcpServerProvider(IMcpSettingsService settingsService)
+    {
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+    }
+
+    public async Task<IReadOnlyList<McpServer>> GetMcpServersAsync(
+        ServerConfiguration? profile,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var settings = await _settingsService.LoadAsync(cancellationToken).ConfigureAwait(false);
+        return settings.IsEnabled
+            ? McpServerJsonConverter.CloneServers(settings.Servers)
+            : Array.Empty<McpServer>();
     }
 }

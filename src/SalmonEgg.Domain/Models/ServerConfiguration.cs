@@ -1,8 +1,5 @@
 namespace SalmonEgg.Domain.Models
 {
-    using System.Collections.Generic;
-    using SalmonEgg.Domain.Models.Mcp;
-
     /// <summary>
     /// 服务器配置
     /// </summary>
@@ -63,8 +60,6 @@ namespace SalmonEgg.Domain.Models
         /// 代理配置
         /// </summary>
         public ProxyConfig? Proxy { get; set; }
-
-        public List<McpServer> McpServers { get; set; } = new List<McpServer>();
 
         /// <summary>
         /// 连接超时（秒）

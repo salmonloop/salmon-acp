@@ -48,6 +48,28 @@ connection_timeout_seconds: 15";
         Assert.Equal("stdio", result.Transport);
         Assert.Equal("my_cmd", result.StdioCommand);
         Assert.Equal(15, result.ConnectionTimeoutSeconds);
+        Assert.Null(typeof(ServerConfigurationYamlV1).GetProperty("McpServers"));
+    }
+
+    [Fact]
+    public void Deserializer_McpSettingsYamlV1_DoesNotRegress()
+    {
+        var yaml = @"schema_version: 1
+is_enabled: true
+servers:
+- transport: stdio
+  name: filesystem
+  command: /usr/bin/mcp-filesystem";
+        var deserializer = YamlSerialization.CreateDeserializer();
+
+        var result = deserializer.Deserialize<McpSettingsYamlV1>(yaml);
+
+        Assert.NotNull(result);
+        Assert.True(result.IsEnabled);
+        var server = Assert.Single(result.Servers);
+        Assert.Equal("stdio", server.Transport);
+        Assert.Equal("filesystem", server.Name);
+        Assert.Equal("/usr/bin/mcp-filesystem", server.Command);
     }
 
     [Fact]

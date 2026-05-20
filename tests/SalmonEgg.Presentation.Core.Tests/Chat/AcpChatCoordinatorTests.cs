@@ -1161,19 +1161,23 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
-    public async Task ConnectToProfileAsync_LoadsMcpServersFromProfileProvider()
+    public async Task ConnectToProfileAsync_LoadsMcpServersFromGlobalSettingsProvider()
     {
+        var settings = new McpSettings
+        {
+            IsEnabled = true,
+            Servers =
+            [
+                new StdioMcpServer("filesystem", "/usr/bin/mcp", ["--stdio"])
+            ]
+        };
         var profile = new ServerConfiguration
         {
             Id = "profile-1",
             Name = "Profile",
             Transport = TransportType.Stdio,
             StdioCommand = "agent.exe",
-            StdioArgs = "--serve",
-            McpServers =
-            [
-                new StdioMcpServer("filesystem", "/usr/bin/mcp", ["--stdio"])
-            ]
+            StdioArgs = "--serve"
         };
         var transport = new FakeTransportConfiguration();
         var service = CreateChatService(new AgentCapabilities(loadSession: true));
@@ -1185,7 +1189,12 @@ public sealed class AcpChatCoordinatorTests
             .Setup(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
             .Returns(service.Object);
 
-        var sut = new AcpChatCoordinator(factory.Object, logger.Object, CreateTransportSupportPolicy());
+        var provider = new GlobalAcpMcpServerProvider(new FakeMcpSettingsService(settings));
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            CreateTransportSupportPolicy(),
+            mcpServerProvider: provider);
 
         await sut.ConnectToProfileAsync(profile, transport, sink);
 
@@ -1194,16 +1203,12 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
-    public async Task ConnectToProfileAsync_SnapshotsMcpServersFromProfile()
+    public async Task ConnectToProfileAsync_SnapshotsMcpServersFromGlobalSettings()
     {
-        var profile = new ServerConfiguration
+        var settings = new McpSettings
         {
-            Id = "profile-1",
-            Name = "Profile",
-            Transport = TransportType.Stdio,
-            StdioCommand = "agent.exe",
-            StdioArgs = "--serve",
-            McpServers =
+            IsEnabled = true,
+            Servers =
             [
                 new StdioMcpServer(
                     "filesystem",
@@ -1211,6 +1216,14 @@ public sealed class AcpChatCoordinatorTests
                     ["--stdio"],
                     [new McpEnvVariable("ROOT", "/repo")])
             ]
+        };
+        var profile = new ServerConfiguration
+        {
+            Id = "profile-1",
+            Name = "Profile",
+            Transport = TransportType.Stdio,
+            StdioCommand = "agent.exe",
+            StdioArgs = "--serve"
         };
         var transport = new FakeTransportConfiguration();
         var service = CreateChatService(new AgentCapabilities(loadSession: true));
@@ -1222,13 +1235,68 @@ public sealed class AcpChatCoordinatorTests
             .Setup(x => x.CreateChatService(TransportType.Stdio, "agent.exe", "--serve", null))
             .Returns(service.Object);
 
-        var sut = new AcpChatCoordinator(factory.Object, logger.Object, CreateTransportSupportPolicy());
+        var provider = new GlobalAcpMcpServerProvider(new FakeMcpSettingsService(settings));
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            CreateTransportSupportPolicy(),
+            mcpServerProvider: provider);
 
         await sut.ConnectToProfileAsync(profile, transport, sink);
-        profile.McpServers.Clear();
+        settings.Servers.Clear();
 
         var stdio = Assert.IsType<StdioMcpServer>(Assert.Single(sink.CurrentMcpServers));
         Assert.Equal("/repo", Assert.Single(stdio.Env!).Value);
+    }
+
+    [Fact]
+    public async Task GlobalAcpMcpServerProvider_WhenDisabled_ReturnsEmptyCatalog()
+    {
+        var settings = new McpSettings
+        {
+            IsEnabled = false,
+            Servers =
+            [
+                new StdioMcpServer("filesystem", "/usr/bin/mcp", ["--stdio"])
+            ]
+        };
+        var provider = new GlobalAcpMcpServerProvider(new FakeMcpSettingsService(settings));
+
+        var servers = await provider.GetMcpServersAsync(profile: null);
+
+        Assert.Empty(servers);
+    }
+
+    [Fact]
+    public async Task GlobalAcpMcpServerProvider_WhenEnabled_ReturnsDeepClonedGlobalCatalog()
+    {
+        var source = new HttpMcpServer(
+            "api",
+            "https://api.example.com/mcp",
+            [new McpHttpHeader("Authorization", "Bearer token")])
+        {
+            Meta = new()
+            {
+                ["source"] = "settings"
+            }
+        };
+        var settings = new McpSettings
+        {
+            IsEnabled = true,
+            Servers = [source]
+        };
+        var provider = new GlobalAcpMcpServerProvider(new FakeMcpSettingsService(settings));
+
+        var servers = await provider.GetMcpServersAsync(profile: null);
+        source.Url = "https://mutated.example.com/mcp";
+        source.Headers![0].Value = "mutated";
+        source.Meta["source"] = "mutated";
+
+        var captured = Assert.IsType<HttpMcpServer>(Assert.Single(servers));
+        Assert.NotSame(source, captured);
+        Assert.Equal("https://api.example.com/mcp", captured.Url);
+        Assert.Equal("Bearer token", Assert.Single(captured.Headers!).Value);
+        Assert.Equal("settings", captured.Meta!["source"]);
     }
 
     [Fact]
@@ -2069,6 +2137,25 @@ public sealed class AcpChatCoordinatorTests
         public string? ValidationError { get; set; }
 
         public (bool IsValid, string? ErrorMessage) Validate() => (IsValid, ValidationError);
+    }
+
+    private sealed class FakeMcpSettingsService : IMcpSettingsService
+    {
+        private readonly McpSettings _settings;
+
+        public FakeMcpSettingsService(McpSettings settings)
+        {
+            _settings = settings;
+        }
+
+        public Task<McpSettings> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(_settings);
+        }
+
+        public Task SaveAsync(McpSettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class FakeSink : IAcpChatCoordinatorSink

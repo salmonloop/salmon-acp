@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using SalmonEgg.Domain.Models;
-using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Services;
 using SalmonEgg.Infrastructure.Storage.YamlModels;
 using YamlDotNet.Core;
@@ -20,9 +19,6 @@ namespace SalmonEgg.Infrastructure.Storage;
 public sealed class ConfigurationManager : IConfigurationService
 {
     private const int CurrentSchemaVersion = 1;
-    private const string StdioMcpTransport = "stdio";
-    private const string HttpMcpTransport = "http";
-    private const string SseMcpTransport = "sse";
 
     private readonly ISecureStorage _secureStorage;
     private readonly IAppFileStore _fileStore;
@@ -41,12 +37,6 @@ public sealed class ConfigurationManager : IConfigurationService
     {
         if (config is null) throw new ArgumentNullException(nameof(config));
         if (string.IsNullOrWhiteSpace(config.Id)) throw new ArgumentException("Configuration ID cannot be empty", nameof(config));
-
-        var mcpValidation = McpServerSupportPolicy.Validate(config.McpServers, McpServerSupportPolicy.SupportAllTransports);
-        if (!mcpValidation.IsSupported)
-        {
-            throw new InvalidOperationException($"MCP server configuration is invalid: {mcpValidation.ErrorMessage}");
-        }
 
         var serverPath = GetServerYamlPath(config.Id);
         await EnsureWritableSchemaAsync(serverPath).ConfigureAwait(false);
@@ -106,11 +96,6 @@ public sealed class ConfigurationManager : IConfigurationService
         }
 
         var config = FromYaml(yamlModel, fallbackId: id);
-        if (!HasValidMcpConfiguration(config))
-        {
-            return null;
-        }
-
         await HydrateSecretsAsync(config, yamlModel.Authentication?.Mode).ConfigureAwait(false);
         return config;
     }
@@ -155,11 +140,6 @@ public sealed class ConfigurationManager : IConfigurationService
                     }
 
                     var config = FromYaml(yamlModel, fallbackId: System.IO.Path.GetFileNameWithoutExtension(path));
-                    if (!HasValidMcpConfiguration(config))
-                    {
-                        continue;
-                    }
-
                     result.Add(config);
                 }
                 catch (Exception)
@@ -213,8 +193,7 @@ public sealed class ConfigurationManager : IConfigurationService
             Authentication = new AuthenticationYamlV1 { Mode = mode },
             Proxy = config.Proxy is { Enabled: true }
                 ? new ProxyYamlV1 { Enabled = true, ProxyUrl = config.Proxy.ProxyUrl ?? string.Empty }
-                : new ProxyYamlV1 { Enabled = false, ProxyUrl = string.Empty },
-            McpServers = ToYamlMcpServers(config.McpServers)
+                : new ProxyYamlV1 { Enabled = false, ProxyUrl = string.Empty }
         };
     }
 
@@ -228,8 +207,7 @@ public sealed class ConfigurationManager : IConfigurationService
             StdioCommand = yamlModel.StdioCommand ?? string.Empty,
             StdioArgs = yamlModel.StdioArgs ?? string.Empty,
             Transport = TransportFromString(yamlModel.Transport),
-            ConnectionTimeout = yamlModel.ConnectionTimeoutSeconds > 0 ? yamlModel.ConnectionTimeoutSeconds : 10,
-            McpServers = FromYamlMcpServers(yamlModel.McpServers)
+            ConnectionTimeout = yamlModel.ConnectionTimeoutSeconds > 0 ? yamlModel.ConnectionTimeoutSeconds : 10
         };
 
         if (yamlModel.Proxy is { Enabled: true })
@@ -243,171 +221,6 @@ public sealed class ConfigurationManager : IConfigurationService
 
         return config;
     }
-
-    private static List<McpServerYamlV1> ToYamlMcpServers(IEnumerable<McpServer>? servers)
-    {
-        if (servers == null)
-        {
-            return new List<McpServerYamlV1>();
-        }
-
-        var yamlServers = new List<McpServerYamlV1>();
-        foreach (var server in servers)
-        {
-            switch (server)
-            {
-                case StdioMcpServer stdio:
-                    yamlServers.Add(new McpServerYamlV1
-                    {
-                        Transport = StdioMcpTransport,
-                        Name = stdio.Name ?? string.Empty,
-                        Meta = McpServerJsonConverter.CloneMeta(stdio.Meta),
-                        Command = stdio.Command ?? string.Empty,
-                        Args = stdio.Args ?? new List<string>(),
-                        Env = ToYamlNameValues(stdio.Env)
-                    });
-                    break;
-                case HttpMcpServer http:
-                    yamlServers.Add(new McpServerYamlV1
-                    {
-                        Transport = HttpMcpTransport,
-                        Name = http.Name ?? string.Empty,
-                        Meta = McpServerJsonConverter.CloneMeta(http.Meta),
-                        Url = http.Url ?? string.Empty,
-                        Headers = ToYamlNameValues(http.Headers)
-                    });
-                    break;
-                case SseMcpServer sse:
-                    yamlServers.Add(new McpServerYamlV1
-                    {
-                        Transport = SseMcpTransport,
-                        Name = sse.Name ?? string.Empty,
-                        Meta = McpServerJsonConverter.CloneMeta(sse.Meta),
-                        Url = sse.Url ?? string.Empty,
-                        Headers = ToYamlNameValues(sse.Headers)
-                    });
-                    break;
-            }
-        }
-
-        return yamlServers;
-    }
-
-    private static List<McpServer> FromYamlMcpServers(IEnumerable<McpServerYamlV1>? yamlServers)
-    {
-        if (yamlServers == null)
-        {
-            return new List<McpServer>();
-        }
-
-        var servers = new List<McpServer>();
-        foreach (var yamlServer in yamlServers)
-        {
-            var transport = (yamlServer.Transport ?? "stdio").Trim().ToLowerInvariant();
-            switch (transport)
-            {
-                case HttpMcpTransport:
-                    servers.Add(new HttpMcpServer(
-                        yamlServer.Name ?? string.Empty,
-                        yamlServer.Url ?? string.Empty,
-                        FromYamlHeaders(yamlServer.Headers))
-                    {
-                        Meta = McpServerJsonConverter.CloneMeta(yamlServer.Meta)
-                    });
-                    break;
-                case SseMcpTransport:
-                    servers.Add(new SseMcpServer(
-                        yamlServer.Name ?? string.Empty,
-                        yamlServer.Url ?? string.Empty,
-                        FromYamlHeaders(yamlServer.Headers))
-                    {
-                        Meta = McpServerJsonConverter.CloneMeta(yamlServer.Meta)
-                    });
-                    break;
-                default:
-                    servers.Add(new StdioMcpServer(
-                        yamlServer.Name ?? string.Empty,
-                        yamlServer.Command ?? string.Empty,
-                        yamlServer.Args ?? new List<string>(),
-                        FromYamlEnv(yamlServer.Env))
-                    {
-                        Meta = McpServerJsonConverter.CloneMeta(yamlServer.Meta)
-                    });
-                    break;
-            }
-        }
-
-        return servers;
-    }
-
-    private static List<McpNameValueYamlV1> ToYamlNameValues(IEnumerable<McpEnvVariable>? values)
-    {
-        if (values == null)
-        {
-            return new List<McpNameValueYamlV1>();
-        }
-
-        return values
-            .Select(value => new McpNameValueYamlV1
-            {
-                Name = value.Name ?? string.Empty,
-                Value = value.Value ?? string.Empty,
-                Meta = McpServerJsonConverter.CloneMeta(value.Meta)
-            })
-            .ToList();
-    }
-
-    private static List<McpNameValueYamlV1> ToYamlNameValues(IEnumerable<McpHttpHeader>? values)
-    {
-        if (values == null)
-        {
-            return new List<McpNameValueYamlV1>();
-        }
-
-        return values
-            .Select(value => new McpNameValueYamlV1
-            {
-                Name = value.Name ?? string.Empty,
-                Value = value.Value ?? string.Empty,
-                Meta = McpServerJsonConverter.CloneMeta(value.Meta)
-            })
-            .ToList();
-    }
-
-    private static List<McpEnvVariable> FromYamlEnv(IEnumerable<McpNameValueYamlV1>? values)
-    {
-        if (values == null)
-        {
-            return new List<McpEnvVariable>();
-        }
-
-        return values
-            .Select(value => new McpEnvVariable(value.Name ?? string.Empty, value.Value ?? string.Empty)
-            {
-                Meta = McpServerJsonConverter.CloneMeta(value.Meta)
-            })
-            .ToList();
-    }
-
-    private static List<McpHttpHeader> FromYamlHeaders(IEnumerable<McpNameValueYamlV1>? values)
-    {
-        if (values == null)
-        {
-            return new List<McpHttpHeader>();
-        }
-
-        return values
-            .Select(value => new McpHttpHeader(value.Name ?? string.Empty, value.Value ?? string.Empty)
-            {
-                Meta = McpServerJsonConverter.CloneMeta(value.Meta)
-            })
-            .ToList();
-    }
-
-    private static bool HasValidMcpConfiguration(ServerConfiguration config)
-        => McpServerSupportPolicy
-            .Validate(config.McpServers, McpServerSupportPolicy.SupportAllTransports)
-            .IsSupported;
 
     private async Task HydrateSecretsAsync(ServerConfiguration config, string? mode)
     {

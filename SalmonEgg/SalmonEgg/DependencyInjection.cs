@@ -177,6 +177,7 @@ public static class DependencyInjection
         // App settings (config/app.yaml)
         services.AddSingleton<IAppFileStore, FileSystemAppFileStore>();
         services.AddSingleton<IAppSettingsService, AppSettingsService>();
+        services.AddSingleton<IMcpSettingsService, McpSettingsService>();
         services.AddSingleton<IAppDataService, AppDataService>();
         services.AddSingleton<IAppMaintenanceService, AppMaintenanceService>();
         services.AddSingleton<IAppDocumentService, AppDocumentService>();
@@ -254,7 +255,8 @@ public static class DependencyInjection
         services.AddSingleton<IAcpSessionCommandOrchestrator>(sp =>
             new AcpSessionCommandOrchestrator(
                 sp.GetRequiredService<ILogger<AcpSessionCommandOrchestrator>>()));
-        services.AddSingleton<IAcpMcpServerProvider>(AcpProfileMcpServerProvider.Instance);
+        services.AddSingleton<IAcpMcpServerProvider>(sp =>
+            new GlobalAcpMcpServerProvider(sp.GetRequiredService<IMcpSettingsService>()));
 
         services.AddSingleton<IShellLayoutStore>(sp =>
         {

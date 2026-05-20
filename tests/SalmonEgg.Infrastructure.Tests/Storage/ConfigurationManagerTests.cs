@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using SalmonEgg.Domain.Models;
-using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Infrastructure.Storage;
 using Xunit;
 
@@ -120,159 +119,39 @@ public sealed class ConfigurationManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveConfigurationAsync_WithMcpServers_WritesYamlAndLoadsBack()
+    public async Task SaveConfigurationAsync_ProfileConfiguration_DoesNotWriteMcpServers()
     {
         var config = CreateTestConfiguration("mcp-servers-001");
-        config.McpServers =
-        [
-            new StdioMcpServer(
-                "filesystem",
-                "/usr/bin/mcp-filesystem",
-                ["--stdio"],
-                [new McpEnvVariable("ROOT", "/repo")]),
-            new HttpMcpServer(
-                "api",
-                "https://api.example.com/mcp",
-                [new McpHttpHeader("Authorization", "Bearer token")]),
-            new SseMcpServer("events", "https://events.example.com/mcp")
-        ];
 
         await _configManager.SaveConfigurationAsync(config);
 
         var yaml = await File.ReadAllTextAsync(GetServerYamlPath(config.Id));
-        Assert.Contains("mcp_servers:", yaml, StringComparison.Ordinal);
-        Assert.Contains("transport: stdio", yaml, StringComparison.Ordinal);
-        Assert.Contains("transport: http", yaml, StringComparison.Ordinal);
-        Assert.Contains("transport: sse", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("mcp_servers:", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("transport: stdio", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("transport: http", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("transport: sse", yaml, StringComparison.Ordinal);
 
         var loaded = await _configManager.LoadConfigurationAsync(config.Id);
         Assert.NotNull(loaded);
-        Assert.Equal(3, loaded!.McpServers.Count);
-
-        var stdio = Assert.IsType<StdioMcpServer>(loaded.McpServers[0]);
-        Assert.Equal("filesystem", stdio.Name);
-        Assert.Equal("/usr/bin/mcp-filesystem", stdio.Command);
-        Assert.Equal("--stdio", Assert.Single(stdio.Args!));
-        var env = Assert.Single(stdio.Env!);
-        Assert.Equal("ROOT", env.Name);
-        Assert.Equal("/repo", env.Value);
-
-        var http = Assert.IsType<HttpMcpServer>(loaded.McpServers[1]);
-        Assert.Equal("https://api.example.com/mcp", http.Url);
-        var header = Assert.Single(http.Headers!);
-        Assert.Equal("Authorization", header.Name);
-        Assert.Equal("Bearer token", header.Value);
-
-        var sse = Assert.IsType<SseMcpServer>(loaded.McpServers[2]);
-        Assert.Equal("events", sse.Name);
     }
 
     [Fact]
-    public async Task SaveConfigurationAsync_WithMcpMeta_WritesYamlAndLoadsBack()
+    public async Task SaveConfigurationAsync_ProfileConfiguration_DoesNotWriteMcpMeta()
     {
         var config = CreateTestConfiguration("mcp-meta-001");
-        config.McpServers =
-        [
-            new StdioMcpServer(
-                "filesystem",
-                "/usr/bin/mcp-filesystem",
-                ["--stdio"],
-                [
-                    new McpEnvVariable("ROOT", "/repo")
-                    {
-                        Meta = new()
-                        {
-                            ["scope"] = "workspace"
-                        }
-                    }
-                ])
-            {
-                Meta = new()
-                {
-                    ["source"] = "profile"
-                }
-            },
-            new HttpMcpServer(
-                "api",
-                "api.example.com/mcp",
-                [
-                    new McpHttpHeader("Authorization", "Bearer token")
-                    {
-                        Meta = new()
-                        {
-                            ["secret_ref"] = "header-auth"
-                        }
-                    }
-                ])
-            {
-                Meta = new()
-                {
-                    ["transport"] = "remote"
-                }
-            }
-        ];
 
         await _configManager.SaveConfigurationAsync(config);
 
         var yaml = await File.ReadAllTextAsync(GetServerYamlPath(config.Id));
-        Assert.Contains("meta:", yaml, StringComparison.Ordinal);
-        Assert.Contains("source: profile", yaml, StringComparison.Ordinal);
-        Assert.Contains("scope: workspace", yaml, StringComparison.Ordinal);
-        Assert.Contains("secret_ref: header-auth", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("mcp_servers:", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("meta:", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("source: profile", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("scope: workspace", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret_ref: header-auth", yaml, StringComparison.Ordinal);
 
         var loaded = await _configManager.LoadConfigurationAsync(config.Id);
 
         Assert.NotNull(loaded);
-        var stdio = Assert.IsType<StdioMcpServer>(loaded!.McpServers[0]);
-        Assert.Equal("profile", stdio.Meta!["source"]);
-        Assert.Equal("workspace", Assert.Single(stdio.Env!).Meta!["scope"]);
-
-        var http = Assert.IsType<HttpMcpServer>(loaded.McpServers[1]);
-        Assert.Equal("remote", http.Meta!["transport"]);
-        Assert.Equal("header-auth", Assert.Single(http.Headers!).Meta!["secret_ref"]);
-    }
-
-    [Fact]
-    public async Task LoadConfigurationAsync_WithInvalidMcpServer_ReturnsNull()
-    {
-        var config = CreateTestConfiguration("invalid-mcp-load-001");
-        config.McpServers =
-        [
-            new StdioMcpServer("filesystem", "/usr/bin/mcp-filesystem", [], [])
-        ];
-        await _configManager.SaveConfigurationAsync(config);
-
-        var path = GetServerYamlPath(config.Id);
-        var yaml = await File.ReadAllTextAsync(path);
-        yaml = yaml.Replace("command: /usr/bin/mcp-filesystem", "command: ''", StringComparison.Ordinal);
-        await File.WriteAllTextAsync(path, yaml);
-
-        var loaded = await _configManager.LoadConfigurationAsync(config.Id);
-
-        Assert.Null(loaded);
-    }
-
-    [Fact]
-    public async Task ListConfigurationsAsync_WithInvalidMcpServer_SkipsConfiguration()
-    {
-        var valid = CreateTestConfiguration("valid-mcp-list-001");
-        var invalid = CreateTestConfiguration("invalid-mcp-list-001");
-        invalid.McpServers =
-        [
-            new StdioMcpServer("filesystem", "/usr/bin/mcp-filesystem", [], [])
-        ];
-        await _configManager.SaveConfigurationAsync(valid);
-        await _configManager.SaveConfigurationAsync(invalid);
-
-        var invalidPath = GetServerYamlPath(invalid.Id);
-        var invalidYaml = await File.ReadAllTextAsync(invalidPath);
-        invalidYaml = invalidYaml.Replace("command: /usr/bin/mcp-filesystem", "command: ''", StringComparison.Ordinal);
-        await File.WriteAllTextAsync(invalidPath, invalidYaml);
-
-        var configs = (await _configManager.ListConfigurationsAsync()).ToList();
-
-        Assert.Contains(configs, c => c.Id == valid.Id);
-        Assert.DoesNotContain(configs, c => c.Id == invalid.Id);
     }
 
     [Fact]
