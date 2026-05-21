@@ -16,6 +16,8 @@ public interface ITranscriptViewportHost : IDisposable
 
     void ScrollItemIntoView(int index, TranscriptItemScrollAlignment alignment = TranscriptItemScrollAlignment.Default);
 
+    bool TryScrollByItems(int itemDelta);
+
     bool IsAtBottom(int itemCount, double bottomThreshold, double bottomGeometryTolerance);
 
     bool IsLastItemVisiblyAtBottom(int itemCount, double bottomThreshold, double bottomGeometryTolerance);

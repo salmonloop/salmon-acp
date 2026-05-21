@@ -236,6 +236,44 @@ public sealed class ChatViewXamlTests
     }
 
     [Fact]
+    public void ChatView_GamepadNavigation_ConsumesTranscriptFocusWithoutBypassingNativeListView()
+    {
+        var chatViewCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
+        var chatViewXaml = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
+
+        Assert.Contains("using SalmonEgg.Presentation.Core.Services.Input;", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("public sealed partial class ChatView : Page, INavigationIntentConsumer", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("ChatTranscriptNavigationIntentHandler.TryConsume(", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("_transcriptViewportHost.TryScrollByItems", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("RegisterUserViewportIntent);", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("messagesList.GotFocus += OnMessagesListGotFocus;", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("messagesList.LostFocus += OnMessagesListLostFocus;", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("MessagesList.GotFocus -= OnMessagesListGotFocus;", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("MessagesList.LostFocus -= OnMessagesListLostFocus;", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("_isMessagesListFocusWithin", chatViewCode, StringComparison.Ordinal);
+        Assert.Contains("IsFocusEngagementEnabled=\"True\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", chatViewXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem =", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChatInputArea", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("FocusManager.TryMoveFocus", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("VisualTreeHelper.", chatViewCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChatTranscriptViewportHost_ExposesRelativeItemScrollWithoutOwningViewportState()
+    {
+        var hostInterface = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ITranscriptViewportHost.cs");
+        var hostCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Transcript\ListViewTranscriptViewportHost.cs");
+
+        Assert.Contains("bool TryScrollByItems(int itemDelta);", hostInterface, StringComparison.Ordinal);
+        Assert.Contains("public bool TryScrollByItems(int itemDelta)", hostCode, StringComparison.Ordinal);
+        Assert.Contains("TryGetFirstVisibleIndex(_listView.Items.Count, out var firstVisibleIndex)", hostCode, StringComparison.Ordinal);
+        Assert.Contains("ScrollItemIntoView(targetIndex, TranscriptItemScrollAlignment.Leading);", hostCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ChangeView", hostCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsGuiAppSession_AnywhereLookupStaysWithinApplicationWindows()
     {
         var code = LoadText(@"tests\SalmonEgg.GuiTests.Windows\WindowsGuiAppSession.cs");

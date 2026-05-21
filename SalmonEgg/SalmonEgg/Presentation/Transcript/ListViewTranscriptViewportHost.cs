@@ -91,6 +91,28 @@ public sealed class ListViewTranscriptViewportHost : ITranscriptViewportHost
         _listView.ScrollIntoView(item, ToNativeAlignment(alignment));
     }
 
+    public bool TryScrollByItems(int itemDelta)
+    {
+        if (itemDelta == 0 || _listView.Items.Count <= 0)
+        {
+            return false;
+        }
+
+        if (!TryGetFirstVisibleIndex(_listView.Items.Count, out var firstVisibleIndex))
+        {
+            return false;
+        }
+
+        var targetIndex = Math.Clamp(firstVisibleIndex + itemDelta, 0, _listView.Items.Count - 1);
+        if (targetIndex == firstVisibleIndex)
+        {
+            return false;
+        }
+
+        ScrollItemIntoView(targetIndex, TranscriptItemScrollAlignment.Leading);
+        return true;
+    }
+
     public bool IsAtBottom(int itemCount, double bottomThreshold, double bottomGeometryTolerance)
     {
         if (itemCount <= 0)

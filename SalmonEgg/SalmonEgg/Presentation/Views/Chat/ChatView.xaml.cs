@@ -10,10 +10,11 @@ using SalmonEgg.Presentation.Transcript;
 using SalmonEgg.Presentation.Utilities;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.Core.ViewModels.ShellLayout;
+using SalmonEgg.Presentation.Core.Services.Input;
 
 namespace SalmonEgg.Presentation.Views.Chat;
 
-public sealed partial class ChatView : Page
+public sealed partial class ChatView : Page, INavigationIntentConsumer
 {
         public ChatShellViewModel ShellViewModel { get; }
         public ChatViewModel ViewModel => ShellViewModel.Chat;
@@ -36,6 +37,7 @@ public sealed partial class ChatView : Page
         private readonly PointerEventHandler _messagesListHandledPointerPressedHandler;
         private readonly PointerEventHandler _messagesListHandledPointerWheelChangedHandler;
         private ITranscriptViewportHost? _transcriptViewportHost;
+        private bool _isMessagesListFocusWithin;
         public ChatView()
         {
             ShellViewModel = App.ServiceProvider.GetRequiredService<ChatShellViewModel>();
@@ -179,6 +181,12 @@ public sealed partial class ChatView : Page
             messagesList?.AddHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler, true);
             messagesList?.AddHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler, true);
             messagesList?.AddHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler, true);
+            if (messagesList is not null)
+            {
+                messagesList.GotFocus += OnMessagesListGotFocus;
+                messagesList.LostFocus += OnMessagesListLostFocus;
+            }
+
             ResumeViewportCoordinatorAfterOverlayIfNeeded();
             BeginLayoutLoadingIfPendingMessages();
             TryApplyPendingProjectionRestore();
@@ -193,6 +201,13 @@ public sealed partial class ChatView : Page
             MessagesList?.RemoveHandler(UIElement.KeyDownEvent, _messagesListHandledKeyDownHandler);
             MessagesList?.RemoveHandler(UIElement.PointerPressedEvent, _messagesListHandledPointerPressedHandler);
             MessagesList?.RemoveHandler(UIElement.PointerWheelChangedEvent, _messagesListHandledPointerWheelChangedHandler);
+            if (MessagesList is not null)
+            {
+                MessagesList.GotFocus -= OnMessagesListGotFocus;
+                MessagesList.LostFocus -= OnMessagesListLostFocus;
+            }
+
+            _isMessagesListFocusWithin = false;
             UpdateTranscriptViewportAutomationState();
         }
 
@@ -290,6 +305,31 @@ public sealed partial class ChatView : Page
             {
                 RegisterUserViewportIntent();
             }
+        }
+
+        private void OnMessagesListGotFocus(object sender, RoutedEventArgs e)
+        {
+            _isMessagesListFocusWithin = true;
+        }
+
+        private void OnMessagesListLostFocus(object sender, RoutedEventArgs e)
+        {
+            _isMessagesListFocusWithin = false;
+        }
+
+        public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
+        {
+            if (_transcriptViewportHost is null)
+            {
+                return false;
+            }
+
+            return ChatTranscriptNavigationIntentHandler.TryConsume(
+                intent,
+                _isMessagesListFocusWithin,
+                ViewModel.MessageHistory.Count,
+                _transcriptViewportHost.TryScrollByItems,
+                RegisterUserViewportIntent);
         }
 
         private void FocusTranscriptScroller()
