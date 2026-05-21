@@ -58,9 +58,14 @@ public interface IAcpSessionCommandOrchestrator
 
 public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrator
 {
-    public AcpSessionCommandOrchestrator(ILogger<AcpSessionCommandOrchestrator> logger)
+    private readonly IAcpMcpServerResolver _mcpServerResolver;
+
+    public AcpSessionCommandOrchestrator(
+        ILogger<AcpSessionCommandOrchestrator> logger,
+        IAcpMcpServerResolver? mcpServerResolver = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        _mcpServerResolver = mcpServerResolver ?? SinkSnapshotAcpMcpServerResolver.Instance;
     }
 
     public async Task<AcpRemoteSessionResult> EnsureRemoteSessionAsync(
@@ -91,7 +96,9 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
 
         var sessionParams = new SessionNewParams(
             sink.GetActiveSessionCwdOrDefault(),
-            McpServerJsonConverter.CloneServers(sink.CurrentMcpServers));
+            McpServerJsonConverter.CloneServers(
+                await _mcpServerResolver.ResolveCurrentMcpServersAsync(sink, cancellationToken)
+                    .ConfigureAwait(false)));
 
         SessionNewResponse response;
         try
@@ -108,6 +115,11 @@ public sealed class AcpSessionCommandOrchestrator : IAcpSessionCommandOrchestrat
                     ex);
             }
 
+            sessionParams = new SessionNewParams(
+                sink.GetActiveSessionCwdOrDefault(),
+                McpServerJsonConverter.CloneServers(
+                    await _mcpServerResolver.ResolveCurrentMcpServersAsync(sink, cancellationToken)
+                        .ConfigureAwait(false)));
             response = await chatService.CreateSessionAsync(sessionParams).ConfigureAwait(false);
         }
 

@@ -22,6 +22,7 @@ using SalmonEgg.Domain.Models.Content;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Domain.Models.ConversationPreview;
 using SalmonEgg.Domain.Models.JsonRpc;
+using SalmonEgg.Domain.Models.Mcp;
 using SalmonEgg.Domain.Models.Plan;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.ProjectAffinity;
@@ -68,7 +69,8 @@ public partial class ChatViewModelTests
         IShellNavigationRuntimeState? shellNavigationRuntimeState = null,
         LocalTerminalPanelCoordinator? localTerminalPanelCoordinator = null,
         IAcpConnectionSessionRegistry? connectionSessionRegistry = null,
-        ISlashCommandSource? localSlashCommandSource = null)
+        ISlashCommandSource? localSlashCommandSource = null,
+        IAcpMcpServerResolver? mcpServerResolver = null)
     {
         var stateOwner = new object();
         var connectionStateOwner = new object();
@@ -219,7 +221,8 @@ public partial class ChatViewModelTests
                 localTerminalPanelCoordinator: localTerminalPanelCoordinator,
                 conversationCatalogFacade: conversationCatalogFacade,
                 connectionSessionRegistry: connectionSessionRegistry,
-                localSlashCommandSource: localSlashCommandSource);
+                localSlashCommandSource: localSlashCommandSource,
+                mcpServerResolver: mcpServerResolver);
             conversationCatalogFacade.SetPanelCleanup(viewModel);
             return new ViewModelFixture(
                 viewModel,
@@ -4349,6 +4352,26 @@ public partial class ChatViewModelTests
             => Inner ?? throw new InvalidOperationException("Connection commands have not been initialized.");
     }
 
+    private sealed class StaticMcpResolver : IAcpMcpServerResolver
+    {
+        private readonly IReadOnlyList<McpServer> _servers;
+
+        public StaticMcpResolver(IReadOnlyList<McpServer> servers)
+        {
+            _servers = McpServerJsonConverter.CloneServers(servers);
+        }
+
+        public Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+            IAcpChatCoordinatorSink sink,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = McpServerJsonConverter.CloneServers(_servers);
+            sink.SetCurrentMcpServers(snapshot);
+            return Task.FromResult<IReadOnlyList<McpServer>>(snapshot);
+        }
+    }
+
     private static List<ConfigOption> CreateModeConfigOptions(string currentValue)
         => new()
         {
@@ -7039,6 +7062,46 @@ public partial class ChatViewModelTests
             Assert.NotNull(capturedParams.McpServers);
             Assert.Empty(capturedParams.McpServers!);
         }
+    }
+
+    [Fact]
+    public async Task HydrateActiveConversationAsync_UsesResolvedMcpServersInsteadOfStaleSnapshot()
+    {
+        var syncContext = new ImmediateSynchronizationContext();
+        var sessionManager = CreateSessionManagerWithStore();
+        await sessionManager.Object.CreateSessionAsync("conv-1", @"C:\repo\demo");
+        await using var fixture = CreateViewModel(
+            syncContext,
+            sessionManager: sessionManager,
+            mcpServerResolver: new StaticMcpResolver([]));
+        var chatService = CreateConnectedChatService();
+        chatService.SetupGet(service => service.AgentCapabilities).Returns(new AgentCapabilities(loadSession: true));
+        SessionLoadParams? capturedParams = null;
+        chatService.Setup(service => service.LoadSessionAsync(It.IsAny<SessionLoadParams>(), It.IsAny<CancellationToken>()))
+            .Callback<SessionLoadParams, CancellationToken>((value, _) => capturedParams = value)
+            .ReturnsAsync(SessionLoadResponse.Completed);
+        fixture.ViewModel.ReplaceChatService(chatService.Object);
+        fixture.ViewModel.SetCurrentMcpServers(
+        [
+            new HttpMcpServer("stale", "https://stale.example.com/mcp")
+        ]);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+        SetCurrentSessionId(fixture.ViewModel, "conv-1");
+        SetCurrentRemoteSessionId(fixture.ViewModel, "remote-1");
+        await DispatchConnectedAsync(fixture, "profile-1");
+
+        var hydrated = await fixture.ViewModel.HydrateActiveConversationAsync();
+
+        Assert.True(hydrated, fixture.ViewModel.ErrorMessage);
+        Assert.NotNull(capturedParams);
+        Assert.Empty(capturedParams!.McpServers);
+        Assert.Empty(fixture.ViewModel.CurrentMcpServers);
     }
 
     [Fact]

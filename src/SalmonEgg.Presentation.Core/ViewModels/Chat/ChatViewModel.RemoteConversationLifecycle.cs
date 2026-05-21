@@ -91,6 +91,11 @@ public partial class ChatViewModel
         _currentMcpServers = McpServerJsonConverter.CloneServers(mcpServers);
     }
 
+    public async Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+        CancellationToken cancellationToken = default)
+        => await _mcpServerResolver.ResolveCurrentMcpServersAsync(this, cancellationToken)
+            .ConfigureAwait(false);
+
     public Task SetIsHydratingAsync(bool isHydrating, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -1947,8 +1952,9 @@ public partial class ChatViewModel
         }
 
         var requestToken = request.Token;
+        var mcpServers = await ResolveCurrentMcpServersAsync(requestToken).ConfigureAwait(false);
         var resumeTask = chatService.ResumeSessionAsync(
-            CreateSessionResumeParams(remoteSessionId, cwd, CurrentMcpServers),
+            CreateSessionResumeParams(remoteSessionId, cwd, mcpServers),
             requestToken);
         request.TrackTransportTask(resumeTask);
         _ = ObserveRemoteSessionRecoveryTransportTaskAsync(resumeTask, recoveryMode, remoteSessionId);
@@ -1988,8 +1994,9 @@ public partial class ChatViewModel
         long? hydrationAttemptId)
     {
         var requestToken = request.Token;
+        var mcpServers = await ResolveCurrentMcpServersAsync(requestToken).ConfigureAwait(false);
         var loadTask = chatService.LoadSessionAsync(
-            CreateSessionLoadParams(remoteSessionId, cwd, CurrentMcpServers),
+            CreateSessionLoadParams(remoteSessionId, cwd, mcpServers),
             requestToken);
         request.TrackTransportTask(loadTask);
 

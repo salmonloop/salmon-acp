@@ -76,7 +76,7 @@ public partial class ChatViewModel
         try
         {
             ClearError();
-            var sessionParams = CreateSessionNewParams();
+            var sessionParams = await CreateSessionNewParamsAsync(CancellationToken.None).ConfigureAwait(false);
             var response = await CreateRemoteSessionAsync(sessionParams, CancellationToken.None).ConfigureAwait(false);
             var localConversationId = await CreateAndActivateLocalConversationAsync(sessionParams.Cwd).ConfigureAwait(false);
             await BindLocalConversationToRemoteSessionAsync(localConversationId, response.SessionId).ConfigureAwait(false);
@@ -163,12 +163,11 @@ public partial class ChatViewModel
         }
     }
 
-    private SessionNewParams CreateSessionNewParams()
-        => new()
-        {
-            Cwd = GetActiveSessionCwdOrDefault(),
-            McpServers = McpServerJsonConverter.CloneServers(CurrentMcpServers)
-        };
+    private async Task<SessionNewParams> CreateSessionNewParamsAsync(CancellationToken cancellationToken)
+        => new(
+            GetActiveSessionCwdOrDefault(),
+            McpServerJsonConverter.CloneServers(
+                await ResolveCurrentMcpServersAsync(cancellationToken).ConfigureAwait(false)));
 
     private async Task<SessionNewResponse> CreateRemoteSessionAsync(
         SessionNewParams sessionParams,

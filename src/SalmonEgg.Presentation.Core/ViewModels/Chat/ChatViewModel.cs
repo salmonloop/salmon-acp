@@ -128,6 +128,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     private readonly OutgoingUserMessageProjector _outgoingUserMessageProjector;
     private readonly IConversationMutationPipeline _conversationMutationPipeline;
     private readonly IChatConnectionStore _chatConnectionStore;
+    private readonly IAcpMcpServerResolver _mcpServerResolver;
     private readonly IConversationAttentionStore? _conversationAttentionStore;
     private readonly SerialAsyncWorkQueue _sessionUpdateWorkQueue;
     private readonly SerialAsyncWorkQueue _previewSnapshotWorkQueue;
@@ -1126,7 +1127,8 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         IConversationActivationOrchestrator? conversationActivationOrchestrator = null,
         ISlashCommandSource? localSlashCommandSource = null,
         IConversationMutationPipeline? conversationMutationPipeline = null,
-        IPlatformShellService? platformShell = null)
+        IPlatformShellService? platformShell = null,
+        IAcpMcpServerResolver? mcpServerResolver = null)
         : base(logger)
     {
         _chatStore = chatStore ?? throw new ArgumentNullException(nameof(chatStore));
@@ -1158,6 +1160,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         _sessionUpdateRouter = new ChatSessionUpdateRouter(_acpSessionUpdateProjector);
         _outgoingUserMessageProjector = new OutgoingUserMessageProjector();
         _chatConnectionStore = chatConnectionStore ?? throw new ArgumentNullException(nameof(chatConnectionStore));
+        _mcpServerResolver = mcpServerResolver ?? SinkSnapshotAcpMcpServerResolver.Instance;
         _conversationAttentionStore = conversationAttentionStore;
         _authoritativeConnectionResolver = new AcpAuthoritativeConnectionResolver(connectionSessionRegistry);
         _sessionUpdateWorkQueue = sessionUpdateWorkQueue ?? new SerialAsyncWorkQueue();

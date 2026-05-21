@@ -48,3 +48,47 @@ public sealed class GlobalAcpMcpServerProvider : IAcpMcpServerProvider
             : Array.Empty<McpServer>();
     }
 }
+
+public interface IAcpMcpServerResolver
+{
+    Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+        IAcpChatCoordinatorSink sink,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class AcpMcpServerResolver : IAcpMcpServerResolver
+{
+    private readonly IAcpMcpServerProvider _provider;
+
+    public AcpMcpServerResolver(IAcpMcpServerProvider provider)
+    {
+        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+    }
+
+    public async Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+        IAcpChatCoordinatorSink sink,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        var servers = await _provider.GetMcpServersAsync(profile: null, cancellationToken)
+            .ConfigureAwait(false);
+        var snapshot = McpServerJsonConverter.CloneServers(servers);
+        sink.SetCurrentMcpServers(snapshot);
+        return snapshot;
+    }
+}
+
+public sealed class SinkSnapshotAcpMcpServerResolver : IAcpMcpServerResolver
+{
+    public static SinkSnapshotAcpMcpServerResolver Instance { get; } = new();
+
+    public Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+        IAcpChatCoordinatorSink sink,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<McpServer>>(
+            McpServerJsonConverter.CloneServers(sink.CurrentMcpServers));
+    }
+}

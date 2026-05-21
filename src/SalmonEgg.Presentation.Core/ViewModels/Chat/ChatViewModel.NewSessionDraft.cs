@@ -96,10 +96,11 @@ public partial class ChatViewModel
             SessionNewResponse response;
             try
             {
+                var mcpServers = await ResolveCurrentMcpServersAsync(cancellationToken).ConfigureAwait(false);
                 response = await chatService.CreateSessionAsync(
                     new SessionNewParams(
                         normalizedCwd,
-                        McpServerJsonConverter.CloneServers(CurrentMcpServers))).ConfigureAwait(false);
+                        McpServerJsonConverter.CloneServers(mcpServers))).ConfigureAwait(false);
             }
             catch (Exception ex) when (ChatAuthenticationCoordinator.IsAuthenticationRequiredError(ex))
             {
@@ -109,10 +110,11 @@ public partial class ChatViewModel
                     throw new OperationCanceledException("Authentication was not completed.", cancellationToken);
                 }
 
+                var mcpServers = await ResolveCurrentMcpServersAsync(cancellationToken).ConfigureAwait(false);
                 response = await chatService.CreateSessionAsync(
                     new SessionNewParams(
                         normalizedCwd,
-                        McpServerJsonConverter.CloneServers(CurrentMcpServers))).ConfigureAwait(false);
+                        McpServerJsonConverter.CloneServers(mcpServers))).ConfigureAwait(false);
             }
 
             if (cancellationToken.IsCancellationRequested)

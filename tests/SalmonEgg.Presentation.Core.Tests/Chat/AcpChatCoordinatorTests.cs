@@ -1161,6 +1161,49 @@ public sealed class AcpChatCoordinatorTests
     }
 
     [Fact]
+    public async Task EnsureRemoteSessionAsync_UsesResolvedMcpServersInsteadOfStaleSnapshot()
+    {
+        var service = CreateChatService();
+        var sink = new FakeSink
+        {
+            CurrentChatService = service.Object,
+            IsConnected = true,
+            IsInitialized = true,
+            IsSessionActive = true,
+            CurrentSessionId = "local-session-1",
+            ActiveSessionCwd = @"C:\repo\demo",
+            SelectedProfileId = "profile-1",
+            CurrentMcpServers =
+            [
+                new HttpMcpServer("stale", "https://stale.example.com/mcp")
+            ]
+        };
+        var factory = new Mock<IAcpChatServiceFactory>();
+        var logger = new Mock<ILogger<AcpChatCoordinator>>();
+        SessionNewParams? capturedParams = null;
+
+        service
+            .Setup(x => x.CreateSessionAsync(It.IsAny<SessionNewParams>()))
+            .Callback<SessionNewParams>(parameters => capturedParams = parameters)
+            .ReturnsAsync(new SessionNewResponse("remote-session-1"));
+
+        var orchestrator = new AcpSessionCommandOrchestrator(
+            Mock.Of<ILogger<AcpSessionCommandOrchestrator>>(),
+            new StaticMcpResolver([]));
+        var sut = new AcpChatCoordinator(
+            factory.Object,
+            logger.Object,
+            CreateTransportSupportPolicy(),
+            sessionCommandOrchestrator: orchestrator);
+
+        await sut.EnsureRemoteSessionAsync(sink, _ => Task.FromResult(true));
+
+        Assert.NotNull(capturedParams);
+        Assert.Empty(capturedParams!.McpServers);
+        Assert.Empty(sink.CurrentMcpServers);
+    }
+
+    [Fact]
     public async Task ConnectToProfileAsync_LoadsMcpServersFromGlobalSettingsProvider()
     {
         var settings = new McpSettings
@@ -2156,6 +2199,26 @@ public sealed class AcpChatCoordinatorTests
 
         public Task SaveAsync(McpSettings settings, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class StaticMcpResolver : IAcpMcpServerResolver
+    {
+        private readonly IReadOnlyList<McpServer> _servers;
+
+        public StaticMcpResolver(IReadOnlyList<McpServer> servers)
+        {
+            _servers = McpServerJsonConverter.CloneServers(servers);
+        }
+
+        public Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+            IAcpChatCoordinatorSink sink,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = McpServerJsonConverter.CloneServers(_servers);
+            sink.SetCurrentMcpServers(snapshot);
+            return Task.FromResult<IReadOnlyList<McpServer>>(snapshot);
+        }
     }
 
     private sealed class FakeSink : IAcpChatCoordinatorSink

@@ -232,7 +232,8 @@ public static class DependencyInjection
         services.AddSingleton<IAcpConnectionCoordinator>(sp =>
             new AcpConnectionCoordinator(
                 sp.GetRequiredService<IChatConnectionStore>(),
-                sp.GetRequiredService<ILogger<AcpConnectionCoordinator>>()));
+                sp.GetRequiredService<ILogger<AcpConnectionCoordinator>>(),
+                sp.GetRequiredService<IAcpMcpServerResolver>()));
         services.AddSingleton(sp =>
             AcpConnectionEvictionOptionsLoader.Load(
                 sp.GetRequiredService<IAppSettingsService>(),
@@ -254,9 +255,12 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILogger<AcpConnectionPoolManager>>()));
         services.AddSingleton<IAcpSessionCommandOrchestrator>(sp =>
             new AcpSessionCommandOrchestrator(
-                sp.GetRequiredService<ILogger<AcpSessionCommandOrchestrator>>()));
+                sp.GetRequiredService<ILogger<AcpSessionCommandOrchestrator>>(),
+                sp.GetRequiredService<IAcpMcpServerResolver>()));
         services.AddSingleton<IAcpMcpServerProvider>(sp =>
             new GlobalAcpMcpServerProvider(sp.GetRequiredService<IMcpSettingsService>()));
+        services.AddSingleton<IAcpMcpServerResolver>(sp =>
+            new AcpMcpServerResolver(sp.GetRequiredService<IAcpMcpServerProvider>()));
 
         services.AddSingleton<IShellLayoutStore>(sp =>
         {

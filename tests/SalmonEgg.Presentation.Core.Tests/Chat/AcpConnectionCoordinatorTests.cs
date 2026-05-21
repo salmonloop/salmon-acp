@@ -146,6 +146,38 @@ public sealed class AcpConnectionCoordinatorTests
     }
 
     [Fact]
+    public async Task ResyncAsync_LoadSessionUsesResolvedMcpServersInsteadOfStaleSnapshot()
+    {
+        var inner = new FakeChatService
+        {
+            AgentCapabilities = new AgentCapabilities(loadSession: true)
+        };
+        inner.OnLoadSessionAsync = (_, _) => Task.FromResult(SessionLoadResponse.Completed);
+
+        var sink = new FakeSink
+        {
+            CurrentChatService = inner,
+            CurrentSessionId = "conv-1",
+            CurrentRemoteSessionId = "remote-1",
+            IsSessionActive = true,
+            CurrentMcpServers =
+            [
+                new HttpMcpServer("stale", "https://stale.example.com/mcp")
+            ]
+        };
+
+        var coordinator = new AcpConnectionCoordinator(
+            Mock.Of<IChatConnectionStore>(),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>(),
+            new StaticMcpResolver([]));
+
+        await coordinator.ResyncAsync(sink);
+
+        Assert.Empty(inner.LastLoadParams!.McpServers);
+        Assert.Empty(sink.CurrentMcpServers);
+    }
+
+    [Fact]
     public async Task ResyncAsync_LoadSessionDeepClonesCurrentMcpServers()
     {
         var inner = new FakeChatService
@@ -264,6 +296,41 @@ public sealed class AcpConnectionCoordinatorTests
 
         var sse = Assert.IsType<SseMcpServer>(Assert.Single(inner.LastResumeParams!.McpServers));
         Assert.Equal("events", sse.Name);
+    }
+
+    [Fact]
+    public async Task ResyncAsync_ResumeSessionUsesResolvedMcpServersInsteadOfStaleSnapshot()
+    {
+        var inner = new FakeChatService
+        {
+            AgentCapabilities = new AgentCapabilities(sessionCapabilities: new SessionCapabilities
+            {
+                Resume = new SessionResumeCapabilities()
+            }),
+            OnResumeSessionAsync = (_, _) => Task.FromResult(SessionResumeResponse.Completed)
+        };
+
+        var sink = new FakeSink
+        {
+            CurrentChatService = inner,
+            CurrentSessionId = "conv-1",
+            CurrentRemoteSessionId = "remote-1",
+            IsSessionActive = true,
+            CurrentMcpServers =
+            [
+                new SseMcpServer("stale", "https://stale.example.com/mcp")
+            ]
+        };
+
+        var coordinator = new AcpConnectionCoordinator(
+            Mock.Of<IChatConnectionStore>(),
+            Mock.Of<ILogger<AcpConnectionCoordinator>>(),
+            new StaticMcpResolver([]));
+
+        await coordinator.ResyncAsync(sink);
+
+        Assert.Empty(inner.LastResumeParams!.McpServers);
+        Assert.Empty(sink.CurrentMcpServers);
     }
 
     [Fact]
@@ -590,6 +657,11 @@ public sealed class AcpConnectionCoordinatorTests
 
         public IUiDispatcher Dispatcher { get; } = new ImmediateUiDispatcher();
 
+        public void SetCurrentMcpServers(IReadOnlyList<McpServer> mcpServers)
+        {
+            CurrentMcpServers = mcpServers;
+        }
+
         public int ResetHydratedConversationForResyncCalls { get; private set; }
         public int MarkConversationRemoteHydratedCalls { get; private set; }
         public SessionLoadResponse? AppliedLoadResponse { get; private set; }
@@ -799,6 +871,26 @@ public sealed class AcpConnectionCoordinatorTests
         {
             WaitForDrainCalls++;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StaticMcpResolver : IAcpMcpServerResolver
+    {
+        private readonly IReadOnlyList<McpServer> _servers;
+
+        public StaticMcpResolver(IReadOnlyList<McpServer> servers)
+        {
+            _servers = McpServerJsonConverter.CloneServers(servers);
+        }
+
+        public Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(
+            IAcpChatCoordinatorSink sink,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = McpServerJsonConverter.CloneServers(_servers);
+            sink.SetCurrentMcpServers(snapshot);
+            return Task.FromResult<IReadOnlyList<McpServer>>(snapshot);
         }
     }
 }

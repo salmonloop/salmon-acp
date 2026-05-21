@@ -34,13 +34,16 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
 
     private readonly IChatConnectionStore _store;
     private readonly ILogger<AcpConnectionCoordinator> _logger;
+    private readonly IAcpMcpServerResolver _mcpServerResolver;
 
     public AcpConnectionCoordinator(
         IChatConnectionStore store,
-        ILogger<AcpConnectionCoordinator> logger)
+        ILogger<AcpConnectionCoordinator> logger,
+        IAcpMcpServerResolver? mcpServerResolver = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _mcpServerResolver = mcpServerResolver ?? SinkSnapshotAcpMcpServerResolver.Instance;
     }
 
     public async Task SetConnectingAsync(string? profileId, CancellationToken cancellationToken = default)
@@ -133,6 +136,9 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
 
         var adapter = sink.CurrentChatService as IAcpSessionUpdateBufferController;
         long? hydrationAttemptId = null;
+        var mcpServers = await _mcpServerResolver
+            .ResolveCurrentMcpServersAsync(sink, cancellationToken)
+            .ConfigureAwait(false);
 
         try
         {
@@ -147,7 +153,7 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
                     new SessionLoadParams(
                         sessionId,
                         sink.GetSessionCwdOrDefault(conversationId!),
-                        McpServerJsonConverter.CloneServers(sink.CurrentMcpServers)),
+                        McpServerJsonConverter.CloneServers(mcpServers)),
                     cancellationToken);
                 recoveryProjection = AcpSessionRecoveryProjection.FromLoad(
                     await loadTask.WaitAsync(SessionLoadTimeout, cancellationToken).ConfigureAwait(false));
@@ -169,7 +175,7 @@ public sealed class AcpConnectionCoordinator : IAcpConnectionCoordinator
                     new SessionResumeParams(
                         sessionId,
                         sink.GetSessionCwdOrDefault(conversationId!),
-                        McpServerJsonConverter.CloneServers(sink.CurrentMcpServers)),
+                        McpServerJsonConverter.CloneServers(mcpServers)),
                     cancellationToken);
                 recoveryProjection = AcpSessionRecoveryProjection.FromResume(
                     await resumeTask.WaitAsync(SessionLoadTimeout, cancellationToken).ConfigureAwait(false));

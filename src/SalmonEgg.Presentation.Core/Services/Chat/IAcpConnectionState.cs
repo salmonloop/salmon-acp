@@ -64,6 +64,13 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
     {
     }
 
+    Task<IReadOnlyList<McpServer>> ResolveCurrentMcpServersAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<McpServer>>(
+            McpServerJsonConverter.CloneServers(CurrentMcpServers));
+    }
+
     long ConnectionGeneration => 0;
 
     IUiDispatcher Dispatcher { get; }
