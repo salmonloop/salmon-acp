@@ -344,12 +344,12 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILogger<AcpChatCoordinator>>(),
                 sp.GetRequiredService<ITransportSupportPolicy>(),
                 sp.GetRequiredService<IAcpMcpServerProvider>(),
+                sp.GetRequiredService<IAcpSessionCommandOrchestrator>(),
                 sp.GetRequiredService<IAcpConnectionCoordinator>(),
                 sp.GetRequiredService<IAcpConnectionSessionRegistry>(),
                 sp.GetRequiredService<IAcpConnectionSessionCleaner>(),
                 sp.GetRequiredService<IAcpConnectionPoolManager>(),
-                sp.GetRequiredService<IAcpConnectionDependencySnapshotProvider>(),
-                sp.GetRequiredService<IAcpSessionCommandOrchestrator>());
+                sp.GetRequiredService<IAcpConnectionDependencySnapshotProvider>());
         });
         services.AddSingleton<IErrorRecoveryService>(sp =>
         {

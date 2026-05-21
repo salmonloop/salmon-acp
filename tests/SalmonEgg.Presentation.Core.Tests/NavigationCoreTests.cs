@@ -173,6 +173,7 @@ public sealed class NavigationCoreTests
     [Fact]
     public void AcpMcpRuntime_DoesNotExposeFallbackCatalogSources()
     {
+        var dependencyInjection = LoadFile(@"SalmonEgg\SalmonEgg\DependencyInjection.cs");
         var providerCode = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\IAcpMcpServerProvider.cs");
         var chatCoordinator = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\AcpChatCoordinator.cs");
         var commandOrchestrator = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\AcpSessionCommandOrchestrator.cs");
@@ -187,6 +188,11 @@ public sealed class NavigationCoreTests
         Assert.DoesNotContain("SinkSnapshotAcpMcpServerResolver", connectionCoordinator, StringComparison.Ordinal);
         Assert.DoesNotContain("SinkSnapshotAcpMcpServerResolver", chatViewModel, StringComparison.Ordinal);
         Assert.DoesNotContain("ResolveCurrentMcpServersAsync(CancellationToken", connectionState, StringComparison.Ordinal);
+        Assert.DoesNotContain("ServerConfiguration? profile", providerCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetMcpServersAsync(profile", providerCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("new AcpSessionCommandOrchestrator(", chatCoordinator, StringComparison.Ordinal);
+        Assert.Contains("sp.GetRequiredService<IAcpMcpServerProvider>()", dependencyInjection, StringComparison.Ordinal);
+        Assert.Contains("sp.GetRequiredService<IAcpSessionCommandOrchestrator>()", dependencyInjection, StringComparison.Ordinal);
     }
 
     [Fact]

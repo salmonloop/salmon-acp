@@ -40,13 +40,12 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         ILogger<AcpChatCoordinator> logger,
         ITransportSupportPolicy transportSupportPolicy,
         IAcpMcpServerProvider mcpServerProvider,
+        IAcpSessionCommandOrchestrator sessionCommandOrchestrator,
         IAcpConnectionCoordinator? connectionCoordinator = null,
         IAcpConnectionSessionRegistry? sessionRegistry = null,
         IAcpConnectionSessionCleaner? sessionCleaner = null,
         IAcpConnectionPoolManager? connectionPoolManager = null,
         IAcpConnectionDependencySnapshotProvider? connectionDependencySnapshotProvider = null,
-        IAcpSessionCommandOrchestrator? sessionCommandOrchestrator = null,
-        IAcpMcpServerResolver? mcpServerResolver = null,
         int sessionUpdateBufferLimit = DefaultSessionUpdateBufferLimit)
     {
         _chatServiceFactory = chatServiceFactory ?? throw new ArgumentNullException(nameof(chatServiceFactory));
@@ -72,9 +71,8 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
         _connectionDependencySnapshotProvider = connectionDependencySnapshotProvider
             ?? NoopAcpConnectionDependencySnapshotProvider.Instance;
         _mcpServerProvider = mcpServerProvider ?? throw new ArgumentNullException(nameof(mcpServerProvider));
-        _sessionCommandOrchestrator = sessionCommandOrchestrator ?? new AcpSessionCommandOrchestrator(
-            NullLogger<AcpSessionCommandOrchestrator>.Instance,
-            mcpServerResolver ?? new AcpMcpServerResolver(_mcpServerProvider));
+        _sessionCommandOrchestrator = sessionCommandOrchestrator
+            ?? throw new ArgumentNullException(nameof(sessionCommandOrchestrator));
         _transportSupportPolicy = transportSupportPolicy ?? throw new ArgumentNullException(nameof(transportSupportPolicy));
         _sessionUpdateBufferLimit = sessionUpdateBufferLimit;
     }
@@ -111,7 +109,7 @@ public sealed class AcpChatCoordinator : IAcpConnectionCommands
 
         EnsureTransportSupported(profile.Transport);
         sink.SetCurrentMcpServers(
-            await _mcpServerProvider.GetMcpServersAsync(profile, cancellationToken).ConfigureAwait(false));
+            await _mcpServerProvider.GetMcpServersAsync(cancellationToken).ConfigureAwait(false));
         await sink.SelectProfileAsync(profile, cancellationToken).ConfigureAwait(false);
         ApplyProfileToTransportConfiguration(profile, transportConfiguration);
 

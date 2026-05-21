@@ -58,11 +58,9 @@ public interface IAcpChatCoordinatorSink : IAcpConnectionState
 
     string? SelectedProfileId => null;
 
-    IReadOnlyList<McpServer> CurrentMcpServers => Array.Empty<McpServer>();
+    IReadOnlyList<McpServer> CurrentMcpServers { get; }
 
-    void SetCurrentMcpServers(IReadOnlyList<McpServer> mcpServers)
-    {
-    }
+    void SetCurrentMcpServers(IReadOnlyList<McpServer> mcpServers);
 
     long ConnectionGeneration => 0;
 
