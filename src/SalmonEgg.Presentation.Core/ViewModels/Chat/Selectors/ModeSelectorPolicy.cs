@@ -13,7 +13,8 @@ public sealed record ModeSelectorPolicyInput(
     bool IsAuthoritative,
     bool IsLoading,
     bool HasError,
-    bool HasModeCapabilitySignal);
+    bool HasModeCapabilitySignal,
+    ModeSelectorPlaceholderLabels Labels);
 
 public sealed class ModeSelectorPolicy
 {
@@ -27,7 +28,7 @@ public sealed class ModeSelectorPolicy
                 realItems,
                 input.SelectedModeId,
                 SelectorPlaceholderKind.Unresolved,
-                "Mode is not ready",
+                input.Labels.Unresolved,
                 input.CurrentIdentity,
                 blocksSubmit: true);
         }
@@ -38,7 +39,7 @@ public sealed class ModeSelectorPolicy
                 realItems,
                 input.SelectedModeId,
                 SelectorPlaceholderKind.Loading,
-                "Loading modes...",
+                input.Labels.Loading,
                 input.CurrentIdentity,
                 blocksSubmit: true);
         }
@@ -49,7 +50,7 @@ public sealed class ModeSelectorPolicy
                 realItems,
                 input.SelectedModeId,
                 SelectorPlaceholderKind.Error,
-                "Mode unavailable",
+                input.Labels.Error,
                 input.CurrentIdentity,
                 blocksSubmit: true);
         }
@@ -60,7 +61,7 @@ public sealed class ModeSelectorPolicy
                 realItems,
                 input.SelectedModeId,
                 SelectorPlaceholderKind.Unresolved,
-                "Mode is not ready",
+                input.Labels.Unresolved,
                 input.CurrentIdentity,
                 blocksSubmit: true);
         }
@@ -82,7 +83,7 @@ public sealed class ModeSelectorPolicy
                 realItems,
                 input.SelectedModeId,
                 SelectorPlaceholderKind.Default,
-                "Default mode",
+                input.Labels.Default,
                 input.CurrentIdentity,
                 blocksSubmit: false);
         }
@@ -91,7 +92,7 @@ public sealed class ModeSelectorPolicy
             realItems,
             input.SelectedModeId,
             SelectorPlaceholderKind.Error,
-            "Mode unavailable",
+            input.Labels.Error,
             input.CurrentIdentity,
             blocksSubmit: true);
     }

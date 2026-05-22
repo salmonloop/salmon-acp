@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SalmonEgg.Application.Services.Chat;
@@ -30,6 +31,7 @@ using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Domain.Models.ProjectAffinity;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.Chat.Slash;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
@@ -1152,6 +1154,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
 
     private readonly IChatStore _chatStore;
     private readonly IAuthoritativeRemoteSessionRouter _authoritativeRemoteSessionRouter;
+    private readonly IStringLocalizer<CoreStrings>? _localizer;
 
     public ChatViewModel(
         IChatStore chatStore,
@@ -1186,11 +1189,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         IConversationActivationOrchestrator? conversationActivationOrchestrator = null,
         ISlashCommandSource? localSlashCommandSource = null,
         IConversationMutationPipeline? conversationMutationPipeline = null,
-        IPlatformShellService? platformShell = null)
+        IPlatformShellService? platformShell = null,
+        IStringLocalizer<CoreStrings>? localizer = null)
         : base(logger)
     {
         _chatStore = chatStore ?? throw new ArgumentNullException(nameof(chatStore));
         _authoritativeRemoteSessionRouter = authoritativeRemoteSessionRouter ?? new AuthoritativeRemoteSessionRouter(chatStore);
+        _localizer = localizer;
         _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _acpProfiles = acpProfiles ?? throw new ArgumentNullException(nameof(acpProfiles));

@@ -514,7 +514,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILogger<StartViewModel>>(),
                 sp.GetRequiredService<IChatLaunchWorkflow>(),
                 sp.GetRequiredService<IChatConnectionStore>(),
-                sp.GetRequiredService<IConversationCatalogReadModel>()));
+                sp.GetRequiredService<IConversationCatalogReadModel>(),
+                sp.GetRequiredService<IStringLocalizer<CoreStrings>>()));
         services.AddSingleton<IChatLaunchWorkflow>(sp =>
             new ChatLaunchWorkflow(
                 sp.GetRequiredService<IChatLaunchWorkflowChatFacade>(),

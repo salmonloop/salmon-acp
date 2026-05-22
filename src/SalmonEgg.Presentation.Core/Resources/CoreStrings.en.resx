@@ -21,6 +21,33 @@
   <data name="Nav_Unclassified" xml:space="preserve">
     <value>Unclassified</value>
   </data>
+  <data name="Selector_Mode_Unresolved" xml:space="preserve">
+    <value>Mode is not ready</value>
+  </data>
+  <data name="Selector_Mode_Loading" xml:space="preserve">
+    <value>Loading modes...</value>
+  </data>
+  <data name="Selector_Mode_Error" xml:space="preserve">
+    <value>Mode unavailable</value>
+  </data>
+  <data name="Selector_Mode_Default" xml:space="preserve">
+    <value>Default mode</value>
+  </data>
+  <data name="Selector_Agent_Loading" xml:space="preserve">
+    <value>Connecting agent...</value>
+  </data>
+  <data name="Selector_Agent_Error" xml:space="preserve">
+    <value>Agent unavailable</value>
+  </data>
+  <data name="Selector_Agent_Unresolved" xml:space="preserve">
+    <value>Select an agent</value>
+  </data>
+  <data name="Selector_Agent_Empty" xml:space="preserve">
+    <value>No agent selected</value>
+  </data>
+  <data name="Selector_Project_Unresolved" xml:space="preserve">
+    <value>Project unavailable</value>
+  </data>
   <data name="SettingsSection_General" xml:space="preserve">
     <value>General</value>
   </data>

@@ -715,6 +715,31 @@ public sealed class StartViewModelTests
     }
 
     [Fact]
+    public void StartSelectorProjection_WhenNoAgentsConfigured_ShowsNonBlockingAgentPlaceholder()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+
+            Assert.Equal(SelectorPlaceholderKind.Default, startViewModel.StartAgentSelectorProjection.PlaceholderKind);
+            Assert.Equal("未选择 Agent", startViewModel.SelectedStartAgentSelectorItem?.DisplayName);
+            Assert.False(startViewModel.StartAgentSelectorProjection.IsSubmitBlocked);
+            Assert.Empty(startViewModel.StartAgentSelectorProjection.DisplayItems.Where(item => !item.IsPlaceholder));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task StartModeSelection_WhenSelectorIdentityIsStale_DoesNotChangeSelectedDraftMode()
     {
         var originalContext = SynchronizationContext.Current;

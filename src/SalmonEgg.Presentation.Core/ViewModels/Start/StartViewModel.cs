@@ -8,9 +8,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Services;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.ViewModels.Chat.Selectors;
@@ -28,6 +30,7 @@ public sealed partial class StartViewModel : ObservableObject
     private readonly MainNavigationViewModel _nav;
     private readonly IChatLaunchWorkflow _chatLaunchWorkflow;
     private readonly IConversationCatalogReadModel _conversationCatalog;
+    private readonly IStringLocalizer<CoreStrings>? _localizer;
     private readonly ILogger<StartViewModel> _logger;
     private readonly SelectorProjectionPresenter _selectorProjectionPresenter = new();
     private readonly ModeSelectorPolicy _modeSelectorPolicy = new();
@@ -195,7 +198,8 @@ public sealed partial class StartViewModel : ObservableObject
         ILogger<StartViewModel> logger,
         IChatLaunchWorkflow? chatLaunchWorkflow = null,
         IChatConnectionStore? chatConnectionStore = null,
-        IConversationCatalogReadModel? conversationCatalog = null)
+        IConversationCatalogReadModel? conversationCatalog = null,
+        IStringLocalizer<CoreStrings>? localizer = null)
     {
         Chat = chatViewModel ?? throw new ArgumentNullException(nameof(chatViewModel));
         ArgumentNullException.ThrowIfNull(sessionManager);
@@ -206,6 +210,7 @@ public sealed partial class StartViewModel : ObservableObject
         _nav = nav ?? throw new ArgumentNullException(nameof(nav));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _conversationCatalog = conversationCatalog ?? NoOpConversationCatalogReadModel.Instance;
+        _localizer = localizer;
         StartProjectOptions = new ReadOnlyObservableCollection<StartProjectOptionViewModel>(_startProjectOptions);
         _chatLaunchWorkflow = chatLaunchWorkflow ?? new ChatLaunchWorkflow(
             new ChatLaunchWorkflowChatFacadeAdapter(
@@ -401,7 +406,8 @@ public sealed partial class StartViewModel : ObservableObject
             Chat.SelectedAcpProfile?.Id,
             Chat.IsConnecting || Chat.IsInitializing,
             Chat.HasConnectionError,
-            !hasAgentSlot || (Chat.SelectedAcpProfile is not null && Chat.IsConnected)));
+            !hasAgentSlot || (Chat.SelectedAcpProfile is not null && Chat.IsConnected),
+            ResolveAgentSelectorPlaceholderLabels()));
 
         return _selectorProjectionPresenter.Present(new SelectorProjectionInput(
             ComposerSelectorKind.Agent,
@@ -424,7 +430,8 @@ public sealed partial class StartViewModel : ObservableObject
             Chat.IsNewSessionDraftReady,
             _isNewSessionDraftRefreshPending || Chat.IsNewSessionDraftLoading,
             Chat.HasNewSessionDraftError,
-            StartModeOptions.Count > 0 || Chat.HasNewSessionDraftError));
+            StartModeOptions.Count > 0 || Chat.HasNewSessionDraftError,
+            ResolveModeSelectorPlaceholderLabels()));
 
         return _selectorProjectionPresenter.Present(new SelectorProjectionInput(
             ComposerSelectorKind.Mode,
@@ -447,7 +454,8 @@ public sealed partial class StartViewModel : ObservableObject
             selectedProjectId,
             PendingProjectIntentResolved: HasSelectableProject(selectedProjectId)
                 || string.Equals(selectedProjectId, NavigationProjectIds.Unclassified, StringComparison.Ordinal),
-            hasLegalFallback));
+            hasLegalFallback,
+            ResolveProjectSelectorPlaceholderLabels()));
 
         return _selectorProjectionPresenter.Present(new SelectorProjectionInput(
             ComposerSelectorKind.Project,
@@ -543,7 +551,7 @@ public sealed partial class StartViewModel : ObservableObject
     {
         var options = new List<StartProjectOptionViewModel>
         {
-            new(NavigationProjectIds.Unclassified, "未归类"),
+            new(NavigationProjectIds.Unclassified, Localize("Nav_Unclassified", "未归类")),
         };
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -600,6 +608,38 @@ public sealed partial class StartViewModel : ObservableObject
         => string.IsNullOrWhiteSpace(projectId)
             ? NavigationProjectIds.Unclassified
             : projectId;
+
+    private ModeSelectorPlaceholderLabels ResolveModeSelectorPlaceholderLabels()
+        => new(
+            Unresolved: Localize("Selector_Mode_Unresolved", "模式尚未就绪"),
+            Loading: Localize("Selector_Mode_Loading", "正在加载模式..."),
+            Error: Localize("Selector_Mode_Error", "模式不可用"),
+            Default: Localize("Selector_Mode_Default", "默认模式"));
+
+    private AgentSelectorPlaceholderLabels ResolveAgentSelectorPlaceholderLabels()
+        => new(
+            Loading: Localize("Selector_Agent_Loading", "正在连接 Agent..."),
+            Error: Localize("Selector_Agent_Error", "Agent 不可用"),
+            Unresolved: Localize("Selector_Agent_Unresolved", "选择 Agent"),
+            Empty: Localize("Selector_Agent_Empty", "未选择 Agent"));
+
+    private ProjectSelectorPlaceholderLabels ResolveProjectSelectorPlaceholderLabels()
+        => new(
+            Unresolved: Localize("Selector_Project_Unresolved", "项目不可用"),
+            Fallback: Localize("Nav_Unclassified", "未归类"));
+
+    private string Localize(string key, string fallback)
+    {
+        if (_localizer is null)
+        {
+            return fallback;
+        }
+
+        var localized = _localizer[key];
+        return localized.ResourceNotFound || string.IsNullOrWhiteSpace(localized.Value)
+            ? fallback
+            : localized.Value;
+    }
 
     private async Task StartVoiceInputAsync()
     {

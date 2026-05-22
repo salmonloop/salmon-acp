@@ -19,7 +19,8 @@ public sealed class ModeSelectorPolicyTests
             IsAuthoritative: false,
             IsLoading: true,
             HasError: false,
-            HasModeCapabilitySignal: true));
+            HasModeCapabilitySignal: true,
+            Labels: Labels()));
 
         Assert.Equal(SelectorPlaceholderKind.Loading, projection.Placeholder!.PlaceholderKind);
         Assert.True(projection.ReplaceSelectionWithPlaceholder);
@@ -40,9 +41,11 @@ public sealed class ModeSelectorPolicyTests
             IsAuthoritative: true,
             IsLoading: false,
             HasError: false,
-            HasModeCapabilitySignal: true));
+            HasModeCapabilitySignal: true,
+            Labels: Labels()));
 
         Assert.Equal(SelectorPlaceholderKind.Unresolved, projection.Placeholder!.PlaceholderKind);
+        Assert.Equal("mode-unresolved", projection.Placeholder.DisplayName);
         Assert.True(projection.Placeholder.BlocksSubmit);
     }
 
@@ -59,9 +62,11 @@ public sealed class ModeSelectorPolicyTests
             IsAuthoritative: true,
             IsLoading: false,
             HasError: false,
-            HasModeCapabilitySignal: false));
+            HasModeCapabilitySignal: false,
+            Labels: Labels()));
 
         Assert.Equal(SelectorPlaceholderKind.Default, projection.Placeholder!.PlaceholderKind);
+        Assert.Equal("mode-default", projection.Placeholder.DisplayName);
         Assert.False(projection.Placeholder.BlocksSubmit);
         Assert.True(projection.ReplaceSelectionWithPlaceholder);
     }
@@ -79,9 +84,11 @@ public sealed class ModeSelectorPolicyTests
             IsAuthoritative: true,
             IsLoading: false,
             HasError: false,
-            HasModeCapabilitySignal: true));
+            HasModeCapabilitySignal: true,
+            Labels: Labels()));
 
         Assert.Equal(SelectorPlaceholderKind.Error, projection.Placeholder!.PlaceholderKind);
+        Assert.Equal("mode-error", projection.Placeholder.DisplayName);
         Assert.True(projection.Placeholder.BlocksSubmit);
     }
 
@@ -98,7 +105,8 @@ public sealed class ModeSelectorPolicyTests
             IsAuthoritative: true,
             IsLoading: false,
             HasError: false,
-            HasModeCapabilitySignal: true));
+            HasModeCapabilitySignal: true,
+            Labels: Labels()));
 
         Assert.Null(projection.Placeholder);
         Assert.False(projection.ReplaceSelectionWithPlaceholder);
@@ -113,4 +121,11 @@ public sealed class ModeSelectorPolicyTests
             ModeName = name,
             Description = string.Empty
         };
+
+    private static ModeSelectorPlaceholderLabels Labels()
+        => new(
+            Unresolved: "mode-unresolved",
+            Loading: "mode-loading",
+            Error: "mode-error",
+            Default: "mode-default");
 }

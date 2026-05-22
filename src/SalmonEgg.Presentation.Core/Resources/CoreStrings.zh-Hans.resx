@@ -15,6 +15,33 @@
   <data name="Nav_Unclassified" xml:space="preserve">
     <value>未归类</value>
   </data>
+  <data name="Selector_Mode_Unresolved" xml:space="preserve">
+    <value>模式尚未就绪</value>
+  </data>
+  <data name="Selector_Mode_Loading" xml:space="preserve">
+    <value>正在加载模式...</value>
+  </data>
+  <data name="Selector_Mode_Error" xml:space="preserve">
+    <value>模式不可用</value>
+  </data>
+  <data name="Selector_Mode_Default" xml:space="preserve">
+    <value>默认模式</value>
+  </data>
+  <data name="Selector_Agent_Loading" xml:space="preserve">
+    <value>正在连接 Agent...</value>
+  </data>
+  <data name="Selector_Agent_Error" xml:space="preserve">
+    <value>Agent 不可用</value>
+  </data>
+  <data name="Selector_Agent_Unresolved" xml:space="preserve">
+    <value>选择 Agent</value>
+  </data>
+  <data name="Selector_Agent_Empty" xml:space="preserve">
+    <value>未选择 Agent</value>
+  </data>
+  <data name="Selector_Project_Unresolved" xml:space="preserve">
+    <value>项目不可用</value>
+  </data>
   <data name="SettingsSection_General" xml:space="preserve">
     <value>常规</value>
   </data>

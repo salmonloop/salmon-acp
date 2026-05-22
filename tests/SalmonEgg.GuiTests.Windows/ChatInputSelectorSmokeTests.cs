@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
@@ -6,6 +7,8 @@ namespace SalmonEgg.GuiTests.Windows;
 
 public sealed class ChatInputSelectorSmokeTests
 {
+    private static readonly string[] DefaultModeLabels = ["Default mode", "默认模式"];
+
     [SkippableFact]
     public void StartComposer_WhenModeHasNoAuthoritativeOptions_ShowsDefaultPlaceholder()
     {
@@ -17,7 +20,7 @@ public sealed class ChatInputSelectorSmokeTests
             $"Expected start mode selector to be visible.{Environment.NewLine}{appData.ReadBootLogTail()}");
 
         Assert.True(
-            WaitUntilVisibleText(session, "Default mode", TimeSpan.FromSeconds(5)),
+            WaitUntilAnyVisibleText(session, DefaultModeLabels, TimeSpan.FromSeconds(5)),
             $"Expected start mode selector to project the default placeholder instead of a blank selection. Visible=[{string.Join(" | ", session.GetVisibleTexts())}]{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
 
@@ -44,19 +47,19 @@ public sealed class ChatInputSelectorSmokeTests
         Assert.Null(session.TryFindByAutomationId("ChatInputArea.ProjectSelector", TimeSpan.FromMilliseconds(300)));
 
         Assert.True(
-            WaitUntilVisibleText(session, "Default mode", TimeSpan.FromSeconds(5)),
+            WaitUntilAnyVisibleText(session, DefaultModeLabels, TimeSpan.FromSeconds(5)),
             $"Expected formal chat mode selector to project the same placeholder subset policy as the start composer. Visible=[{string.Join(" | ", session.GetVisibleTexts())}]{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
 
-    private static bool WaitUntilVisibleText(
+    private static bool WaitUntilAnyVisibleText(
         WindowsGuiAppSession session,
-        string expectedText,
+        IReadOnlyCollection<string> expectedTexts,
         TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (session.GetVisibleTexts().Any(text => string.Equals(text, expectedText, StringComparison.Ordinal)))
+            if (session.GetVisibleTexts().Any(text => expectedTexts.Contains(text)))
             {
                 return true;
             }

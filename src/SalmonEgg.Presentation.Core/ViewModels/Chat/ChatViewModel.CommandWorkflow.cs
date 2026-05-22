@@ -377,7 +377,8 @@ public partial class ChatViewModel
             IsAuthoritative: IsSessionActive,
             IsLoading: IsConnecting || IsInitializing,
             HasError: HasConnectionError,
-            HasModeCapabilitySignal: AvailableModes.Count > 0));
+            HasModeCapabilitySignal: AvailableModes.Count > 0,
+            Labels: ResolveModeSelectorPlaceholderLabels()));
 
         return _selectorProjectionPresenter.Present(new SelectorProjectionInput(
             ComposerSelectorKind.Mode,
@@ -400,6 +401,26 @@ public partial class ChatViewModel
             connectionInstanceId ?? string.Empty,
             cwd ?? string.Empty,
             version.ToString(CultureInfo.InvariantCulture));
+
+    private ModeSelectorPlaceholderLabels ResolveModeSelectorPlaceholderLabels()
+        => new(
+            Unresolved: Localize("Selector_Mode_Unresolved", "模式尚未就绪"),
+            Loading: Localize("Selector_Mode_Loading", "正在加载模式..."),
+            Error: Localize("Selector_Mode_Error", "模式不可用"),
+            Default: Localize("Selector_Mode_Default", "默认模式"));
+
+    private string Localize(string key, string fallback)
+    {
+        if (_localizer is null)
+        {
+            return fallback;
+        }
+
+        var localized = _localizer[key];
+        return localized.ResourceNotFound || string.IsNullOrWhiteSpace(localized.Value)
+            ? fallback
+            : localized.Value;
+    }
 
     private ChatAskUserState ResolveAskUserState()
         => _askUserStatePresenter.Present(PendingAskUserRequest, _emptyAskUserQuestions);

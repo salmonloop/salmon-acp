@@ -11,7 +11,8 @@ public sealed record ProjectSelectorPolicyInput(
     IReadOnlyList<StartProjectOptionViewModel> Projects,
     string? SelectedProjectId,
     bool PendingProjectIntentResolved,
-    bool HasLegalFallback);
+    bool HasLegalFallback,
+    ProjectSelectorPlaceholderLabels Labels);
 
 public sealed class ProjectSelectorPolicy
 {
@@ -31,7 +32,7 @@ public sealed class ProjectSelectorPolicy
             var unresolved = ComposerSelectorItemViewModel.Placeholder(
                 ComposerSelectorKind.Project,
                 SelectorPlaceholderKind.Unresolved,
-                "Project unavailable",
+                input.Labels.Unresolved,
                 input.Identity,
                 blocksSubmit: true);
 
@@ -49,7 +50,7 @@ public sealed class ProjectSelectorPolicy
             var fallback = ComposerSelectorItemViewModel.Placeholder(
                 ComposerSelectorKind.Project,
                 SelectorPlaceholderKind.Fallback,
-                "Unclassified",
+                input.Labels.Fallback,
                 input.Identity,
                 semanticValue: NavigationProjectIds.Unclassified,
                 blocksSubmit: false,

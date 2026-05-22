@@ -17,7 +17,8 @@ public sealed class ProjectSelectorPolicyTests
             Projects: new[] { new StartProjectOptionViewModel(NavigationProjectIds.Unclassified, "Unclassified") },
             SelectedProjectId: NavigationProjectIds.Unclassified,
             PendingProjectIntentResolved: true,
-            HasLegalFallback: true));
+            HasLegalFallback: true,
+            Labels: Labels()));
 
         Assert.Null(projection.Placeholder);
         Assert.False(projection.DisableRealItems);
@@ -35,10 +36,17 @@ public sealed class ProjectSelectorPolicyTests
             Projects: Array.Empty<StartProjectOptionViewModel>(),
             SelectedProjectId: "deleted-project",
             PendingProjectIntentResolved: false,
-            HasLegalFallback: false));
+            HasLegalFallback: false,
+            Labels: Labels()));
 
         Assert.Equal(SelectorPlaceholderKind.Unresolved, projection.Placeholder!.PlaceholderKind);
+        Assert.Equal("project-unresolved", projection.Placeholder.DisplayName);
         Assert.True(projection.Placeholder.BlocksSubmit);
         Assert.True(projection.ReplaceSelectionWithPlaceholder);
     }
+
+    private static ProjectSelectorPlaceholderLabels Labels()
+        => new(
+            Unresolved: "project-unresolved",
+            Fallback: "project-fallback");
 }

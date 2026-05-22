@@ -561,8 +561,9 @@ public sealed class NavigationCoreTests
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
 
         Assert.Contains("AgentSelectorAutomationId=\"StartView.AgentSelector\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("AgentItemsSource=\"{x:Bind ViewModel.Chat.AcpProfileList, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedAgent=\"{x:Bind ViewModel.Chat.SelectedAcpProfile, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AgentSelectorItemsSource=\"{x:Bind ViewModel.StartAgentSelectorItems, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedAgentSelectorItem=\"{x:Bind ViewModel.SelectedStartAgentSelectorItem, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AgentSelectionCommand=\"{x:Bind ViewModel.SelectStartAgentDisplayCommand}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -571,8 +572,9 @@ public sealed class NavigationCoreTests
         var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
 
         Assert.Contains("ProjectSelectorAutomationId=\"StartView.ProjectSelector\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ProjectItemsSource=\"{x:Bind ViewModel.StartProjectOptions, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedProjectId=\"{x:Bind ViewModel.SelectedStartProjectId, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectSelectorItemsSource=\"{x:Bind ViewModel.StartProjectSelectorItems, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedProjectSelectorItem=\"{x:Bind ViewModel.SelectedStartProjectSelectorItem, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectSelectionCommand=\"{x:Bind ViewModel.SelectStartProjectDisplayCommand}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -588,9 +590,9 @@ public sealed class NavigationCoreTests
         Assert.True(projectSelectorIndex > modeSelectorIndex);
         Assert.Contains("ModeSelectorAutomationId=\"StartView.ModeSelector\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("IsStartModeSelectorVisible", xaml, StringComparison.Ordinal);
-        Assert.Contains("ModeItemsSource=\"{x:Bind ViewModel.StartModeOptions, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedMode=\"{x:Bind ViewModel.SelectedStartMode, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ModeSelectionCommand=\"{x:Bind ViewModel.SelectStartModeCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ModeSelectorItemsSource=\"{x:Bind ViewModel.StartModeSelectorItems, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedModeSelectorItem=\"{x:Bind ViewModel.SelectedStartModeSelectorItem, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ModeSelectionCommand=\"{x:Bind ViewModel.SelectStartModeDisplayCommand}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsModeSelectorEnabled=\"{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ViewModel=\"{x:Bind ViewModel.Chat, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
     }
