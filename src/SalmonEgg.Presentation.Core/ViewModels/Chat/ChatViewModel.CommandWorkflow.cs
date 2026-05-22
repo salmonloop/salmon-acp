@@ -959,6 +959,11 @@ public partial class ChatViewModel
         if (mode == null)
             return;
 
+        if (string.Equals(SelectedMode?.ModeId, mode.ModeId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         try
         {
             IsBusy = true;

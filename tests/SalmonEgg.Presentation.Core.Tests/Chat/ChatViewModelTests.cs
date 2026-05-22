@@ -335,6 +335,42 @@ public partial class ChatViewModelTests
         Assert.Null(fixture.ViewModel.SelectedMode);
     }
 
+    [Fact]
+    public async Task ChatModeSelection_WhenProjectedSelectedModeRaisesSelectionChanged_DoesNotDispatchDuplicateRemoteModeSet()
+    {
+        await using var fixture = CreateViewModel();
+        var viewModel = fixture.ViewModel;
+        var chatService = CreateConnectedChatService();
+        viewModel.ReplaceChatService(chatService.Object);
+
+        await fixture.UpdateStateAsync(state => state with
+        {
+            HydratedConversationId = "conv-1",
+            Bindings = ImmutableDictionary<string, ConversationBindingSlice>.Empty
+                .Add("conv-1", new ConversationBindingSlice("conv-1", "remote-1", "profile-1"))
+        });
+        SetCurrentSessionId(viewModel, "conv-1");
+        SetCurrentRemoteSessionId(viewModel, "remote-1");
+        viewModel.IsConnected = true;
+        viewModel.IsSessionActive = true;
+        viewModel.AvailableModes.Add(new SessionModeViewModel
+        {
+            ModeId = "dontAsk",
+            ModeName = "Don't Ask",
+            Description = string.Empty
+        });
+        SetSelectedModeWithoutDispatch(viewModel, viewModel.AvailableModes.Single());
+
+        viewModel.SelectChatModeDisplayCommand.Execute(viewModel.SelectedChatModeSelectorItem);
+
+        chatService.Verify(
+            service => service.SetSessionConfigOptionAsync(It.IsAny<SessionSetConfigOptionParams>()),
+            Times.Never);
+        chatService.Verify(
+            service => service.SetSessionModeAsync(It.IsAny<SessionSetModeParams>()),
+            Times.Never);
+    }
+
     private static StartViewModel CreateStartViewModelForChatFixture(
         ViewModelFixture fixture,
         MainNavigationViewModel nav,
@@ -370,6 +406,15 @@ public partial class ChatViewModelTests
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.NotNull(property);
         property!.SetValue(viewModel, conversationId);
+    }
+
+    private static void SetSelectedModeWithoutDispatch(ChatViewModel viewModel, SessionModeViewModel? mode)
+    {
+        var method = typeof(ChatViewModel).GetMethod(
+            "SetSelectedModeWithoutDispatch",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, new object?[] { mode });
     }
 
     private static void SetProjectedConnectionInstanceId(ChatViewModel viewModel, string? connectionInstanceId)
