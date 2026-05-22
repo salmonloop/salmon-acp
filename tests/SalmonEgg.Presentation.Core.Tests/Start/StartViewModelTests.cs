@@ -715,6 +715,38 @@ public sealed class StartViewModelTests
     }
 
     [Fact]
+    public async Task StartModeSelection_WhenSelectorIdentityIsStale_DoesNotChangeSelectedDraftMode()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+            var workflow = new Mock<IChatLaunchWorkflow>();
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+
+            await MakeStartDraftReadyAsync(chat, startViewModel);
+            var originalMode = startViewModel.SelectedStartMode;
+            var staleItem = ComposerSelectorItemViewModel.Real(
+                ComposerSelectorKind.Mode,
+                "code",
+                "Code",
+                "stale-identity");
+
+            startViewModel.SelectStartModeDisplayCommand.Execute(staleItem);
+
+            Assert.Same(originalMode, startViewModel.SelectedStartMode);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task StartModeSelector_WhenProfileChanges_DisablesExistingModesUntilFreshDraftArrives()
     {
         var originalContext = SynchronizationContext.Current;

@@ -125,6 +125,12 @@ public sealed partial class StartViewModel : ObservableObject
 
     public IRelayCommand<SessionModeViewModel?> SelectStartModeCommand { get; }
 
+    public IRelayCommand<ComposerSelectorItemViewModel?> SelectStartModeDisplayCommand { get; }
+
+    public IRelayCommand<ComposerSelectorItemViewModel?> SelectStartAgentDisplayCommand { get; }
+
+    public IRelayCommand<ComposerSelectorItemViewModel?> SelectStartProjectDisplayCommand { get; }
+
     public bool IsInputEnabled => !IsStarting;
 
     public string SelectedStartProjectId
@@ -213,6 +219,9 @@ public sealed partial class StartViewModel : ObservableObject
         StartSessionAndSendCommand = new AsyncRelayCommand(StartSessionAndSendAsync, CanStartSessionAndSend);
         ExecuteSuggestionCommand = new RelayCommand<QuickSuggestionViewModel>(ExecuteSuggestion);
         SelectStartModeCommand = new RelayCommand<SessionModeViewModel?>(SelectStartMode);
+        SelectStartModeDisplayCommand = new RelayCommand<ComposerSelectorItemViewModel?>(SelectStartModeDisplay);
+        SelectStartAgentDisplayCommand = new RelayCommand<ComposerSelectorItemViewModel?>(SelectStartAgentDisplay);
+        SelectStartProjectDisplayCommand = new RelayCommand<ComposerSelectorItemViewModel?>(SelectStartProjectDisplay);
         StartVoiceInputCommand = new AsyncRelayCommand(StartVoiceInputAsync, () => CanStartVoiceInput);
         StopVoiceInputCommand = new AsyncRelayCommand(StopVoiceInputAsync, () => CanStopVoiceInput);
 
@@ -247,6 +256,59 @@ public sealed partial class StartViewModel : ObservableObject
             SelectedStartMode = mode;
         }
     }
+
+    private void SelectStartModeDisplay(ComposerSelectorItemViewModel? item)
+    {
+        if (!CanCommitSelectorItem(item, ComposerSelectorKind.Mode, StartModeSelectorItems))
+        {
+            return;
+        }
+
+        var mode = StartModeOptions.FirstOrDefault(candidate =>
+            string.Equals(candidate.ModeId, item!.SemanticValue, StringComparison.Ordinal));
+        if (mode is not null)
+        {
+            SelectedStartMode = mode;
+        }
+    }
+
+    private void SelectStartAgentDisplay(ComposerSelectorItemViewModel? item)
+    {
+        if (!CanCommitSelectorItem(item, ComposerSelectorKind.Agent, StartAgentSelectorItems))
+        {
+            return;
+        }
+
+        var agent = Chat.AcpProfileList.FirstOrDefault(candidate =>
+            string.Equals(candidate.Id, item!.SemanticValue, StringComparison.Ordinal));
+        if (agent is not null)
+        {
+            Chat.SelectedAcpProfile = agent;
+        }
+    }
+
+    private void SelectStartProjectDisplay(ComposerSelectorItemViewModel? item)
+    {
+        if (!CanCommitSelectorItem(item, ComposerSelectorKind.Project, StartProjectSelectorItems))
+        {
+            return;
+        }
+
+        SelectedStartProjectId = item!.SemanticValue ?? NavigationProjectIds.Unclassified;
+    }
+
+    private static bool CanCommitSelectorItem(
+        ComposerSelectorItemViewModel? item,
+        ComposerSelectorKind expectedKind,
+        IReadOnlyList<ComposerSelectorItemViewModel> currentItems)
+        => item is not null
+            && item.Kind == expectedKind
+            && !item.IsPlaceholder
+            && item.IsSelectable
+            && !string.IsNullOrWhiteSpace(item.SemanticValue)
+            && currentItems.Any(candidate =>
+                string.Equals(candidate.SemanticValue, item.SemanticValue, StringComparison.Ordinal)
+                && string.Equals(candidate.Identity, item.Identity, StringComparison.Ordinal));
 
     public void OnComposerLoaded()
     {

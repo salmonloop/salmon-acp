@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Presentation.Core.Services.Input;
+using SalmonEgg.Presentation.Core.ViewModels.Chat.Selectors;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using XamlFocusManager = Microsoft.UI.Xaml.Input.FocusManager;
 
@@ -64,6 +65,27 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             typeof(ChatInputArea),
             new PropertyMetadata(null));
 
+    public static readonly DependencyProperty AgentSelectorItemsSourceProperty =
+        DependencyProperty.Register(
+            nameof(AgentSelectorItemsSource),
+            typeof(object),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty SelectedAgentSelectorItemProperty =
+        DependencyProperty.Register(
+            nameof(SelectedAgentSelectorItem),
+            typeof(ComposerSelectorItemViewModel),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty AgentSelectionCommandProperty =
+        DependencyProperty.Register(
+            nameof(AgentSelectionCommand),
+            typeof(ICommand),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
     public static readonly DependencyProperty ShowModeSelectorProperty =
         DependencyProperty.Register(
             nameof(ShowModeSelector),
@@ -82,6 +104,20 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
         DependencyProperty.Register(
             nameof(SelectedMode),
             typeof(SessionModeViewModel),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty ModeSelectorItemsSourceProperty =
+        DependencyProperty.Register(
+            nameof(ModeSelectorItemsSource),
+            typeof(object),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty SelectedModeSelectorItemProperty =
+        DependencyProperty.Register(
+            nameof(SelectedModeSelectorItem),
+            typeof(ComposerSelectorItemViewModel),
             typeof(ChatInputArea),
             new PropertyMetadata(null));
 
@@ -117,6 +153,27 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
         DependencyProperty.Register(
             nameof(SelectedProjectId),
             typeof(string),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty ProjectSelectorItemsSourceProperty =
+        DependencyProperty.Register(
+            nameof(ProjectSelectorItemsSource),
+            typeof(object),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty SelectedProjectSelectorItemProperty =
+        DependencyProperty.Register(
+            nameof(SelectedProjectSelectorItem),
+            typeof(ComposerSelectorItemViewModel),
+            typeof(ChatInputArea),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty ProjectSelectionCommandProperty =
+        DependencyProperty.Register(
+            nameof(ProjectSelectionCommand),
+            typeof(ICommand),
             typeof(ChatInputArea),
             new PropertyMetadata(null));
 
@@ -188,6 +245,24 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
         set => SetValue(SelectedAgentProperty, value);
     }
 
+    public object? AgentSelectorItemsSource
+    {
+        get => GetValue(AgentSelectorItemsSourceProperty);
+        set => SetValue(AgentSelectorItemsSourceProperty, value);
+    }
+
+    public ComposerSelectorItemViewModel? SelectedAgentSelectorItem
+    {
+        get => (ComposerSelectorItemViewModel?)GetValue(SelectedAgentSelectorItemProperty);
+        set => SetValue(SelectedAgentSelectorItemProperty, value);
+    }
+
+    public ICommand? AgentSelectionCommand
+    {
+        get => (ICommand?)GetValue(AgentSelectionCommandProperty);
+        set => SetValue(AgentSelectionCommandProperty, value);
+    }
+
     public bool ShowModeSelector
     {
         get => (bool)GetValue(ShowModeSelectorProperty);
@@ -204,6 +279,18 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
     {
         get => (SessionModeViewModel?)GetValue(SelectedModeProperty);
         set => SetValue(SelectedModeProperty, value);
+    }
+
+    public object? ModeSelectorItemsSource
+    {
+        get => GetValue(ModeSelectorItemsSourceProperty);
+        set => SetValue(ModeSelectorItemsSourceProperty, value);
+    }
+
+    public ComposerSelectorItemViewModel? SelectedModeSelectorItem
+    {
+        get => (ComposerSelectorItemViewModel?)GetValue(SelectedModeSelectorItemProperty);
+        set => SetValue(SelectedModeSelectorItemProperty, value);
     }
 
     public ICommand? ModeSelectionCommand
@@ -234,6 +321,24 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
     {
         get => (string?)GetValue(SelectedProjectIdProperty);
         set => SetValue(SelectedProjectIdProperty, value);
+    }
+
+    public object? ProjectSelectorItemsSource
+    {
+        get => GetValue(ProjectSelectorItemsSourceProperty);
+        set => SetValue(ProjectSelectorItemsSourceProperty, value);
+    }
+
+    public ComposerSelectorItemViewModel? SelectedProjectSelectorItem
+    {
+        get => (ComposerSelectorItemViewModel?)GetValue(SelectedProjectSelectorItemProperty);
+        set => SetValue(SelectedProjectSelectorItemProperty, value);
+    }
+
+    public ICommand? ProjectSelectionCommand
+    {
+        get => (ICommand?)GetValue(ProjectSelectionCommandProperty);
+        set => SetValue(ProjectSelectionCommandProperty, value);
     }
 
     public string AgentSelectorAutomationId
@@ -445,21 +550,34 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
 
     private void OnModeSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var selectedMode = e.AddedItems.OfType<SessionModeViewModel>().FirstOrDefault();
-        if (selectedMode == null)
+        ExecuteSelectorCommand(sender, ModeSelectionCommand);
+    }
+
+    private void OnAgentSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ExecuteSelectorCommand(sender, AgentSelectionCommand);
+    }
+
+    private void OnProjectSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ExecuteSelectorCommand(sender, ProjectSelectionCommand);
+    }
+
+    private static void ExecuteSelectorCommand(object sender, ICommand? command)
+    {
+        if (sender is not ComboBox comboBox
+            || command is null
+            || comboBox.SelectedItem is not ComposerSelectorItemViewModel item
+            || item.IsPlaceholder
+            || !item.IsSelectable
+            || string.IsNullOrWhiteSpace(item.SemanticValue))
         {
             return;
         }
 
-        if (Equals(selectedMode, SelectedMode))
+        if (command.CanExecute(item))
         {
-            return;
-        }
-
-        var command = ModeSelectionCommand;
-        if (command?.CanExecute(selectedMode) == true)
-        {
-            command.Execute(selectedMode);
+            command.Execute(item);
         }
     }
 

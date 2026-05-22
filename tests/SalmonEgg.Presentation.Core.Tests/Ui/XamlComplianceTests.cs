@@ -664,9 +664,13 @@ public sealed class XamlComplianceTests
         Assert.Contains("x:Name=\"AgentSelectorHost\"", xaml);
         Assert.Contains("x:Load=\"{x:Bind ShowAgentSelector", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"{x:Bind AgentSelectorAutomationId, Mode=OneWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{x:Bind AgentSelectorItemsSource, Mode=OneWay}\"", xaml);
+        Assert.Contains("SelectedItem=\"{x:Bind SelectedAgentSelectorItem, Mode=OneWay}\"", xaml);
         Assert.Contains("x:Name=\"ProjectSelectorHost\"", xaml);
         Assert.Contains("x:Load=\"{x:Bind ShowProjectSelector", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"{x:Bind ProjectSelectorAutomationId, Mode=OneWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{x:Bind ProjectSelectorItemsSource, Mode=OneWay}\"", xaml);
+        Assert.Contains("SelectedItem=\"{x:Bind SelectedProjectSelectorItem, Mode=OneWay}\"", xaml);
     }
 
     [Fact]
@@ -908,7 +912,10 @@ public sealed class XamlComplianceTests
         Assert.Contains("ShowAgentSelector=\"True\"", xaml);
         Assert.Contains("ShowModeSelector=\"True\"", xaml);
         Assert.Contains("ShowProjectSelector=\"True\"", xaml);
-        Assert.Contains("ModeItemsSource=\"{x:Bind ViewModel.StartModeOptions, Mode=OneWay}\"", xaml);
+        Assert.Contains("AgentSelectorItemsSource=\"{x:Bind ViewModel.StartAgentSelectorItems, Mode=OneWay}\"", xaml);
+        Assert.Contains("ModeSelectorItemsSource=\"{x:Bind ViewModel.StartModeSelectorItems, Mode=OneWay}\"", xaml);
+        Assert.Contains("ProjectSelectorItemsSource=\"{x:Bind ViewModel.StartProjectSelectorItems, Mode=OneWay}\"", xaml);
+        Assert.Contains("SelectedModeSelectorItem=\"{x:Bind ViewModel.SelectedStartModeSelectorItem, Mode=OneWay}\"", xaml);
         Assert.DoesNotContain("IsComposerExpanded", xaml);
         Assert.DoesNotContain("OnComposerInteractiveElementGotFocus", xaml);
         Assert.DoesNotContain("OnComposerSelectorDropDownOpened", xaml);
@@ -924,8 +931,11 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
 
         Assert.Contains("<controls:ChatInputArea ViewModel=\"{x:Bind ViewModel, Mode=OneWay}\"", xaml);
-        Assert.Contains("ModeItemsSource=\"{x:Bind ViewModel.AvailableModes, Mode=OneWay}\"", xaml);
+        Assert.Contains("ModeSelectorItemsSource=\"{x:Bind ViewModel.ChatModeSelectorItems, Mode=OneWay}\"", xaml);
+        Assert.Contains("SelectedModeSelectorItem=\"{x:Bind ViewModel.SelectedChatModeSelectorItem, Mode=OneWay}\"", xaml);
         Assert.DoesNotContain("ShowAgentSelector=\"True\"", xaml);
+        Assert.DoesNotContain("AgentSelectorItemsSource=", xaml);
+        Assert.DoesNotContain("ProjectSelectorItemsSource=", xaml);
     }
 
     [Fact]
@@ -935,16 +945,17 @@ public sealed class XamlComplianceTests
         var chatViewXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml");
         var startViewXaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
 
-        Assert.Contains("SelectedItem=\"{x:Bind SelectedMode, Mode=OneWay}\"", chatInputXaml);
+        Assert.Contains("ItemsSource=\"{x:Bind ModeSelectorItemsSource, Mode=OneWay}\"", chatInputXaml);
+        Assert.Contains("SelectedItem=\"{x:Bind SelectedModeSelectorItem, Mode=OneWay}\"", chatInputXaml);
         Assert.Contains("SelectionChanged=\"OnModeSelectorSelectionChanged\"", chatInputXaml);
         Assert.DoesNotContain("SelectedItem=\"{x:Bind SelectedMode, Mode=TwoWay}\"", chatInputXaml, StringComparison.Ordinal);
 
-        Assert.Contains("SelectedMode=\"{x:Bind ViewModel.SelectedMode, Mode=OneWay}\"", chatViewXaml);
-        Assert.Contains("ModeSelectionCommand=\"{x:Bind ViewModel.SetModeCommand}\"", chatViewXaml);
+        Assert.Contains("SelectedModeSelectorItem=\"{x:Bind ViewModel.SelectedChatModeSelectorItem, Mode=OneWay}\"", chatViewXaml);
+        Assert.Contains("ModeSelectionCommand=\"{x:Bind ViewModel.SelectChatModeDisplayCommand}\"", chatViewXaml);
         Assert.DoesNotContain("SelectedMode=\"{x:Bind ViewModel.SelectedMode, Mode=TwoWay}\"", chatViewXaml, StringComparison.Ordinal);
 
-        Assert.Contains("SelectedMode=\"{x:Bind ViewModel.SelectedStartMode, Mode=OneWay}\"", startViewXaml);
-        Assert.Contains("ModeSelectionCommand=\"{x:Bind ViewModel.SelectStartModeCommand}\"", startViewXaml);
+        Assert.Contains("SelectedModeSelectorItem=\"{x:Bind ViewModel.SelectedStartModeSelectorItem, Mode=OneWay}\"", startViewXaml);
+        Assert.Contains("ModeSelectionCommand=\"{x:Bind ViewModel.SelectStartModeDisplayCommand}\"", startViewXaml);
         Assert.DoesNotContain("SelectedMode=\"{x:Bind ViewModel.SelectedStartMode, Mode=TwoWay}\"", startViewXaml, StringComparison.Ordinal);
     }
 
@@ -1076,7 +1087,7 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("DisplayMemberPath=", chatInputXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("DisplayMemberPath=\"Name\"", dialogXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("DisplayMemberPath=\"Name\"", editorXaml, StringComparison.Ordinal);
-        Assert.Contains("x:DataType=\"startVm:StartProjectOptionViewModel\"", chatInputXaml, StringComparison.Ordinal);
+        Assert.Contains("x:DataType=\"selectors:ComposerSelectorItemViewModel\"", chatInputXaml, StringComparison.Ordinal);
         Assert.Contains("x:DataType=\"vm:TransportOption\"", dialogXaml, StringComparison.Ordinal);
         Assert.Contains("x:DataType=\"vm:TransportOption\"", editorXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{x:Bind DisplayName, Mode=OneWay}\"", chatInputXaml, StringComparison.Ordinal);

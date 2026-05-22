@@ -410,6 +410,34 @@ public partial class ChatViewModel
     private bool CanSendPrompt() => ResolveInputState().CanSendPrompt;
 
     [RelayCommand]
+    private void SelectChatModeDisplay(ComposerSelectorItemViewModel? item)
+    {
+        if (item is null
+            || item.Kind != ComposerSelectorKind.Mode
+            || item.IsPlaceholder
+            || !item.IsSelectable
+            || string.IsNullOrWhiteSpace(item.SemanticValue))
+        {
+            return;
+        }
+
+        var current = ChatModeSelectorItems.FirstOrDefault(candidate =>
+            string.Equals(candidate.SemanticValue, item.SemanticValue, StringComparison.Ordinal)
+            && string.Equals(candidate.Identity, item.Identity, StringComparison.Ordinal));
+        if (current is null)
+        {
+            return;
+        }
+
+        var mode = AvailableModes.FirstOrDefault(candidate =>
+            string.Equals(candidate.ModeId, item.SemanticValue, StringComparison.Ordinal));
+        if (mode is not null)
+        {
+            SetModeCommand.Execute(mode);
+        }
+    }
+
+    [RelayCommand]
     private async Task StartVoiceInputAsync()
     {
         if (!CanStartVoiceInput)

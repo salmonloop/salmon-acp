@@ -319,6 +319,22 @@ public partial class ChatViewModelTests
         Assert.Equal(SelectorPlaceholderKind.None, projection.PlaceholderKind);
     }
 
+    [Fact]
+    public async Task ChatModeSelection_WhenPlaceholderItemIsSelected_DoesNotDispatchModeCommand()
+    {
+        await using var fixture = CreateViewModel();
+        var placeholder = ComposerSelectorItemViewModel.Placeholder(
+            ComposerSelectorKind.Mode,
+            SelectorPlaceholderKind.Loading,
+            "Loading modes...",
+            "identity",
+            blocksSubmit: true);
+
+        fixture.ViewModel.SelectChatModeDisplayCommand.Execute(placeholder);
+
+        Assert.Null(fixture.ViewModel.SelectedMode);
+    }
+
     private static StartViewModel CreateStartViewModelForChatFixture(
         ViewModelFixture fixture,
         MainNavigationViewModel nav,
