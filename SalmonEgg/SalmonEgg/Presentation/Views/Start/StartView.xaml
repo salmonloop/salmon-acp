@@ -140,6 +140,7 @@
             <controls:ChatInputArea x:Name="ComposerShell"
                                     Grid.Row="1"
                                     ViewModel="{x:Bind ViewModel.Chat, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsInputEnabled, Mode=OneWay}"
                                     SubmitCommand="{x:Bind ViewModel.StartSessionAndSendCommand}"
                                     IsSubmitButtonEnabled="{x:Bind ViewModel.CanStartSessionAndSendUi, Mode=OneWay}"
                                     InputBoxAutomationId="StartView.PromptBox"

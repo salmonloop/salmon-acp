@@ -904,6 +904,7 @@ public sealed class XamlComplianceTests
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml");
 
         Assert.Contains("<controls:ChatInputArea x:Name=\"ComposerShell\"", xaml);
+        Assert.Contains("IsEnabled=\"{x:Bind ViewModel.IsInputEnabled, Mode=OneWay}\"", xaml);
         Assert.Contains("ShowAgentSelector=\"True\"", xaml);
         Assert.Contains("ShowModeSelector=\"True\"", xaml);
         Assert.Contains("ShowProjectSelector=\"True\"", xaml);
