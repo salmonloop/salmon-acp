@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Immutable;
+using System.Globalization;
+using Microsoft.Extensions.Localization;
 using SalmonEgg.Domain.Models.Conversation;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
+using SalmonEgg.Presentation.Core.Resources;
 
 namespace SalmonEgg.Presentation.Core.Services.Chat;
 
@@ -18,18 +21,26 @@ public sealed class ChatStateProjector : IChatStateProjector
 {
     private readonly ChatSessionToolingProjector _sessionToolingProjector;
     private readonly TranscriptProjectionRestoreTokenProjector _restoreTokenProjector;
+    private readonly IStringLocalizer<CoreStrings>? _localizer;
 
     public ChatStateProjector()
-        : this(new ChatSessionToolingProjector(), new TranscriptProjectionRestoreTokenProjector())
+        : this(new ChatSessionToolingProjector(), new TranscriptProjectionRestoreTokenProjector(), localizer: null)
+    {
+    }
+
+    public ChatStateProjector(IStringLocalizer<CoreStrings> localizer)
+        : this(new ChatSessionToolingProjector(), new TranscriptProjectionRestoreTokenProjector(), localizer)
     {
     }
 
     public ChatStateProjector(
         ChatSessionToolingProjector sessionToolingProjector,
-        TranscriptProjectionRestoreTokenProjector restoreTokenProjector)
+        TranscriptProjectionRestoreTokenProjector restoreTokenProjector,
+        IStringLocalizer<CoreStrings>? localizer = null)
     {
         _sessionToolingProjector = sessionToolingProjector ?? throw new ArgumentNullException(nameof(sessionToolingProjector));
         _restoreTokenProjector = restoreTokenProjector ?? throw new ArgumentNullException(nameof(restoreTokenProjector));
+        _localizer = localizer;
     }
 
     public ChatUiProjection Apply(
@@ -54,9 +65,13 @@ public sealed class ChatStateProjector : IChatStateProjector
         var isConnecting = connectionState.Phase == ConnectionPhase.Connecting;
         var isConnected = connectionState.Phase == ConnectionPhase.Connected;
         var isInitializing = connectionState.Phase == ConnectionPhase.Initializing;
-        var connectionStatus = connectionState.Phase == ConnectionPhase.Connected ? "Connected" : 
-                               connectionState.Phase == ConnectionPhase.Initializing ? "Initializing..." :
-                               connectionState.Phase == ConnectionPhase.Connecting ? "Connecting..." : "Disconnected";
+        var connectionStatus = connectionState.Phase switch
+        {
+            ConnectionPhase.Connected => Localize("ChatConnectionStatus_Connected", "Connected"),
+            ConnectionPhase.Initializing => Localize("ChatConnectionStatus_Initializing", "Initializing..."),
+            ConnectionPhase.Connecting => Localize("ChatConnectionStatus_Connecting", "Connecting..."),
+            _ => Localize("ChatConnectionStatus_Disconnected", "Disconnected")
+        };
         var connectionError = connectionState.Error;
         var isAuthenticationRequired = connectionState.IsAuthenticationRequired;
         var authenticationHintMessage = connectionState.AuthenticationHintMessage;
@@ -131,23 +146,47 @@ public sealed class ChatStateProjector : IChatStateProjector
             : null;
     }
 
-    private static string GetTurnStatusText(ActiveTurnState? turn)
+    private string GetTurnStatusText(ActiveTurnState? turn)
     {
         if (turn == null) return string.Empty;
         return turn.Phase switch
         {
-            ChatTurnPhase.CreatingRemoteSession => "Starting session...",
-            ChatTurnPhase.DispatchingPrompt => "Sending prompt...",
-            ChatTurnPhase.WaitingForAgent => "Waiting for agent...",
-            ChatTurnPhase.Thinking => "Thinking...",
-            ChatTurnPhase.ToolPending => "Preparing tool call...",
-            ChatTurnPhase.ToolRunning => $"Running tool: {turn.ToolTitle ?? "..."}",
-            ChatTurnPhase.Responding => "Responding...",
-            ChatTurnPhase.Completed => "Completed",
-            ChatTurnPhase.Failed => $"Failed: {turn.FailureMessage ?? "Unknown error"}",
-            ChatTurnPhase.Cancelled => "Cancelled",
+            ChatTurnPhase.CreatingRemoteSession => Localize("ChatTurnStatus_CreatingRemoteSession", "Starting session..."),
+            ChatTurnPhase.DispatchingPrompt => Localize("ChatTurnStatus_DispatchingPrompt", "Sending prompt..."),
+            ChatTurnPhase.WaitingForAgent => Localize("ChatTurnStatus_WaitingForAgent", "Waiting for agent..."),
+            ChatTurnPhase.Thinking => Localize("ChatTurnStatus_Thinking", "Thinking..."),
+            ChatTurnPhase.ToolPending => Localize("ChatTurnStatus_ToolPending", "Preparing tool call..."),
+            ChatTurnPhase.ToolRunning => FormatLocalize("ChatTurnStatus_ToolRunning", "Running tool: {0}", turn.ToolTitle ?? "..."),
+            ChatTurnPhase.Responding => Localize("ChatTurnStatus_Responding", "Responding..."),
+            ChatTurnPhase.Completed => Localize("ChatTurnStatus_Completed", "Completed"),
+            ChatTurnPhase.Failed => FormatLocalize("ChatTurnStatus_Failed", "Failed: {0}", turn.FailureMessage ?? Localize("ChatTurnStatus_UnknownError", "Unknown error")),
+            ChatTurnPhase.Cancelled => Localize("ChatTurnStatus_Cancelled", "Cancelled"),
             _ => string.Empty
         };
+    }
+
+    private string Localize(string key, string fallback)
+    {
+        if (_localizer is null)
+        {
+            return fallback;
+        }
+
+        var localized = _localizer[key];
+        return localized.ResourceNotFound ? fallback : localized.Value;
+    }
+
+    private string FormatLocalize(string key, string fallback, params object[] arguments)
+    {
+        if (_localizer is null)
+        {
+            return string.Format(CultureInfo.CurrentCulture, fallback, arguments);
+        }
+
+        var localized = _localizer[key, arguments];
+        return localized.ResourceNotFound
+            ? string.Format(CultureInfo.CurrentCulture, fallback, arguments)
+            : localized.Value;
     }
 
     private static bool IsRunningTurn(ActiveTurnState? turn)

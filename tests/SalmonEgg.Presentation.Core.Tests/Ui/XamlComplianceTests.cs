@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -221,6 +223,134 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void UiResources_HaveSameKeysForCanonicalLanguages()
+    {
+        string[] resourceFiles =
+        [
+            @"SalmonEgg\SalmonEgg\Strings\en\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\en-US\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\zh-Hans\Resources.resw"
+        ];
+
+        var resourceKeysByFile = resourceFiles.ToDictionary(
+            path => path,
+            path => XDocument.Parse(LoadText(path))
+                .Descendants("data")
+                .Select(data => (string?)data.Attribute("name"))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+        var allKeys = resourceKeysByFile.Values
+            .SelectMany(static keys => keys)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var failures = new List<string>();
+
+        foreach (var (resourceFile, keys) in resourceKeysByFile)
+        {
+            var missing = allKeys.Except(keys, StringComparer.Ordinal).ToArray();
+            if (missing.Length > 0)
+            {
+                failures.Add($"{resourceFile} missing: {string.Join(", ", missing)}");
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void Xaml_UserVisibleLiteralAttributesAreLocalizedWithUid()
+    {
+        var root = FindRepoRoot();
+        var xamlFiles = Directory
+            .EnumerateFiles(Path.Combine(root, "SalmonEgg", "SalmonEgg"), "*.xaml", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var failures = new List<string>();
+
+        foreach (var xamlFile in xamlFiles)
+        {
+            var document = XDocument.Parse(File.ReadAllText(xamlFile));
+            foreach (var element in document.Descendants())
+            {
+                foreach (var attribute in element.Attributes().Where(IsUserVisibleTextAttribute))
+                {
+                    if (!IsHardcodedUserVisibleLiteral(attribute.Value)
+                        || HasAttributeByLocalName(element, "Uid")
+                        || IsVisibleLiteralWhitelist(xamlFile, element, attribute))
+                    {
+                        continue;
+                    }
+
+                    failures.Add($"{Path.GetRelativePath(root, xamlFile)} <{element.Name.LocalName}> {attribute.Name.LocalName}=\"{attribute.Value}\"");
+                }
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void UiCode_DynamicResourceKeysExistInAllCanonicalResources()
+    {
+        string[] sourceFiles =
+        [
+            @"SalmonEgg\SalmonEgg\MainPage.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Controls\ToolCallPill.xaml.cs",
+            @"SalmonEgg\SalmonEgg\Presentation\Converters\TaskOverviewLocalizationConverters.cs"
+        ];
+        string[] resourceFiles =
+        [
+            @"SalmonEgg\SalmonEgg\Strings\en\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\en-US\Resources.resw",
+            @"SalmonEgg\SalmonEgg\Strings\zh-Hans\Resources.resw"
+        ];
+        var keys = sourceFiles
+            .SelectMany(path => Regex.Matches(LoadText(path), @"(?:ResolveResourceString|TaskOverviewResourceLabels\.Get)\(\s*""(?<key>[^""]+)"""))
+            .Select(match => match.Groups["key"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var failures = new List<string>();
+
+        foreach (var resourceFile in resourceFiles)
+        {
+            var resourceKeys = XDocument.Parse(LoadText(resourceFile))
+                .Descendants("data")
+                .Select(data => (string?)data.Attribute("name"))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var key in keys)
+            {
+                if (!resourceKeys.Contains(key))
+                {
+                    failures.Add($"{resourceFile} missing dynamic key {key}");
+                }
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void MainPage_DynamicResourceLookupSupportsXUidPropertyKeyFallback()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+        var resolveResourceString = ExtractSection(
+            code,
+            "private static string ResolveResourceString(string resourceKey, string fallback)",
+            "private static bool IsChatPageType");
+
+        Assert.Contains("ResourceLoader.GetString(resourceKey)", resolveResourceString, StringComparison.Ordinal);
+        Assert.Contains("resourceKey.Replace('.', '/')", resolveResourceString, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SettingsPages_UseSharedResponsiveContentAndFormRows()
     {
         var settingsFiles = Directory.GetFiles(
@@ -422,6 +552,7 @@ public sealed class XamlComplianceTests
         Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.Title\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.TaskOverviewRoot\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.TaskOverviewSummary\"", xaml);
+        Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.TaskOverview.CurrentPlan\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.TaskOverview.PlanList\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.TaskOverview.EmptyTitle\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"RightPanel.TaskOverview.ChangesList\"", xaml);
@@ -438,6 +569,12 @@ public sealed class XamlComplianceTests
 
         Assert.Contains("Text=\"{x:Bind GetTaskOverviewSummaryText(ChatVM.TaskOverviewState), Mode=OneWay}\"", xaml);
         Assert.Contains("AutomationProperties.Name=\"{x:Bind GetTaskOverviewSummaryAutomationName(ChatVM.TaskOverviewState), Mode=OneWay}\"", xaml);
+        Assert.Contains("TaskOverviewCurrentPlanLabel", xaml);
+        Assert.Contains("Text=\"{x:Bind ChatVM.TaskOverviewCurrentPlanContent, Mode=OneWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{x:Bind ChatVM.TaskOverviewVisiblePlanEntries, Mode=OneWay}\"", xaml);
+        Assert.Contains("ItemsSource=\"{x:Bind ChatVM.TaskOverviewVisibleChanges, Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{x:Bind GetTaskOverviewMorePlanText(ChatVM.TaskOverviewHiddenPlanCount), Mode=OneWay}\"", xaml);
+        Assert.Contains("Text=\"{x:Bind GetTaskOverviewMoreChangesText(ChatVM.TaskOverviewHiddenChangeCount), Mode=OneWay}\"", xaml);
         Assert.Contains("Fill=\"{x:Bind Status, Mode=OneWay, Converter={StaticResource PlanStatusToColorConverter}}\"", xaml);
         Assert.Contains("Text=\"{x:Bind Status, Mode=OneWay, Converter={StaticResource PlanStatusLabelConverter}}\"", xaml);
         Assert.Contains("Text=\"{x:Bind Priority, Mode=OneWay, Converter={StaticResource PlanPriorityLabelConverter}}\"", xaml);
@@ -2084,6 +2221,52 @@ public sealed class XamlComplianceTests
 
     private static bool HasAttributeByLocalName(XElement element, string localName)
         => element.Attributes().Any(attribute => string.Equals(attribute.Name.LocalName, localName, StringComparison.Ordinal));
+
+    private static bool IsUserVisibleTextAttribute(XAttribute attribute)
+    {
+        if (attribute.Name.LocalName is not ("Text" or "Content" or "Header" or "PlaceholderText" or "ToolTip" or "Name"))
+        {
+            return false;
+        }
+
+        return attribute.Name.LocalName != "Name"
+            || attribute.Name.NamespaceName.EndsWith("/automation", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHardcodedUserVisibleLiteral(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith('{')
+            || trimmed.StartsWith("&#x", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("ms-appx://", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("/", StringComparison.Ordinal)
+            || trimmed.All(char.IsDigit))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsVisibleLiteralWhitelist(string xamlFile, XElement element, XAttribute attribute)
+    {
+        var fileName = Path.GetFileName(xamlFile);
+        var elementName = element.Name.LocalName;
+        var value = attribute.Value;
+
+        return elementName is "FontIcon" or "SymbolIcon"
+            || string.Equals(value, "Icon", StringComparison.Ordinal)
+            || string.Equals(value, "boot", StringComparison.Ordinal)
+            || string.Equals(value, "inactive", StringComparison.Ordinal)
+            || string.Equals(fileName, "ChatInputArea.xaml", StringComparison.OrdinalIgnoreCase)
+                && attribute.Name.LocalName == "Content"
+                && value.Length <= 2;
+    }
 
     private static string GetResourceValue(XDocument resources, string name)
     {

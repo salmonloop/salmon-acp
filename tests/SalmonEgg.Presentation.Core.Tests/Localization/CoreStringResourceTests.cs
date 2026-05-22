@@ -95,6 +95,37 @@ public sealed class CoreStringResourceTests
         }
     }
 
+    [Fact]
+    public void CoreStringResources_HaveSameKeysForCanonicalLanguages()
+    {
+        var keysByFile = CoreStringResourcePaths.ToDictionary(
+            path => path,
+            path => XDocument.Load(Path.Combine(FindRepoRoot(), NormalizeRelativePath(path)))
+                .Descendants("data")
+                .Select(data => (string?)data.Attribute("name"))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+        var allKeys = keysByFile.Values
+            .SelectMany(static keys => keys)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var failures = keysByFile
+            .Select(pair => new
+            {
+                File = pair.Key,
+                Missing = allKeys.Except(pair.Value, StringComparer.Ordinal).ToArray()
+            })
+            .Where(result => result.Missing.Length > 0)
+            .Select(result => $"{result.File} missing: {string.Join(", ", result.Missing)}")
+            .ToArray();
+
+        Assert.True(failures.Length == 0, string.Join(Environment.NewLine, failures));
+    }
+
     private static readonly string[] CoreStringResourcePaths =
     [
         @"src\SalmonEgg.Presentation.Core\Resources\CoreStrings.resx",

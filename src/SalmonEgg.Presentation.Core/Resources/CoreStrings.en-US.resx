@@ -15,6 +15,12 @@
   <data name="Nav_Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
+  <data name="Nav_Sessions" xml:space="preserve">
+    <value>Sessions</value>
+  </data>
+  <data name="Nav_Unclassified" xml:space="preserve">
+    <value>Unclassified</value>
+  </data>
   <data name="SettingsSection_General" xml:space="preserve">
     <value>General</value>
   </data>
@@ -51,6 +57,72 @@
   <data name="Search_Commands" xml:space="preserve">
     <value>Commands</value>
   </data>
+  <data name="Search_Loading" xml:space="preserve">
+    <value>Searching...</value>
+  </data>
+  <data name="Search_LoadingSubtitle" xml:space="preserve">
+    <value>Updating results</value>
+  </data>
+  <data name="Search_Empty" xml:space="preserve">
+    <value>No results found</value>
+  </data>
+  <data name="Search_EmptySubtitle" xml:space="preserve">
+    <value>Try a different keyword</value>
+  </data>
+  <data name="Search_Error" xml:space="preserve">
+    <value>Search failed</value>
+  </data>
+  <data name="Search_ErrorSubtitle" xml:space="preserve">
+    <value>Try again later</value>
+  </data>
+  <data name="Search_History" xml:space="preserve">
+    <value>Recent searches</value>
+  </data>
+  <data name="ChatConnectionStatus_Connected" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="ChatConnectionStatus_Initializing" xml:space="preserve">
+    <value>Initializing...</value>
+  </data>
+  <data name="ChatConnectionStatus_Connecting" xml:space="preserve">
+    <value>Connecting...</value>
+  </data>
+  <data name="ChatConnectionStatus_Disconnected" xml:space="preserve">
+    <value>Disconnected</value>
+  </data>
+  <data name="ChatTurnStatus_CreatingRemoteSession" xml:space="preserve">
+    <value>Starting session...</value>
+  </data>
+  <data name="ChatTurnStatus_DispatchingPrompt" xml:space="preserve">
+    <value>Sending prompt...</value>
+  </data>
+  <data name="ChatTurnStatus_WaitingForAgent" xml:space="preserve">
+    <value>Waiting for agent...</value>
+  </data>
+  <data name="ChatTurnStatus_Thinking" xml:space="preserve">
+    <value>Thinking...</value>
+  </data>
+  <data name="ChatTurnStatus_ToolPending" xml:space="preserve">
+    <value>Preparing tool call...</value>
+  </data>
+  <data name="ChatTurnStatus_ToolRunning" xml:space="preserve">
+    <value>Running tool: {0}</value>
+  </data>
+  <data name="ChatTurnStatus_Responding" xml:space="preserve">
+    <value>Responding...</value>
+  </data>
+  <data name="ChatTurnStatus_Completed" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="ChatTurnStatus_Failed" xml:space="preserve">
+    <value>Failed: {0}</value>
+  </data>
+  <data name="ChatTurnStatus_UnknownError" xml:space="preserve">
+    <value>Unknown error</value>
+  </data>
+  <data name="ChatTurnStatus_Cancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
   <data name="SearchCommand_NewSessionTitle" xml:space="preserve">
     <value>New session</value>
   </data>
@@ -68,6 +140,72 @@
   </data>
   <data name="SearchCommand_ToggleThemeSubtitle" xml:space="preserve">
     <value>Switch between light, dark, and system theme</value>
+  </data>
+  <data name="Discover_LoadingConnecting" xml:space="preserve">
+    <value>Connecting to agent...</value>
+  </data>
+  <data name="Discover_LoadingInitializing" xml:space="preserve">
+    <value>Initializing ACP protocol...</value>
+  </data>
+  <data name="Discover_LoadingListingSessions" xml:space="preserve">
+    <value>Fetching sessions...</value>
+  </data>
+  <data name="Discover_LoadingImportingSession" xml:space="preserve">
+    <value>Importing session...</value>
+  </data>
+  <data name="Discover_LoadingActivatingSession" xml:space="preserve">
+    <value>Opening session...</value>
+  </data>
+  <data name="Discover_LoadingHydratingSession" xml:space="preserve">
+    <value>Loading session history...</value>
+  </data>
+  <data name="Discover_ErrorConnectionNotInitialized" xml:space="preserve">
+    <value>The ACP connection has not finished initializing.</value>
+  </data>
+  <data name="Discover_ErrorListCapabilityMissing" xml:space="preserve">
+    <value>The current agent does not advertise session/list capability.</value>
+  </data>
+  <data name="Discover_UntitledSession" xml:space="preserve">
+    <value>Untitled session</value>
+  </data>
+  <data name="Discover_NoDescription" xml:space="preserve">
+    <value>No description</value>
+  </data>
+  <data name="Discover_ErrorImportFailed" xml:space="preserve">
+    <value>Session import failed.</value>
+  </data>
+  <data name="Discover_ErrorImportException" xml:space="preserve">
+    <value>Error importing session: {0}</value>
+  </data>
+  <data name="Discover_ErrorListFailed" xml:space="preserve">
+    <value>Unable to fetch sessions: {0}</value>
+  </data>
+  <data name="Discover_AffinityNeedsMapping" xml:space="preserve">
+    <value>Needs mapping</value>
+  </data>
+  <data name="Discover_AffinityUnclassified" xml:space="preserve">
+    <value>Unclassified</value>
+  </data>
+  <data name="Discover_AffinityStatusOverride" xml:space="preserve">
+    <value>Using local project override.</value>
+  </data>
+  <data name="Discover_AffinityStatusPathMapping" xml:space="preserve">
+    <value>Mapped from remote path.</value>
+  </data>
+  <data name="Discover_AffinityStatusDirectMatch" xml:space="preserve">
+    <value>Matched by local project path.</value>
+  </data>
+  <data name="Discover_AffinityStatusNeedsMapping" xml:space="preserve">
+    <value>Remote working directory needs path mapping.</value>
+  </data>
+  <data name="Discover_AffinityStatusMissingCwd" xml:space="preserve">
+    <value>Remote metadata has no usable working directory.</value>
+  </data>
+  <data name="Discover_AffinityStatusUnclassified" xml:space="preserve">
+    <value>No matching local project.</value>
+  </data>
+  <data name="Discover_AffinityStatusUnknown" xml:space="preserve">
+    <value>No project affinity information.</value>
   </data>
   <data name="SettingsSearchSubtitle_General" xml:space="preserve">
     <value>Theme, language, and startup options</value>

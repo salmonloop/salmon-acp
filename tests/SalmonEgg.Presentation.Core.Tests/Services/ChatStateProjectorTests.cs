@@ -2,6 +2,7 @@ using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using System.Collections.Immutable;
 using SalmonEgg.Domain.Models.Conversation;
+using SalmonEgg.Presentation.Core.Tests.Localization;
 using Uno.Extensions.Reactive;
 using Xunit;
 
@@ -73,6 +74,26 @@ public sealed class ChatStateProjectorTests
         Assert.True(projection.IsPromptInFlight);
         Assert.False(projection.IsPromptSubmitInFlight);
         Assert.Equal(ChatTurnPhase.Thinking, projection.TurnPhase);
+    }
+
+    [Fact]
+    public void Apply_ProjectsTurnStatusTextFromCoreStringResources()
+    {
+        var projector = new ChatStateProjector(new TestCoreStringLocalizer());
+        var storeState = ChatState.Empty with
+        {
+            ActiveTurn = new ActiveTurnState(
+                "conv-1",
+                "turn-1",
+                ChatTurnPhase.ToolRunning,
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                ToolTitle: "read_file")
+        };
+
+        var projection = projector.Apply(storeState, ChatConnectionState.Empty, "conv-1", null);
+
+        Assert.Equal("正在运行工具：read_file", projection.TurnStatusText);
     }
 
     [Theory]

@@ -3248,11 +3248,15 @@ public partial class ChatViewModelTests
         Assert.Contains(nameof(ChatViewModel.ShouldShowPlanList), raised);
         Assert.Contains(nameof(ChatViewModel.ShouldShowPlanEmpty), raised);
         Assert.Contains(nameof(ChatViewModel.TaskOverviewState), raised);
+        Assert.Contains(nameof(ChatViewModel.TaskOverviewCurrentPlanContent), raised);
+        Assert.Contains(nameof(ChatViewModel.TaskOverviewVisiblePlanEntries), raised);
         Assert.True(viewModel.HasPlanEntries);
         Assert.True(viewModel.ShouldShowPlanList);
         Assert.False(viewModel.ShouldShowPlanEmpty);
         Assert.False(viewModel.TaskOverviewState.ShouldShowEmpty);
         Assert.True(viewModel.TaskOverviewState.ShouldShowPlanList);
+        Assert.Equal(1, viewModel.TaskOverviewState.PendingPlanCount);
+        Assert.Equal("Step 1", viewModel.TaskOverviewCurrentPlanContent);
     }
 
     private sealed class QueueingSynchronizationContext : SynchronizationContext, IUiDispatcher

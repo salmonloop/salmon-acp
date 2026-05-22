@@ -76,6 +76,51 @@
   <data name="Search_History" xml:space="preserve">
     <value>最近搜索</value>
   </data>
+  <data name="ChatConnectionStatus_Connected" xml:space="preserve">
+    <value>已连接</value>
+  </data>
+  <data name="ChatConnectionStatus_Initializing" xml:space="preserve">
+    <value>初始化中...</value>
+  </data>
+  <data name="ChatConnectionStatus_Connecting" xml:space="preserve">
+    <value>连接中...</value>
+  </data>
+  <data name="ChatConnectionStatus_Disconnected" xml:space="preserve">
+    <value>未连接</value>
+  </data>
+  <data name="ChatTurnStatus_CreatingRemoteSession" xml:space="preserve">
+    <value>正在启动会话...</value>
+  </data>
+  <data name="ChatTurnStatus_DispatchingPrompt" xml:space="preserve">
+    <value>正在发送提示...</value>
+  </data>
+  <data name="ChatTurnStatus_WaitingForAgent" xml:space="preserve">
+    <value>等待 Agent...</value>
+  </data>
+  <data name="ChatTurnStatus_Thinking" xml:space="preserve">
+    <value>思考中...</value>
+  </data>
+  <data name="ChatTurnStatus_ToolPending" xml:space="preserve">
+    <value>正在准备工具调用...</value>
+  </data>
+  <data name="ChatTurnStatus_ToolRunning" xml:space="preserve">
+    <value>正在运行工具：{0}</value>
+  </data>
+  <data name="ChatTurnStatus_Responding" xml:space="preserve">
+    <value>正在回复...</value>
+  </data>
+  <data name="ChatTurnStatus_Completed" xml:space="preserve">
+    <value>已完成</value>
+  </data>
+  <data name="ChatTurnStatus_Failed" xml:space="preserve">
+    <value>失败：{0}</value>
+  </data>
+  <data name="ChatTurnStatus_UnknownError" xml:space="preserve">
+    <value>未知错误</value>
+  </data>
+  <data name="ChatTurnStatus_Cancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
   <data name="SearchCommand_NewSessionTitle" xml:space="preserve">
     <value>新建会话</value>
   </data>
@@ -93,6 +138,72 @@
   </data>
   <data name="SearchCommand_ToggleThemeSubtitle" xml:space="preserve">
     <value>在亮色、暗色和系统主题间切换</value>
+  </data>
+  <data name="Discover_LoadingConnecting" xml:space="preserve">
+    <value>正在连接到 Agent...</value>
+  </data>
+  <data name="Discover_LoadingInitializing" xml:space="preserve">
+    <value>正在初始化 ACP 协议...</value>
+  </data>
+  <data name="Discover_LoadingListingSessions" xml:space="preserve">
+    <value>正在获取会话列表...</value>
+  </data>
+  <data name="Discover_LoadingImportingSession" xml:space="preserve">
+    <value>正在导入会话...</value>
+  </data>
+  <data name="Discover_LoadingActivatingSession" xml:space="preserve">
+    <value>正在打开会话...</value>
+  </data>
+  <data name="Discover_LoadingHydratingSession" xml:space="preserve">
+    <value>正在加载会话历史...</value>
+  </data>
+  <data name="Discover_ErrorConnectionNotInitialized" xml:space="preserve">
+    <value>ACP 连接尚未完成初始化。</value>
+  </data>
+  <data name="Discover_ErrorListCapabilityMissing" xml:space="preserve">
+    <value>当前 Agent 未声明 session/list 能力。</value>
+  </data>
+  <data name="Discover_UntitledSession" xml:space="preserve">
+    <value>未命名会话</value>
+  </data>
+  <data name="Discover_NoDescription" xml:space="preserve">
+    <value>暂无描述</value>
+  </data>
+  <data name="Discover_ErrorImportFailed" xml:space="preserve">
+    <value>导入会话失败。</value>
+  </data>
+  <data name="Discover_ErrorImportException" xml:space="preserve">
+    <value>导入会话时出错: {0}</value>
+  </data>
+  <data name="Discover_ErrorListFailed" xml:space="preserve">
+    <value>无法获取会话列表: {0}</value>
+  </data>
+  <data name="Discover_AffinityNeedsMapping" xml:space="preserve">
+    <value>需要映射</value>
+  </data>
+  <data name="Discover_AffinityUnclassified" xml:space="preserve">
+    <value>未归类</value>
+  </data>
+  <data name="Discover_AffinityStatusOverride" xml:space="preserve">
+    <value>已应用本地项目覆盖。</value>
+  </data>
+  <data name="Discover_AffinityStatusPathMapping" xml:space="preserve">
+    <value>已根据远程路径映射。</value>
+  </data>
+  <data name="Discover_AffinityStatusDirectMatch" xml:space="preserve">
+    <value>已匹配本地项目路径。</value>
+  </data>
+  <data name="Discover_AffinityStatusNeedsMapping" xml:space="preserve">
+    <value>远程工作目录需要路径映射。</value>
+  </data>
+  <data name="Discover_AffinityStatusMissingCwd" xml:space="preserve">
+    <value>远程元数据没有可用工作目录。</value>
+  </data>
+  <data name="Discover_AffinityStatusUnclassified" xml:space="preserve">
+    <value>未匹配到本地项目。</value>
+  </data>
+  <data name="Discover_AffinityStatusUnknown" xml:space="preserve">
+    <value>没有项目归属信息。</value>
   </data>
   <data name="SettingsSearchSubtitle_General" xml:space="preserve">
     <value>主题、语言、启动选项</value>

@@ -6,6 +6,7 @@ public sealed class TaskOverviewPanelStatePresenter
         int planCount,
         int changeCount,
         int activePlanCount = 0,
+        int pendingPlanCount = 0,
         int completedPlanCount = 0)
     {
         var hasPlan = planCount > 0;
@@ -14,6 +15,7 @@ public sealed class TaskOverviewPanelStatePresenter
             planCount,
             changeCount,
             activePlanCount,
+            pendingPlanCount,
             completedPlanCount,
             ShouldShowEmpty: !hasPlan && !hasChanges,
             ShouldShowPlanList: hasPlan,

@@ -565,13 +565,44 @@
                                 <ScrollViewer Grid.Row="1"
                                               AutomationProperties.AutomationId="RightPanel.TaskOverviewRoot">
                                     <StackPanel Padding="16" Spacing="16">
-                                        <StackPanel Spacing="8">
+                                        <StackPanel AutomationProperties.AutomationId="RightPanel.TaskOverview.CurrentPlan"
+                                                    AutomationProperties.Name="{x:Bind GetTaskOverviewCurrentPlanAutomationName(ChatVM.TaskOverviewCurrentPlanContent, ChatVM.TaskOverviewCurrentPlanStatus, ChatVM.TaskOverviewCurrentPlanPriority), Mode=OneWay}"
+                                                    Spacing="8"
+                                                    Visibility="{x:Bind ChatVM.ShouldShowTaskOverviewCurrentPlan, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock x:Uid="TaskOverviewCurrentPlanLabel"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Padding="12">
+                                                <Grid ColumnDefinitions="*,Auto"
+                                                      ColumnSpacing="12">
+                                                    <TextBlock Text="{x:Bind ChatVM.TaskOverviewCurrentPlanContent, Mode=OneWay}"
+                                                               TextWrapping="WrapWholeWords"
+                                                               Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                                               VerticalAlignment="Center" />
+                                                    <StackPanel Grid.Column="1"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Text="{x:Bind ChatVM.TaskOverviewCurrentPlanStatus, Mode=OneWay, Converter={StaticResource PlanStatusLabelConverter}}"
+                                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                                   HorizontalAlignment="Right" />
+                                                        <TextBlock Text="{x:Bind ChatVM.TaskOverviewCurrentPlanPriority, Mode=OneWay, Converter={StaticResource PlanPriorityLabelConverter}}"
+                                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   HorizontalAlignment="Right" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="8"
+                                                    Visibility="{x:Bind ChatVM.ShouldShowTaskOverviewVisiblePlanList, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                             <TextBlock x:Uid="TaskOverviewPlanSectionTitle"
                                                        Style="{ThemeResource BodyStrongTextBlockStyle}" />
                                             <ListView AutomationProperties.AutomationId="RightPanel.TaskOverview.PlanList"
-                                                      ItemsSource="{x:Bind ChatVM.PlanEntries, Mode=OneWay}"
-                                                      SelectionMode="None"
-                                                      Visibility="{x:Bind ChatVM.TaskOverviewState.ShouldShowPlanList, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                      ItemsSource="{x:Bind ChatVM.TaskOverviewVisiblePlanEntries, Mode=OneWay}"
+                                                      SelectionMode="None">
                                                 <ListView.ItemTemplate>
                                                     <DataTemplate x:DataType="chatVm:PlanEntryViewModel">
                                                         <Grid Padding="0,8"
@@ -599,13 +630,17 @@
                                                     </DataTemplate>
                                                 </ListView.ItemTemplate>
                                             </ListView>
+                                            <TextBlock Text="{x:Bind GetTaskOverviewMorePlanText(ChatVM.TaskOverviewHiddenPlanCount), Mode=OneWay}"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{x:Bind ChatVM.ShouldShowTaskOverviewMorePlanItems, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
 
                                         <StackPanel Spacing="8">
                                             <TextBlock x:Uid="TaskOverviewChangesSectionTitle"
                                                        Style="{ThemeResource BodyStrongTextBlockStyle}" />
                                             <ListView AutomationProperties.AutomationId="RightPanel.TaskOverview.ChangesList"
-                                                      ItemsSource="{x:Bind ChatVM.TaskOverviewChanges, Mode=OneWay}"
+                                                      ItemsSource="{x:Bind ChatVM.TaskOverviewVisibleChanges, Mode=OneWay}"
                                                       SelectionMode="None"
                                                       Visibility="{x:Bind ChatVM.TaskOverviewState.ShouldShowChangesList, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                                                 <ListView.ItemTemplate>
@@ -636,6 +671,10 @@
                                                     </DataTemplate>
                                                 </ListView.ItemTemplate>
                                             </ListView>
+                                            <TextBlock Text="{x:Bind GetTaskOverviewMoreChangesText(ChatVM.TaskOverviewHiddenChangeCount), Mode=OneWay}"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{x:Bind ChatVM.ShouldShowTaskOverviewMoreChanges, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" />
                                         </StackPanel>
 
                                         <StackPanel Visibility="{x:Bind ChatVM.TaskOverviewState.ShouldShowEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"

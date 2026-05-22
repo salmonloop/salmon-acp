@@ -61,12 +61,10 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private string? _toolCallId;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(ToolCallKindDisplayName))]
         [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private Domain.Models.Tool.ToolCallKind? _toolCallKind;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(ToolCallStatusDisplayName))]
         [NotifyPropertyChangedFor(nameof(ShouldShowToolCallPill))]
         private Domain.Models.Tool.ToolCallStatus? _toolCallStatus;
 
@@ -326,29 +324,6 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
                || HasTitle);
 
 
-       public string ToolCallStatusDisplayName => ToolCallStatus switch
-       {
-           Domain.Models.Tool.ToolCallStatus.Pending => "待处理",
-           Domain.Models.Tool.ToolCallStatus.InProgress => "进行中",
-           Domain.Models.Tool.ToolCallStatus.Completed => "已完成",
-           Domain.Models.Tool.ToolCallStatus.Failed => "失败",
-           Domain.Models.Tool.ToolCallStatus.Cancelled => "已取消",
-           _ => "未知"
-       };
-
-       public string ToolCallKindDisplayName => ToolCallKind switch
-       {
-           Domain.Models.Tool.ToolCallKind.Read => "读取",
-           Domain.Models.Tool.ToolCallKind.Edit => "编辑",
-           Domain.Models.Tool.ToolCallKind.Delete => "删除",
-           Domain.Models.Tool.ToolCallKind.Move => "移动",
-           Domain.Models.Tool.ToolCallKind.Search => "搜索",
-           Domain.Models.Tool.ToolCallKind.Execute => "执行",
-           Domain.Models.Tool.ToolCallKind.SwitchMode => "切换模式",
-           Domain.Models.Tool.ToolCallKind.Think => "思考",
-           _ => "工具"
-       };
-
        public bool HasToolCallJson => !string.IsNullOrWhiteSpace(ToolCallJson);
        public bool HasToolCallRawInput => !string.IsNullOrWhiteSpace(ToolCallRawInputJson);
        public bool HasToolCallRawOutput => !string.IsNullOrWhiteSpace(ToolCallRawOutputJson);
@@ -606,27 +581,9 @@ namespace SalmonEgg.Presentation.ViewModels.Chat
         private string _content = string.Empty;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(StatusDisplayName))]
         private Domain.Models.Plan.PlanEntryStatus _status;
 
         [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(PriorityDisplayName))]
         private Domain.Models.Plan.PlanEntryPriority _priority;
-
-        public string StatusDisplayName => Status switch
-        {
-            Domain.Models.Plan.PlanEntryStatus.Pending => "待处理",
-            Domain.Models.Plan.PlanEntryStatus.InProgress => "进行中",
-            Domain.Models.Plan.PlanEntryStatus.Completed => "已完成",
-            _ => "未知"
-        };
-
-        public string PriorityDisplayName => Priority switch
-        {
-            Domain.Models.Plan.PlanEntryPriority.High => "高",
-            Domain.Models.Plan.PlanEntryPriority.Medium => "中",
-            Domain.Models.Plan.PlanEntryPriority.Low => "低",
-            _ => "未知"
-        };
     }
 }

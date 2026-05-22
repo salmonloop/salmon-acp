@@ -475,6 +475,13 @@ public class UiConventionsTests
                 failures.Add($"{file}: missing TaskOverviewSummaryFormat.Text");
             }
 
+            if (!keys.Contains("TaskOverviewCurrentPlanLabel.Text")
+                || !keys.Contains("TaskOverviewMorePlanItemsFormat.Text")
+                || !keys.Contains("TaskOverviewMoreChangesFormat.Text"))
+            {
+                failures.Add($"{file}: missing task overview progressive disclosure labels");
+            }
+
             if (!keys.Contains("TaskOverviewPlanStatusPending.Text")
                 || !keys.Contains("TaskOverviewPlanStatusInProgress.Text")
                 || !keys.Contains("TaskOverviewPlanStatusCompleted.Text"))

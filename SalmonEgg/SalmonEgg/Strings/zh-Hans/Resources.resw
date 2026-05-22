@@ -594,6 +594,12 @@
   <data name="Start_Title.AutomationProperties.Name" xml:space="preserve">
     <value>Salmon Egg 欢迎标题</value>
   </data>
+  <data name="Start_Subtitle.Text" xml:space="preserve">
+    <value>你的 AI 好鲑鲑</value>
+  </data>
+  <data name="Start_QuickLaunchLabel.Text" xml:space="preserve">
+    <value>快速开始</value>
+  </data>
   <data name="Start_Quick1.AutomationProperties.Name" xml:space="preserve">
     <value>智能推荐入口 1</value>
   </data>
@@ -1195,10 +1201,22 @@
     <value>Agent 更新计划或文件改动后会显示在这里。</value>
   </data>
   <data name="TaskOverviewSummaryFormat.Text" xml:space="preserve">
-    <value>{0} 个进行中 · {1} 个已完成 · {2} 个文件改动</value>
+    <value>{0} 个进行中 · {1} 个待处理 · {2} 个已完成 · {3} 个文件改动</value>
   </data>
   <data name="TaskOverviewSummaryAutomationFormat.Text" xml:space="preserve">
-    <value>任务概览摘要：{0} 个进行中，{1} 个已完成，{2} 个文件改动</value>
+    <value>任务概览摘要：{0} 个进行中，{1} 个待处理，{2} 个已完成，{3} 个文件改动</value>
+  </data>
+  <data name="TaskOverviewCurrentPlanLabel.Text" xml:space="preserve">
+    <value>当前焦点</value>
+  </data>
+  <data name="TaskOverviewCurrentPlanAutomationFormat.Text" xml:space="preserve">
+    <value>当前计划项：{0}。状态：{1}。优先级：{2}。</value>
+  </data>
+  <data name="TaskOverviewMorePlanItemsFormat.Text" xml:space="preserve">
+    <value>还有 {0} 个计划项</value>
+  </data>
+  <data name="TaskOverviewMoreChangesFormat.Text" xml:space="preserve">
+    <value>还有 {0} 个改动文件</value>
   </data>
   <data name="TaskOverviewPlanStatusPending.Text" xml:space="preserve">
     <value>待处理</value>
@@ -1232,5 +1250,8 @@
   </data>
   <data name="TaskOverviewChangeKindChanged.Text" xml:space="preserve">
     <value>改动</value>
+  </data>
+  <data name="ApplicationName" xml:space="preserve">
+    <value>SalmonEgg-en</value>
   </data>
 </root>

@@ -62,6 +62,8 @@ namespace SalmonEgg.Presentation.ViewModels.Chat;
 public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordinatorSink, IConversationSessionSwitcher, IConversationPanelCleanup, IConversationActivationOrchestratorSink
 {
     private const int MiniWindowCompactDisplayNameMaxLength = 24;
+    private const int TaskOverviewPlanPreviewLimit = 4;
+    private const int TaskOverviewChangePreviewLimit = 5;
 
     public enum LoadingOverlayStage
     {
@@ -847,7 +849,39 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
             PlanEntries.Count,
             TaskOverviewChanges.Count,
             PlanEntries.Count(static entry => entry.Status == Domain.Models.Plan.PlanEntryStatus.InProgress),
+            PlanEntries.Count(static entry => entry.Status == Domain.Models.Plan.PlanEntryStatus.Pending),
             PlanEntries.Count(static entry => entry.Status == Domain.Models.Plan.PlanEntryStatus.Completed));
+
+    public string TaskOverviewCurrentPlanContent => ResolveTaskOverviewCurrentPlanEntry()?.Content ?? string.Empty;
+
+    public Domain.Models.Plan.PlanEntryStatus? TaskOverviewCurrentPlanStatus => ResolveTaskOverviewCurrentPlanEntry()?.Status;
+
+    public Domain.Models.Plan.PlanEntryPriority? TaskOverviewCurrentPlanPriority => ResolveTaskOverviewCurrentPlanEntry()?.Priority;
+
+    public bool ShouldShowTaskOverviewCurrentPlan => ResolveTaskOverviewCurrentPlanEntry() is not null;
+
+    public IReadOnlyList<PlanEntryViewModel> TaskOverviewVisiblePlanEntries => ResolveTaskOverviewVisiblePlanEntries();
+
+    public bool ShouldShowTaskOverviewVisiblePlanList => TaskOverviewVisiblePlanEntries.Count > 0;
+
+    public int TaskOverviewHiddenPlanCount
+    {
+        get
+        {
+            var currentCount = ShouldShowTaskOverviewCurrentPlan ? 1 : 0;
+            return Math.Max(0, PlanEntries.Count - currentCount - TaskOverviewVisiblePlanEntries.Count);
+        }
+    }
+
+    public bool ShouldShowTaskOverviewMorePlanItems => TaskOverviewHiddenPlanCount > 0;
+
+    public IReadOnlyList<TaskOverviewChangeViewModel> TaskOverviewVisibleChanges
+        => TaskOverviewChanges.Take(TaskOverviewChangePreviewLimit).ToArray();
+
+    public int TaskOverviewHiddenChangeCount
+        => Math.Max(0, TaskOverviewChanges.Count - TaskOverviewVisibleChanges.Count);
+
+    public bool ShouldShowTaskOverviewMoreChanges => TaskOverviewHiddenChangeCount > 0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ComposerState))]
@@ -1645,6 +1679,9 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     partial void OnTaskOverviewChangesChanged(ObservableCollection<TaskOverviewChangeViewModel> value)
     {
         OnPropertyChanged(nameof(TaskOverviewState));
+        OnPropertyChanged(nameof(TaskOverviewVisibleChanges));
+        OnPropertyChanged(nameof(TaskOverviewHiddenChangeCount));
+        OnPropertyChanged(nameof(ShouldShowTaskOverviewMoreChanges));
     }
 
     private void OnCurrentSessionIdChanged(string? value)
@@ -3078,11 +3115,40 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
         OnPropertyChanged(nameof(ShouldShowPlanList));
         OnPropertyChanged(nameof(ShouldShowPlanEmpty));
         OnPropertyChanged(nameof(TaskOverviewState));
+        OnPropertyChanged(nameof(TaskOverviewCurrentPlanContent));
+        OnPropertyChanged(nameof(TaskOverviewCurrentPlanStatus));
+        OnPropertyChanged(nameof(TaskOverviewCurrentPlanPriority));
+        OnPropertyChanged(nameof(ShouldShowTaskOverviewCurrentPlan));
+        OnPropertyChanged(nameof(TaskOverviewVisiblePlanEntries));
+        OnPropertyChanged(nameof(ShouldShowTaskOverviewVisiblePlanList));
+        OnPropertyChanged(nameof(TaskOverviewHiddenPlanCount));
+        OnPropertyChanged(nameof(ShouldShowTaskOverviewMorePlanItems));
     }
 
     private void RefreshTaskOverviewChanges(IReadOnlyList<ConversationMessageSnapshot> transcript)
     {
         TaskOverviewChanges = new ObservableCollection<TaskOverviewChangeViewModel>(
             _taskOverviewChangeProjectionCoordinator.Project(transcript));
+    }
+
+    private PlanEntryViewModel? ResolveTaskOverviewCurrentPlanEntry()
+        => PlanEntries.FirstOrDefault(static entry => entry.Status == Domain.Models.Plan.PlanEntryStatus.InProgress)
+            ?? PlanEntries.FirstOrDefault(static entry => entry.Status == Domain.Models.Plan.PlanEntryStatus.Pending);
+
+    private IReadOnlyList<PlanEntryViewModel> ResolveTaskOverviewVisiblePlanEntries()
+    {
+        var current = ResolveTaskOverviewCurrentPlanEntry();
+        var visible = PlanEntries
+            .Where(entry => !ReferenceEquals(entry, current))
+            .Where(static entry => entry.Status != Domain.Models.Plan.PlanEntryStatus.Completed)
+            .Take(TaskOverviewPlanPreviewLimit)
+            .ToArray();
+
+        return visible.Length > 0
+            ? visible
+            : PlanEntries
+                .Where(entry => !ReferenceEquals(entry, current))
+                .Take(TaskOverviewPlanPreviewLimit)
+                .ToArray();
     }
 }

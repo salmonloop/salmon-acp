@@ -450,6 +450,11 @@ public sealed partial class StartViewModel : ObservableObject
             || string.Equals(e.PropertyName, nameof(ChatViewModel.IsNewSessionDraftReady), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(ChatViewModel.NewSessionDraftModeOptions), StringComparison.Ordinal))
         {
+            if (Chat.IsNewSessionDraftReady)
+            {
+                SetNewSessionDraftRefreshPending(false);
+            }
+
             RefreshStartModeProjection();
             RefreshStartSessionDraftErrorProjection();
             return;

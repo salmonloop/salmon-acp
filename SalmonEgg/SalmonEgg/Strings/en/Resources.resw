@@ -1120,10 +1120,22 @@
     <value>Agent plan updates and file changes will appear here.</value>
   </data>
   <data name="TaskOverviewSummaryFormat.Text" xml:space="preserve">
-    <value>{0} active · {1} completed · {2} files changed</value>
+    <value>{0} in progress · {1} pending · {2} completed · {3} files changed</value>
   </data>
   <data name="TaskOverviewSummaryAutomationFormat.Text" xml:space="preserve">
-    <value>Task overview summary: {0} active, {1} completed, {2} files changed</value>
+    <value>Task overview summary: {0} in progress, {1} pending, {2} completed, {3} files changed</value>
+  </data>
+  <data name="TaskOverviewCurrentPlanLabel.Text" xml:space="preserve">
+    <value>Current focus</value>
+  </data>
+  <data name="TaskOverviewCurrentPlanAutomationFormat.Text" xml:space="preserve">
+    <value>Current plan item: {0}. Status: {1}. Priority: {2}.</value>
+  </data>
+  <data name="TaskOverviewMorePlanItemsFormat.Text" xml:space="preserve">
+    <value>{0} more plan items</value>
+  </data>
+  <data name="TaskOverviewMoreChangesFormat.Text" xml:space="preserve">
+    <value>{0} more changed files</value>
   </data>
   <data name="TaskOverviewPlanStatusPending.Text" xml:space="preserve">
     <value>Pending</value>
@@ -1157,5 +1169,194 @@
   </data>
   <data name="TaskOverviewChangeKindChanged.Text" xml:space="preserve">
     <value>Changed</value>
+  </data>
+  <data name="Acp_ConnectionToggle.Header" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="Acp_ConnectionToggle.OffContent" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Acp_ConnectionToggle.OnContent" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="Acp_EndpointLabel.Text" xml:space="preserve">
+    <value>Endpoint</value>
+  </data>
+  <data name="Acp_IntegrationHint.Text" xml:space="preserve">
+    <value>These options affect only how SalmonEgg stores profiles, connects to ACP agents, and adapts local resources.</value>
+  </data>
+  <data name="Acp_IntegrationTitle.Text" xml:space="preserve">
+    <value>SalmonEgg integration settings</value>
+  </data>
+  <data name="Acp_OverviewTitle.Text" xml:space="preserve">
+    <value>Current connection</value>
+  </data>
+  <data name="Acp_PathMappingsAdd.Content" xml:space="preserve">
+    <value>Add mapping</value>
+  </data>
+  <data name="Acp_PathMappingsHint.Text" xml:space="preserve">
+    <value>SalmonEgg uses these mappings to translate remote workspace paths reported by the agent into local file system paths.</value>
+  </data>
+  <data name="Acp_PathMappingsLocalPath.Header" xml:space="preserve">
+    <value>Local root path</value>
+  </data>
+  <data name="Acp_PathMappingsRemotePath.Header" xml:space="preserve">
+    <value>Remote root path</value>
+  </data>
+  <data name="Acp_PathMappingsRemove.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Remove mapping</value>
+  </data>
+  <data name="Acp_PathMappingsTitle.Text" xml:space="preserve">
+    <value>Local path mappings</value>
+  </data>
+  <data name="Acp_ProfileConnect.Text" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Acp_ProfileDelete.Text" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Acp_ProfileEdit.Text" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Acp_ProfileMore.ToolTipService.ToolTip" xml:space="preserve">
+    <value>More</value>
+  </data>
+  <data name="Acp_ProfilesAdd.Content" xml:space="preserve">
+    <value>New profile</value>
+  </data>
+  <data name="Acp_ProfilesRefresh.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Acp_ProfilesTitle.Text" xml:space="preserve">
+    <value>ACP connection profiles</value>
+  </data>
+  <data name="Acp_TransportLabel.Text" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="ChatComposerPromptInFlightStatus.Text" xml:space="preserve">
+    <value>Waiting for the current response to finish.</value>
+  </data>
+  <data name="Conn_ActiveSessionTitle.Text" xml:space="preserve">
+    <value>Active session connection</value>
+  </data>
+  <data name="Conn_ConnectButton.Content" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Conn_ErrorInfo.Title" xml:space="preserve">
+    <value>Connection failed</value>
+  </data>
+  <data name="Conn_GoToChat.Content" xml:space="preserve">
+    <value>Enter chat</value>
+  </data>
+  <data name="Conn_PresetDelete.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Conn_PresetEdit.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Conn_PresetsAdd.Text" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="Conn_PresetsTitle.Text" xml:space="preserve">
+    <value>Server presets</value>
+  </data>
+  <data name="Conn_RemoteUrl.Header" xml:space="preserve">
+    <value>Server URL</value>
+  </data>
+  <data name="Conn_RemoteUrl.PlaceholderText" xml:space="preserve">
+    <value>ws://localhost:8080</value>
+  </data>
+  <data name="Conn_StdioArgs.Header" xml:space="preserve">
+    <value>Arguments</value>
+  </data>
+  <data name="Conn_StdioArgs.PlaceholderText" xml:space="preserve">
+    <value>e.g. server.py</value>
+  </data>
+  <data name="Conn_StdioCommand.Header" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="Conn_StdioCommand.PlaceholderText" xml:space="preserve">
+    <value>e.g. python, node</value>
+  </data>
+  <data name="Conn_SuccessInfo.Message" xml:space="preserve">
+    <value>Session established. You can start chatting.</value>
+  </data>
+  <data name="Conn_SuccessInfo.Title" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="Conn_Title.Text" xml:space="preserve">
+    <value>Connection and services</value>
+  </data>
+  <data name="Conn_TransportHttpSse.Content" xml:space="preserve">
+    <value>HTTP SSE</value>
+  </data>
+  <data name="Conn_TransportLabel.Text" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="Conn_TransportStdio.Content" xml:space="preserve">
+    <value>Stdio (local)</value>
+  </data>
+  <data name="Conn_TransportWebSocket.Content" xml:space="preserve">
+    <value>WebSocket</value>
+  </data>
+  <data name="General_ClearCacheAction.Content" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="General_ClearCacheDescription.Text" xml:space="preserve">
+    <value>Deletes all files in the local cache folder.</value>
+  </data>
+  <data name="General_ClearCacheTitle.Text" xml:space="preserve">
+    <value>Clear local cache</value>
+  </data>
+  <data name="General_MaintenanceTitle.Text" xml:space="preserve">
+    <value>Maintenance</value>
+  </data>
+  <data name="MiniChatCancelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="MiniChatComposerPromptInFlightStatus.Text" xml:space="preserve">
+    <value>Waiting for the current response to finish.</value>
+  </data>
+  <data name="MiniChatComposerVoiceListeningStatus.Text" xml:space="preserve">
+    <value>Voice input is active.</value>
+  </data>
+  <data name="Start_Quick1.AutomationProperties.Name" xml:space="preserve">
+    <value>Quick entry 1</value>
+  </data>
+  <data name="Start_Quick1Subtitle.Text" xml:space="preserve">
+    <value>Placeholder</value>
+  </data>
+  <data name="Start_Quick1Title.Text" xml:space="preserve">
+    <value>Quick pick 1</value>
+  </data>
+  <data name="Start_Quick2.AutomationProperties.Name" xml:space="preserve">
+    <value>Quick entry 2</value>
+  </data>
+  <data name="Start_Quick2Subtitle.Text" xml:space="preserve">
+    <value>Placeholder</value>
+  </data>
+  <data name="Start_Quick2Title.Text" xml:space="preserve">
+    <value>Quick pick 2</value>
+  </data>
+  <data name="Start_Quick3.AutomationProperties.Name" xml:space="preserve">
+    <value>Quick entry 3</value>
+  </data>
+  <data name="Start_Quick3Subtitle.Text" xml:space="preserve">
+    <value>Placeholder</value>
+  </data>
+  <data name="Start_Quick3Title.Text" xml:space="preserve">
+    <value>Quick pick 3</value>
+  </data>
+  <data name="Start_Title.AutomationProperties.Name" xml:space="preserve">
+    <value>Salmon Egg welcome title</value>
+  </data>
+  <data name="Start_Subtitle.Text" xml:space="preserve">
+    <value>Your AI co-pilot for ACP sessions</value>
+  </data>
+  <data name="Start_QuickLaunchLabel.Text" xml:space="preserve">
+    <value>Quick Launch</value>
+  </data>
+  <data name="Start_Title.Text" xml:space="preserve">
+    <value>Salmon Egg</value>
   </data>
 </root>

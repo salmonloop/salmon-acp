@@ -4,6 +4,7 @@ public sealed record TaskOverviewPanelState(
     int PlanCount,
     int ChangeCount,
     int ActivePlanCount,
+    int PendingPlanCount,
     int CompletedPlanCount,
     bool ShouldShowEmpty,
     bool ShouldShowPlanList,

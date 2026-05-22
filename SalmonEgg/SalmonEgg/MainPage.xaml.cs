@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SalmonEgg.Domain.Models.Plan;
 using SalmonEgg.Domain.Models.Session;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
 using SalmonEgg.Presentation.Core.Services;
@@ -509,8 +510,9 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     private string GetTaskOverviewSummaryText(TaskOverviewPanelState state)
         => string.Format(
             CultureInfo.CurrentCulture,
-            ResolveResourceString("TaskOverviewSummaryFormat.Text", "{0} active · {1} completed · {2} files changed"),
+            ResolveResourceString("TaskOverviewSummaryFormat.Text", "{0} in progress · {1} pending · {2} completed · {3} files changed"),
             state.ActivePlanCount,
+            state.PendingPlanCount,
             state.CompletedPlanCount,
             state.ChangeCount);
 
@@ -519,10 +521,56 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
             CultureInfo.CurrentCulture,
             ResolveResourceString(
                 "TaskOverviewSummaryAutomationFormat.Text",
-                "Task overview summary: {0} active, {1} completed, {2} files changed"),
+                "Task overview summary: {0} in progress, {1} pending, {2} completed, {3} files changed"),
             state.ActivePlanCount,
+            state.PendingPlanCount,
             state.CompletedPlanCount,
             state.ChangeCount);
+
+    private string GetTaskOverviewMorePlanText(int hiddenCount)
+        => string.Format(
+            CultureInfo.CurrentCulture,
+            ResolveResourceString("TaskOverviewMorePlanItemsFormat.Text", "{0} more plan items"),
+            hiddenCount);
+
+    private string GetTaskOverviewMoreChangesText(int hiddenCount)
+        => string.Format(
+            CultureInfo.CurrentCulture,
+            ResolveResourceString("TaskOverviewMoreChangesFormat.Text", "{0} more changed files"),
+            hiddenCount);
+
+    private string GetTaskOverviewCurrentPlanAutomationName(
+        string content,
+        PlanEntryStatus? status,
+        PlanEntryPriority? priority)
+    {
+        var statusText = ResolveTaskOverviewStatusLabel(status);
+        var priorityText = ResolveTaskOverviewPriorityLabel(priority);
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            ResolveResourceString("TaskOverviewCurrentPlanAutomationFormat.Text", "Current plan item: {0}. Status: {1}. Priority: {2}."),
+            content,
+            statusText,
+            priorityText);
+    }
+
+    private string ResolveTaskOverviewStatusLabel(PlanEntryStatus? status)
+        => status switch
+        {
+            PlanEntryStatus.Pending => ResolveResourceString("TaskOverviewPlanStatusPending.Text", "Pending"),
+            PlanEntryStatus.InProgress => ResolveResourceString("TaskOverviewPlanStatusInProgress.Text", "In progress"),
+            PlanEntryStatus.Completed => ResolveResourceString("TaskOverviewPlanStatusCompleted.Text", "Completed"),
+            _ => ResolveResourceString("TaskOverviewPlanStatusUnknown.Text", "Unknown")
+        };
+
+    private string ResolveTaskOverviewPriorityLabel(PlanEntryPriority? priority)
+        => priority switch
+        {
+            PlanEntryPriority.Low => ResolveResourceString("TaskOverviewPlanPriorityLow.Text", "Low"),
+            PlanEntryPriority.Medium => ResolveResourceString("TaskOverviewPlanPriorityMedium.Text", "Medium"),
+            PlanEntryPriority.High => ResolveResourceString("TaskOverviewPlanPriorityHigh.Text", "High"),
+            _ => ResolveResourceString("TaskOverviewPlanPriorityUnknown.Text", "Unknown")
+        };
 
     private DataTemplate GetBottomPanelButtonIconTemplate(BottomPanelMode mode)
         => GetAuxiliaryIconTemplate(mode == BottomPanelMode.Dock
@@ -996,6 +1044,11 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     private static string ResolveResourceString(string resourceKey, string fallback)
     {
         var value = ResourceLoader.GetString(resourceKey);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = ResourceLoader.GetString(resourceKey.Replace('.', '/'));
+        }
+
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 

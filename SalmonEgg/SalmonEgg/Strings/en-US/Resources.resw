@@ -681,6 +681,12 @@
   <data name="Start_Title.AutomationProperties.Name" xml:space="preserve">
     <value>Salmon Egg welcome title</value>
   </data>
+  <data name="Start_Subtitle.Text" xml:space="preserve">
+    <value>Your AI co-pilot for ACP sessions</value>
+  </data>
+  <data name="Start_QuickLaunchLabel.Text" xml:space="preserve">
+    <value>Quick Launch</value>
+  </data>
   <data name="Start_Quick1.AutomationProperties.Name" xml:space="preserve">
     <value>Quick entry 1</value>
   </data>
@@ -1195,10 +1201,22 @@
     <value>Agent plan updates and file changes will appear here.</value>
   </data>
   <data name="TaskOverviewSummaryFormat.Text" xml:space="preserve">
-    <value>{0} active · {1} completed · {2} files changed</value>
+    <value>{0} in progress · {1} pending · {2} completed · {3} files changed</value>
   </data>
   <data name="TaskOverviewSummaryAutomationFormat.Text" xml:space="preserve">
-    <value>Task overview summary: {0} active, {1} completed, {2} files changed</value>
+    <value>Task overview summary: {0} in progress, {1} pending, {2} completed, {3} files changed</value>
+  </data>
+  <data name="TaskOverviewCurrentPlanLabel.Text" xml:space="preserve">
+    <value>Current focus</value>
+  </data>
+  <data name="TaskOverviewCurrentPlanAutomationFormat.Text" xml:space="preserve">
+    <value>Current plan item: {0}. Status: {1}. Priority: {2}.</value>
+  </data>
+  <data name="TaskOverviewMorePlanItemsFormat.Text" xml:space="preserve">
+    <value>{0} more plan items</value>
+  </data>
+  <data name="TaskOverviewMoreChangesFormat.Text" xml:space="preserve">
+    <value>{0} more changed files</value>
   </data>
   <data name="TaskOverviewPlanStatusPending.Text" xml:space="preserve">
     <value>Pending</value>
@@ -1232,5 +1250,8 @@
   </data>
   <data name="TaskOverviewChangeKindChanged.Text" xml:space="preserve">
     <value>Changed</value>
+  </data>
+  <data name="ApplicationName" xml:space="preserve">
+    <value>SalmonEgg-en</value>
   </data>
 </root>

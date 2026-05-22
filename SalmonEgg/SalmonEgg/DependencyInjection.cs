@@ -498,7 +498,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<IDiscoverSessionsConnectionFacade>(),
                 sp.GetRequiredService<IUiDispatcher>(),
                 sp.GetRequiredService<IShellLayoutStore>(),
-                sp.GetRequiredService<IProjectAffinityResolver>()));
+                sp.GetRequiredService<IProjectAffinityResolver>(),
+                sp.GetRequiredService<IStringLocalizer<CoreStrings>>()));
 
         // Start page orchestrator (Start creates session and submits)
         services.AddSingleton<StartViewModel>(sp =>

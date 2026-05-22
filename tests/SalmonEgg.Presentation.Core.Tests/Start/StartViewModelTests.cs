@@ -1294,7 +1294,9 @@ public sealed class StartViewModelTests
         await chat.DispatchConnectionAsync(new SetConnectionInstanceIdAction("conn-1"));
         await chat.DispatchConnectionAsync(new SetConnectionPhaseAction(ConnectionPhase.Connected));
         await chat.DispatchConnectionAsync(new SetNewSessionDraftAction(CreateReadyDraft("plan")));
-        await WaitForConditionAsync(() => startViewModel.StartModeOptions.Count == 2);
+        await WaitForConditionAsync(() =>
+            startViewModel.StartModeOptions.Count == 2
+            && startViewModel.IsStartModeSelectorEnabled);
     }
 
     private static async Task WaitForConditionAsync(Func<bool> predicate, int timeoutMilliseconds = 2000, int pollDelayMilliseconds = 20)

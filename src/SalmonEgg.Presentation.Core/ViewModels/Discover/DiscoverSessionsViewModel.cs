@@ -6,10 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Domain.Models;
 using SalmonEgg.Domain.Models.Protocol;
 using SalmonEgg.Presentation.Core.Mvux.ShellLayout;
+using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
@@ -28,6 +30,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
     private readonly IDiscoverSessionsConnectionFacade _connectionFacade;
     private readonly IProjectAffinityResolver _projectAffinityResolver;
     private readonly IUiDispatcher _uiDispatcher;
+    private readonly IStringLocalizer<CoreStrings>? _localizer;
     private readonly IState<ShellLayoutState>? _layoutState;
     private CancellationTokenSource? _refreshSessionsCts;
     private readonly CancellationTokenSource _layoutProjectionCts = new();
@@ -74,12 +77,12 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
     public string? LoadingStatus => LoadPhase switch
     {
-        DiscoverSessionsLoadPhase.Connecting => "正在连接到 Agent...",
-        DiscoverSessionsLoadPhase.Initializing => "正在初始化 ACP 协议...",
-        DiscoverSessionsLoadPhase.ListingSessions => "正在获取会话列表...",
-        DiscoverSessionsLoadPhase.ImportingSession => "正在导入会话...",
-        DiscoverSessionsLoadPhase.ActivatingSession => "正在打开会话...",
-        DiscoverSessionsLoadPhase.HydratingSession => "正在加载会话历史...",
+        DiscoverSessionsLoadPhase.Connecting => Localize("Discover_LoadingConnecting", "正在连接到 Agent..."),
+        DiscoverSessionsLoadPhase.Initializing => Localize("Discover_LoadingInitializing", "正在初始化 ACP 协议..."),
+        DiscoverSessionsLoadPhase.ListingSessions => Localize("Discover_LoadingListingSessions", "正在获取会话列表..."),
+        DiscoverSessionsLoadPhase.ImportingSession => Localize("Discover_LoadingImportingSession", "正在导入会话..."),
+        DiscoverSessionsLoadPhase.ActivatingSession => Localize("Discover_LoadingActivatingSession", "正在打开会话..."),
+        DiscoverSessionsLoadPhase.HydratingSession => Localize("Discover_LoadingHydratingSession", "正在加载会话历史..."),
         _ => null
     };
 
@@ -141,7 +144,8 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         IDiscoverSessionsConnectionFacade connectionFacade,
         IUiDispatcher uiDispatcher,
         IShellLayoutStore? shellLayoutStore = null,
-        IProjectAffinityResolver? projectAffinityResolver = null)
+        IProjectAffinityResolver? projectAffinityResolver = null,
+        IStringLocalizer<CoreStrings>? localizer = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
@@ -150,6 +154,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
         _connectionFacade = connectionFacade ?? throw new ArgumentNullException(nameof(connectionFacade));
         _projectAffinityResolver = projectAffinityResolver ?? new ProjectAffinityResolver();
         _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
+        _localizer = localizer;
         if (shellLayoutStore is not null)
         {
             SetLayoutMode(ResolveLayoutMode(shellLayoutStore.CurrentState.WindowMetrics));
@@ -308,13 +313,13 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             {
                 throw new InvalidOperationException(
                     string.IsNullOrWhiteSpace(_connectionFacade.ConnectionErrorMessage)
-                        ? "ACP 连接尚未完成初始化。"
+                        ? Localize("Discover_ErrorConnectionNotInitialized", "ACP 连接尚未完成初始化。")
                         : _connectionFacade.ConnectionErrorMessage);
             }
 
             if (chatService.AgentCapabilities?.SupportsSessionList != true)
             {
-                throw new InvalidOperationException("当前 Agent 未声明 session/list 能力。");
+                throw new InvalidOperationException(Localize("Discover_ErrorListCapabilityMissing", "当前 Agent 未声明 session/list 能力。"));
             }
 
             await PostToUiAsync(() => LoadPhase = DiscoverSessionsLoadPhase.ListingSessions).ConfigureAwait(false);
@@ -346,8 +351,8 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                         UnclassifiedProjectId: NavigationProjectIds.Unclassified));
                     items.Add(new DiscoverSessionItemViewModel(
                         session.SessionId,
-                        string.IsNullOrWhiteSpace(session.Title) ? "未命名会话" : session.Title,
-                        string.IsNullOrWhiteSpace(session.Description) ? "暂无描述" : session.Description,
+                        string.IsNullOrWhiteSpace(session.Title) ? Localize("Discover_UntitledSession", "未命名会话") : session.Title,
+                        string.IsNullOrWhiteSpace(session.Description) ? Localize("Discover_NoDescription", "暂无描述") : session.Description,
                         AcpSessionTimestampPolicy.ParseUpdatedAtUtc(session.UpdatedAt),
                         LoadSessionCommand,
                         session.Cwd,
@@ -442,7 +447,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                     }
 
                     ErrorMessage = string.IsNullOrWhiteSpace(openResult.ErrorMessage)
-                        ? "导入会话失败。"
+                        ? Localize("Discover_ErrorImportFailed", "导入会话失败。")
                         : openResult.ErrorMessage;
                     LoadPhase = DiscoverSessionsLoadPhase.Error;
                 }).ConfigureAwait(false);
@@ -476,7 +481,7 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
                     return;
                 }
 
-                ErrorMessage = $"导入会话时出错: {ex.Message}";
+                ErrorMessage = FormatLocalize("Discover_ErrorImportException", "导入会话时出错: {0}", ex.Message);
                 LoadPhase = DiscoverSessionsLoadPhase.Error;
             }).ConfigureAwait(false);
         }
@@ -536,10 +541,10 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             return _connectionFacade.ConnectionErrorMessage!;
         }
 
-        return $"无法获取会话列表: {ex.Message}";
+        return FormatLocalize("Discover_ErrorListFailed", "无法获取会话列表: {0}", ex.Message);
     }
 
-    private static string ResolveAffinityBadgeText(
+    private string ResolveAffinityBadgeText(
         ProjectAffinityResolution resolution,
         IReadOnlyList<ProjectDefinition> projects)
     {
@@ -548,12 +553,12 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
 
         if (resolution.Source == ProjectAffinitySource.NeedsMapping)
         {
-            return "Needs mapping";
+            return Localize("Discover_AffinityNeedsMapping", "Needs mapping");
         }
 
         if (resolution.Source == ProjectAffinitySource.Unclassified)
         {
-            return "Unclassified";
+            return Localize("Discover_AffinityUnclassified", "Unclassified");
         }
 
         var effectiveProjectId = resolution.EffectiveProjectId;
@@ -570,20 +575,44 @@ public sealed partial class DiscoverSessionsViewModel : ObservableObject, IDispo
             : projectName;
     }
 
-    private static string ResolveAffinityStatusText(ProjectAffinityResolution resolution)
+    private string ResolveAffinityStatusText(ProjectAffinityResolution resolution)
     {
         ArgumentNullException.ThrowIfNull(resolution);
 
         return resolution.Source switch
         {
-            ProjectAffinitySource.Override => "Using local project override.",
-            ProjectAffinitySource.PathMapping => "Mapped from remote path.",
-            ProjectAffinitySource.DirectMatch => "Matched by local project path.",
-            ProjectAffinitySource.NeedsMapping => "Remote working directory needs path mapping.",
-            ProjectAffinitySource.Unclassified when string.Equals(resolution.Reason, "MissingCwd", StringComparison.Ordinal) => "Remote metadata has no usable working directory.",
-            ProjectAffinitySource.Unclassified => "No matching local project.",
-            _ => "No project affinity information."
+            ProjectAffinitySource.Override => Localize("Discover_AffinityStatusOverride", "Using local project override."),
+            ProjectAffinitySource.PathMapping => Localize("Discover_AffinityStatusPathMapping", "Mapped from remote path."),
+            ProjectAffinitySource.DirectMatch => Localize("Discover_AffinityStatusDirectMatch", "Matched by local project path."),
+            ProjectAffinitySource.NeedsMapping => Localize("Discover_AffinityStatusNeedsMapping", "Remote working directory needs path mapping."),
+            ProjectAffinitySource.Unclassified when string.Equals(resolution.Reason, "MissingCwd", StringComparison.Ordinal) => Localize("Discover_AffinityStatusMissingCwd", "Remote metadata has no usable working directory."),
+            ProjectAffinitySource.Unclassified => Localize("Discover_AffinityStatusUnclassified", "No matching local project."),
+            _ => Localize("Discover_AffinityStatusUnknown", "No project affinity information.")
         };
+    }
+
+    private string Localize(string key, string fallback)
+    {
+        if (_localizer is null)
+        {
+            return fallback;
+        }
+
+        var localized = _localizer[key];
+        return localized.ResourceNotFound ? fallback : localized.Value;
+    }
+
+    private string FormatLocalize(string key, string fallback, params object[] arguments)
+    {
+        if (_localizer is null)
+        {
+            return string.Format(System.Globalization.CultureInfo.CurrentCulture, fallback, arguments);
+        }
+
+        var localized = _localizer[key, arguments];
+        return localized.ResourceNotFound
+            ? string.Format(System.Globalization.CultureInfo.CurrentCulture, fallback, arguments)
+            : localized.Value;
     }
 
     private static bool IsCatalogLoadingPhase(DiscoverSessionsLoadPhase phase)
