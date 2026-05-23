@@ -217,7 +217,6 @@ public sealed partial class StartViewModel : ObservableObject
                 Chat,
                 chatConnectionStore ?? throw new ArgumentNullException(nameof(chatConnectionStore))),
             sessionManager,
-            _preferences,
             navigationCoordinator,
             ResolveDefaultCwd);
 

@@ -883,7 +883,19 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        UpdateMainNavHierarchicalFocusRoutes();
         UpdateMainNavAutomationSelectionState();
+    }
+
+    private void OnMainNavItemLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            _ = DispatcherQueue.TryEnqueue(UpdateMainNavHierarchicalFocusRoutes);
+            return;
+        }
+
+        UpdateMainNavHierarchicalFocusRoutes();
     }
 
     // Animation logic removed
@@ -1000,6 +1012,44 @@ public sealed partial class MainPage : Page
            && container.Visibility == Visibility.Visible
            && container.ActualWidth > 0
            && container.ActualHeight > 0;
+
+    private void UpdateMainNavHierarchicalFocusRoutes()
+    {
+        if (MainNavView is null)
+        {
+            return;
+        }
+
+        foreach (var project in NavVM.Items.OfType<ProjectNavItemViewModel>())
+        {
+            if (MainNavView.ContainerFromMenuItem(project) is not NavigationViewItem projectContainer)
+            {
+                continue;
+            }
+
+            var childContainers = project.Children
+                .Select(child => MainNavView.ContainerFromMenuItem(child) as NavigationViewItem)
+                .OfType<NavigationViewItem>()
+                .Where(IsContainerVisible)
+                .ToArray();
+
+            foreach (var childContainer in childContainers)
+            {
+                childContainer.ClearValue(UIElement.XYFocusUpProperty);
+            }
+
+            var firstChildContainer = childContainers.FirstOrDefault();
+
+            if (projectContainer.IsExpanded && firstChildContainer is not null)
+            {
+                projectContainer.XYFocusDown = firstChildContainer;
+                firstChildContainer.XYFocusUp = projectContainer;
+                continue;
+            }
+
+            projectContainer.ClearValue(UIElement.XYFocusDownProperty);
+        }
+    }
 
     private static string ResolveResourceString(string resourceKey, string fallback)
     {

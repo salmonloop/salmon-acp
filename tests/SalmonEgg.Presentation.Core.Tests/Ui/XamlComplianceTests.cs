@@ -1989,9 +1989,14 @@ public sealed class XamlComplianceTests
 
         Assert.DoesNotContain("IsFocusEngagementEnabled=\"True\"", navigationViewSection, StringComparison.Ordinal);
         Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", navigationViewSection, StringComparison.Ordinal);
-        Assert.Contains("IsFocusEngagementEnabled=\"True\"", projectTemplateSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsFocusEngagementEnabled=\"True\"", projectTemplateSection, StringComparison.Ordinal);
         Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", projectTemplateSection, StringComparison.Ordinal);
+        Assert.Contains("Loaded=\"OnMainNavItemLoaded\"", projectTemplateSection, StringComparison.Ordinal);
         Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", sessionTemplateSection, StringComparison.Ordinal);
+        Assert.Contains("Loaded=\"OnMainNavItemLoaded\"", sessionTemplateSection, StringComparison.Ordinal);
+        var mainPageCode = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+        Assert.Contains("projectContainer.XYFocusDown = firstChildContainer;", mainPageCode, StringComparison.Ordinal);
+        Assert.Contains("firstChildContainer.XYFocusUp = projectContainer;", mainPageCode, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedItem =", LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs"), StringComparison.Ordinal);
     }
 

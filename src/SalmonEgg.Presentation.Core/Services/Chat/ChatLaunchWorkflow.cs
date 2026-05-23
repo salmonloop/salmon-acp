@@ -7,7 +7,6 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Mvux.Chat;
 using SalmonEgg.Presentation.Models.Settings;
 using SalmonEgg.Presentation.ViewModels.Chat;
-using SalmonEgg.Presentation.ViewModels.Settings;
 
 namespace SalmonEgg.Presentation.Core.Services.Chat;
 
@@ -39,7 +38,6 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
 {
     private readonly IChatLaunchWorkflowChatFacade _chat;
     private readonly ISessionManager _sessionManager;
-    private readonly AppPreferencesViewModel _preferences;
     private readonly INavigationCoordinator _navigationCoordinator;
     private readonly Func<string?> _resolveDefaultCwd;
     private readonly ConversationCatalogFacade? _catalogFacade;
@@ -48,7 +46,6 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
     public ChatLaunchWorkflow(
         IChatLaunchWorkflowChatFacade chat,
         ISessionManager sessionManager,
-        AppPreferencesViewModel preferences,
         INavigationCoordinator navigationCoordinator,
         Func<string?> resolveDefaultCwd,
         ILogger<ChatLaunchWorkflow>? logger = null,
@@ -56,7 +53,6 @@ public sealed class ChatLaunchWorkflow : IChatLaunchWorkflow
     {
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
-        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _navigationCoordinator = navigationCoordinator ?? throw new ArgumentNullException(nameof(navigationCoordinator));
         _resolveDefaultCwd = resolveDefaultCwd ?? throw new ArgumentNullException(nameof(resolveDefaultCwd));
         _logger = logger ?? NullLogger<ChatLaunchWorkflow>.Instance;

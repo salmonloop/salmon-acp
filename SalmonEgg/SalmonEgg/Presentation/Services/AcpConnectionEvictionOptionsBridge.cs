@@ -1,9 +1,10 @@
 using System;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
+using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.ViewModels.Settings;
 
-namespace SalmonEgg.Presentation.Core.Services.Chat;
+namespace SalmonEgg.Presentation.Services;
 
 public sealed class AcpConnectionEvictionOptionsBridge : IDisposable
 {

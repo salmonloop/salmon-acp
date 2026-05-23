@@ -30,8 +30,6 @@ public sealed class ChatLaunchWorkflowTests
         sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences(lastSelectedProjectId: "project-1");
-
         var chat = new FakeChatLaunchWorkflowChatFacade
         {
             IsConnected = true
@@ -45,7 +43,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager.Object,
-            preferences,
             navigation,
             () => @"C:\repo\demo",
             logger.Object);
@@ -67,7 +64,6 @@ public sealed class ChatLaunchWorkflowTests
         sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences();
         var chat = new FakeChatLaunchWorkflowChatFacade
         {
             IsConnected = true
@@ -81,7 +77,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager.Object,
-            preferences,
             navigation,
             () => @"C:\repo\demo",
             logger.Object);
@@ -101,7 +96,6 @@ public sealed class ChatLaunchWorkflowTests
         sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences();
         var chat = new FakeChatLaunchWorkflowChatFacade
         {
             IsConnected = false,
@@ -121,7 +115,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager.Object,
-            preferences,
             navigation,
             () => @"C:\repo\demo",
             logger.Object);
@@ -141,7 +134,6 @@ public sealed class ChatLaunchWorkflowTests
         sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences();
         var chat = new FakeChatLaunchWorkflowChatFacade
         {
             IsConnected = false,
@@ -161,7 +153,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager.Object,
-            preferences,
             navigation,
             () => @"C:\repo\demo",
             logger.Object);
@@ -210,7 +201,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager,
-            preferences,
             navigation,
             () => @"C:\repo\demo",
             logger.Object,
@@ -253,7 +243,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager,
-            preferences,
             navigation,
             () => @"C:\repo\demo",
             catalogFacade: catalogFacade);
@@ -273,7 +262,6 @@ public sealed class ChatLaunchWorkflowTests
         sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences();
         var chat = new FakeChatLaunchWorkflowChatFacade
         {
             IsConnected = false,
@@ -287,7 +275,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager.Object,
-            preferences,
             navigation,
             () => @"C:\repo\demo");
 
@@ -305,7 +292,6 @@ public sealed class ChatLaunchWorkflowTests
         sessionManager.Setup(s => s.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .ReturnsAsync((string id, string? cwd) => new Session { SessionId = id, Cwd = cwd });
 
-        var preferences = CreatePreferences();
         var chat = new FakeChatLaunchWorkflowChatFacade
         {
             IsConnected = true
@@ -318,7 +304,6 @@ public sealed class ChatLaunchWorkflowTests
         var workflow = new ChatLaunchWorkflow(
             chat,
             sessionManager.Object,
-            preferences,
             navigation,
             () => @"C:\repo\demo");
 

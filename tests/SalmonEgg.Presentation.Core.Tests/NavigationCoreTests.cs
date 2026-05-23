@@ -174,8 +174,14 @@ public sealed class NavigationCoreTests
     public void AcpMcpRuntime_DoesNotExposeFallbackCatalogSources()
     {
         var dependencyInjection = LoadFile(@"SalmonEgg\SalmonEgg\DependencyInjection.cs");
+        var root = FindRepoRoot();
         var providerCode = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\IAcpMcpServerProvider.cs");
+        var availabilityPolicy = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\IAcpAvailabilityPolicy.cs");
+        var availabilityAdapter = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Services\AppPreferencesAcpAvailabilityPolicy.cs");
+        var evictionBridge = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Services\AcpConnectionEvictionOptionsBridge.cs");
+        var appPreferences = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\Settings\AppPreferencesViewModel.cs");
         var chatCoordinator = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\AcpChatCoordinator.cs");
+        var chatLaunchWorkflow = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\ChatLaunchWorkflow.cs");
         var commandOrchestrator = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\AcpSessionCommandOrchestrator.cs");
         var connectionCoordinator = LoadFile(@"src\SalmonEgg.Presentation.Core\Services\Chat\AcpConnectionCoordinator.cs");
         var chatViewModel = LoadFile(@"src\SalmonEgg.Presentation.Core\ViewModels\Chat\ChatViewModel.cs");
@@ -190,9 +196,19 @@ public sealed class NavigationCoreTests
         Assert.DoesNotContain("ResolveCurrentMcpServersAsync(CancellationToken", connectionState, StringComparison.Ordinal);
         Assert.DoesNotContain("ServerConfiguration? profile", providerCode, StringComparison.Ordinal);
         Assert.DoesNotContain("GetMcpServersAsync(profile", providerCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("Presentation.ViewModels.Settings", availabilityPolicy, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppPreferencesAcpAvailabilityPolicy", availabilityPolicy, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(
+            root,
+            NormalizeRelativePath(@"src\SalmonEgg.Presentation.Core\Services\Chat\AcpConnectionEvictionOptionsBridge.cs"))));
         Assert.DoesNotContain("new AcpSessionCommandOrchestrator(", chatCoordinator, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppPreferencesViewModel", chatLaunchWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("ObservableObject, IAcpAvailabilityPolicy", appPreferences, StringComparison.Ordinal);
+        Assert.Contains("class AppPreferencesAcpAvailabilityPolicy : IAcpAvailabilityPolicy", availabilityAdapter, StringComparison.Ordinal);
+        Assert.Contains("class AcpConnectionEvictionOptionsBridge : IDisposable", evictionBridge, StringComparison.Ordinal);
         Assert.Contains("sp.GetRequiredService<IAcpMcpServerProvider>()", dependencyInjection, StringComparison.Ordinal);
         Assert.Contains("sp.GetRequiredService<IAcpSessionCommandOrchestrator>()", dependencyInjection, StringComparison.Ordinal);
+        Assert.Contains("new AppPreferencesAcpAvailabilityPolicy(sp.GetRequiredService<AppPreferencesViewModel>())", dependencyInjection, StringComparison.Ordinal);
     }
 
     [Fact]

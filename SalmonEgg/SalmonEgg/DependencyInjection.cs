@@ -528,7 +528,6 @@ public static class DependencyInjection
             new ChatLaunchWorkflow(
                 sp.GetRequiredService<IChatLaunchWorkflowChatFacade>(),
                 sp.GetRequiredService<ISessionManager>(),
-                sp.GetRequiredService<AppPreferencesViewModel>(),
                 sp.GetRequiredService<INavigationCoordinator>(),
                 CreateStartCwdResolver(
                     sp.GetRequiredService<MainNavigationViewModel>(),

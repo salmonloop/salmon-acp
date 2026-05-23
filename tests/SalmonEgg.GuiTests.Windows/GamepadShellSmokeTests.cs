@@ -73,7 +73,7 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
-    public void MainNavigationProjectItem_KeyboardDown_CanReachSessionChild()
+    public void MainNavigationProjectItem_VirtualGamepadDPadDown_CanReachSessionChild()
     {
         GuiTestGate.RequireEnabled();
 
@@ -89,13 +89,41 @@ public sealed class ShellFocusedActivationSmokeTests
 
         var reachedSessionChild = MoveFocusUntil(
             session,
-            session.PressDown,
+            session.PressVirtualGamepadDPadDown,
             () => session.IsFocusWithinAutomationId("MainNav.Session.gui-session-01"),
             attempts: 8);
 
         Assert.True(
             reachedSessionChild,
-            $"Keyboard down focus did not move from a project item into its session child."
+            $"Virtual gamepad D-pad focus did not move from a project item into its session child."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void MainNavigationSessionItem_VirtualGamepadDPadUp_CanReachParentProject()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(withContent: true);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
+            $"Session nav child did not become visible before gamepad upward navigation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, sessionItem, "MainNav.Session.gui-session-01", "session navigation item");
+
+        var reachedParentProject = MoveFocusUntil(
+            session,
+            session.PressVirtualGamepadDPadUp,
+            () => session.IsFocusWithinAutomationId("MainNav.Project.project-1"),
+            attempts: 8);
+
+        Assert.True(
+            reachedParentProject,
+            $"Virtual gamepad D-pad focus did not move from a session child back to its parent project."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
