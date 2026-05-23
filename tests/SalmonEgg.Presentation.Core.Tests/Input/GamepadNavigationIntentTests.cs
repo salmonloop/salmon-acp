@@ -7,7 +7,7 @@ namespace SalmonEgg.Presentation.Core.Tests.Input;
 public sealed class GamepadNavigationIntentTests
 {
     [Fact]
-    public void GamepadNavigationIntent_DefinesShellSafeDirectionsAndActions()
+    public void GamepadNavigationIntent_DefinesDeviceDirectionsAndSemanticActions()
     {
         var values = Enum.GetNames(typeof(GamepadNavigationIntent));
 

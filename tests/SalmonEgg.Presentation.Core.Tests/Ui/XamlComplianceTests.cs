@@ -2125,7 +2125,7 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void MainShellGamepadNavigationDispatcher_DirectionalNavigationStaysControlAgnostic()
+    public void MainShellGamepadNavigationDispatcher_LeavesUnconsumedDirectionsWithNativeControls()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\MainShellGamepadNavigationDispatcher.cs");
 
