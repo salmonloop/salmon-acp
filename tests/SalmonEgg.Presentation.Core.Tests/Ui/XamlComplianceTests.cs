@@ -1959,8 +1959,10 @@ public sealed class XamlComplianceTests
         Assert.Contains("HandleActivatableTagAsync(navItem, tag)", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("MainPage : Page, INavigationIntentConsumer", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)", mainPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryHandleFocusedMainNavigationActivationAsync", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("ResolveFocusedMainNavigationItem", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateFocusedItemActivationTask", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("HandleFocusedItemActivationAsync", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("_mainNavigationViewAdapter.CreateFocusedItemActivationTask", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("MainNav.Start", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("MainNav.DiscoverSessions", mainPage, StringComparison.Ordinal);
@@ -1990,13 +1992,13 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("IsFocusEngagementEnabled=\"True\"", navigationViewSection, StringComparison.Ordinal);
         Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", navigationViewSection, StringComparison.Ordinal);
         Assert.DoesNotContain("IsFocusEngagementEnabled=\"True\"", projectTemplateSection, StringComparison.Ordinal);
-        Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", projectTemplateSection, StringComparison.Ordinal);
-        Assert.Contains("Loaded=\"OnMainNavItemLoaded\"", projectTemplateSection, StringComparison.Ordinal);
-        Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", sessionTemplateSection, StringComparison.Ordinal);
-        Assert.Contains("Loaded=\"OnMainNavItemLoaded\"", sessionTemplateSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("XYFocusKeyboardNavigation=\"Enabled\"", projectTemplateSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Loaded=\"OnMainNavItemLoaded\"", projectTemplateSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("XYFocusKeyboardNavigation=\"Enabled\"", sessionTemplateSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Loaded=\"OnMainNavItemLoaded\"", sessionTemplateSection, StringComparison.Ordinal);
         var mainPageCode = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
-        Assert.Contains("projectContainer.XYFocusDown = firstChildContainer;", mainPageCode, StringComparison.Ordinal);
-        Assert.Contains("firstChildContainer.XYFocusUp = projectContainer;", mainPageCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateMainNavHierarchicalFocusRoutes", mainPageCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnMainNavItemLoaded", mainPageCode, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedItem =", LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs"), StringComparison.Ordinal);
     }
 
@@ -2201,6 +2203,18 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("AppWindowClosingEventArgs", sharedPage, StringComparison.Ordinal);
         Assert.Contains("TrayIconManager", windowsPage, StringComparison.Ordinal);
         Assert.Contains("AppWindowClosingEventArgs", windowsPage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_WindowsDebugKeyboardProbe_UsesKeyDownInsteadOfSystemKeyDown()
+    {
+        var windowsPage = LoadText(@"SalmonEgg\SalmonEgg\Platforms\Windows\MainPage.Windows.cs");
+
+        Assert.Contains("InputKeyboardSource.GetForIsland", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("_debugKeyboardSource.KeyDown -= OnDebugKeyDown;", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("_debugKeyboardSource.KeyDown += OnDebugKeyDown;", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("private static void OnDebugKeyDown", windowsPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("SystemKeyDown", windowsPage, StringComparison.Ordinal);
     }
 
     [Fact]

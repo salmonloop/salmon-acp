@@ -1,11 +1,14 @@
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Input;
 using SalmonEgg.Platforms.Windows;
+using WinUIKeyEventArgs = Microsoft.UI.Input.KeyEventArgs;
 
 namespace SalmonEgg;
 
 public sealed partial class MainPage
 {
     private TrayIconManager? _trayIcon;
+    private InputKeyboardSource? _debugKeyboardSource;
     private bool _allowClose;
 
     partial void InitializeTray()
@@ -105,4 +108,41 @@ public sealed partial class MainPage
         args.Cancel = true;
         sender.Hide();
     }
+
+    partial void AttachDebugKeyLogging()
+    {
+#if DEBUG
+        if (XamlRoot?.ContentIsland is null)
+        {
+            App.BootLog("MainPage KeyDown attach skipped: ContentIsland unavailable");
+            _ = DispatcherQueue.TryEnqueue(AttachDebugKeyLogging);
+            return;
+        }
+
+        _debugKeyboardSource ??= InputKeyboardSource.GetForIsland(XamlRoot.ContentIsland);
+        _debugKeyboardSource.KeyDown -= OnDebugKeyDown;
+        _debugKeyboardSource.KeyDown += OnDebugKeyDown;
+        App.BootLog("MainPage KeyDown attach succeeded");
+#endif
+    }
+
+    partial void DetachDebugKeyLogging()
+    {
+#if DEBUG
+        if (_debugKeyboardSource is null)
+        {
+            return;
+        }
+
+        _debugKeyboardSource.KeyDown -= OnDebugKeyDown;
+        App.BootLog("MainPage KeyDown detached");
+#endif
+    }
+
+#if DEBUG
+    private static void OnDebugKeyDown(InputKeyboardSource sender, WinUIKeyEventArgs args)
+    {
+        App.BootLog($"MainPage KeyDown: key={args.VirtualKey} handled={args.Handled}");
+    }
+#endif
 }

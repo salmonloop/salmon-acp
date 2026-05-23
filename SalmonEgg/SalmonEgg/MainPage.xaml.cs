@@ -179,6 +179,7 @@ public sealed partial class MainPage : Page
     private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
     {
         DetachGamepadInput();
+        DetachDebugKeyLogging();
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         Preferences.ShortcutBindingsChanged -= OnShortcutBindingsChanged;
         NavVM.PropertyChanged -= OnNavigationViewModelPropertyChanged;
@@ -685,6 +686,7 @@ public sealed partial class MainPage : Page
     private async void OnMainPageLoaded(object sender, RoutedEventArgs e)
     {
         AttachGamepadInput();
+        AttachDebugKeyLogging();
         _titleBarAdapter.Configure(App.MainWindowInstance);
         _metricsProvider.Attach(App.MainWindowInstance!, _titleBarAdapter);
         UpdateNavPaneToggleUi();
@@ -883,19 +885,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        UpdateMainNavHierarchicalFocusRoutes();
         UpdateMainNavAutomationSelectionState();
-    }
-
-    private void OnMainNavItemLoaded(object sender, RoutedEventArgs e)
-    {
-        if (!DispatcherQueue.HasThreadAccess)
-        {
-            _ = DispatcherQueue.TryEnqueue(UpdateMainNavHierarchicalFocusRoutes);
-            return;
-        }
-
-        UpdateMainNavHierarchicalFocusRoutes();
     }
 
     // Animation logic removed
@@ -1013,44 +1003,6 @@ public sealed partial class MainPage : Page
            && container.ActualWidth > 0
            && container.ActualHeight > 0;
 
-    private void UpdateMainNavHierarchicalFocusRoutes()
-    {
-        if (MainNavView is null)
-        {
-            return;
-        }
-
-        foreach (var project in NavVM.Items.OfType<ProjectNavItemViewModel>())
-        {
-            if (MainNavView.ContainerFromMenuItem(project) is not NavigationViewItem projectContainer)
-            {
-                continue;
-            }
-
-            var childContainers = project.Children
-                .Select(child => MainNavView.ContainerFromMenuItem(child) as NavigationViewItem)
-                .OfType<NavigationViewItem>()
-                .Where(IsContainerVisible)
-                .ToArray();
-
-            foreach (var childContainer in childContainers)
-            {
-                childContainer.ClearValue(UIElement.XYFocusUpProperty);
-            }
-
-            var firstChildContainer = childContainers.FirstOrDefault();
-
-            if (projectContainer.IsExpanded && firstChildContainer is not null)
-            {
-                projectContainer.XYFocusDown = firstChildContainer;
-                firstChildContainer.XYFocusUp = projectContainer;
-                continue;
-            }
-
-            projectContainer.ClearValue(UIElement.XYFocusDownProperty);
-        }
-    }
-
     private static string ResolveResourceString(string resourceKey, string fallback)
     {
         var value = ResourceLoader.GetString(resourceKey);
@@ -1160,6 +1112,10 @@ public sealed partial class MainPage : Page
     partial void UpdateTrayState();
 
     partial void DisposePlatformTray();
+
+    partial void AttachDebugKeyLogging();
+
+    partial void DetachDebugKeyLogging();
 
     // TitleBar insets are now handled by WindowMetricsProvider reporting to IShellLayoutMetricsSink,
     // which updates ShellLayoutStore/ShellLayoutViewModel. Visuals are bound using x:Bind in XAML.

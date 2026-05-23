@@ -134,6 +134,60 @@ internal sealed class GuiAppDataScope : IDisposable
         return scope;
     }
 
+    public static GuiAppDataScope CreateDeterministicMultiProjectLeftNavData(
+        int projectCount = 2,
+        int sessionsPerProject = 1,
+        bool withContent = false,
+        int messageCountPerSession = 2)
+    {
+        if (projectCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(projectCount));
+        }
+
+        if (sessionsPerProject <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sessionsPerProject));
+        }
+
+        if (messageCountPerSession < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(messageCountPerSession));
+        }
+
+        GuiTestGate.RequireEnabled();
+        WindowsGuiAppSession.StopAllRunningInstances();
+
+        var appDataRoot = ResolveAppDataRoot();
+        var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        var previousGuiControlFile = Environment.GetEnvironmentVariable(GuiControlFileEnvVar);
+        Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
+        var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
+        var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
+        var projectRootPath = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", "project-1");
+
+        var scope = new GuiAppDataScope(
+            appDataRoot,
+            appYamlPath,
+            conversationsPath,
+            serverYamlPath: null,
+            secondaryServerYamlPath: null,
+            File.Exists(appYamlPath) ? File.ReadAllBytes(appYamlPath) : null,
+            File.Exists(appYamlPath),
+            File.Exists(conversationsPath) ? File.ReadAllBytes(conversationsPath) : null,
+            File.Exists(conversationsPath),
+            originalServerYaml: null,
+            serverYamlExisted: false,
+            originalSecondaryServerYaml: null,
+            secondaryServerYamlExisted: false,
+            projectRootPath,
+            previousGuiAppDataRootOverride,
+            previousGuiControlFile: previousGuiControlFile);
+
+        scope.SeedMultiProject(projectCount, sessionsPerProject, withContent, messageCountPerSession);
+        return scope;
+    }
+
     public static GuiAppDataScope CreateDeterministicVariableHeightTranscriptData(int messageCount = 400)
     {
         if (messageCount <= 0)
@@ -732,6 +786,37 @@ internal sealed class GuiAppDataScope : IDisposable
             Encoding.UTF8);
     }
 
+    private void SeedMultiProject(
+        int projectCount,
+        int sessionsPerProject,
+        bool withContent = false,
+        int messageCountPerSession = 2)
+    {
+        Directory.CreateDirectory(_configDirectory);
+        Directory.CreateDirectory(_conversationsDirectory);
+
+        var projects = new List<(string ProjectId, string Name, string RootPath)>(projectCount);
+        for (var index = 1; index <= projectCount; index++)
+        {
+            var projectId = $"project-{index}";
+            var rootPath = index == 1
+                ? _projectRootPath
+                : Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests", projectId);
+            Directory.CreateDirectory(rootPath);
+            projects.Add((projectId, $"GUI Project {index:00}", rootPath));
+        }
+
+        File.WriteAllText(_appYamlPath, BuildMultiProjectAppYaml(projects), Encoding.UTF8);
+        File.WriteAllText(
+            _conversationsPath,
+            BuildMultiProjectConversationsJson(
+                projects.Select(project => (project.ProjectId, project.RootPath)).ToArray(),
+                sessionsPerProject,
+                withContent,
+                messageCountPerSession),
+            Encoding.UTF8);
+    }
+
     private void SeedVariableHeightTranscript(int messageCount)
     {
         Directory.CreateDirectory(_configDirectory);
@@ -948,6 +1033,31 @@ internal sealed class GuiAppDataScope : IDisposable
         return string.Join(Environment.NewLine, lines);
     }
 
+    private static string BuildMultiProjectAppYaml(
+        IReadOnlyList<(string ProjectId, string Name, string RootPath)> projects)
+    {
+        var lines = new List<string>
+        {
+            "schema_version: 1",
+            "theme: System",
+            "is_animation_enabled: true",
+            "backdrop: System",
+            "projects:"
+        };
+
+        foreach (var project in projects)
+        {
+            var normalizedPath = project.RootPath.Replace("'", "''", StringComparison.Ordinal);
+            lines.Add($"  - project_id: {project.ProjectId}");
+            lines.Add($"    name: {project.Name}");
+            lines.Add($"    root_path: '{normalizedPath}'");
+        }
+
+        lines.Add($"last_selected_project_id: {projects[0].ProjectId}");
+        lines.Add(string.Empty);
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private static string BuildConversationsJson(
         string projectRootPath,
         int sessionCount,
@@ -991,6 +1101,62 @@ internal sealed class GuiAppDataScope : IDisposable
                 };
             })
             .ToArray();
+
+        var document = new
+        {
+            version = 1,
+            lastActiveConversationId = (string?)null,
+            conversations
+        };
+
+        return JsonSerializer.Serialize(document);
+    }
+
+    private static string BuildMultiProjectConversationsJson(
+        IReadOnlyList<(string ProjectId, string RootPath)> projects,
+        int sessionsPerProject,
+        bool withContent = false,
+        int messageCountPerSession = 2)
+    {
+        var baseTime = new DateTimeOffset(2026, 03, 19, 09, 00, 00, TimeSpan.Zero);
+        var conversations = new List<object>();
+        var sessionOrdinal = 1;
+
+        for (var projectIndex = 0; projectIndex < projects.Count; projectIndex++)
+        {
+            var project = projects[projectIndex];
+            for (var sessionIndex = 0; sessionIndex < sessionsPerProject; sessionIndex++, sessionOrdinal++)
+            {
+                var timestamp = baseTime.AddMinutes(-(sessionOrdinal - 1));
+                object[] messages = Array.Empty<object>();
+
+                if (withContent)
+                {
+                    var count = Math.Max(2, messageCountPerSession);
+                    messages = Enumerable.Range(1, count)
+                        .Select(messageIndex => new
+                        {
+                            id = $"mp-{sessionOrdinal}-{messageIndex}",
+                            timestamp = timestamp.AddSeconds(messageIndex),
+                            contentType = "text",
+                            textContent = $"GUI Project {projectIndex + 1:00} Session {sessionIndex + 1:00} message {messageIndex:000}",
+                            isOutgoing = messageIndex % 2 == 0
+                        })
+                        .Cast<object>()
+                        .ToArray();
+                }
+
+                conversations.Add(new
+                {
+                    conversationId = $"gui-session-{sessionOrdinal:00}",
+                    displayName = $"GUI Session {sessionOrdinal:00}",
+                    createdAt = timestamp,
+                    lastUpdatedAt = timestamp,
+                    cwd = project.RootPath,
+                    messages
+                });
+            }
+        }
 
         var document = new
         {

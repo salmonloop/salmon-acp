@@ -13,4 +13,12 @@ public sealed partial class MainPage
     partial void DisposePlatformTray()
     {
     }
+
+    partial void AttachDebugKeyLogging()
+    {
+    }
+
+    partial void DetachDebugKeyLogging()
+    {
+    }
 }

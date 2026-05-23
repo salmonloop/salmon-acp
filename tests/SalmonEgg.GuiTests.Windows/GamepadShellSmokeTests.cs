@@ -26,6 +26,24 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
+    public void DiscoverSessions_CanBeActivated_ThroughVirtualGamepadA()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var discoverItem = session.FindByAutomationId("MainNav.DiscoverSessions", TimeSpan.FromSeconds(10));
+        session.FocusElement(discoverItem);
+        Thread.Sleep(150);
+        session.PressVirtualGamepadA();
+
+        Assert.True(
+            session.WaitUntilVisible("DiscoverSessions.Title", TimeSpan.FromSeconds(10)),
+            $"Discover sessions page did not become visible through Virtual Gamepad A activation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void TitleBarCommand_VirtualGamepadDPadDown_CanReachMainNavigation()
     {
         GuiTestGate.RequireEnabled();
@@ -124,6 +142,40 @@ public sealed class ShellFocusedActivationSmokeTests
         Assert.True(
             reachedParentProject,
             $"Virtual gamepad D-pad focus did not move from a session child back to its parent project."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void MainNavigationLastSession_VirtualGamepadDPadDown_CanReachNextProject()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicMultiProjectLeftNavData(
+            projectCount: 2,
+            sessionsPerProject: 1,
+            withContent: true);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
+            $"First project session item did not become visible before cross-project gamepad navigation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Project.project-2", TimeSpan.FromSeconds(15)),
+            $"Second project item did not become visible before cross-project gamepad navigation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, sessionItem, "MainNav.Session.gui-session-01", "last session item in first project");
+
+        var reachedNextProject = MoveFocusUntil(
+            session,
+            session.PressVirtualGamepadDPadDown,
+            () => session.IsFocusWithinAutomationId("MainNav.Project.project-2"),
+            attempts: 8);
+
+        Assert.True(
+            reachedNextProject,
+            $"Virtual gamepad D-pad focus did not leave the first project's last session for the next project."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
