@@ -77,6 +77,7 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase
         try
         {
             await ViewModel.LiveLogViewer.HandlePageUnloadedAsync();
+            await ViewModel.GamepadDiagnostics.HandlePageUnloadedAsync();
         }
         catch (Exception ex)
         {

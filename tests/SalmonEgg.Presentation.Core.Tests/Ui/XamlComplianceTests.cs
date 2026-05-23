@@ -1317,9 +1317,41 @@ public sealed class XamlComplianceTests
         var code = LoadText(@"SalmonEgg\SalmonEgg\DependencyInjection.cs");
 
         Assert.Contains("IGamepadInputService", code);
+        Assert.Contains("IGamepadDiagnosticsService", code);
         Assert.Contains("SupportsGamepadInput", code);
+        Assert.Contains("GuiGamepadInputService", code);
+        Assert.Contains("IsGuiAutomationEnabled()", code);
+        Assert.Contains("IsGuiGamepadInputEnabled()", code);
+        Assert.Contains("SALMONEGG_GUI_CONTROL_FILE", code);
         Assert.DoesNotContain("new WindowsGamepadInputService(", code, StringComparison.Ordinal);
         Assert.DoesNotContain("new NoOpGamepadInputService(", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("new GuiGamepadInputService(", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("new WindowsGamepadDiagnosticsService(", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DiagnosticsSettingsPage_ExposesGamepadDiagnosticsThroughViewModel()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DiagnosticsSettingsPage.xaml");
+        var viewModel = LoadText(@"src\SalmonEgg.Presentation.Core\ViewModels\Settings\GamepadDiagnosticsViewModel.cs");
+        var windowsService = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadDiagnosticsService.cs");
+        var gamepadSection = ExtractSection(xaml, "Diagnostics_GamepadTitle", "Diagnostics_LogsTitle");
+
+        Assert.Contains("AutomationProperties.AutomationId=\"Diagnostics.GamepadMonitorHeader\"", gamepadSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Expander", gamepadSection, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.StatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.ConnectedGamepadsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.ConnectedRawControllersText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.InputSourceText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.ActiveInputsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.ThumbstickText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.RawControllersText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.StartMonitoringCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.StopMonitoringCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.GamepadDiagnostics.RefreshSnapshotCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Windows.Gaming.Input", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Windows.Gaming.Input", viewModel, StringComparison.Ordinal);
+        Assert.Contains("Windows.Gaming.Input", windowsService, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1426,6 +1458,18 @@ public sealed class XamlComplianceTests
             "Diagnostics_LiveLogResume.Content",
             "Diagnostics_LiveLogClear.Content",
             "Diagnostics_LiveLogHint.Text",
+            "Diagnostics_GamepadTitle.Text",
+            "Diagnostics_GamepadMonitorHeader.Text",
+            "Diagnostics_GamepadStatusLabel.Text",
+            "Diagnostics_GamepadStandardCountLabel.Text",
+            "Diagnostics_GamepadRawCountLabel.Text",
+            "Diagnostics_GamepadInputSourceLabel.Text",
+            "Diagnostics_GamepadActiveInputsLabel.Text",
+            "Diagnostics_GamepadThumbstickLabel.Text",
+            "Diagnostics_GamepadRawDetailsLabel.Text",
+            "Diagnostics_GamepadStart.Content",
+            "Diagnostics_GamepadStop.Content",
+            "Diagnostics_GamepadRefresh.Content",
             "Diagnostics_ConnectionTitle.Text",
             "Diagnostics_ConnectionStatusLabel.Text",
             "Diagnostics_AgentLabel.Text",
@@ -1907,21 +1951,24 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void MainPage_DoesNotDuplicateNativeNavigationViewGamepadActivation()
+    public void MainPage_GamepadNavigationActivation_ReusesNavigationAdapterWithoutSelectionMutation()
     {
         var mainPage = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
         var adapter = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Navigation\MainNavigationViewAdapter.cs");
 
-        Assert.Contains("MainPage : Page", mainPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("MainPage : Page, INavigationIntentConsumer", mainPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("public bool TryConsumeNavigationIntent", mainPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("TryFindFocusedMainNavItem", mainPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("_mainNavigationViewAdapter.TryHandleFocusedItemActivation", mainPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("TryHandleFocusedItemActivation", adapter, StringComparison.Ordinal);
-        Assert.DoesNotContain("ObserveFocusedActivationAsync", adapter, StringComparison.Ordinal);
+        Assert.Contains("MainPage : Page, INavigationIntentConsumer", mainPage, StringComparison.Ordinal);
+        Assert.Contains("public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)", mainPage, StringComparison.Ordinal);
+        Assert.Contains("intent != GamepadNavigationIntent.Activate", mainPage, StringComparison.Ordinal);
+        Assert.Contains("ResolveFocusedMainNavigationItem", mainPage, StringComparison.Ordinal);
+        Assert.Contains("_mainNavigationViewAdapter.CreateFocusedItemActivationTask(navItem)", mainPage, StringComparison.Ordinal);
+        Assert.Contains("CreateFocusedItemActivationTask", adapter, StringComparison.Ordinal);
+        Assert.Contains("HandleActivatableTagAsync(navItem, tag)", adapter, StringComparison.Ordinal);
         Assert.Contains("HandleItemInvokedAsync", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainNav.Start", mainPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainNav.DiscoverSessions", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectionChanged", adapter, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedItem =", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem =", mainPage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2016,6 +2063,30 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void WindowsRawGameControllerMapper_DelegatesAxisNormalizationToCorePolicy()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsRawGameControllerMapper.cs");
+
+        Assert.Contains("!RawGameControllerAxisNormalizer.IsAllAxesZero(axes)", code, StringComparison.Ordinal);
+        Assert.Contains("RawGameControllerAxisNormalizer.NormalizeHorizontal(axes[0])", code, StringComparison.Ordinal);
+        Assert.Contains("RawGameControllerAxisNormalizer.NormalizeVertical(axes[1])", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("axes[0] - 0.5", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("0.5 - axes[1]", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsRawGameControllerMapper_DelegatesEightWaySwitchMappingToCorePolicy()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsRawGameControllerMapper.cs");
+
+        Assert.Contains("GamepadDirectionalSwitchMapper.Apply", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("GameControllerSwitchPosition.Up) == GameControllerSwitchPosition.Up", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("GameControllerSwitchPosition.Down) == GameControllerSwitchPosition.Down", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("GameControllerSwitchPosition.Left) == GameControllerSwitchPosition.Left", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("GameControllerSwitchPosition.Right) == GameControllerSwitchPosition.Right", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsGamepadInputService_ConsidersActiveRawControllersEvenWhenStandardGamepadsAreConnected()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadInputService.cs");
@@ -2023,6 +2094,19 @@ public sealed class XamlComplianceTests
         Assert.Contains("foreach (var gamepad in", code);
         Assert.Contains("foreach (var controller in", code);
         Assert.DoesNotContain("var gamepad = GetPrimaryGamepad()", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("HasMatchingGamepad", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("RawGameController.FromGameController", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsGamepadDiagnosticsService_DoesNotHideRawFallbackBehindInactiveStandardGamepad()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadDiagnosticsService.cs");
+
+        Assert.Contains("foreach (var gamepad in", code);
+        Assert.Contains("foreach (var controller in", code);
+        Assert.DoesNotContain("HasMatchingGamepad", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("RawGameController.FromGameController", code, StringComparison.Ordinal);
     }
 
     [Fact]

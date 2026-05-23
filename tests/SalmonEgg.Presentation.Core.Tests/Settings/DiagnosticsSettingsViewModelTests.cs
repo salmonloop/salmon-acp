@@ -26,6 +26,15 @@ public sealed class DiagnosticsSettingsViewModelTests
     }
 
     [Fact]
+    public void Constructor_ComposesGamepadDiagnostics()
+    {
+        var gamepadDiagnostics = CreateGamepadDiagnostics();
+        var viewModel = CreateViewModel(gamepadDiagnostics: gamepadDiagnostics);
+
+        Assert.Same(gamepadDiagnostics, viewModel.GamepadDiagnostics);
+    }
+
+    [Fact]
     public void PlatformCapabilities_ReflectBindableAvailability()
     {
         var viewModel = CreateViewModel(supportsExternalOpen: false, supportsLocalFileExport: false);
@@ -73,7 +82,8 @@ public sealed class DiagnosticsSettingsViewModelTests
         Mock<IDiagnosticsBundleService>? bundle = null,
         Mock<IStorageLocationService>? storageLocations = null,
         Mock<IUiInteractionService>? ui = null,
-        LiveLogViewerViewModel? liveLogViewer = null)
+        LiveLogViewerViewModel? liveLogViewer = null,
+        GamepadDiagnosticsViewModel? gamepadDiagnostics = null)
     {
         var chat = (ChatViewModel)RuntimeHelpers.GetUninitializedObject(typeof(ChatViewModel));
         var paths = new Mock<IAppDataService>();
@@ -93,6 +103,7 @@ public sealed class DiagnosticsSettingsViewModelTests
             Mock.Of<ILogFileCatalog>(),
             ui?.Object ?? Mock.Of<IUiInteractionService>(),
             liveLogViewer ?? CreateLiveLogViewer(),
+            gamepadDiagnostics ?? CreateGamepadDiagnostics(),
             new TestCoreStringLocalizer(),
             Mock.Of<ILogger<DiagnosticsSettingsViewModel>>());
     }
@@ -109,5 +120,18 @@ public sealed class DiagnosticsSettingsViewModelTests
             Mock.Of<ILogger<LiveLogViewerViewModel>>(),
             new ImmediateUiDispatcher(),
             new TestCoreStringLocalizer());
+    }
+
+    private static GamepadDiagnosticsViewModel CreateGamepadDiagnostics()
+    {
+        var capabilities = new Mock<IPlatformCapabilityService>();
+        capabilities.SetupGet(service => service.SupportsGamepadInput).Returns(false);
+
+        return new GamepadDiagnosticsViewModel(
+            new SalmonEgg.Presentation.Core.Services.Input.NoOpGamepadDiagnosticsService(),
+            capabilities.Object,
+            new ImmediateUiDispatcher(),
+            new TestCoreStringLocalizer(),
+            Mock.Of<ILogger<GamepadDiagnosticsViewModel>>());
     }
 }

@@ -8,8 +8,6 @@ namespace SalmonEgg.Presentation.Services.Input;
 
 public sealed class WindowsRawGameControllerMapper
 {
-    private const double CenteredAxisValue = 0.5;
-
     public HashSet<GamepadNavigationIntent> GetActiveIntents(RawGameController controller)
     {
         return GamepadIntentProcessor.GetActiveIntents(GetInputReading(controller));
@@ -38,34 +36,17 @@ public sealed class WindowsRawGameControllerMapper
 
         for (var i = 0; i < switches.Length; i++)
         {
-            var position = switches[i];
-            if ((position & GameControllerSwitchPosition.Up) == GameControllerSwitchPosition.Up)
-            {
-                reading = reading with { MoveUp = true };
-            }
-
-            if ((position & GameControllerSwitchPosition.Down) == GameControllerSwitchPosition.Down)
-            {
-                reading = reading with { MoveDown = true };
-            }
-
-            if ((position & GameControllerSwitchPosition.Left) == GameControllerSwitchPosition.Left)
-            {
-                reading = reading with { MoveLeft = true };
-            }
-
-            if ((position & GameControllerSwitchPosition.Right) == GameControllerSwitchPosition.Right)
-            {
-                reading = reading with { MoveRight = true };
-            }
+            reading = GamepadDirectionalSwitchMapper.Apply(
+                (GamepadDirectionalSwitchPosition)(int)switches[i],
+                reading);
         }
 
-        if (axes.Length >= 2)
+        if (axes.Length >= 2 && !RawGameControllerAxisNormalizer.IsAllAxesZero(axes))
         {
             reading = reading with
             {
-                ThumbstickX = axes[0] - CenteredAxisValue,
-                ThumbstickY = CenteredAxisValue - axes[1]
+                ThumbstickX = RawGameControllerAxisNormalizer.NormalizeHorizontal(axes[0]),
+                ThumbstickY = RawGameControllerAxisNormalizer.NormalizeVertical(axes[1])
             };
         }
 

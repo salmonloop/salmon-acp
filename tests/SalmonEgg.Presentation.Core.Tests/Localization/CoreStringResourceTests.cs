@@ -51,6 +51,18 @@ public sealed class CoreStringResourceTests
     [InlineData("McpSettings_ImportFailed")]
     [InlineData("McpSettings_ClipboardEmpty")]
     [InlineData("McpSettings_ClipboardFilled")]
+    [InlineData("GamepadDiagnostics_StatusNotStarted")]
+    [InlineData("GamepadDiagnostics_StatusMonitoring")]
+    [InlineData("GamepadDiagnostics_StatusStopped")]
+    [InlineData("GamepadDiagnostics_StatusUnsupported")]
+    [InlineData("GamepadDiagnostics_StatusFailed")]
+    [InlineData("GamepadDiagnostics_InputSourceNone")]
+    [InlineData("GamepadDiagnostics_InputSourceGamepad")]
+    [InlineData("GamepadDiagnostics_InputSourceRawController")]
+    [InlineData("GamepadDiagnostics_ActiveInputsNone")]
+    [InlineData("GamepadDiagnostics_RawControllersNone")]
+    [InlineData("GamepadDiagnostics_ConnectionWired")]
+    [InlineData("GamepadDiagnostics_ConnectionWireless")]
     public void CoreMessages_ArePresentInAllCoreStringResources(string key)
     {
         foreach (var relativePath in CoreStringResourcePaths)

@@ -314,6 +314,42 @@ Create the corresponding Markdown file in:
   <data name="LiveLog_StatusSwitchedToLatest" xml:space="preserve">
     <value>Switched to the latest log file.</value>
   </data>
+  <data name="GamepadDiagnostics_StatusNotStarted" xml:space="preserve">
+    <value>Not started</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusMonitoring" xml:space="preserve">
+    <value>Monitoring</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusStopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusUnsupported" xml:space="preserve">
+    <value>Gamepad input is not supported on this platform.</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusFailed" xml:space="preserve">
+    <value>Read failed. Try again later.</value>
+  </data>
+  <data name="GamepadDiagnostics_InputSourceNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="GamepadDiagnostics_InputSourceGamepad" xml:space="preserve">
+    <value>Gamepad</value>
+  </data>
+  <data name="GamepadDiagnostics_InputSourceRawController" xml:space="preserve">
+    <value>RawGameController</value>
+  </data>
+  <data name="GamepadDiagnostics_ActiveInputsNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="GamepadDiagnostics_RawControllersNone" xml:space="preserve">
+    <value>No raw controllers detected.</value>
+  </data>
+  <data name="GamepadDiagnostics_ConnectionWired" xml:space="preserve">
+    <value>wired</value>
+  </data>
+  <data name="GamepadDiagnostics_ConnectionWireless" xml:space="preserve">
+    <value>wireless</value>
+  </data>
   <data name="Shortcuts_InvalidGestureMessage" xml:space="preserve">
     <value>One or more shortcuts use an invalid format. Fix them before saving.</value>
   </data>

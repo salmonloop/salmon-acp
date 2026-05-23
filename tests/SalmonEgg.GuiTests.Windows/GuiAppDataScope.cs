@@ -13,6 +13,7 @@ internal sealed class GuiAppDataScope : IDisposable
     private const string LateUserMessageIdEnvVar = "SALMONEGG_GUI_LATE_USER_MESSAGE_ID";
     private const string LateUserMessageTextEnvVar = "SALMONEGG_GUI_LATE_USER_MESSAGE_TEXT";
     private const string LateUserMessageDelayMsEnvVar = "SALMONEGG_GUI_LATE_USER_MESSAGE_DELAY_MS";
+    private const string GuiControlFileEnvVar = "SALMONEGG_GUI_CONTROL_FILE";
     private readonly string _appDataRoot;
     private readonly string _configDirectory;
     private readonly string _conversationsDirectory;
@@ -105,6 +106,7 @@ internal sealed class GuiAppDataScope : IDisposable
 
         var appDataRoot = ResolveAppDataRoot();
         var previousGuiAppDataRootOverride = Environment.GetEnvironmentVariable(AppDataRootEnvVar);
+        var previousGuiControlFile = Environment.GetEnvironmentVariable(GuiControlFileEnvVar);
         Environment.SetEnvironmentVariable(AppDataRootEnvVar, appDataRoot);
         var appYamlPath = Path.Combine(appDataRoot, "config", "app.yaml");
         var conversationsPath = Path.Combine(appDataRoot, "conversations", "conversations.v1.json");
@@ -125,7 +127,8 @@ internal sealed class GuiAppDataScope : IDisposable
             originalSecondaryServerYaml: null,
             secondaryServerYamlExisted: false,
             projectRootPath,
-            previousGuiAppDataRootOverride);
+            previousGuiAppDataRootOverride,
+            previousGuiControlFile: previousGuiControlFile);
 
         scope.Seed(sessionCount, withContent, messageCountPerSession, firstSessionDisplayName);
         return scope;
@@ -448,8 +451,7 @@ internal sealed class GuiAppDataScope : IDisposable
         int cachedMessageCount = 1,
         int replayMessageCount = 24)
     {
-        const string controlFileEnvVar = "SALMONEGG_GUI_CONTROL_FILE";
-        var previousControlFile = Environment.GetEnvironmentVariable(controlFileEnvVar);
+        var previousControlFile = Environment.GetEnvironmentVariable(GuiControlFileEnvVar);
         GuiTestGate.RequireEnabled();
         WindowsGuiAppSession.StopAllRunningInstances();
 
@@ -496,7 +498,7 @@ internal sealed class GuiAppDataScope : IDisposable
             remoteConversationCount: 2);
 
         var controlFilePath = Path.Combine(appDataRoot, "control", "agent-control.json");
-        Environment.SetEnvironmentVariable(controlFileEnvVar, controlFilePath);
+        Environment.SetEnvironmentVariable(GuiControlFileEnvVar, controlFilePath);
         return scope;
     }
 
@@ -593,7 +595,7 @@ internal sealed class GuiAppDataScope : IDisposable
         Environment.SetEnvironmentVariable(AppDataRootEnvVar, _previousGuiAppDataRootOverride);
         Environment.SetEnvironmentVariable("SALMONEGG_GUI_FAKE_REMOTE_REPLAY_SESSION_ID", _previousFakeReplaySessionId);
         Environment.SetEnvironmentVariable("SALMONEGG_GUI_FAKE_REMOTE_REPLAY_MESSAGE_COUNT", _previousFakeReplayMessageCount);
-        Environment.SetEnvironmentVariable("SALMONEGG_GUI_CONTROL_FILE", _previousGuiControlFile);
+        Environment.SetEnvironmentVariable(GuiControlFileEnvVar, _previousGuiControlFile);
         foreach (var pair in _environmentRestoreMap)
         {
             Environment.SetEnvironmentVariable(pair.Key, pair.Value);
@@ -772,7 +774,7 @@ internal sealed class GuiAppDataScope : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(remoteSessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
-        var controlPath = Environment.GetEnvironmentVariable("SALMONEGG_GUI_CONTROL_FILE")
+        var controlPath = Environment.GetEnvironmentVariable(GuiControlFileEnvVar)
             ?? throw new InvalidOperationException("SALMONEGG_GUI_CONTROL_FILE was not set.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(controlPath)!);
@@ -783,6 +785,37 @@ internal sealed class GuiAppDataScope : IDisposable
                 kind = "background-agent-message",
                 sessionId = remoteSessionId,
                 text
+            }),
+            Encoding.UTF8);
+    }
+
+    public void EnableGuiControlFile()
+    {
+        var controlFilePath = Path.Combine(_appDataRoot, "control", "agent-control.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(controlFilePath)!);
+        if (File.Exists(controlFilePath))
+        {
+            File.Delete(controlFilePath);
+        }
+
+        Environment.SetEnvironmentVariable(GuiControlFileEnvVar, controlFilePath);
+    }
+
+    public void TriggerGamepadIntent(string intent)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intent);
+
+        var controlPath = Environment.GetEnvironmentVariable(GuiControlFileEnvVar)
+            ?? throw new InvalidOperationException("SALMONEGG_GUI_CONTROL_FILE was not set.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(controlPath)!);
+        File.WriteAllText(
+            controlPath,
+            JsonSerializer.Serialize(new
+            {
+                kind = "gamepad-intent",
+                id = Guid.NewGuid().ToString("N"),
+                intent
             }),
             Encoding.UTF8);
     }

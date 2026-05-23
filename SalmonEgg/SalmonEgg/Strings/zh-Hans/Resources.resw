@@ -312,6 +312,42 @@
   <data name="Diagnostics_LiveLogHint.Text" xml:space="preserve">
     <value>离开页面后会自动停止实时打印。</value>
   </data>
+  <data name="Diagnostics_GamepadTitle.Text" xml:space="preserve">
+    <value>手柄输入</value>
+  </data>
+  <data name="Diagnostics_GamepadMonitorHeader.Text" xml:space="preserve">
+    <value>兼容性监测</value>
+  </data>
+  <data name="Diagnostics_GamepadStatusLabel.Text" xml:space="preserve">
+    <value>监测状态：</value>
+  </data>
+  <data name="Diagnostics_GamepadStandardCountLabel.Text" xml:space="preserve">
+    <value>Gamepad 数量：</value>
+  </data>
+  <data name="Diagnostics_GamepadRawCountLabel.Text" xml:space="preserve">
+    <value>Raw 控制器数量：</value>
+  </data>
+  <data name="Diagnostics_GamepadInputSourceLabel.Text" xml:space="preserve">
+    <value>输入来源：</value>
+  </data>
+  <data name="Diagnostics_GamepadActiveInputsLabel.Text" xml:space="preserve">
+    <value>当前输入：</value>
+  </data>
+  <data name="Diagnostics_GamepadThumbstickLabel.Text" xml:space="preserve">
+    <value>左摇杆：</value>
+  </data>
+  <data name="Diagnostics_GamepadRawDetailsLabel.Text" xml:space="preserve">
+    <value>Raw 明细：</value>
+  </data>
+  <data name="Diagnostics_GamepadStart.Content" xml:space="preserve">
+    <value>开始监测</value>
+  </data>
+  <data name="Diagnostics_GamepadStop.Content" xml:space="preserve">
+    <value>停止监测</value>
+  </data>
+  <data name="Diagnostics_GamepadRefresh.Content" xml:space="preserve">
+    <value>刷新一次</value>
+  </data>
   <data name="Diagnostics_ConnectionTitle.Text" xml:space="preserve">
     <value>连接诊断</value>
   </data>

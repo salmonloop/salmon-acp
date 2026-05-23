@@ -100,6 +100,159 @@
                     </StackPanel>
 
                     <StackPanel Spacing="12">
+                        <TextBlock x:Uid="Diagnostics_GamepadTitle"
+                                   Text="手柄输入"
+                                   Style="{StaticResource SettingsSectionTitleTextStyle}"/>
+
+                        <Border Style="{StaticResource SettingsSectionContainerStyle}">
+                            <StackPanel>
+                                <Grid Padding="12,8" HorizontalAlignment="Stretch">
+                                    <TextBlock x:Uid="Diagnostics_GamepadMonitorHeader"
+                                               AutomationProperties.AutomationId="Diagnostics.GamepadMonitorHeader"
+                                               Text="兼容性监测"
+                                               FontWeight="SemiBold" />
+                                </Grid>
+
+                                <StackPanel HorizontalAlignment="Stretch">
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadStatusLabel"
+                                                       Text="监测状态："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.StatusText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadStatus"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadStandardCountLabel"
+                                                       Text="Gamepad 数量："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.ConnectedGamepadsText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadStandardCount"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadRawCountLabel"
+                                                       Text="Raw 控制器数量："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.ConnectedRawControllersText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadRawCount"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadInputSourceLabel"
+                                                       Text="输入来源："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.InputSourceText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadInputSource"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadActiveInputsLabel"
+                                                       Text="当前输入："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.ActiveInputsText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadActiveInputs"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadThumbstickLabel"
+                                                       Text="左摇杆："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.ThumbstickText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadThumbstick"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <controls:ResponsiveFormRow>
+                                        <controls:ResponsiveFormRow.Label>
+                                            <TextBlock x:Uid="Diagnostics_GamepadRawDetailsLabel"
+                                                       Text="Raw 明细："
+                                                       Style="{StaticResource SettingsRowTitleTextStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </controls:ResponsiveFormRow.Label>
+                                        <controls:ResponsiveFormRow.Value>
+                                            <TextBlock Text="{x:Bind ViewModel.GamepadDiagnostics.RawControllersText, Mode=OneWay}"
+                                                       AutomationProperties.AutomationId="Diagnostics.GamepadRawDetails"
+                                                       Style="{StaticResource SettingsRowDescriptionTextStyle}"
+                                                       TextWrapping="WrapWholeWords"/>
+                                        </controls:ResponsiveFormRow.Value>
+                                    </controls:ResponsiveFormRow>
+
+                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+
+                                    <StackPanel Spacing="8"
+                                                Padding="{StaticResource SettingsRowPadding}">
+                                        <Button x:Uid="Diagnostics_GamepadStart"
+                                                AutomationProperties.AutomationId="Diagnostics.GamepadStart"
+                                                Content="开始监测"
+                                                Command="{x:Bind ViewModel.GamepadDiagnostics.StartMonitoringCommand}"
+                                                IsEnabled="{x:Bind ViewModel.GamepadDiagnostics.CanStartMonitoring, Mode=OneWay}"
+                                                HorizontalAlignment="Stretch" />
+                                        <Button x:Uid="Diagnostics_GamepadStop"
+                                                AutomationProperties.AutomationId="Diagnostics.GamepadStop"
+                                                Content="停止监测"
+                                                Command="{x:Bind ViewModel.GamepadDiagnostics.StopMonitoringCommand}"
+                                                IsEnabled="{x:Bind ViewModel.GamepadDiagnostics.CanStopMonitoring, Mode=OneWay}"
+                                                HorizontalAlignment="Stretch" />
+                                        <Button x:Uid="Diagnostics_GamepadRefresh"
+                                                AutomationProperties.AutomationId="Diagnostics.GamepadRefresh"
+                                                Content="刷新一次"
+                                                Command="{x:Bind ViewModel.GamepadDiagnostics.RefreshSnapshotCommand}"
+                                                HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Spacing="12">
                         <TextBlock x:Uid="Diagnostics_LogsTitle"
                                    Text="日志"
                                    Style="{StaticResource SettingsSectionTitleTextStyle}"/>

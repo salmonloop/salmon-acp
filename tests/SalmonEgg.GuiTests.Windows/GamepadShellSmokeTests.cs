@@ -73,6 +73,76 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
+    public void TitleBarCommand_InjectedGamepadIntent_CanReachMainNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        appData.EnableGuiControlFile();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var titleBarToggle = session.FindByAutomationId("TitleBar.ToggleSidebar", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, titleBarToggle, "TitleBar.ToggleSidebar", "title bar command");
+
+        var reachedMainNavigation = MoveFocusUntil(
+            session,
+            () => appData.TriggerGamepadIntent("MoveDown"),
+            () => session.IsFocusWithinAutomationId("MainNavView"),
+            attempts: 10);
+
+        Assert.True(
+            reachedMainNavigation,
+            $"Injected gamepad intent did not leave the title bar command group for main navigation."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void MainNavigationStartItem_InjectedGamepadIntent_CanReachAnotherNavigationItem()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        appData.EnableGuiControlFile();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var startItem = session.FindByAutomationId("MainNav.Start", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, startItem, "MainNav.Start", "start navigation item");
+
+        var reachedNavigationItem = MoveFocusUntil(
+            session,
+            () => appData.TriggerGamepadIntent("MoveDown"),
+            () => IsFocusOnConcreteMainNavigationItemOtherThan(session, "MainNav.Start"),
+            attempts: 10);
+
+        Assert.True(
+            reachedNavigationItem,
+            $"Injected gamepad intent did not move focus past the Start navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void DiscoverSessions_InjectedGamepadActivate_CanInvokeFocusedNavigationItem()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        appData.EnableGuiControlFile();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var discoverItem = session.FindByAutomationId("MainNav.DiscoverSessions", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, discoverItem, "MainNav.DiscoverSessions", "discover navigation item");
+        appData.TriggerGamepadIntent("Activate");
+
+        Assert.True(
+            session.WaitUntilVisible("DiscoverSessions.Title", TimeSpan.FromSeconds(10)),
+            $"Discover sessions page did not become visible through injected gamepad activation."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void RightTitleBarCommand_VirtualGamepadDPadDown_CanReachApplicationBody()
     {
         GuiTestGate.RequireEnabled();

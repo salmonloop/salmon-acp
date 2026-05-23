@@ -267,6 +267,42 @@
   <data name="Diagnostics_LiveLogHint.Text" xml:space="preserve">
     <value>Live streaming stops automatically when you leave this page.</value>
   </data>
+  <data name="Diagnostics_GamepadTitle.Text" xml:space="preserve">
+    <value>Gamepad input</value>
+  </data>
+  <data name="Diagnostics_GamepadMonitorHeader.Text" xml:space="preserve">
+    <value>Compatibility monitor</value>
+  </data>
+  <data name="Diagnostics_GamepadStatusLabel.Text" xml:space="preserve">
+    <value>Monitor status:</value>
+  </data>
+  <data name="Diagnostics_GamepadStandardCountLabel.Text" xml:space="preserve">
+    <value>Gamepads:</value>
+  </data>
+  <data name="Diagnostics_GamepadRawCountLabel.Text" xml:space="preserve">
+    <value>Raw controllers:</value>
+  </data>
+  <data name="Diagnostics_GamepadInputSourceLabel.Text" xml:space="preserve">
+    <value>Input source:</value>
+  </data>
+  <data name="Diagnostics_GamepadActiveInputsLabel.Text" xml:space="preserve">
+    <value>Active input:</value>
+  </data>
+  <data name="Diagnostics_GamepadThumbstickLabel.Text" xml:space="preserve">
+    <value>Left thumbstick:</value>
+  </data>
+  <data name="Diagnostics_GamepadRawDetailsLabel.Text" xml:space="preserve">
+    <value>Raw details:</value>
+  </data>
+  <data name="Diagnostics_GamepadStart.Content" xml:space="preserve">
+    <value>Start monitor</value>
+  </data>
+  <data name="Diagnostics_GamepadStop.Content" xml:space="preserve">
+    <value>Stop monitor</value>
+  </data>
+  <data name="Diagnostics_GamepadRefresh.Content" xml:space="preserve">
+    <value>Refresh once</value>
+  </data>
   <data name="Diagnostics_ConnectionTitle.Text" xml:space="preserve">
     <value>Connection diagnostics</value>
   </data>

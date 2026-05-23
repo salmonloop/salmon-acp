@@ -194,11 +194,6 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
 
         foreach (var controller in rawControllers)
         {
-            if (HasMatchingGamepad(controller, gamepads))
-            {
-                continue;
-            }
-
             reading = _rawMapper.GetInputReading(controller);
             if (GamepadIntentProcessor.GetActiveIntents(reading).Count > 0)
             {
@@ -208,19 +203,6 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
         }
 
         reading = default;
-        return false;
-    }
-
-    private static bool HasMatchingGamepad(RawGameController controller, IReadOnlyList<Gamepad> gamepads)
-    {
-        foreach (var gamepad in gamepads)
-        {
-            if (ReferenceEquals(RawGameController.FromGameController(gamepad), controller))
-            {
-                return true;
-            }
-        }
-
         return false;
     }
 

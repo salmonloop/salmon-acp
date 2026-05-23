@@ -55,6 +55,7 @@ namespace SalmonEgg;
 public static class DependencyInjection
 {
     private const string GuiEnabledEnvVar = "SALMONEGG_GUI";
+    private const string GuiControlFileEnvVar = "SALMONEGG_GUI_CONTROL_FILE";
     private const string GuiSlowSessionLoadMsEnvVar = "SALMONEGG_GUI_SLOW_SESSION_LOAD_MS";
 
     /// <summary>
@@ -146,15 +147,31 @@ public static class DependencyInjection
 #if WINDOWS
         services.AddSingleton<WindowsRawGameControllerMapper>();
         services.AddSingleton<WindowsGamepadInputService>();
+        services.AddSingleton<WindowsGamepadDiagnosticsService>();
+        services.AddSingleton<GuiGamepadInputService>();
         services.AddSingleton<NoOpGamepadInputService>();
+        services.AddSingleton<NoOpGamepadDiagnosticsService>();
         services.AddSingleton<IGamepadInputService>(sp =>
-            sp.GetRequiredService<IPlatformCapabilityService>().SupportsGamepadInput
+        {
+            if (IsGuiGamepadInputEnabled())
+            {
+                return sp.GetRequiredService<GuiGamepadInputService>();
+            }
+
+            return sp.GetRequiredService<IPlatformCapabilityService>().SupportsGamepadInput
                 ? sp.GetRequiredService<WindowsGamepadInputService>()
-                : sp.GetRequiredService<NoOpGamepadInputService>());
+                : sp.GetRequiredService<NoOpGamepadInputService>();
+        });
+        services.AddSingleton<IGamepadDiagnosticsService>(sp =>
+            sp.GetRequiredService<IPlatformCapabilityService>().SupportsGamepadInput
+                ? sp.GetRequiredService<WindowsGamepadDiagnosticsService>()
+                : sp.GetRequiredService<NoOpGamepadDiagnosticsService>());
 #elif __ANDROID__
         services.AddSingleton<IGamepadInputService, NoOpGamepadInputService>();
+        services.AddSingleton<IGamepadDiagnosticsService, NoOpGamepadDiagnosticsService>();
 #else
         services.AddSingleton<IGamepadInputService, NoOpGamepadInputService>();
+        services.AddSingleton<IGamepadDiagnosticsService, NoOpGamepadDiagnosticsService>();
 #endif
 
 #if WINDOWS
@@ -602,6 +619,7 @@ public static class DependencyInjection
                 sp.GetRequiredService<ILogger<LiveLogViewerViewModel>>(),
                 sp.GetRequiredService<IUiDispatcher>(),
                 sp.GetRequiredService<IStringLocalizer<CoreStrings>>()));
+        services.AddSingleton<GamepadDiagnosticsViewModel>();
         services.AddSingleton<DiagnosticsSettingsViewModel>();
         services.AddSingleton<IOpenSourceAcknowledgementsProvider, GeneratedOpenSourceAcknowledgementsProvider>();
         services.AddSingleton<AboutViewModel>();
@@ -668,7 +686,7 @@ public static class DependencyInjection
 
     private static Func<IChatService, IChatService>? CreateChatServiceDecorator()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable(GuiEnabledEnvVar), "1", StringComparison.Ordinal))
+        if (!IsGuiAutomationEnabled())
         {
             return null;
         }
@@ -682,5 +700,12 @@ public static class DependencyInjection
         var delay = TimeSpan.FromMilliseconds(delayMs);
         return inner => new DelayedLoadChatService(inner, delay);
     }
+
+    private static bool IsGuiAutomationEnabled()
+        => string.Equals(Environment.GetEnvironmentVariable(GuiEnabledEnvVar), "1", StringComparison.Ordinal);
+
+    private static bool IsGuiGamepadInputEnabled()
+        => IsGuiAutomationEnabled()
+            && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(GuiControlFileEnvVar));
 
 }

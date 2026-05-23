@@ -316,6 +316,42 @@
   <data name="LiveLog_StatusSwitchedToLatest" xml:space="preserve">
     <value>已切换到最新日志文件</value>
   </data>
+  <data name="GamepadDiagnostics_StatusNotStarted" xml:space="preserve">
+    <value>未启动</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusMonitoring" xml:space="preserve">
+    <value>正在监测</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusStopped" xml:space="preserve">
+    <value>已停止</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusUnsupported" xml:space="preserve">
+    <value>当前平台不支持手柄输入</value>
+  </data>
+  <data name="GamepadDiagnostics_StatusFailed" xml:space="preserve">
+    <value>读取失败，请稍后重试</value>
+  </data>
+  <data name="GamepadDiagnostics_InputSourceNone" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="GamepadDiagnostics_InputSourceGamepad" xml:space="preserve">
+    <value>Gamepad</value>
+  </data>
+  <data name="GamepadDiagnostics_InputSourceRawController" xml:space="preserve">
+    <value>RawGameController</value>
+  </data>
+  <data name="GamepadDiagnostics_ActiveInputsNone" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="GamepadDiagnostics_RawControllersNone" xml:space="preserve">
+    <value>未检测到 Raw 控制器</value>
+  </data>
+  <data name="GamepadDiagnostics_ConnectionWired" xml:space="preserve">
+    <value>有线</value>
+  </data>
+  <data name="GamepadDiagnostics_ConnectionWireless" xml:space="preserve">
+    <value>无线</value>
+  </data>
 
   <!-- Settings: Shortcuts -->
   <data name="Shortcuts_InvalidGestureMessage" xml:space="preserve">
