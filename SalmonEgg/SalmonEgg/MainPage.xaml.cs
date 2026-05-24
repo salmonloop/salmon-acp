@@ -176,9 +176,14 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
 #endif
     }
 
+    partial void AttachPlatformGamepadDirectionalBridge();
+
+    partial void DetachPlatformGamepadDirectionalBridge();
+
     private void OnMainPageUnloaded(object sender, RoutedEventArgs e)
     {
         DetachGamepadInput();
+        DetachPlatformGamepadDirectionalBridge();
         DetachDebugKeyLogging();
         Preferences.PropertyChanged -= OnPreferencesPropertyChanged;
         Preferences.ShortcutBindingsChanged -= OnShortcutBindingsChanged;
@@ -686,6 +691,7 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     private async void OnMainPageLoaded(object sender, RoutedEventArgs e)
     {
         AttachGamepadInput();
+        AttachPlatformGamepadDirectionalBridge();
         AttachDebugKeyLogging();
         _titleBarAdapter.Configure(App.MainWindowInstance);
         _metricsProvider.Attach(App.MainWindowInstance!, _titleBarAdapter);

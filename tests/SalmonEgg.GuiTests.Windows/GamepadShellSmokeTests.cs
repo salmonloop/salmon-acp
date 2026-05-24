@@ -252,6 +252,12 @@ public sealed class ShellFocusedActivationSmokeTests
             $"Session nav item did not become onscreen before rightward gamepad navigation.{Environment.NewLine}{appData.ReadBootLogTail()}");
 
         var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(10));
+        session.FocusElement(sessionItem);
+        session.PressEnter();
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionTitle", TimeSpan.FromSeconds(10)),
+            $"Chat view did not become visible before testing MainNav -> chat directional navigation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
         FocusAndAssert(session, sessionItem, "MainNav.Session.gui-session-01", "session navigation item");
 
         var reachedChatBody = MoveFocusUntil(

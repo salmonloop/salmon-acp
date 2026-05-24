@@ -145,4 +145,45 @@ public sealed partial class MainPage
         App.BootLog($"MainPage KeyDown: key={args.VirtualKey} handled={args.Handled}");
     }
 #endif
+
+    partial void AttachPlatformGamepadDirectionalBridge()
+    {
+        if (XamlRoot?.ContentIsland is null)
+        {
+            _ = DispatcherQueue.TryEnqueue(AttachPlatformGamepadDirectionalBridge);
+            return;
+        }
+
+        _debugKeyboardSource ??= InputKeyboardSource.GetForIsland(XamlRoot.ContentIsland);
+        _debugKeyboardSource.KeyDown -= OnPlatformGamepadDirectionalBridgeKeyDown;
+        _debugKeyboardSource.KeyDown += OnPlatformGamepadDirectionalBridgeKeyDown;
+    }
+
+    partial void DetachPlatformGamepadDirectionalBridge()
+    {
+        if (_debugKeyboardSource is null)
+        {
+            return;
+        }
+
+        _debugKeyboardSource.KeyDown -= OnPlatformGamepadDirectionalBridgeKeyDown;
+    }
+
+    private void OnPlatformGamepadDirectionalBridgeKeyDown(InputKeyboardSource sender, WinUIKeyEventArgs args)
+    {
+        if (args.VirtualKey != Windows.System.VirtualKey.GamepadDPadRight)
+        {
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!IsFocusWithinMainNavigation())
+            {
+                return;
+            }
+
+            _ = TryMoveFocusFromMainNavigationIntoCurrentContent();
+        });
+    }
 }

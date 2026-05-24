@@ -1962,6 +1962,9 @@ public sealed class XamlComplianceTests
         Assert.Contains("HandleActivatableTagAsync(navItem, tag)", adapter, StringComparison.Ordinal);
         Assert.Contains("MainPage : Page, INavigationIntentConsumer", mainPage, StringComparison.Ordinal);
         Assert.Contains("public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)", mainPage, StringComparison.Ordinal);
+        Assert.Contains("intent != GamepadNavigationIntent.MoveRight", mainPage, StringComparison.Ordinal);
+        Assert.Contains("IsFocusWithinMainNavigation()", mainPage, StringComparison.Ordinal);
+        Assert.Contains("TryMoveFocusFromMainNavigationIntoCurrentContent()", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("TryHandleFocusedMainNavigationActivationAsync", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("ResolveFocusedMainNavigationItem", mainPage, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateFocusedItemActivationTask", adapter, StringComparison.Ordinal);
@@ -2257,7 +2260,26 @@ public sealed class XamlComplianceTests
         Assert.Contains("_debugKeyboardSource.KeyDown -= OnDebugKeyDown;", windowsPage, StringComparison.Ordinal);
         Assert.Contains("_debugKeyboardSource.KeyDown += OnDebugKeyDown;", windowsPage, StringComparison.Ordinal);
         Assert.Contains("private static void OnDebugKeyDown", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("partial void AttachPlatformGamepadDirectionalBridge()", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("partial void DetachPlatformGamepadDirectionalBridge()", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("OnPlatformGamepadDirectionalBridgeKeyDown", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("Windows.System.VirtualKey.GamepadDPadRight", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("TryMoveFocusFromMainNavigationIntoCurrentContent()", windowsPage, StringComparison.Ordinal);
         Assert.DoesNotContain("SystemKeyDown", windowsPage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_GamepadDirectionalBridge_RemainsPlatformBounded()
+    {
+        var sharedPage = LoadText(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+        var windowsPage = LoadText(@"SalmonEgg\SalmonEgg\Platforms\Windows\MainPage.Windows.cs");
+
+        Assert.Contains("partial void AttachPlatformGamepadDirectionalBridge();", sharedPage, StringComparison.Ordinal);
+        Assert.Contains("partial void DetachPlatformGamepadDirectionalBridge();", sharedPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("InputKeyboardSource", sharedPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Windows.System.VirtualKey.GamepadDPadRight", sharedPage, StringComparison.Ordinal);
+        Assert.Contains("InputKeyboardSource", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("Windows.System.VirtualKey.GamepadDPadRight", windowsPage, StringComparison.Ordinal);
     }
 
     [Fact]
