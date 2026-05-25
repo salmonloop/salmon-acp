@@ -2295,11 +2295,13 @@ public sealed class XamlComplianceTests
         Assert.Contains("case Windows.System.VirtualKey.GamepadDPadRight:", windowsPage, StringComparison.Ordinal);
         Assert.Contains("if (IsFocusWithinMainNavigation())", windowsPage, StringComparison.Ordinal);
         Assert.Contains("TryMoveFocusFromMainNavigationIntoCurrentContent()", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("case Windows.System.VirtualKey.GamepadDPadUp:", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("TryDispatchWithoutNativeFallback(GamepadNavigationIntent.MoveUp)", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("case Windows.System.VirtualKey.GamepadDPadDown:", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("TryDispatchWithoutNativeFallback(GamepadNavigationIntent.MoveDown)", windowsPage, StringComparison.Ordinal);
         Assert.Contains("case Windows.System.VirtualKey.GamepadB:", windowsPage, StringComparison.Ordinal);
         Assert.Contains("_virtualGamepadNavigationDispatcher?.TryDispatchWithoutNativeFallback(GamepadNavigationIntent.Back)", windowsPage, StringComparison.Ordinal);
         Assert.DoesNotContain("Windows.System.VirtualKey.GamepadDPadLeft", windowsPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("Windows.System.VirtualKey.GamepadDPadUp", windowsPage, StringComparison.Ordinal);
-        Assert.DoesNotContain("Windows.System.VirtualKey.GamepadDPadDown", windowsPage, StringComparison.Ordinal);
         Assert.DoesNotContain("Windows.System.VirtualKey.GamepadA", windowsPage, StringComparison.Ordinal);
         Assert.DoesNotContain("XamlFocusManager.TryMoveFocus", windowsPage, StringComparison.Ordinal);
         Assert.DoesNotContain("AutomationPeer", windowsPage, StringComparison.Ordinal);

@@ -110,17 +110,18 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
 
     public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
     {
-        if (intent != GamepadNavigationIntent.MoveDown)
+        if (intent == GamepadNavigationIntent.MoveDown && IsFocusWithinSettingsNav())
         {
-            return false;
+            var consumed = TryFocusCurrentSectionContent();
+            return consumed;
         }
 
-        if (!IsFocusWithinSettingsNav())
+        if (intent == GamepadNavigationIntent.MoveUp && IsFocusWithinSettingsContent())
         {
-            return false;
+            return TryFocusCurrentSectionNavigationItem();
         }
 
-        return TryFocusCurrentSectionContent();
+        return false;
     }
 
     private bool IsFocusWithinSettingsNav()
@@ -161,6 +162,36 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
                 control is ComboBox or ToggleSwitch or TextBox or Button)
             is { } firstInteractive
             && firstInteractive.Focus(FocusState.Programmatic);
+    }
+
+    private bool IsFocusWithinSettingsContent()
+    {
+        if (SettingsFrame.XamlRoot is null)
+        {
+            return false;
+        }
+
+        var current = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsFrame.XamlRoot) as DependencyObject;
+        while (current is not null)
+        {
+            if (ReferenceEquals(current, SettingsFrame))
+            {
+                return true;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
+    }
+
+    private bool TryFocusCurrentSectionNavigationItem()
+    {
+        var automationId = ViewModel.SelectedSection.AutomationId;
+        return FindDescendant<NavigationViewItem>(SettingsNavView, item =>
+                string.Equals(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(item), automationId, StringComparison.Ordinal))
+            is { } selectedItem
+            && selectedItem.Focus(FocusState.Programmatic);
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)

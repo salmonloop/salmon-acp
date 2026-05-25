@@ -346,6 +346,46 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
+    public void StartPrompt_VirtualGamepadDPadUp_CanReturnToSuggestionCards()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var startItem = session.FindByAutomationId("MainNav.Start", TimeSpan.FromSeconds(10));
+        ClickAndAssertFocus(session, startItem, "MainNav.Start", "start navigation item");
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                session.PressVirtualGamepadDPadRight,
+                () => session.IsFocusWithinAutomationId("StartView.Suggestion.AnalyzeCodebase"),
+                attempts: 4),
+            $"Could not move from MainNav into Start suggestions before prompt return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                session.PressVirtualGamepadDPadDown,
+                () => session.IsFocusWithinAutomationId("StartView.PromptBox"),
+                attempts: 4),
+            $"Could not move from Start suggestions into the prompt box before return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        session.PressVirtualGamepadDPadUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("StartView.Suggestion.AnalyzeCodebase")
+                    || session.IsFocusWithinAutomationId("StartView.Suggestion.RecommendTasks")
+                    || session.IsFocusWithinAutomationId("StartView.Suggestion.ResolveErrors"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from Start prompt to suggestion cards."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void ChatInputArea_VirtualGamepadDPadDown_CanReachInputBox()
     {
         GuiTestGate.RequireEnabled();
@@ -446,6 +486,49 @@ public sealed class ShellFocusedActivationSmokeTests
         Assert.True(
             reachedDiagnosticsAction,
             $"Virtual gamepad D-pad focus did not move from settings section navigation into diagnostics action buttons."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsContent_VirtualGamepadDPadUp_CanReturnToSectionNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
+        session.ClickElement(settingsItem);
+        Assert.True(
+            session.WaitUntilOnscreen("SettingsNav.Diagnostics", TimeSpan.FromSeconds(10)),
+            $"Settings navigation did not become visible before section return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var diagnosticsItem = session.FindByAutomationId("SettingsNav.Diagnostics", TimeSpan.FromSeconds(10));
+        ClickAndAssertFocus(session, diagnosticsItem, "SettingsNav.Diagnostics", "diagnostics settings navigation item");
+        Assert.True(
+            session.WaitUntilOnscreen("Diagnostics.GamepadMonitorHeader", TimeSpan.FromSeconds(10)),
+            $"Diagnostics settings page did not become visible before section return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                session.PressVirtualGamepadDPadDown,
+                () => session.IsFocusWithinAutomationId("Diagnostics.GamepadStart")
+                    || session.IsFocusWithinAutomationId("Diagnostics.GamepadRefresh")
+                    || session.IsFocusWithinAutomationId("Diagnostics.GamepadStop"),
+                attempts: 10),
+            $"Could not move from diagnostics section nav into page content before return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        session.PressVirtualGamepadDPadUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("SettingsNav.Diagnostics")
+                    || session.IsFocusWithinAutomationId("SettingsNav.General")
+                    || session.IsFocusWithinAutomationId("SettingsNav.Appearance"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from settings content to section navigation."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }

@@ -47,13 +47,44 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
 
     public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
     {
-        if (!IsFocusWithinHeroSuggestions())
+        if (intent == GamepadNavigationIntent.MoveDown && IsFocusWithinHeroSuggestions())
+        {
+            return TryFocusPromptBox();
+        }
+
+        if (intent == GamepadNavigationIntent.MoveUp && IsFocusWithinPromptBox())
+        {
+            return TryFocusPrimaryContentTarget();
+        }
+
+        return false;
+    }
+
+    private bool IsFocusWithinPromptBox()
+    {
+        if (HeroSuggestionsHost.XamlRoot is null)
         {
             return false;
         }
 
-        return intent == GamepadNavigationIntent.MoveDown
-            && TryFocusPromptBox();
+        var promptBox = FindPromptBox();
+        if (promptBox is null)
+        {
+            return false;
+        }
+
+        var current = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(HeroSuggestionsHost.XamlRoot) as DependencyObject;
+        while (current is not null)
+        {
+            if (ReferenceEquals(current, promptBox) || current is TextBox)
+            {
+                return true;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
     }
 
     public bool TryFocusPrimaryContentTarget()
@@ -109,6 +140,15 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
 
     private void RefreshHeroSuggestionFocusTargets()
     {
+        var firstSuggestion = ViewModel.Suggestions.Count > 0
+            ? FindSuggestionButton(ViewModel.Suggestions[0].AutomationId)
+            : null;
+        if (firstSuggestion is not null
+            && FindPromptBox() is TextBox promptBox)
+        {
+            promptBox.XYFocusUp = firstSuggestion;
+        }
+
         for (var i = 0; i < ViewModel.Suggestions.Count; i++)
         {
             if (FindSuggestionButton(ViewModel.Suggestions[i].AutomationId) is not Button button)

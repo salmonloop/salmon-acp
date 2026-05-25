@@ -186,6 +186,18 @@ public sealed partial class MainPage
                     }
                 });
                 break;
+            case Windows.System.VirtualKey.GamepadDPadUp:
+                _ = DispatcherQueue.TryEnqueue(() =>
+                {
+                    _ = _virtualGamepadNavigationDispatcher?.TryDispatchWithoutNativeFallback(GamepadNavigationIntent.MoveUp);
+                });
+                break;
+            case Windows.System.VirtualKey.GamepadDPadDown:
+                _ = DispatcherQueue.TryEnqueue(() =>
+                {
+                    _ = _virtualGamepadNavigationDispatcher?.TryDispatchWithoutNativeFallback(GamepadNavigationIntent.MoveDown);
+                });
+                break;
             case Windows.System.VirtualKey.GamepadB:
                 _ = DispatcherQueue.TryEnqueue(() =>
                 {
