@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading;
 using FlaUI.Core.Definitions;
 using Xunit.Sdk;
 
@@ -35,7 +34,9 @@ public sealed class McpSettingsSmokeTests
         session.ClickElement(toggle);
 
         Assert.True(
-            WaitUntil(() => appData.ReadMcpYaml().Contains("enabled: true", StringComparison.Ordinal), TimeSpan.FromSeconds(5)),
+            session.WaitUntil(
+                () => appData.ReadMcpYaml().Contains("enabled: true", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(5)),
             $"MCP service toggle did not persist true to mcp.yaml.{Environment.NewLine}{appData.ReadMcpYaml()}");
 
         NavigateToAcpSettings(session);
@@ -54,25 +55,40 @@ public sealed class McpSettingsSmokeTests
         EnsureMainWindowWide(session);
         NavigateToMcpSettings(session);
 
-        ClickButton(session, "Mcp.AddServer");
-        Assert.True(
-            session.WaitUntilOnscreen("Mcp.SaveServer", TimeSpan.FromSeconds(5)),
-            "MCP editor save button did not become visible after adding a server.");
+        ClickButtonAndWaitForOnscreen(session, "Mcp.AddServer", "Mcp.Editor.Close");
 
-        ClickButton(session, "Mcp.Editor.Close");
+        ClickButtonAndWaitForHidden(session, "Mcp.Editor.Close", "Mcp.Editor.Close");
         Assert.True(
-            session.WaitUntilHidden("Mcp.SaveServer", TimeSpan.FromSeconds(5)),
+            session.WaitUntilHidden("Mcp.Editor.Close", TimeSpan.FromSeconds(5)),
             "MCP editor stayed visible after closing the draft.");
 
-        ClickButton(session, "Mcp.AddServer");
-        Assert.True(
-            session.WaitUntilOnscreen("Mcp.SaveServer", TimeSpan.FromSeconds(5)),
-            "MCP editor did not become visible after adding a second server draft.");
+        ClickButtonAndWaitForOnscreen(session, "Mcp.AddServer", "Mcp.Editor.Close");
 
-        Thread.Sleep(250);
         Assert.True(
             session.WaitUntilOnscreen("Mcp.AddServer", TimeSpan.FromSeconds(2)),
             "MCP settings page stopped responding after add-delete-add.");
+    }
+
+    private static void ClickButtonAndWaitForOnscreen(
+        WindowsGuiAppSession session,
+        string automationId,
+        string expectedAutomationId)
+    {
+        ClickButton(session, automationId);
+        Assert.True(
+            session.WaitUntilOnscreen(expectedAutomationId, TimeSpan.FromSeconds(5)),
+            $"Expected '{expectedAutomationId}' to become visible after clicking '{automationId}'.");
+    }
+
+    private static void ClickButtonAndWaitForHidden(
+        WindowsGuiAppSession session,
+        string automationId,
+        string expectedHiddenAutomationId)
+    {
+        ClickButton(session, automationId);
+        Assert.True(
+            session.WaitUntilHidden(expectedHiddenAutomationId, TimeSpan.FromSeconds(5)),
+            $"Expected '{expectedHiddenAutomationId}' to become hidden after clicking '{automationId}'.");
     }
 
     private static void ClickButton(WindowsGuiAppSession session, string automationId)
@@ -82,16 +98,13 @@ public sealed class McpSettingsSmokeTests
             $"Button '{automationId}' did not become visible.");
 
         session.ClickElement(session.FindByAutomationId(automationId));
-        Thread.Sleep(250);
     }
 
     private static void NavigateToMcpSettings(WindowsGuiAppSession session)
     {
         var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
         session.ActivateElement(settingsItem);
-        Thread.Sleep(250);
         session.ClickElement(settingsItem);
-        Thread.Sleep(250);
 
         var mcpSettingsItem = session.TryFindByAutomationId("SettingsNav.Mcp", TimeSpan.FromSeconds(10))
             ?? session.TryFindVisibleElementByNameAnywhere("MCP", TimeSpan.FromSeconds(10));
@@ -112,7 +125,7 @@ public sealed class McpSettingsSmokeTests
         session.ActivateElement(mcpSettingsItem!);
 
         Assert.True(
-            session.WaitUntilOnscreen("Mcp.AddServer", TimeSpan.FromSeconds(10)),
+            session.WaitUntilEnabled("Mcp.AddServer", TimeSpan.FromSeconds(10)),
             "MCP settings page did not become visible.");
     }
 
@@ -120,9 +133,7 @@ public sealed class McpSettingsSmokeTests
     {
         var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
         session.ActivateElement(settingsItem);
-        Thread.Sleep(250);
         session.ClickElement(settingsItem);
-        Thread.Sleep(250);
 
         var acpSettingsItem = session.TryFindByAutomationId("SettingsNav.AgentAcp", TimeSpan.FromSeconds(10))
             ?? session.TryFindVisibleElementByNameAnywhere("Agent (ACP)", TimeSpan.FromSeconds(10));
@@ -145,22 +156,6 @@ public sealed class McpSettingsSmokeTests
         Assert.True(
             session.WaitUntilOnscreen("Acp.Global.Enabled", TimeSpan.FromSeconds(10)),
             "ACP settings page did not become visible.");
-    }
-
-    private static bool WaitUntil(Func<bool> condition, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition())
-            {
-                return true;
-            }
-
-            Thread.Sleep(120);
-        }
-
-        return condition();
     }
 
     private static void EnsureMainWindowWide(WindowsGuiAppSession session)

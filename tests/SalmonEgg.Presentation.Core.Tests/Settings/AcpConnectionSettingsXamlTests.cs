@@ -79,6 +79,20 @@ public sealed class AcpConnectionSettingsXamlTests
     }
 
     [Fact]
+    public void McpSettingsAddCommand_UsesViewModelCanExecuteAsEnabledStateOwner()
+    {
+        var xaml = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\McpSettingsPage.xaml");
+        var document = XDocument.Parse(xaml);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var addButton = Assert.Single(document.Descendants().Where(element =>
+            element.Name.LocalName == "Button"
+            && string.Equals((string?)element.Attribute(x + "Uid"), "Mcp_AddServer", StringComparison.Ordinal)));
+        Assert.Equal("{x:Bind ViewModel.AddServerCommand}", (string?)addButton.Attribute("Command"));
+        Assert.Null(addButton.Attribute("IsEnabled"));
+    }
+
+    [Fact]
     public void McpSettingsPage_HasLocalizedVisibleTextResources()
     {
         string[] resourceFiles =

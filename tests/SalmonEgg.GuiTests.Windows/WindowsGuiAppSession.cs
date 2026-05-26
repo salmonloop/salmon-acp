@@ -255,17 +255,9 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public bool WaitUntilHidden(string automationId, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            var element = TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
-            if (element == null)
-            {
-                return true;
-            }
-            Thread.Sleep(250);
-        }
-        return false;
+        return WaitUntil(
+            () => TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250)) is null,
+            timeout);
     }
 
     public bool WaitUntilVisible(string automationId, TimeSpan timeout)
@@ -275,19 +267,49 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public bool WaitUntilOnscreen(string automationId, TimeSpan timeout)
     {
+        return WaitUntil(
+            () =>
+            {
+                var element = TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
+                return element is not null && !TryGetIsOffscreen(element);
+            },
+            timeout);
+    }
+
+    public bool IsOnscreen(string automationId, TimeSpan? timeout = null)
+    {
+        var element = TryFindByAutomationId(automationId, timeout ?? TimeSpan.FromMilliseconds(250));
+        return element is not null && !TryGetIsOffscreen(element);
+    }
+
+    public bool WaitUntilEnabled(string automationId, TimeSpan timeout)
+    {
+        return WaitUntil(
+            () =>
+            {
+                var element = TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
+                return element is not null && !TryGetIsOffscreen(element) && TryGetIsEnabled(element);
+            },
+            timeout);
+    }
+
+    public bool WaitUntil(Func<bool> condition, TimeSpan timeout, TimeSpan? pollInterval = null)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+
         var deadline = DateTime.UtcNow + timeout;
+        var interval = pollInterval ?? TimeSpan.FromMilliseconds(120);
         while (DateTime.UtcNow < deadline)
         {
-            var element = TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
-            if (element is not null && !TryGetIsOffscreen(element))
+            if (condition())
             {
                 return true;
             }
 
-            Thread.Sleep(120);
+            Thread.Sleep(interval);
         }
 
-        return false;
+        return condition();
     }
 
     public void InvokeButton(string automationId)
@@ -1370,6 +1392,18 @@ internal sealed class WindowsGuiAppSession : IDisposable
         try
         {
             return element.IsOffscreen;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetIsEnabled(AutomationElement element)
+    {
+        try
+        {
+            return element.IsEnabled;
         }
         catch
         {

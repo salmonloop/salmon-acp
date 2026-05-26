@@ -451,6 +451,28 @@ public sealed class McpSettingsViewModelTests
     }
 
     [Fact]
+    public async Task AddServerCommand_WhenLoadIsInProgress_IsDisabledUntilRowsLoaded()
+    {
+        var loadCompletion = new TaskCompletionSource<McpSettings>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new FakeMcpSettingsService
+        {
+            LoadOverride = _ => loadCompletion.Task
+        };
+        var viewModel = CreateViewModel(service);
+
+        var loadTask = viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.AddServerCommand.CanExecute(null));
+
+        loadCompletion.SetResult(new McpSettings());
+        await loadTask;
+
+        Assert.True(viewModel.AddServerCommand.CanExecute(null));
+        viewModel.AddServerCommand.Execute(null);
+        Assert.True(viewModel.IsEditorOpen);
+    }
+
+    [Fact]
     public async Task RowSaveCommand_WhenDisabledDraftIsIncomplete_PersistsAsDisabledDraft()
     {
         var service = new FakeMcpSettingsService();
@@ -629,8 +651,10 @@ public sealed class McpSettingsViewModelTests
 
         public int SaveCount { get; private set; }
 
+        public Func<CancellationToken, Task<McpSettings>>? LoadOverride { get; set; }
+
         public Task<McpSettings> LoadAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(Settings);
+            => LoadOverride?.Invoke(cancellationToken) ?? Task.FromResult(Settings);
 
         public Task SaveAsync(McpSettings settings, CancellationToken cancellationToken = default)
         {

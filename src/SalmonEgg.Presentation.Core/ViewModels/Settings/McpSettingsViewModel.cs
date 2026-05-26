@@ -26,6 +26,7 @@ public sealed partial class McpSettingsViewModel : ObservableObject
     private bool _isLoadingRows;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddServerCommand))]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -97,7 +98,9 @@ public sealed partial class McpSettingsViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    public bool CanAddServer => !IsLoading;
+
+    [RelayCommand(CanExecute = nameof(CanAddServer))]
     private void AddServer()
     {
         var row = new McpServerRowViewModel(RemoveServer, SaveServerAsync)

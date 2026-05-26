@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading;
 using FlaUI.Core.Definitions;
 using Xunit.Sdk;
 
@@ -47,9 +46,7 @@ public sealed class DiagnosticsSettingsSmokeTests
     {
         var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
         session.ActivateElement(settingsItem);
-        Thread.Sleep(250);
         session.ClickElement(settingsItem);
-        Thread.Sleep(250);
 
         var diagnosticsItem = session.TryFindByAutomationId("SettingsNav.Diagnostics", TimeSpan.FromSeconds(10));
         if (diagnosticsItem is null)
@@ -82,25 +79,27 @@ public sealed class DiagnosticsSettingsSmokeTests
         string automationId,
         TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
         FlaUI.Core.AutomationElements.AutomationElement? element = null;
-        while (DateTime.UtcNow < deadline)
-        {
-            element = session.TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
-            if (element is not null)
-            {
-                break;
-            }
 
-            session.ScrollWheel(-120);
-            Thread.Sleep(120);
-        }
+        session.WaitUntil(
+            () =>
+            {
+                element = session.TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
+                if (element is not null)
+                {
+                    return true;
+                }
+
+                session.ScrollWheel(-120);
+                return false;
+            },
+            timeout);
 
         element ??= session.FindByAutomationId(automationId, TimeSpan.FromMilliseconds(250));
         if (element.Patterns.ScrollItem.IsSupported)
         {
             element.Patterns.ScrollItem.Pattern.ScrollIntoView();
-            Thread.Sleep(150);
+            session.WaitUntil(() => !element.IsOffscreen, TimeSpan.FromSeconds(1));
         }
 
         return element;

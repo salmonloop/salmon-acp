@@ -674,6 +674,17 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void ChatInputArea_CodeBehind_TreatsDeferredSelectorsAsOptional()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml.cs");
+
+        Assert.Contains("FindName(selectorName) as ComboBox", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("AgentSelectorHost.XamlRoot", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModeSelectorHost.XamlRoot", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProjectSelectorHost.XamlRoot", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChatInputArea_ComposerBlockedStates_UseUnifiedViewModelProjection()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml");

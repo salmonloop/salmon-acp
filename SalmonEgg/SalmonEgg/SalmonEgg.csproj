@@ -105,6 +105,8 @@
   <PropertyGroup>
     <!-- Mobile targets are opt-in to keep `dotnet build` working on dev machines without workloads/toolchains. -->
     <EnableMobileTargets Condition="'$(EnableMobileTargets)' == ''">false</EnableMobileTargets>
+    <!-- Windows dev environments need the WinUI target present during restore/design-time build so XAML-generated types resolve. -->
+    <EnableWinUIBuild Condition="'$(EnableWinUIBuild)' == '' and '$(OS)' == 'Windows_NT'">true</EnableWinUIBuild>
     <!-- Avoid duplicate PRIResource items when we explicitly list them above -->
     <EnableDefaultPriItems>false</EnableDefaultPriItems>
     <!-- Keep a Windows-specific multi-size ICO for the apphost / Explorer / unpackaged desktop shell. -->

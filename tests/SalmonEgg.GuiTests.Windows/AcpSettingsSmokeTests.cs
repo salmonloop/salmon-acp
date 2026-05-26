@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading;
 using FlaUI.Core.Definitions;
 using Xunit.Sdk;
 
@@ -26,7 +25,9 @@ public sealed class AcpSettingsSmokeTests
             session.ClickElement(toggle);
 
             Assert.True(
-                WaitUntil(() => appData.ReadAppYaml().Contains("acp_enabled: false", StringComparison.Ordinal), TimeSpan.FromSeconds(5)),
+                session.WaitUntil(
+                    () => appData.ReadAppYaml().Contains("acp_enabled: false", StringComparison.Ordinal),
+                    TimeSpan.FromSeconds(5)),
                 $"Global ACP toggle did not persist false to app.yaml.{Environment.NewLine}{appData.ReadAppYaml()}");
         }
 
@@ -44,7 +45,6 @@ public sealed class AcpSettingsSmokeTests
     {
         var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
         session.ClickElement(settingsItem);
-        Thread.Sleep(250);
 
         var acpSettingsItem = session.TryFindByAutomationId("SettingsNav.AgentAcp", TimeSpan.FromSeconds(10))
             ?? session.TryFindVisibleElementByNameAnywhere("Agent (ACP)", TimeSpan.FromSeconds(10));
@@ -102,22 +102,6 @@ public sealed class AcpSettingsSmokeTests
         }
 
         throw new InvalidOperationException("Failed to resize the SalmonEgg window.");
-    }
-
-    private static bool WaitUntil(Func<bool> condition, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition())
-            {
-                return true;
-            }
-
-            Thread.Sleep(120);
-        }
-
-        return condition();
     }
 
     private static class NativeMethods

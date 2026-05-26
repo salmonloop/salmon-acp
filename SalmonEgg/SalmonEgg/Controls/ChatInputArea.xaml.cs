@@ -604,9 +604,19 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
         for (var i = 0; i < selectors.Length; i++)
         {
             selectors[i].XYFocusUp = InputBox;
-            selectors[i].XYFocusDown = null;
-            selectors[i].XYFocusLeft = i > 0 ? selectors[i - 1] : null;
-            selectors[i].XYFocusRight = i + 1 < selectors.Length ? selectors[i + 1] : null;
+            selectors[i].ClearValue(Control.XYFocusDownProperty);
+            selectors[i].ClearValue(Control.XYFocusLeftProperty);
+            selectors[i].ClearValue(Control.XYFocusRightProperty);
+
+            if (i > 0)
+            {
+                selectors[i].XYFocusLeft = selectors[i - 1];
+            }
+
+            if (i + 1 < selectors.Length)
+            {
+                selectors[i].XYFocusRight = selectors[i + 1];
+            }
         }
     }
 
@@ -615,18 +625,22 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
 
     private IEnumerable<ComboBox> GetVisibleSelectors()
     {
-        if (AgentSelectorHost.XamlRoot is null)
-        {
-            return Enumerable.Empty<ComboBox>();
-        }
-
-        return new[] { AgentSelectorHost, ModeSelectorHost, ProjectSelectorHost }
+        return new[]
+            {
+                GetLoadedSelector(nameof(AgentSelectorHost)),
+                GetLoadedSelector(nameof(ModeSelectorHost)),
+                GetLoadedSelector(nameof(ProjectSelectorHost))
+            }
             .Where(selector => selector is not null
+                               && selector.XamlRoot is not null
                                && selector.Visibility == Visibility.Visible
                                && selector.ActualWidth > 0
                                && selector.ActualHeight > 0
-                               && selector.IsEnabled);
+                               && selector.IsEnabled)!;
     }
+
+    private ComboBox? GetLoadedSelector(string selectorName)
+        => FindName(selectorName) as ComboBox;
 
     private void OnSlashCommandsListSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
