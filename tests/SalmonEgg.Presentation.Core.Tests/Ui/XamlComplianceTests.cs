@@ -2237,6 +2237,29 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void ChatInputArea_SelectorGamepadDPadDown_IsConsumedBeforeKeyboardFallback()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml.cs");
+        var previewKeyDown = ExtractSection(code, "private void OnSelectorHostPreviewKeyDown", "private static void ExecuteSelectorCommand");
+
+        Assert.Contains("Windows.System.VirtualKey.GamepadDPadDown", previewKeyDown, StringComparison.Ordinal);
+        Assert.Contains("TryFocusNextVisibleSelectorOrInputBox(comboBox)", code, StringComparison.Ordinal);
+        Assert.Contains("comboBox.IsDropDownOpen", previewKeyDown, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true;", previewKeyDown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppearanceSettingsPage_ComboboxGamepadDPad_UsesFocusTraversalNotValueMutation()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AppearanceSettingsPage.xaml.cs");
+
+        Assert.Contains("Windows.System.VirtualKey.GamepadDPadDown", code, StringComparison.Ordinal);
+        Assert.Contains("Windows.System.VirtualKey.GamepadDPadUp", code, StringComparison.Ordinal);
+        Assert.Contains("comboBox.IsDropDownOpen", code, StringComparison.Ordinal);
+        Assert.Contains("AppearanceAnimationToggle.Focus(FocusState.Programmatic)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShortcutRecorder_TracksModifiersWithoutPlatformKeyStateFallback()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Controls\ShortcutRecorder.xaml");

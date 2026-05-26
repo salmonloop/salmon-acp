@@ -24,7 +24,7 @@ public sealed partial class AppearanceSettingsPage : SalmonEgg.Presentation.View
             return;
         }
 
-        if (e.Key == Windows.System.VirtualKey.Down)
+        if (e.Key is Windows.System.VirtualKey.Down or Windows.System.VirtualKey.GamepadDPadDown)
         {
             e.Handled = true;
             _ = DispatcherQueue.TryEnqueue(() => AppearanceAnimationToggle.Focus(FocusState.Programmatic));
@@ -33,12 +33,12 @@ public sealed partial class AppearanceSettingsPage : SalmonEgg.Presentation.View
 
     private void OnAnimationToggleKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Up)
+        if (e.Key is Windows.System.VirtualKey.Up or Windows.System.VirtualKey.GamepadDPadUp)
         {
             e.Handled = true;
             _ = DispatcherQueue.TryEnqueue(() => AppearanceThemeComboBox.Focus(FocusState.Programmatic));
         }
-        else if (e.Key == Windows.System.VirtualKey.Down)
+        else if (e.Key is Windows.System.VirtualKey.Down or Windows.System.VirtualKey.GamepadDPadDown)
         {
             e.Handled = true;
             _ = DispatcherQueue.TryEnqueue(() => AppearanceBackdropComboBox.Focus(FocusState.Programmatic));
@@ -52,7 +52,7 @@ public sealed partial class AppearanceSettingsPage : SalmonEgg.Presentation.View
             return;
         }
 
-        if (e.Key == Windows.System.VirtualKey.Up)
+        if (e.Key is Windows.System.VirtualKey.Up or Windows.System.VirtualKey.GamepadDPadUp)
         {
             e.Handled = true;
             _ = DispatcherQueue.TryEnqueue(() => AppearanceAnimationToggle.Focus(FocusState.Programmatic));

@@ -687,6 +687,30 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
                 e.Handled = true;
             }
         }
+        else if (e.Key is Windows.System.VirtualKey.Down or Windows.System.VirtualKey.GamepadDPadDown)
+        {
+            if (TryFocusNextVisibleSelectorOrInputBox(comboBox))
+            {
+                e.Handled = true;
+            }
+        }
+    }
+
+    private bool TryFocusNextVisibleSelectorOrInputBox(ComboBox currentSelector)
+    {
+        var selectors = GetVisibleSelectors().ToArray();
+        var index = Array.FindIndex(selectors, selector => ReferenceEquals(selector, currentSelector));
+        if (index < 0)
+        {
+            return false;
+        }
+
+        if (index + 1 < selectors.Length)
+        {
+            return selectors[index + 1].Focus(FocusState.Programmatic);
+        }
+
+        return TryFocusInputBox();
     }
 
     private static void ExecuteSelectorCommand(object sender, ICommand? command)

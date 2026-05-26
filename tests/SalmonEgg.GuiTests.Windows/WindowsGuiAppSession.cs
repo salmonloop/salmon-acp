@@ -399,6 +399,11 @@ internal sealed class WindowsGuiAppSession : IDisposable
         {
         }
 
+        if (TryClickElementCenter(element))
+        {
+            return;
+        }
+
         string elementId;
         try
         {
@@ -435,6 +440,11 @@ internal sealed class WindowsGuiAppSession : IDisposable
         {
         }
 
+        if (TryClickElementCenter(element))
+        {
+            return;
+        }
+
         ActivateElement(element);
     }
 
@@ -463,6 +473,33 @@ internal sealed class WindowsGuiAppSession : IDisposable
         ClickElement(element);
         Thread.Sleep(50);
         ClickElement(element);
+    }
+
+    private static bool TryClickElementCenter(AutomationElement element)
+    {
+        try
+        {
+            if (TryGetIsOffscreen(element))
+            {
+                return false;
+            }
+
+            var bounds = element.BoundingRectangle;
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return false;
+            }
+
+            var point = new Point(
+                bounds.Left + bounds.Width / 2,
+                bounds.Top + bounds.Height / 2);
+            Mouse.Click(point);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void OpenContextMenu(AutomationElement element)
