@@ -377,7 +377,6 @@
                                     <Setter Property="Margin" Value="0,0,0,10"/>
                                     <Setter Property="MinHeight" Value="104"/>
                                     <Setter Property="Padding" Value="0"/>
-                                    <Setter Property="XYFocusRight" Value="{Binding ElementName=ActionBtn}"/>
                                 </Style>
                             </ListView.ItemContainerStyle>
 
@@ -502,7 +501,6 @@
                                                 Grid.RowSpan="3"
                                                 x:Uid="DiscoverSessionsImportButton"
                                                 Style="{StaticResource AccentButtonStyle}"
-                                                XYFocusLeft="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}}"
                                                 VerticalAlignment="Center"
                                                 Command="{x:Bind LoadSessionCommand, Mode=OneTime}"
                                                 CommandParameter="{x:Bind}" />

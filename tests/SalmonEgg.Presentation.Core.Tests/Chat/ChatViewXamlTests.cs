@@ -84,7 +84,8 @@ public sealed class ChatViewXamlTests
         Assert.DoesNotContain("Style=\"{StaticResource InlineHeaderButtonStyle}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("AutomationProperties.AutomationId=\"ChatView.CurrentSessionNameButton\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<Button AutomationProperties.AutomationId=\"ChatView.CurrentSessionTitle\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<TextBlock AutomationProperties.AutomationId=\"ChatView.CurrentSessionTitle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<TextBlock x:Name=\"CurrentSessionTitleBlock\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ChatView.CurrentSessionTitle\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MinWidth=\"0\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxWidth=\"560\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth=\"120\"", xaml, StringComparison.Ordinal);
