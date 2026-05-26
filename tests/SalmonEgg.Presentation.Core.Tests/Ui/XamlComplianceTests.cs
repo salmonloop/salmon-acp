@@ -2302,7 +2302,7 @@ public sealed class XamlComplianceTests
         Assert.Contains("public bool TryDispatchWithoutNativeFallback(GamepadNavigationIntent intent)", dispatcher, StringComparison.Ordinal);
         Assert.Contains("TryDispatchCore(intent, allowNativeFallback: false)", dispatcher, StringComparison.Ordinal);
         Assert.Contains("case Windows.System.VirtualKey.GamepadDPadRight:", windowsPage, StringComparison.Ordinal);
-        Assert.Contains("if (IsFocusWithinMainNavigation())", windowsPage, StringComparison.Ordinal);
+        Assert.Contains("IsFocusWithinMainNavigation() && TryMoveFocusFromMainNavigationIntoCurrentContent()", windowsPage, StringComparison.Ordinal);
         Assert.Contains("TryMoveFocusFromMainNavigationIntoCurrentContent()", windowsPage, StringComparison.Ordinal);
         Assert.Contains("case Windows.System.VirtualKey.GamepadDPadUp:", windowsPage, StringComparison.Ordinal);
         Assert.Contains("TryDispatch(GamepadNavigationIntent.MoveUp)", windowsPage, StringComparison.Ordinal);
@@ -2370,6 +2370,21 @@ public sealed class XamlComplianceTests
         Assert.DoesNotContain("AppWindowTitleBar", provider, StringComparison.Ordinal);
         Assert.DoesNotContain("AppWindowTitleBar =>", titleBarAdapter, StringComparison.Ordinal);
         Assert.Contains("ITitleBarInsetProvider", titleBarAdapter, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsShellPage_ContentTraversal_CoversSubsequentControlsIncludingExpanders()
+    {
+        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsShellPage.xaml.cs");
+
+        Assert.Contains("intent == GamepadNavigationIntent.MoveDown", code, StringComparison.Ordinal);
+        Assert.Contains("intent == GamepadNavigationIntent.MoveUp", code, StringComparison.Ordinal);
+        Assert.Contains("TryMoveFocusWithinSettingsContent(moveDown: true)", code, StringComparison.Ordinal);
+        Assert.Contains("TryMoveFocusWithinSettingsContent(moveDown: false)", code, StringComparison.Ordinal);
+        Assert.Contains("control is ComboBox or ToggleSwitch or TextBox or Button or Expander", code, StringComparison.Ordinal);
+        Assert.Contains("Expander => true", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewModel.SelectedSection.Key == SettingsSectionCatalog.AgentAcpKey", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewModel.SelectedSection.Key == SettingsSectionCatalog.McpKey", code, StringComparison.Ordinal);
     }
 
     [Fact]

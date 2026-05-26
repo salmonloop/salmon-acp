@@ -57,6 +57,7 @@
                                 </StackPanel>
 
                                 <ToggleSwitch Grid.Column="1"
+                                              x:Name="AcpGlobalEnabledToggle"
                                               x:Uid="Acp_GlobalEnabledSwitch"
                                               AutomationProperties.AutomationId="Acp.Global.Enabled"
                                               IsOn="{x:Bind ViewModel.IsAcpEnabled, Mode=TwoWay}"
@@ -78,12 +79,16 @@
                                         Orientation="Horizontal"
                                         Spacing="8"
                                         VerticalAlignment="Center">
-                                <Button x:Uid="Acp_ProfilesRefresh"
+                                <Button x:Name="AcpProfilesRefreshButton"
+                                        x:Uid="Acp_ProfilesRefresh"
                                         Content="刷新"
+                                        AutomationProperties.AutomationId="Acp.Profiles.Refresh"
                                         Command="{x:Bind ViewModel.Profiles.RefreshCommand}"
                                         IsEnabled="{x:Bind ViewModel.Profiles.IsLoading, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"/>
-                                <Button x:Uid="Acp_ProfilesAdd"
+                                <Button x:Name="AcpProfilesAddButton"
+                                        x:Uid="Acp_ProfilesAdd"
                                         Content="新建配置"
+                                        AutomationProperties.AutomationId="Acp.Profiles.Add"
                                         Style="{StaticResource AccentButtonStyle}"
                                         Click="OnAddProfileClick"/>
                             </StackPanel>
@@ -208,6 +213,7 @@
                                        Style="{StaticResource SettingsSectionTitleTextStyle}"
                                        VerticalAlignment="Center"/>
                             <Button Grid.Column="1"
+                                    x:Name="AcpPathMappingsAddButton"
                                     x:Uid="Acp_PathMappingsAdd"
                                     Content="新增映射"
                                     Command="{x:Bind ViewModel.AddPathMappingCommand}"

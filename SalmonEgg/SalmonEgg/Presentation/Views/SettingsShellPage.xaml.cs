@@ -132,11 +132,21 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
             return TryFocusCurrentSectionContent();
         }
 
-        if (intent == GamepadNavigationIntent.MoveUp
-            && IsFocusWithinSettingsContent()
-            && IsFocusOnFirstSettingsContentControl())
+        if (intent == GamepadNavigationIntent.MoveDown
+            && IsFocusWithinSettingsContent())
         {
-            return TryFocusCurrentSectionNavigationItem();
+            return TryMoveFocusWithinSettingsContent(moveDown: true);
+        }
+
+        if (intent == GamepadNavigationIntent.MoveUp
+            && IsFocusWithinSettingsContent())
+        {
+            if (IsFocusOnFirstSettingsContentControl())
+            {
+                return TryFocusCurrentSectionNavigationItem();
+            }
+
+            return TryMoveFocusWithinSettingsContent(moveDown: false);
         }
 
         return false;
@@ -268,10 +278,45 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         }
 
         return FindDescendants<Control>(SettingsFrame, static control =>
-                control is ComboBox or ToggleSwitch or TextBox or Button)
+                control is ComboBox or ToggleSwitch or TextBox or Button or Expander)
             .Where(control => !HasInteractiveAncestor(control))
             .Where(IsUserMeaningfulInteractiveControl)
             .ToArray();
+    }
+
+    private bool TryMoveFocusWithinSettingsContent(bool moveDown)
+    {
+        if (SettingsFrame.XamlRoot is null)
+        {
+            return false;
+        }
+
+        var interactiveControls = GetInteractiveControlsInTraversalOrder().ToArray();
+        if (interactiveControls.Length == 0)
+        {
+            return false;
+        }
+
+        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsFrame.XamlRoot) as DependencyObject;
+        var focusedControl = ResolveFocusedInteractiveControl(focusedElement, interactiveControls);
+        if (focusedControl is null)
+        {
+            return false;
+        }
+
+        var index = Array.FindIndex(interactiveControls, control => ReferenceEquals(control, focusedControl));
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var targetIndex = moveDown ? index + 1 : index - 1;
+        if (targetIndex < 0 || targetIndex >= interactiveControls.Length)
+        {
+            return false;
+        }
+
+        return interactiveControls[targetIndex].Focus(FocusState.Programmatic);
     }
 
     private bool IsFocusOnFirstSettingsContentControl()
@@ -325,6 +370,7 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
             TextBox => true,
             ComboBox => true,
             ToggleSwitch => true,
+            Expander => true,
             Button button => !string.IsNullOrWhiteSpace(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(button))
                              || !string.IsNullOrWhiteSpace(button.Name)
                              || !string.IsNullOrWhiteSpace(button.Content?.ToString()),

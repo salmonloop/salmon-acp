@@ -178,31 +178,28 @@ public sealed partial class MainPage
         switch (args.VirtualKey)
         {
             case Windows.System.VirtualKey.GamepadDPadRight:
-                _ = DispatcherQueue.TryEnqueue(() =>
+                if (IsFocusWithinMainNavigation() && TryMoveFocusFromMainNavigationIntoCurrentContent())
                 {
-                    if (IsFocusWithinMainNavigation())
-                    {
-                        _ = TryMoveFocusFromMainNavigationIntoCurrentContent();
-                    }
-                });
+                    args.Handled = true;
+                }
                 break;
             case Windows.System.VirtualKey.GamepadDPadUp:
-                _ = DispatcherQueue.TryEnqueue(() =>
+                if ((_virtualGamepadNavigationDispatcher?.TryDispatch(GamepadNavigationIntent.MoveUp)).GetValueOrDefault())
                 {
-                    _ = _virtualGamepadNavigationDispatcher?.TryDispatch(GamepadNavigationIntent.MoveUp);
-                });
+                    args.Handled = true;
+                }
                 break;
             case Windows.System.VirtualKey.GamepadDPadDown:
-                _ = DispatcherQueue.TryEnqueue(() =>
+                if ((_virtualGamepadNavigationDispatcher?.TryDispatch(GamepadNavigationIntent.MoveDown)).GetValueOrDefault())
                 {
-                    _ = _virtualGamepadNavigationDispatcher?.TryDispatch(GamepadNavigationIntent.MoveDown);
-                });
+                    args.Handled = true;
+                }
                 break;
             case Windows.System.VirtualKey.GamepadB:
-                _ = DispatcherQueue.TryEnqueue(() =>
+                if ((_virtualGamepadNavigationDispatcher?.TryDispatchWithoutNativeFallback(GamepadNavigationIntent.Back)).GetValueOrDefault())
                 {
-                    _ = _virtualGamepadNavigationDispatcher?.TryDispatchWithoutNativeFallback(GamepadNavigationIntent.Back);
-                });
+                    args.Handled = true;
+                }
                 break;
         }
     }
