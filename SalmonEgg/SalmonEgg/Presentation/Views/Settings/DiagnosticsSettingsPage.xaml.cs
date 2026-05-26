@@ -97,18 +97,12 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
 
     public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
     {
-        var consumed = intent switch
+        return intent switch
         {
             GamepadNavigationIntent.MoveDown => TryMoveFocusWithinGamepadActions(moveDown: true),
             GamepadNavigationIntent.MoveUp => TryMoveFocusWithinGamepadActions(moveDown: false),
             _ => false
         };
-
-#if DEBUG
-        App.BootLog($"DiagnosticsGamepad intent={intent} consumed={consumed}");
-#endif
-
-        return consumed;
     }
 
     private bool TryMoveFocusWithinGamepadActions(bool moveDown)
@@ -122,9 +116,6 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
         var focusedButton = ResolveFocusedGamepadActionButton(focusedElement);
         focusedButton ??= ResolveFocusedGamepadActionButtonFromControlState();
         focusedButton ??= _lastFocusedGamepadActionButton;
-#if DEBUG
-        App.BootLog($"DiagnosticsGamepad move={(moveDown ? "down" : "up")} focused={DescribeButton(focusedButton)}");
-#endif
         if (focusedButton is null)
         {
             return false;
@@ -203,19 +194,6 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
         }
 
         return false;
-    }
-
-    private static string DescribeButton(Button? button)
-    {
-        if (button is null)
-        {
-            return "<null>";
-        }
-
-        var automationId = Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(button);
-        var name = Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(button);
-        var content = button.Content?.ToString();
-        return $"{button.GetType().Name}(id={automationId ?? "<null>"},name={name ?? "<null>"},content={content ?? "<null>"})";
     }
 
     private static T? FindAncestorOrSelf<T>(DependencyObject? start)

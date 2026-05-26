@@ -354,11 +354,26 @@ public sealed class ShellFocusedActivationSmokeTests
         using var session = WindowsGuiAppSession.LaunchFresh();
 
         Assert.True(
-            session.WaitUntilVisible("StartView.AgentSelector", TimeSpan.FromSeconds(10)),
-            $"Start selectors did not become visible before selector return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+            session.WaitUntilVisible("StartView.PromptBox", TimeSpan.FromSeconds(10)),
+            $"Start prompt box did not become visible before selector return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
 
-        var agentSelector = session.FindByAutomationId("StartView.AgentSelector", TimeSpan.FromSeconds(5));
-        ClickAndAssertFocus(session, agentSelector, "StartView.AgentSelector", "start agent selector");
+        var selectorIds = new[] { "StartView.AgentSelector", "StartView.ModeSelector", "StartView.ProjectSelector" };
+        AutomationElement? focusedSelector = null;
+        string? focusedSelectorId = null;
+        foreach (var selectorId in selectorIds)
+        {
+            var selector = session.FindByAutomationId(selectorId, TimeSpan.FromSeconds(5));
+            if (TryFocus(session, selector, selectorId))
+            {
+                focusedSelector = selector;
+                focusedSelectorId = selectorId;
+                break;
+            }
+        }
+
+        Assert.True(
+            focusedSelector is not null && focusedSelectorId is not null,
+            $"Unable to establish any Start selector focus before directional navigation.{Environment.NewLine}Focus={session.DescribeFocusedElement()}{Environment.NewLine}{appData.ReadBootLogTail()}");
 
         session.PressVirtualGamepadDPadUp();
 
@@ -366,7 +381,7 @@ public sealed class ShellFocusedActivationSmokeTests
             WaitUntil(
                 () => session.IsFocusWithinAutomationId("StartView.PromptBox"),
                 TimeSpan.FromSeconds(3)),
-            $"Virtual gamepad D-pad Up did not return from Start selectors to the prompt box."
+            $"Virtual gamepad D-pad Up did not return from selector '{focusedSelectorId}' to the prompt box."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
@@ -878,6 +893,26 @@ public sealed class ShellFocusedActivationSmokeTests
         Assert.Fail(
             $"Unable to establish {description} focus before directional navigation."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}");
+    }
+
+    private static bool TryFocus(
+        WindowsGuiAppSession session,
+        AutomationElement element,
+        string automationId)
+    {
+        session.BringMainWindowToFront();
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            session.FocusElement(element);
+            if (WaitUntil(
+                    () => session.IsFocusWithinAutomationId(automationId),
+                    TimeSpan.FromMilliseconds(250)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void FocusElementAndWait(

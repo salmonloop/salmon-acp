@@ -85,9 +85,6 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
 
     private void OnSectionNavigationInvoked(object? sender, SettingsSectionNavigationInvokedEventArgs args)
     {
-#if DEBUG
-        App.BootLog($"SettingsShell section invoked key={args.Key} focusBeforeNavigate={DescribeFocusedElement()}");
-#endif
         var section = ViewModel.SelectSection(args.Key);
         NavigateFrameToSection(section.Key);
     }
@@ -105,9 +102,6 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
 
     private void OnSettingsFrameNavigated(object sender, NavigationEventArgs e)
     {
-#if DEBUG
-        App.BootLog($"SettingsShell frame navigated page={e.SourcePageType?.Name ?? "<null>"} focusAfterNavigate={DescribeFocusedElement()}");
-#endif
         _ = DispatcherQueue.TryEnqueue(RefreshCurrentSectionFocusTargets);
     }
 
@@ -128,22 +122,14 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
     {
         if (intent == GamepadNavigationIntent.MoveDown && IsFocusWithinSettingsNav())
         {
-            var consumed = TryFocusCurrentSectionContent();
-#if DEBUG
-            App.BootLog($"SettingsShellGamepad intent=MoveDown scope=nav consumed={consumed}");
-#endif
-            return consumed;
+            return TryFocusCurrentSectionContent();
         }
 
         if (intent == GamepadNavigationIntent.MoveUp
             && IsFocusWithinSettingsContent()
             && IsFocusOnFirstSettingsContentControl())
         {
-            var consumed = TryFocusCurrentSectionNavigationItem();
-#if DEBUG
-            App.BootLog($"SettingsShellGamepad intent=MoveUp scope=content-first consumed={consumed}");
-#endif
-            return consumed;
+            return TryFocusCurrentSectionNavigationItem();
         }
 
         return false;
@@ -180,9 +166,6 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         if (FindDescendant<Button>(SettingsFrame, static button =>
                 string.Equals(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(button), "Diagnostics.GamepadStart", StringComparison.Ordinal)) is { } diagnosticsStart)
         {
-#if DEBUG
-            App.BootLog("SettingsGamepad MoveDown nav->content target=" + DescribeControl(diagnosticsStart));
-#endif
             return diagnosticsStart.Focus(FocusState.Programmatic);
         }
 
@@ -192,9 +175,6 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
             return false;
         }
 
-#if DEBUG
-        App.BootLog("SettingsGamepad MoveDown nav->content target=" + DescribeControl(firstInteractive));
-#endif
         return firstInteractive.Focus(FocusState.Programmatic);
     }
 
@@ -358,45 +338,6 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         }
 
         return null;
-    }
-
-    private static string DescribeControl(Control control)
-    {
-        var automationId = Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(control);
-        var name = Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(control);
-        var content = control switch
-        {
-            Button button => button.Content?.ToString(),
-            _ => null
-        };
-
-        return $"{control.GetType().Name}(id={automationId ?? "<null>"},name={name ?? "<null>"},content={content ?? "<null>"})";
-    }
-
-    private string DescribeFocusedElement()
-    {
-        if (SettingsNavView.XamlRoot is null)
-        {
-            return "<xamlroot-null>";
-        }
-
-        var current = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsNavView.XamlRoot) as DependencyObject;
-        if (current is null)
-        {
-            return "<focus-null>";
-        }
-
-        return DescribeDependencyObject(current);
-    }
-
-    private static string DescribeDependencyObject(DependencyObject current)
-    {
-        return current switch
-        {
-            Control control => DescribeControl(control),
-            TextBlock textBlock => $"TextBlock(id={Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(textBlock) ?? "<null>"},name={Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(textBlock) ?? "<null>"},text={textBlock.Text ?? "<null>"})",
-            _ => current.GetType().Name
-        };
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)

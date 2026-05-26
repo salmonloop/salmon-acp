@@ -52,20 +52,12 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
     {
         if (intent == GamepadNavigationIntent.MoveDown && IsFocusWithinHeroSuggestions())
         {
-            var consumed = TryFocusPromptBox();
-#if DEBUG
-            App.BootLog($"StartGamepad intent=MoveDown scope=suggestions consumed={consumed}");
-#endif
-            return consumed;
+            return TryFocusPromptBox();
         }
 
         if (intent == GamepadNavigationIntent.MoveUp && IsFocusWithinComposerShellButNotSuggestions())
         {
-            var consumed = TryFocusPrimaryContentTarget();
-#if DEBUG
-            App.BootLog($"StartGamepad intent=MoveUp scope=prompt consumed={consumed}");
-#endif
-            return consumed;
+            return TryFocusPrimaryContentTarget();
         }
 
         return false;
@@ -87,18 +79,12 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
         var promptBox = FindPromptBox();
         if (promptBox is not null && IsDescendantOrSelf(current, promptBox))
         {
-#if DEBUG
-            App.BootLog("StartGamepad prompt focus source=PromptBoxDescendant");
-#endif
             return true;
         }
 
         var inComposerShell = IsDescendantOrSelf(current, ComposerShell)
                               && promptBox is not null
                               && IsDescendantOrSelf(current, promptBox);
-#if DEBUG
-        App.BootLog($"StartGamepad prompt focus source=ComposerShell current={current.GetType().Name} inComposerShell={inComposerShell}");
-#endif
         return inComposerShell;
     }
 

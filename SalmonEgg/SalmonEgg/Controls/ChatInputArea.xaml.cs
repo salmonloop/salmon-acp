@@ -207,6 +207,7 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
 
     private bool _isImeComposing;
     private ComboBox? _openSelectorHost;
+    private bool _suppressNextInputEscapeMoveUp;
     public event EventHandler? SelectorDropDownOpened;
 
     public event EventHandler? SelectorDropDownClosed;
@@ -537,21 +538,15 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             IsPromptEditingAvailable(),
             _isImeComposing);
 
-        var consumed = action switch
+        return action switch
         {
             ChatInputNavigationAction.MoveSlashUp => ViewModel.TryMoveSlashSelection(-1),
             ChatInputNavigationAction.MoveSlashDown => ViewModel.TryMoveSlashSelection(1),
             ChatInputNavigationAction.AcceptSlashCommand => TryAcceptSelectedSlashCommandAndMoveCaretToEnd(),
-            ChatInputNavigationAction.EscapeMoveUp => MoveUpEscapeHandler?.Invoke() == true,
+            ChatInputNavigationAction.EscapeMoveUp => ConsumeOrEscapeMoveUp(),
             ChatInputNavigationAction.ReturnToInputBox => TryFocusInputBox(),
             _ => false
         };
-
-#if DEBUG
-        App.BootLog($"ChatInputGamepad intent={intent} focus={focusContext} action={action} consumed={consumed}");
-#endif
-
-        return consumed;
     }
 
     private bool TryAcceptSelectedSlashCommandAndMoveCaretToEnd()
@@ -583,6 +578,17 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
         InputBox.SelectionStart = InputBox.Text?.Length ?? 0;
         InputBox.SelectionLength = 0;
         return true;
+    }
+
+    private bool ConsumeOrEscapeMoveUp()
+    {
+        if (_suppressNextInputEscapeMoveUp)
+        {
+            _suppressNextInputEscapeMoveUp = false;
+            return true;
+        }
+
+        return MoveUpEscapeHandler?.Invoke() == true;
     }
 
     private void RefreshVerticalFocusTargets()
@@ -645,6 +651,28 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
     private void OnProjectSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         ExecuteSelectorCommand(sender, ProjectSelectionCommand);
+    }
+
+    private void OnSelectorHostPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_isImeComposing || !IsPromptEditingAvailable() || sender is not ComboBox comboBox)
+        {
+            return;
+        }
+
+        if (comboBox.IsDropDownOpen)
+        {
+            return;
+        }
+
+        if (e.Key is Windows.System.VirtualKey.Up or Windows.System.VirtualKey.GamepadDPadUp)
+        {
+            _suppressNextInputEscapeMoveUp = true;
+            if (TryFocusInputBox())
+            {
+                e.Handled = true;
+            }
+        }
     }
 
     private static void ExecuteSelectorCommand(object sender, ICommand? command)
