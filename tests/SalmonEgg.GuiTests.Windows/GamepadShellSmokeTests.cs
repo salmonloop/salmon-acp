@@ -1061,13 +1061,36 @@ public sealed class ShellFocusedActivationSmokeTests
         EnsureMainWindowWide(session);
 
         var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
-        session.ClickElement(settingsItem);
+        ClickAndAssertFocus(session, settingsItem, "SettingsItem", "settings navigation item");
         Assert.True(
-            session.WaitUntilOnscreen("SettingsNav.Appearance", TimeSpan.FromSeconds(10)),
-            $"Settings navigation did not become visible before appearance entry validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
-
-        var appearanceItem = session.FindByAutomationId("SettingsNav.Appearance", TimeSpan.FromSeconds(10));
-        session.ClickElement(appearanceItem);
+            MoveFocusUntil(
+                session,
+                session.PressVirtualGamepadDPadRight,
+                () => session.IsFocusWithinAutomationId("SettingsNav.General")
+                    || session.IsFocusWithinAutomationId("SettingsNav.Appearance")
+                    || session.IsFocusWithinAutomationId("SettingsNav.AgentAcp"),
+                attempts: 6),
+            $"Virtual gamepad D-pad Right did not move from Settings nav item into settings section navigation."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                session.PressVirtualGamepadDPadDown,
+                () => session.IsFocusWithinAutomationId("SettingsNav.Appearance"),
+                attempts: 4),
+            $"Virtual gamepad D-pad Down did not move from the first settings section to Appearance."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+        session.PressEnter();
+        Assert.True(
+            session.WaitUntilOnscreen("Appearance.Theme", TimeSpan.FromSeconds(10)),
+            $"Appearance settings page did not become visible after activating its section navigation item.{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.True(
+            session.IsFocusWithinAutomationId("SettingsNav.Appearance"),
+            $"Focus left Appearance section navigation before D-pad Down into content."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
 
         Assert.True(
             MoveFocusUntil(
@@ -1111,6 +1134,58 @@ public sealed class ShellFocusedActivationSmokeTests
             $"Virtual gamepad D-pad Down did not move beyond the first data-storage control."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsDataStorageNumberBox_VirtualGamepadDPadDown_MovesFocusWithoutChangingValue()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
+        session.ClickElement(settingsItem);
+        Assert.True(
+            session.WaitUntilOnscreen("SettingsNav.DataStorage", TimeSpan.FromSeconds(10)),
+            $"Settings navigation did not become visible before data-storage NumberBox validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var dataStorageItem = session.FindByAutomationId("SettingsNav.DataStorage", TimeSpan.FromSeconds(10));
+        session.ClickElement(dataStorageItem);
+
+        var firstInteractive = session.FindByAutomationId("DataStorage.SaveLocalHistory", TimeSpan.FromSeconds(10));
+        var numberBox = session.FindByAutomationId("DataStorage.CacheRetention", TimeSpan.FromSeconds(10));
+        var valueBefore = session.TryGetValue(numberBox);
+        Assert.False(
+            string.IsNullOrWhiteSpace(valueBefore),
+            $"Unable to read the data-storage NumberBox value before gamepad traversal.{Environment.NewLine}Focus={session.DescribeFocusedElement()}");
+
+        FocusElementAndWait(session, firstInteractive, "data storage first interactive control");
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                session.PressVirtualGamepadDPadDown,
+                () => session.IsFocusWithinAutomationId("DataStorage.CacheRetention"),
+                attempts: 6),
+            $"Virtual gamepad D-pad Down did not naturally reach the data-storage NumberBox from the preceding control."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.Equal(valueBefore, session.TryGetValue(numberBox));
+
+        var focusOnNumberBox = session.DescribeFocusedElement();
+        session.PressVirtualGamepadDPadDown();
+        Assert.True(
+            WaitUntil(
+                () => !session.IsFocusWithinAutomationId("DataStorage.CacheRetention"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Down did not leave the data-storage NumberBox before engagement."
+            + $"{Environment.NewLine}FocusBefore={focusOnNumberBox}"
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.Equal(valueBefore, session.TryGetValue(numberBox));
     }
 
     private static bool MoveFocusUntil(

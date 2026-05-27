@@ -5,17 +5,15 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Extensions.Logging;
 using SalmonEgg.Presentation.Models.Settings;
-using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Views;
 
 namespace SalmonEgg.Presentation.Views.Settings;
 
-public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigationIntentConsumer
+public sealed partial class DiagnosticsSettingsPage : SettingsPageBase
 {
     private ScrollViewer? _liveLogScrollViewer;
     private readonly ILogger<DiagnosticsSettingsPage> _logger;
-    private Button? _lastFocusedGamepadActionButton;
 
     public DiagnosticsSettingsViewModel ViewModel { get; }
 
@@ -87,180 +85,4 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
         }
     }
 
-    private void OnGamepadActionGotFocus(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button)
-        {
-            _lastFocusedGamepadActionButton = button;
-        }
-    }
-
-    public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
-    {
-        return intent switch
-        {
-            GamepadNavigationIntent.MoveDown => TryMoveFocusWithinGamepadActions(moveDown: true),
-            GamepadNavigationIntent.MoveUp => TryMoveFocusWithinGamepadActions(moveDown: false),
-            _ => false
-        };
-    }
-
-    private bool TryMoveFocusWithinGamepadActions(bool moveDown)
-    {
-        if (XamlRoot is null)
-        {
-            return false;
-        }
-
-        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
-        var focusedButton = ResolveFocusedGamepadActionButton(focusedElement);
-        focusedButton ??= ResolveFocusedGamepadActionButtonFromControlState();
-        focusedButton ??= _lastFocusedGamepadActionButton;
-        if (focusedButton is null)
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(focusedButton, DiagnosticsGamepadStartButton))
-        {
-            if (!moveDown)
-            {
-                return TryFocusOwnerSectionNavigation();
-            }
-
-            if (DiagnosticsGamepadStopButton.IsEnabled
-                && DiagnosticsGamepadStopButton.Focus(FocusState.Programmatic))
-            {
-                _lastFocusedGamepadActionButton = DiagnosticsGamepadStopButton;
-                return true;
-            }
-
-            if (DiagnosticsGamepadRefreshButton.IsEnabled
-                && DiagnosticsGamepadRefreshButton.Focus(FocusState.Programmatic))
-            {
-                _lastFocusedGamepadActionButton = DiagnosticsGamepadRefreshButton;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (ReferenceEquals(focusedButton, DiagnosticsGamepadStopButton))
-        {
-            if (moveDown)
-            {
-                if (DiagnosticsGamepadRefreshButton.IsEnabled
-                    && DiagnosticsGamepadRefreshButton.Focus(FocusState.Programmatic))
-                {
-                    _lastFocusedGamepadActionButton = DiagnosticsGamepadRefreshButton;
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (DiagnosticsGamepadStartButton.IsEnabled
-                && DiagnosticsGamepadStartButton.Focus(FocusState.Programmatic))
-            {
-                _lastFocusedGamepadActionButton = DiagnosticsGamepadStartButton;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (ReferenceEquals(focusedButton, DiagnosticsGamepadRefreshButton))
-        {
-            if (moveDown)
-            {
-                return false;
-            }
-
-            if (DiagnosticsGamepadStopButton.IsEnabled
-                && DiagnosticsGamepadStopButton.Focus(FocusState.Programmatic))
-            {
-                _lastFocusedGamepadActionButton = DiagnosticsGamepadStopButton;
-                return true;
-            }
-
-            if (DiagnosticsGamepadStartButton.IsEnabled
-                && DiagnosticsGamepadStartButton.Focus(FocusState.Programmatic))
-            {
-                _lastFocusedGamepadActionButton = DiagnosticsGamepadStartButton;
-                return true;
-            }
-
-            return false;
-        }
-
-        return false;
-    }
-
-    private static T? FindAncestorOrSelf<T>(DependencyObject? start)
-        where T : DependencyObject
-    {
-        var current = start;
-        while (current is not null)
-        {
-            if (current is T match)
-            {
-                return match;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
-    }
-
-    private Button? ResolveFocusedGamepadActionButtonFromControlState()
-    {
-        if (DiagnosticsGamepadStartButton.FocusState != FocusState.Unfocused)
-        {
-            return DiagnosticsGamepadStartButton;
-        }
-
-        if (DiagnosticsGamepadStopButton.FocusState != FocusState.Unfocused)
-        {
-            return DiagnosticsGamepadStopButton;
-        }
-
-        if (DiagnosticsGamepadRefreshButton.FocusState != FocusState.Unfocused)
-        {
-            return DiagnosticsGamepadRefreshButton;
-        }
-
-        return null;
-    }
-
-    private bool TryFocusOwnerSectionNavigation()
-    {
-        return FindAncestorOrSelf<SettingsShellPage>(this)?.TryFocusSelectedSectionNavigationItemForChildPage() == true;
-    }
-
-    private Button? ResolveFocusedGamepadActionButton(DependencyObject? start)
-    {
-        var current = start;
-        while (current is not null)
-        {
-            if (ReferenceEquals(current, DiagnosticsGamepadStartButton))
-            {
-                return DiagnosticsGamepadStartButton;
-            }
-
-            if (ReferenceEquals(current, DiagnosticsGamepadStopButton))
-            {
-                return DiagnosticsGamepadStopButton;
-            }
-
-            if (ReferenceEquals(current, DiagnosticsGamepadRefreshButton))
-            {
-                return DiagnosticsGamepadRefreshButton;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
-    }
 }

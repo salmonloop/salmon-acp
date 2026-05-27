@@ -36,6 +36,7 @@
         <NavigationView x:Name="SettingsNavView"
                         Grid.Row="0"
                         Margin="0,0,0,16"
+                        XYFocusKeyboardNavigation="Enabled"
                         MenuItemsSource="{x:Bind ViewModel.Sections, Mode=OneWay}"
                         MenuItemTemplate="{StaticResource SettingsSectionNavItemTemplate}"
                         SelectedItem="{x:Bind ViewModel.SelectedSection, Mode=OneWay}" />

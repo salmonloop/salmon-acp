@@ -710,7 +710,11 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
             {
                 if (MainNavView.XamlRoot is not null)
                 {
-                    MainNavView.Focus(FocusState.Programmatic);
+                    var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(MainNavView.XamlRoot);
+                    if (focusedElement is null)
+                    {
+                        MainNavView.Focus(FocusState.Keyboard);
+                    }
                 }
             });
     }
@@ -747,22 +751,26 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
             return;
         }
 
+        if (intent is GamepadNavigationIntent.MoveUp or GamepadNavigationIntent.MoveDown)
+        {
+            return;
+        }
+
         _ = _gamepadNavigationDispatcher.TryDispatch(intent);
     }
 
     public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
     {
-        if (intent != GamepadNavigationIntent.MoveRight)
-        {
-            return false;
-        }
-
         if (!IsFocusWithinMainNavigation())
         {
             return false;
         }
 
-        return TryMoveFocusFromMainNavigationIntoCurrentContent();
+        return intent switch
+        {
+            GamepadNavigationIntent.MoveRight => TryMoveFocusFromMainNavigationIntoCurrentContent(),
+            _ => false
+        };
     }
 
     public bool TryGoBack()
@@ -862,7 +870,7 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
 
         if (ContentFrame.Content is FrameworkElement element)
         {
-            return element.Focus(FocusState.Programmatic);
+            return element.Focus(FocusState.Keyboard);
         }
 
         return false;
@@ -878,12 +886,12 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
         var navigationTarget = ResolveCurrentNavigationFocusTarget();
         if (navigationTarget is not null
             && MainNavView.ContainerFromMenuItem(navigationTarget) is Control selectedContainer
-            && selectedContainer.Focus(FocusState.Programmatic))
+            && selectedContainer.Focus(FocusState.Keyboard))
         {
             return true;
         }
 
-        return MainNavView.Focus(FocusState.Programmatic);
+        return MainNavView.Focus(FocusState.Keyboard);
     }
 
     private object? ResolveCurrentNavigationFocusTarget()

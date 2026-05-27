@@ -17,7 +17,7 @@ namespace SalmonEgg.Presentation.Views;
 /// - Secondary navigation as a Top NavigationView below the breadcrumb.
 /// - Section content hosted in an inner Frame.
 /// </summary>
-public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
+public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
 {
     private SettingsSectionNavigationAdapter? _sectionNavigation;
 
@@ -125,114 +125,25 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         _ => typeof(GeneralSettingsPage)
     };
 
-    public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
-    {
-        if (intent == GamepadNavigationIntent.MoveDown && IsFocusWithinSettingsNav())
-        {
-            return TryFocusCurrentSectionContent();
-        }
-
-        if (intent == GamepadNavigationIntent.MoveDown
-            && IsFocusWithinSettingsContent())
-        {
-            return TryMoveFocusWithinSettingsContent(moveDown: true);
-        }
-
-        if (intent == GamepadNavigationIntent.MoveUp
-            && IsFocusWithinSettingsContent())
-        {
-            if (IsFocusOnFirstSettingsContentControl())
-            {
-                return TryFocusCurrentSectionNavigationItem();
-            }
-
-            return TryMoveFocusWithinSettingsContent(moveDown: false);
-        }
-
-        return false;
-    }
-
-    private bool IsFocusWithinSettingsNav()
-    {
-        if (SettingsNavView.XamlRoot is null)
-        {
-            return false;
-        }
-
-        var current = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsNavView.XamlRoot) as DependencyObject;
-        while (current is not null)
-        {
-            if (ReferenceEquals(current, SettingsNavView))
-            {
-                return true;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return false;
-    }
-
-    private bool TryFocusCurrentSectionContent()
-    {
-        if (SettingsFrame.Content is null)
-        {
-            return false;
-        }
-
-        if (ViewModel.SelectedSection.Key == SettingsSectionCatalog.AppearanceKey
-            && FindDescendant<ComboBox>(SettingsFrame, static comboBox =>
-                string.Equals(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(comboBox), "Appearance.Theme", StringComparison.Ordinal)) is { } appearanceTheme)
-        {
-            return appearanceTheme.Focus(FocusState.Programmatic);
-        }
-
-        if (FindDescendant<Button>(SettingsFrame, static button =>
-                string.Equals(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(button), "Diagnostics.GamepadStart", StringComparison.Ordinal)) is { } diagnosticsStart)
-        {
-            return diagnosticsStart.Focus(FocusState.Programmatic);
-        }
-
-        var firstInteractive = GetInteractiveControlsInTraversalOrder().FirstOrDefault();
-        if (firstInteractive is null)
-        {
-            return false;
-        }
-
-        return firstInteractive.Focus(FocusState.Programmatic);
-    }
-
-    private bool IsFocusWithinSettingsContent()
-    {
-        if (SettingsFrame.XamlRoot is null)
-        {
-            return false;
-        }
-
-        var current = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsFrame.XamlRoot) as DependencyObject;
-        while (current is not null)
-        {
-            if (ReferenceEquals(current, SettingsFrame))
-            {
-                return true;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return false;
-    }
-
     private bool TryFocusCurrentSectionNavigationItem()
     {
+        if (SettingsNavView.ContainerFromMenuItem(ViewModel.SelectedSection) is Control selectedContainer
+            && selectedContainer.Focus(FocusState.Keyboard))
+        {
+            return true;
+        }
+
         var automationId = ViewModel.SelectedSection.AutomationId;
         return FindDescendant<NavigationViewItem>(SettingsNavView, item =>
                 string.Equals(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(item), automationId, StringComparison.Ordinal))
             is { } selectedItem
-            && selectedItem.Focus(FocusState.Programmatic);
+            && selectedItem.Focus(FocusState.Keyboard);
     }
 
     internal bool TryFocusSelectedSectionNavigationItemForChildPage()
+        => TryFocusCurrentSectionNavigationItem();
+
+    public bool TryFocusPrimaryContentTarget()
         => TryFocusCurrentSectionNavigationItem();
 
     private void RefreshCurrentSectionFocusTargets()
@@ -278,64 +189,10 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         }
 
         return FindDescendants<Control>(SettingsFrame, static control =>
-                control is ComboBox or ToggleSwitch or TextBox or Button or Expander)
+                control is ComboBox or NumberBox or ToggleSwitch or TextBox or Button or Expander)
             .Where(control => !HasInteractiveAncestor(control))
             .Where(IsUserMeaningfulInteractiveControl)
             .ToArray();
-    }
-
-    private bool TryMoveFocusWithinSettingsContent(bool moveDown)
-    {
-        if (SettingsFrame.XamlRoot is null)
-        {
-            return false;
-        }
-
-        var interactiveControls = GetInteractiveControlsInTraversalOrder().ToArray();
-        if (interactiveControls.Length == 0)
-        {
-            return false;
-        }
-
-        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsFrame.XamlRoot) as DependencyObject;
-        var focusedControl = ResolveFocusedInteractiveControl(focusedElement, interactiveControls);
-        if (focusedControl is null)
-        {
-            return false;
-        }
-
-        var index = Array.FindIndex(interactiveControls, control => ReferenceEquals(control, focusedControl));
-        if (index < 0)
-        {
-            return false;
-        }
-
-        var targetIndex = moveDown ? index + 1 : index - 1;
-        if (targetIndex < 0 || targetIndex >= interactiveControls.Length)
-        {
-            return false;
-        }
-
-        return interactiveControls[targetIndex].Focus(FocusState.Programmatic);
-    }
-
-    private bool IsFocusOnFirstSettingsContentControl()
-    {
-        if (SettingsFrame.XamlRoot is null)
-        {
-            return false;
-        }
-
-        var interactiveControls = GetInteractiveControlsInTraversalOrder().ToArray();
-        if (interactiveControls.Length == 0)
-        {
-            return false;
-        }
-
-        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(SettingsFrame.XamlRoot) as DependencyObject;
-        var focusedControl = ResolveFocusedInteractiveControl(focusedElement, interactiveControls);
-        return focusedControl is not null
-               && ReferenceEquals(focusedControl, interactiveControls[0]);
     }
 
     private static bool HasInteractiveAncestor(DependencyObject control)
@@ -344,7 +201,7 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         while (current is not null)
         {
             if (current is Control parentControl
-                && parentControl is ComboBox or ToggleSwitch or TextBox or Button)
+                && parentControl is ComboBox or NumberBox or ToggleSwitch or TextBox or Button)
             {
                 return true;
             }
@@ -369,6 +226,7 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
         {
             TextBox => true,
             ComboBox => true,
+            NumberBox => true,
             ToggleSwitch => true,
             Expander => true,
             Button button => !string.IsNullOrWhiteSpace(Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(button))
@@ -376,28 +234,6 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
                              || !string.IsNullOrWhiteSpace(button.Content?.ToString()),
             _ => false
         };
-    }
-
-    private static Control? ResolveFocusedInteractiveControl(DependencyObject? focusedElement, IReadOnlyList<Control> interactiveControls)
-    {
-        var current = focusedElement;
-        while (current is not null)
-        {
-            if (current is Control control)
-            {
-                for (var i = 0; i < interactiveControls.Count; i++)
-                {
-                    if (ReferenceEquals(control, interactiveControls[i]))
-                    {
-                        return control;
-                    }
-                }
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)

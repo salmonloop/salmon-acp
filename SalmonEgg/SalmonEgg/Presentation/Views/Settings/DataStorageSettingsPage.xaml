@@ -90,6 +90,7 @@
                                                Maximum="60"
                                                SmallChange="1"
                                                SpinButtonPlacementMode="Inline"
+                                               IsFocusEngagementEnabled="True"
                                                Width="140"
                                                VerticalAlignment="Center"/>
                                 </Grid>

@@ -183,18 +183,6 @@ public sealed partial class MainPage
                     args.Handled = true;
                 }
                 break;
-            case Windows.System.VirtualKey.GamepadDPadUp:
-                if ((_virtualGamepadNavigationDispatcher?.TryDispatch(GamepadNavigationIntent.MoveUp)).GetValueOrDefault())
-                {
-                    args.Handled = true;
-                }
-                break;
-            case Windows.System.VirtualKey.GamepadDPadDown:
-                if ((_virtualGamepadNavigationDispatcher?.TryDispatch(GamepadNavigationIntent.MoveDown)).GetValueOrDefault())
-                {
-                    args.Handled = true;
-                }
-                break;
             case Windows.System.VirtualKey.GamepadB:
                 if ((_virtualGamepadNavigationDispatcher?.TryDispatchWithoutNativeFallback(GamepadNavigationIntent.Back)).GetValueOrDefault())
                 {

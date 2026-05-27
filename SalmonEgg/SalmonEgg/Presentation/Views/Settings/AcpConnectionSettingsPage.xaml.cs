@@ -1,17 +1,14 @@
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Models.Settings;
-using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Views;
 
 namespace SalmonEgg.Presentation.Views.Settings;
 
-public sealed partial class AcpConnectionSettingsPage : SettingsPageBase, INavigationIntentConsumer
+public sealed partial class AcpConnectionSettingsPage : SettingsPageBase
 {
     public AcpConnectionSettingsViewModel ViewModel { get; }
 
@@ -85,77 +82,4 @@ public sealed partial class AcpConnectionSettingsPage : SettingsPageBase, INavig
         await item.ToggleConnectionCommand.ExecuteAsync(null);
     }
 
-    public bool TryConsumeNavigationIntent(GamepadNavigationIntent intent)
-    {
-        return intent switch
-        {
-            GamepadNavigationIntent.MoveDown => TryMoveFocusWithinPage(moveDown: true),
-            GamepadNavigationIntent.MoveUp => TryMoveFocusWithinPage(moveDown: false),
-            _ => false
-        };
-    }
-
-    private bool TryMoveFocusWithinPage(bool moveDown)
-    {
-        if (XamlRoot is null)
-        {
-            return false;
-        }
-
-        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
-        var current = ResolveFocusedAcpControl(focusedElement);
-        if (current is null)
-        {
-            return false;
-        }
-
-        if (ReferenceEquals(current, AcpGlobalEnabledToggle))
-        {
-            return moveDown
-                ? AcpProfilesRefreshButton.Focus(FocusState.Programmatic)
-                : false;
-        }
-
-        if (ReferenceEquals(current, AcpProfilesRefreshButton))
-        {
-            return moveDown
-                ? AcpProfilesAddButton.Focus(FocusState.Programmatic)
-                : AcpGlobalEnabledToggle.Focus(FocusState.Programmatic);
-        }
-
-        if (ReferenceEquals(current, AcpProfilesAddButton))
-        {
-            return moveDown
-                ? AcpPathMappingsAddButton.Focus(FocusState.Programmatic)
-                : AcpProfilesRefreshButton.Focus(FocusState.Programmatic);
-        }
-
-        if (ReferenceEquals(current, AcpPathMappingsAddButton))
-        {
-            return moveDown
-                ? false
-                : AcpProfilesAddButton.Focus(FocusState.Programmatic);
-        }
-
-        return false;
-    }
-
-    private DependencyObject? ResolveFocusedAcpControl(DependencyObject? start)
-    {
-        var current = start;
-        while (current is not null)
-        {
-            if (ReferenceEquals(current, AcpGlobalEnabledToggle)
-                || ReferenceEquals(current, AcpProfilesRefreshButton)
-                || ReferenceEquals(current, AcpProfilesAddButton)
-                || ReferenceEquals(current, AcpPathMappingsAddButton))
-            {
-                return current;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
-    }
 }

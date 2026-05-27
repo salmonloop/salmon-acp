@@ -361,6 +361,19 @@ internal sealed class WindowsGuiAppSession : IDisposable
             $"Element '{automationId}' does not support ValuePattern for text entry.");
     }
 
+    public string? TryGetValue(AutomationElement element)
+    {
+        if (element.Patterns.Value.IsSupported)
+        {
+            return element.Patterns.Value.Pattern.Value;
+        }
+
+        var valueElement = element
+            .FindAllDescendants()
+            .FirstOrDefault(descendant => descendant.Patterns.Value.IsSupported);
+        return valueElement?.Patterns.Value.Pattern.Value;
+    }
+
     public void TypeText(string automationId, string text)
     {
         var element = FindByAutomationId(automationId);

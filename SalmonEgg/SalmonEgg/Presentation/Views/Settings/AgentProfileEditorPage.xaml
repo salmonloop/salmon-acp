@@ -110,6 +110,7 @@
                                            Minimum="5"
                                            Maximum="60"
                                            SpinButtonPlacementMode="Inline"
+                                           IsFocusEngagementEnabled="True"
                                            Value="{x:Bind ViewModel.ConnectionTimeout, Mode=TwoWay}"/>
                             </StackPanel>
                         </Expander>
