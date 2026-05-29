@@ -46,6 +46,7 @@
                                 <Button x:Name="McpReloadButton"
                                         x:Uid="Mcp_Reload"
                                         Content="刷新"
+                                        AutomationProperties.AutomationId="Mcp.Reload"
                                         Command="{x:Bind ViewModel.LoadCommand}"
                                         IsEnabled="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"/>
                                 <Button x:Name="McpAddServerButton"
@@ -74,7 +75,9 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <Border Margin="16,16,16,0"
                                         Padding="0,16,0,0"

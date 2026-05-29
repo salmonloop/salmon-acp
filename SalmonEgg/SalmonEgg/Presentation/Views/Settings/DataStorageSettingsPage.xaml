@@ -96,7 +96,9 @@
                                                VerticalAlignment="Center"/>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <Grid Style="{StaticResource SettingsRowGridStyle}">
                                     <Grid.RowDefinitions>
@@ -171,7 +173,9 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <Grid Style="{StaticResource SettingsRowGridStyle}">
                                     <Grid.RowDefinitions>
@@ -246,7 +250,9 @@
                                                 VerticalAlignment="Center"/>
                                     </Grid>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <Grid Style="{StaticResource SettingsRowGridStyle}">
                                         <Grid.ColumnDefinitions>

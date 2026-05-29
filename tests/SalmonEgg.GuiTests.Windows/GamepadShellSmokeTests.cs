@@ -1093,6 +1093,43 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
+    public void DiagnosticsGamepadActions_VirtualGamepadDPadDown_SkipsDisabledStopButton()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "diagnostics disabled-stop skip validation");
+
+        var diagnosticsItem = session.FindByAutomationId("SettingsNav.Diagnostics", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, diagnosticsItem, "SettingsNav.Diagnostics", "diagnostics settings navigation item");
+        session.PressEnter();
+        Assert.True(
+            session.WaitUntilOnscreen("Diagnostics.GamepadMonitorHeader", TimeSpan.FromSeconds(10)),
+            $"Diagnostics settings page did not become visible before disabled-stop skip validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var startButton = FindAndScrollIntoView(session, "Diagnostics.GamepadStart", TimeSpan.FromSeconds(10));
+        var stopButton = FindAndScrollIntoView(session, "Diagnostics.GamepadStop", TimeSpan.FromSeconds(10));
+        Assert.False(
+            stopButton.IsEnabled,
+            $"Diagnostics stop action should be disabled before monitoring starts.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        FocusAndAssert(session, startButton, "Diagnostics.GamepadStart", "diagnostics start action");
+        session.PressVirtualGamepadDPadDown();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("Diagnostics.GamepadRefresh"),
+                TimeSpan.FromSeconds(2)),
+            $"Virtual gamepad D-pad Down should skip the disabled diagnostics stop action and land on refresh."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void SettingsGeneralContent_VirtualGamepadDPadDown_CanReachSubsequentControls()
     {
         GuiTestGate.RequireEnabled();
@@ -1218,6 +1255,58 @@ public sealed class ShellFocusedActivationSmokeTests
                 TimeSpan.FromSeconds(3)),
             $"Virtual gamepad D-pad Down did not move beyond the first MCP settings control."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsMcpReload_VirtualGamepadDPadDown_ReachesFirstServerToggleWithoutHiddenStops()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        appData.WriteMcpYaml(
+            """
+            schema_version: 1
+            servers:
+            - transport: http
+              name: search
+              enabled: false
+              url: https://example.com/mcp
+            """);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "MCP reload downward traversal validation");
+
+        var mcpItem = session.FindByAutomationId("SettingsNav.Mcp", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, mcpItem, "SettingsNav.Mcp", "MCP settings navigation item");
+        session.PressEnter();
+        Assert.True(
+            session.WaitUntilOnscreen("Mcp.AddServer", TimeSpan.FromSeconds(10))
+            && session.WaitUntilOnscreen("Mcp.Server.Enabled", TimeSpan.FromSeconds(10)),
+            $"MCP settings page did not become visible before reload traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var addServerButton = session.FindByAutomationId("Mcp.AddServer", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, addServerButton, "Mcp.AddServer", "MCP add server action");
+        session.PressVirtualGamepadDPadLeft();
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("Mcp.Reload"),
+                TimeSpan.FromSeconds(2)),
+            $"Virtual gamepad D-pad Left did not move from the MCP add-server action to the reload action."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        session.PressVirtualGamepadDPadDown();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("Mcp.Server.Enabled"),
+                TimeSpan.FromSeconds(2)),
+            $"Virtual gamepad D-pad Down from the MCP reload action should land on the first server toggle."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
 
@@ -1457,6 +1546,39 @@ public sealed class ShellFocusedActivationSmokeTests
             + $"{Environment.NewLine}ValueAfter={session.TryGetValue(numberBox)}"
             + $"{Environment.NewLine}FocusBefore={focusOnNumberBox}"
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsDataStorageFirstToggle_VirtualGamepadDPadDown_ReachesNumberBoxInSingleStep()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
+        session.ClickElement(settingsItem);
+        Assert.True(
+            session.WaitUntilOnscreen("SettingsNav.DataStorage", TimeSpan.FromSeconds(10)),
+            $"Settings navigation did not become visible before data-storage single-step validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var dataStorageItem = session.FindByAutomationId("SettingsNav.DataStorage", TimeSpan.FromSeconds(10));
+        session.ClickElement(dataStorageItem);
+
+        var firstInteractive = session.FindByAutomationId("DataStorage.SaveLocalHistory", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, firstInteractive, "DataStorage.SaveLocalHistory", "data storage first interactive control");
+
+        session.PressVirtualGamepadDPadDown();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("DataStorage.CacheRetention"),
+                TimeSpan.FromSeconds(2)),
+            $"Virtual gamepad D-pad Down from the first data-storage toggle should land on the cache-retention NumberBox in a single step."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
 
