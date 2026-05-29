@@ -9,7 +9,16 @@ public static class ChatInputNavigationPolicy
         bool inputEnabled,
         bool isImeComposing)
     {
-        if (!slashCommandsVisible || !inputEnabled || isImeComposing)
+        if (!inputEnabled || isImeComposing)
+        {
+            return intent switch
+            {
+                GamepadNavigationIntent.MoveUp when focusContext == ChatInputFocusContext.ModeSelector => ChatInputNavigationAction.ReturnToInputBox,
+                _ => ChatInputNavigationAction.None
+            };
+        }
+
+        if (!slashCommandsVisible)
         {
             return intent switch
             {
