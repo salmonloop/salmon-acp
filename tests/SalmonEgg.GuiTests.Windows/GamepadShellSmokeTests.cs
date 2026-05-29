@@ -439,6 +439,171 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
+    public void ChatInputArea_ModeSelector_VirtualGamepadDPadUp_CanReturnToInputBox()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(withContent: true);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
+            $"Session nav item did not become onscreen before chat selector return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(10));
+        session.ClickElement(sessionItem);
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionTitle", TimeSpan.FromSeconds(10)),
+            $"Chat view did not become visible before selector return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.True(
+            session.WaitUntilOnscreen("ChatInputArea.ModeSelector", TimeSpan.FromSeconds(6)),
+            $"Chat mode selector did not become visible before selector return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var modeSelector = session.FindByAutomationId("ChatInputArea.ModeSelector", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, modeSelector, "ChatInputArea.ModeSelector", "chat mode selector");
+
+        session.PressVirtualGamepadDPadUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("InputBox"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from the chat mode selector to the input box."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void ChatInputArea_ComposerHorizontalTraversal_CanReachActionButtonAndReturnToTrailingVisibleSelector()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(withContent: true);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var focusTimeline = new List<string>();
+
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
+            $"Session nav item did not become onscreen before chat selector horizontal traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(10));
+        session.ClickElement(sessionItem);
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionTitle", TimeSpan.FromSeconds(10)),
+            $"Chat view did not become visible before selector horizontal traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.True(
+            session.WaitUntilOnscreen("ChatInputArea.ModeSelector", TimeSpan.FromSeconds(6)),
+            $"Chat mode selector did not become visible before selector horizontal traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var modeSelector = session.FindByAutomationId("ChatInputArea.ModeSelector", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, modeSelector, "ChatInputArea.ModeSelector", "chat mode selector");
+        focusTimeline.Add($"start: {session.DescribeFocusedElementDetailed()}");
+        var expectedReturnSelectorAutomationId =
+            session.WaitUntilOnscreen("ChatInputArea.ProjectSelector", TimeSpan.FromMilliseconds(250)) ? "ChatInputArea.ProjectSelector" :
+            session.WaitUntilOnscreen("ChatInputArea.ModeSelector", TimeSpan.FromMilliseconds(250)) ? "ChatInputArea.ModeSelector" :
+            "ChatInputArea.AgentSelector";
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                () =>
+                {
+                    session.PressVirtualGamepadDPadRight();
+                    focusTimeline.Add($"after right: {session.DescribeFocusedElementDetailed()}");
+                },
+                () => session.IsFocusWithinAutomationId("VoiceInputStartButton")
+                    || session.IsFocusWithinAutomationId("VoiceInputStopButton")
+                    || session.IsFocusWithinAutomationId("SendButton")
+                    || session.IsFocusWithinAutomationId("CancelButton"),
+                attempts: 6),
+            $"Virtual gamepad D-pad Right did not leave the chat mode selector for any composer action button."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}Timeline={string.Join(Environment.NewLine, focusTimeline)}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                () =>
+                {
+                    session.PressVirtualGamepadDPadLeft();
+                    focusTimeline.Add($"after left: {session.DescribeFocusedElementDetailed()}");
+                },
+                () => session.IsFocusWithinAutomationId(expectedReturnSelectorAutomationId),
+                attempts: 6),
+            $"Virtual gamepad D-pad Left did not return from the composer action buttons to the trailing visible selector."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}ExpectedReturn={expectedReturnSelectorAutomationId}"
+            + $"{Environment.NewLine}Timeline={string.Join(Environment.NewLine, focusTimeline)}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void ChatInputArea_ComposerHorizontalTraversal_KeyboardCanReturnToTrailingVisibleSelector()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(withContent: true);
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var focusTimeline = new List<string>();
+
+        Assert.True(
+            session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
+            $"Session nav item did not become onscreen before chat keyboard horizontal traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var sessionItem = session.FindByAutomationId("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(10));
+        session.ClickElement(sessionItem);
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionTitle", TimeSpan.FromSeconds(10)),
+            $"Chat view did not become visible before keyboard horizontal traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+        Assert.True(
+            session.WaitUntilOnscreen("ChatInputArea.ModeSelector", TimeSpan.FromSeconds(6)),
+            $"Chat mode selector did not become visible before keyboard horizontal traversal validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var modeSelector = session.FindByAutomationId("ChatInputArea.ModeSelector", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, modeSelector, "ChatInputArea.ModeSelector", "chat mode selector");
+        focusTimeline.Add($"start: {session.DescribeFocusedElementDetailed()}");
+        var expectedReturnSelectorAutomationId =
+            session.WaitUntilOnscreen("ChatInputArea.ProjectSelector", TimeSpan.FromMilliseconds(250)) ? "ChatInputArea.ProjectSelector" :
+            session.WaitUntilOnscreen("ChatInputArea.ModeSelector", TimeSpan.FromMilliseconds(250)) ? "ChatInputArea.ModeSelector" :
+            "ChatInputArea.AgentSelector";
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                () =>
+                {
+                    session.PressRight();
+                    focusTimeline.Add($"after right: {session.DescribeFocusedElementDetailed()}");
+                },
+                () => session.IsFocusWithinAutomationId("VoiceInputStartButton")
+                    || session.IsFocusWithinAutomationId("VoiceInputStopButton")
+                    || session.IsFocusWithinAutomationId("SendButton")
+                    || session.IsFocusWithinAutomationId("CancelButton"),
+                attempts: 6),
+            $"Keyboard Right did not leave the chat mode selector for any composer action button."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}Timeline={string.Join(Environment.NewLine, focusTimeline)}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                () =>
+                {
+                    session.PressLeft();
+                    focusTimeline.Add($"after left: {session.DescribeFocusedElementDetailed()}");
+                },
+                () => session.IsFocusWithinAutomationId(expectedReturnSelectorAutomationId),
+                attempts: 6),
+            $"Keyboard Left did not return from the composer action buttons to the trailing visible selector."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}ExpectedReturn={expectedReturnSelectorAutomationId}"
+            + $"{Environment.NewLine}Timeline={string.Join(Environment.NewLine, focusTimeline)}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
     public void SettingsCenter_VirtualGamepadDPadRight_CanReachSectionNavigation()
     {
         GuiTestGate.RequireEnabled();

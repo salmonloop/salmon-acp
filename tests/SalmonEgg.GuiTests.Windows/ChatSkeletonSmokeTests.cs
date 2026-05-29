@@ -17,6 +17,7 @@ namespace SalmonEgg.GuiTests.Windows;
 public sealed class ChatSkeletonSmokeTests
 {
     private const string LongSessionHeaderTitle = "GUI Session 01 - Long Title For Responsive Header Validation Across Narrow Layout Widths";
+    private static readonly string[] ToolCallPayloadDetailHeaders = ["调用参数详情", "Payload details"];
 
     [SkippableFact]
     public void SelectSessionWithToolCall_CanOpenToolCallPillWithoutCrashing()
@@ -37,33 +38,35 @@ public sealed class ChatSkeletonSmokeTests
         var messagesList = session.FindByAutomationId("ChatView.MessagesList", TimeSpan.FromSeconds(10));
         var toolCallPillButton = session.FindByAutomationId("ToolCallPill.RootButton", TimeSpan.FromSeconds(10));
 
-        session.ClickElement(toolCallPillButton);
-        var isExpanded = WaitUntilToggleState(
+        session.FocusElement(toolCallPillButton);
+        Thread.Sleep(150);
+        session.PressEnter();
+        var detailsVisible = WaitUntilVisibleTextState(
             session,
-            "ToolCallPill.RootButton",
-            ToggleState.On,
+            ToolCallPayloadDetailHeaders,
+            expectedVisible: true,
             TimeSpan.FromSeconds(2));
-        Assert.True(isExpanded, "Tool call pill did not expand after activation.");
+        Assert.True(detailsVisible, "Tool call pill did not expose payload details after native activation.");
 
-        session.ClickElement(toolCallPillButton);
-        var isCollapsed = WaitUntilToggleState(
+        session.PressEnter();
+        var detailsHidden = WaitUntilVisibleTextState(
             session,
-            "ToolCallPill.RootButton",
-            ToggleState.Off,
+            ToolCallPayloadDetailHeaders,
+            expectedVisible: false,
             TimeSpan.FromSeconds(2));
-        Assert.True(isCollapsed, "Tool call pill did not collapse after a second activation.");
+        Assert.True(detailsHidden, "Tool call pill did not hide payload details after a second native activation.");
 
-        session.ClickElement(toolCallPillButton);
-        isExpanded = WaitUntilToggleState(
+        session.PressEnter();
+        detailsVisible = WaitUntilVisibleTextState(
             session,
-            "ToolCallPill.RootButton",
-            ToggleState.On,
+            ToolCallPayloadDetailHeaders,
+            expectedVisible: true,
             TimeSpan.FromSeconds(2));
         var visibleTexts = session.GetVisibleTexts(messagesList);
         var sawPath = visibleTexts.Any(text => text.Contains("appsettings.json", StringComparison.Ordinal));
         var sawQuery = visibleTexts.Any(text => text.Contains("Logging", StringComparison.Ordinal));
 
-        Assert.True(isExpanded, "Tool call pill did not expand after a third activation.");
+        Assert.True(detailsVisible, "Tool call pill did not re-expose payload details after a third native activation.");
         Assert.True(sawPath, "Expanded tool call pill did not expose the expected path details.");
         Assert.True(sawQuery, "Expanded tool call pill did not expose the expected query details.");
 
@@ -3745,6 +3748,28 @@ public sealed class ChatSkeletonSmokeTests
                 catch
                 {
                 }
+            }
+
+            Thread.Sleep(120);
+        }
+
+        return false;
+    }
+
+    private static bool WaitUntilVisibleTextState(
+        WindowsGuiAppSession session,
+        IReadOnlyList<string> candidateTexts,
+        bool expectedVisible,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var anyVisible = candidateTexts.Any(text =>
+                session.TryFindVisibleTextAnywhere(text, TimeSpan.FromMilliseconds(120)) is not null);
+            if (anyVisible == expectedVisible)
+            {
+                return true;
             }
 
             Thread.Sleep(120);
