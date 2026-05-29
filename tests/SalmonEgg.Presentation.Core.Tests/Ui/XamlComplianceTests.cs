@@ -2450,20 +2450,30 @@ public sealed class XamlComplianceTests
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsShellPage.xaml.cs");
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsShellPage.xaml");
+        var document = XDocument.Parse(xaml);
         var pageBase = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\SettingsPageBase.cs");
         var acpPage = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AcpConnectionSettingsPage.xaml.cs");
         var diagnosticsPage = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\DiagnosticsSettingsPage.xaml.cs");
+        var shellGrid = document
+            .Descendants()
+            .Single(element => element.Name.LocalName == "Grid"
+                && string.Equals(element.Attribute("Padding")?.Value, "40,24", StringComparison.Ordinal));
 
         Assert.Contains("SettingsShellPage : Page, IPrimaryContentFocusTarget", code, StringComparison.Ordinal);
         Assert.Contains("public bool TryFocusPrimaryContentTarget()", code, StringComparison.Ordinal);
         Assert.Contains("=> TryFocusCurrentSectionNavigationItem();", code, StringComparison.Ordinal);
         Assert.Contains("SettingsNavView.ContainerFromMenuItem(ViewModel.SelectedSection)", code, StringComparison.Ordinal);
+        Assert.Equal("Enabled", shellGrid.Attribute("XYFocusKeyboardNavigation")?.Value);
         Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"SettingsNavView\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("TryResolveCurrentSectionEntryFocusTarget", code, StringComparison.Ordinal);
         Assert.Contains("navItem.XYFocusDown = sectionEntryTarget;", code, StringComparison.Ordinal);
-        Assert.Contains("sectionEntryTarget.XYFocusUp = navItem;", code, StringComparison.Ordinal);
+        Assert.Contains("returnTarget.XYFocusUp = navItem;", code, StringComparison.Ordinal);
         Assert.Contains("protected virtual Control? GetSectionEntryFocusTarget()", pageBase, StringComparison.Ordinal);
+        Assert.Contains("protected virtual IEnumerable<Control?> GetSectionFocusReturnTargets()", pageBase, StringComparison.Ordinal);
+        Assert.Contains("if (!TryRefreshCurrentSectionFocusTargets())", code, StringComparison.Ordinal);
+        Assert.Contains("settingsPage.Loaded += OnDeferredFocusTargetRefreshLoaded;", code, StringComparison.Ordinal);
+        Assert.Contains("DetachDeferredFocusTargetRefresh(settingsPage);", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("LayoutUpdated", code, StringComparison.Ordinal);
         Assert.DoesNotContain("TryConsumeNavigationIntent", code, StringComparison.Ordinal);
         Assert.DoesNotContain("TryMoveFocusWithinSettingsContent", code, StringComparison.Ordinal);
         Assert.DoesNotContain("IsFocusOnFirstSettingsContentControl", code, StringComparison.Ordinal);
@@ -2491,6 +2501,7 @@ public sealed class XamlComplianceTests
         var aboutCode = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AboutPage.xaml.cs");
 
         Assert.Contains("protected Control? FirstAvailableSectionEntryTarget", pageBase, StringComparison.Ordinal);
+        Assert.Contains("GetSectionFocusReturnTargets", pageBase, StringComparison.Ordinal);
 
         Assert.DoesNotContain("XYFocusUp=", diagnosticsXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("XYFocusDown=", diagnosticsXaml, StringComparison.Ordinal);
@@ -2499,6 +2510,7 @@ public sealed class XamlComplianceTests
 
         Assert.Contains("FirstAvailableSectionEntryTarget(", diagnosticsCode, StringComparison.Ordinal);
         Assert.Contains("FirstAvailableSectionEntryTarget(", mcpCode, StringComparison.Ordinal);
+        Assert.Contains("GetSectionFocusReturnTargets()", mcpCode, StringComparison.Ordinal);
         Assert.Contains("FirstAvailableSectionEntryTarget(", aboutCode, StringComparison.Ordinal);
     }
 

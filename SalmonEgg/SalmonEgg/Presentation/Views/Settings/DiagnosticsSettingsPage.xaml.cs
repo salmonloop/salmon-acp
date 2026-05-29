@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -31,6 +32,11 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase
             DiagnosticsGamepadStartButton,
             DiagnosticsGamepadStopButton,
             DiagnosticsGamepadRefreshButton);
+
+    protected override IEnumerable<Control?> GetSectionFocusReturnTargets()
+    {
+        yield return DiagnosticsGamepadStartButton;
+    }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {

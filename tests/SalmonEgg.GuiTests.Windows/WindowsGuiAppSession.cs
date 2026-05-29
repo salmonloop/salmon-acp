@@ -1180,6 +1180,35 @@ internal sealed class WindowsGuiAppSession : IDisposable
             : string.Join(" > ", segments);
     }
 
+    public string DescribeFocusedElementDetailed(int maxDepth = 8)
+    {
+        if (maxDepth < 1)
+        {
+            maxDepth = 1;
+        }
+
+        var segments = new List<string>(maxDepth);
+        try
+        {
+            var current = _automation.FocusedElement();
+            var depth = 0;
+            while (current is not null && depth < maxDepth)
+            {
+                segments.Add(DescribeElement(current));
+                current = current.Parent;
+                depth++;
+            }
+        }
+        catch (Exception ex)
+        {
+            return $"<focus-error:{ex.GetType().Name}:{ex.Message}>";
+        }
+
+        return segments.Count == 0
+            ? "<focus-null>"
+            : string.Join(" > ", segments);
+    }
+
     public void Dispose()
     {
         _gamepadInput?.Dispose();
@@ -1611,6 +1640,66 @@ internal sealed class WindowsGuiAppSession : IDisposable
         catch
         {
             return "<name-error>";
+        }
+    }
+
+    private static string DescribeElement(AutomationElement element)
+        => $"{SafeAutomationId(element)}"
+            + $"[{SafeControlType(element)}]"
+            + $" name='{SafeName(element)}'"
+            + $" class='{SafeClassName(element)}'"
+            + $" offscreen={SafeIsOffscreen(element)}"
+            + $" enabled={SafeIsEnabled(element)}"
+            + $" bounds={SafeBoundingRectangle(element)}";
+
+    private static string SafeClassName(AutomationElement element)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(element.ClassName)
+                ? "<no-class>"
+                : element.ClassName;
+        }
+        catch
+        {
+            return "<class-error>";
+        }
+    }
+
+    private static bool SafeIsOffscreen(AutomationElement element)
+    {
+        try
+        {
+            return element.IsOffscreen;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool SafeIsEnabled(AutomationElement element)
+    {
+        try
+        {
+            return element.IsEnabled;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string SafeBoundingRectangle(AutomationElement element)
+    {
+        try
+        {
+            var rect = element.BoundingRectangle;
+            return $"{rect.Left:0},{rect.Top:0},{rect.Width:0},{rect.Height:0}";
+        }
+        catch
+        {
+            return "<bounds-error>";
         }
     }
 

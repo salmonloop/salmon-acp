@@ -20,7 +20,7 @@ namespace SalmonEgg.Presentation.Views;
 public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
 {
     private SettingsSectionNavigationAdapter? _sectionNavigation;
-    private FrameworkElement? _pendingFocusTargetRefreshRoot;
+    private SettingsPageBase? _pendingFocusTargetRefreshPage;
 
     public SettingsShellViewModel ViewModel { get; }
 
@@ -50,7 +50,7 @@ public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
         var section = ViewModel.SelectSection(key);
         AttachSectionNavigation();
         NavigateFrameToSection(section.Key);
-        _ = DispatcherQueue.TryEnqueue(RefreshOrDeferCurrentSectionFocusTargets);
+        QueueRefreshCurrentSectionFocusTargets();
         QueueFocusCurrentSectionNavigationItem();
     }
 
@@ -59,7 +59,6 @@ public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
         base.OnNavigatedFrom(e);
 
         SettingsFrame.Navigated -= OnSettingsFrameNavigated;
-        DetachDeferredFocusTargetRefresh();
         DetachSectionNavigation();
     }
 
@@ -106,12 +105,12 @@ public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
             SettingsFrame.Navigate(pageType, null, UiMotionController.Current.CreateNavigationTransitionInfo());
         }
 
-        _ = DispatcherQueue.TryEnqueue(RefreshOrDeferCurrentSectionFocusTargets);
+        QueueRefreshCurrentSectionFocusTargets();
     }
 
     private void OnSettingsFrameNavigated(object sender, NavigationEventArgs e)
     {
-        _ = DispatcherQueue.TryEnqueue(RefreshOrDeferCurrentSectionFocusTargets);
+        QueueRefreshCurrentSectionFocusTargets();
     }
 
     private static Type GetSettingsSectionPageType(string key) => key switch
@@ -144,26 +143,28 @@ public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
     internal bool TryFocusSelectedSectionNavigationItemForChildPage()
         => TryFocusCurrentSectionNavigationItem();
 
+    internal void RefreshCurrentSectionFocusTargetsForChildPage()
+    {
+        _ = DispatcherQueue.TryEnqueue(() => _ = TryRefreshCurrentSectionFocusTargets());
+    }
+
     public bool TryFocusPrimaryContentTarget()
         => TryFocusCurrentSectionNavigationItem();
 
-    private void RefreshOrDeferCurrentSectionFocusTargets()
+    private void QueueRefreshCurrentSectionFocusTargets()
     {
-        if (TryRefreshCurrentSectionFocusTargets())
+        _ = DispatcherQueue.TryEnqueue(() =>
         {
-            DetachDeferredFocusTargetRefresh();
-            return;
-        }
-
-        if (SettingsFrame.Content is FrameworkElement root)
-        {
-            AttachDeferredFocusTargetRefresh(root);
-        }
+            if (!TryRefreshCurrentSectionFocusTargets())
+            {
+                DeferCurrentSectionFocusTargetRefresh();
+            }
+        });
     }
 
     private bool TryRefreshCurrentSectionFocusTargets()
     {
-        if (SettingsFrame.Content is null)
+        if (SettingsFrame.Content is not SettingsPageBase settingsPage)
         {
             return false;
         }
@@ -176,66 +177,68 @@ public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
             return false;
         }
 
-        var sectionEntryTarget = TryResolveCurrentSectionEntryFocusTarget();
+        var sectionEntryTarget = settingsPage.TryGetSectionEntryFocusTarget();
         if (sectionEntryTarget is null)
         {
             return false;
         }
 
         navItem.XYFocusDown = sectionEntryTarget;
-        sectionEntryTarget.XYFocusUp = navItem;
+        var returnTargets = settingsPage.TryGetSectionFocusReturnTargets();
+        if (returnTargets.Count == 0)
+        {
+            returnTargets = [sectionEntryTarget];
+        }
+
+        foreach (var returnTarget in returnTargets)
+        {
+            returnTarget.XYFocusUp = navItem;
+        }
+
+        DetachDeferredFocusTargetRefresh(settingsPage);
 
         return true;
     }
 
-    private Control? TryResolveCurrentSectionEntryFocusTarget()
+    private void DeferCurrentSectionFocusTargetRefresh()
     {
-        if (SettingsFrame.Content is SettingsPageBase settingsPage)
-        {
-            return settingsPage.TryGetSectionEntryFocusTarget();
-        }
-
-        return null;
-    }
-
-    private void AttachDeferredFocusTargetRefresh(FrameworkElement root)
-    {
-        if (ReferenceEquals(_pendingFocusTargetRefreshRoot, root))
+        if (SettingsFrame.Content is not SettingsPageBase settingsPage)
         {
             return;
         }
 
-        DetachDeferredFocusTargetRefresh();
-        _pendingFocusTargetRefreshRoot = root;
-        root.Loaded += OnDeferredFocusTargetRefreshLoaded;
-        root.LayoutUpdated += OnDeferredFocusTargetRefreshLayoutUpdated;
-    }
-
-    private void DetachDeferredFocusTargetRefresh()
-    {
-        if (_pendingFocusTargetRefreshRoot is null)
+        if (ReferenceEquals(_pendingFocusTargetRefreshPage, settingsPage))
         {
             return;
         }
 
-        _pendingFocusTargetRefreshRoot.Loaded -= OnDeferredFocusTargetRefreshLoaded;
-        _pendingFocusTargetRefreshRoot.LayoutUpdated -= OnDeferredFocusTargetRefreshLayoutUpdated;
-        _pendingFocusTargetRefreshRoot = null;
+        if (_pendingFocusTargetRefreshPage is not null)
+        {
+            DetachDeferredFocusTargetRefresh(_pendingFocusTargetRefreshPage);
+        }
+
+        _pendingFocusTargetRefreshPage = settingsPage;
+        settingsPage.Loaded += OnDeferredFocusTargetRefreshLoaded;
+    }
+
+    private void DetachDeferredFocusTargetRefresh(SettingsPageBase settingsPage)
+    {
+        settingsPage.Loaded -= OnDeferredFocusTargetRefreshLoaded;
+        if (ReferenceEquals(_pendingFocusTargetRefreshPage, settingsPage))
+        {
+            _pendingFocusTargetRefreshPage = null;
+        }
     }
 
     private void OnDeferredFocusTargetRefreshLoaded(object sender, RoutedEventArgs e)
     {
-        _ = DispatcherQueue.TryEnqueue(RefreshOrDeferCurrentSectionFocusTargets);
-    }
-
-    private void OnDeferredFocusTargetRefreshLayoutUpdated(object sender, object e)
-    {
-        if (!ReferenceEquals(sender, _pendingFocusTargetRefreshRoot))
+        if (sender is not SettingsPageBase settingsPage)
         {
             return;
         }
 
-        RefreshOrDeferCurrentSectionFocusTargets();
+        DetachDeferredFocusTargetRefresh(settingsPage);
+        _ = TryRefreshCurrentSectionFocusTargets();
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)

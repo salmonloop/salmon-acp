@@ -27,7 +27,8 @@
         </DataTemplate>
     </Page.Resources>
 
-    <Grid Padding="40,24">
+    <Grid Padding="40,24"
+          XYFocusKeyboardNavigation="Enabled">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />

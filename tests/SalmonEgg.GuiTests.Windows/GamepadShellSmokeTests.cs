@@ -472,14 +472,11 @@ public sealed class ShellFocusedActivationSmokeTests
         using var session = WindowsGuiAppSession.LaunchFresh();
         EnsureMainWindowWide(session);
 
-        var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));
-        session.ClickElement(settingsItem);
-        Assert.True(
-            session.WaitUntilOnscreen("SettingsNav.Appearance", TimeSpan.FromSeconds(10)),
-            $"Settings navigation did not become visible before section return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "section return validation");
 
         var appearanceItem = session.FindByAutomationId("SettingsNav.Appearance", TimeSpan.FromSeconds(10));
-        session.ClickElement(appearanceItem);
+        FocusAndAssert(session, appearanceItem, "SettingsNav.Appearance", "appearance settings navigation item");
+        session.PressEnter();
         Assert.True(
             session.WaitUntilOnscreen("Appearance.Theme", TimeSpan.FromSeconds(10)),
             $"Appearance settings page did not become visible before section return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
@@ -508,6 +505,251 @@ public sealed class ShellFocusedActivationSmokeTests
                 attempts: 4),
             $"Virtual gamepad D-pad Up did not eventually return from settings content to section navigation."
             + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsAboutContent_VirtualGamepadDPadUp_CanReturnToSectionNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var gamepad = session.CreateGamepadInput();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "about section return validation");
+
+        var aboutItem = session.FindByAutomationId("SettingsNav.About", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, aboutItem, "SettingsNav.About", "about settings navigation item");
+        session.PressEnter();
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                gamepad.PressDown,
+                () => session.IsFocusWithinAutomationId("About.Support.OpenAppData")
+                    || session.IsFocusWithinAutomationId("About.Support.OpenReleaseNotes")
+                    || session.IsFocusWithinAutomationId("About.Support.OpenPrivacyPolicy")
+                    || session.IsFocusWithinAutomationId("About.Support.CopyVersionInfo"),
+                attempts: 6),
+            $"Virtual gamepad D-pad Down did not enter the About support actions from the section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        gamepad.PressUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("SettingsNav.About"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from the about support action to the About section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsMcpTopRowAction_VirtualGamepadDPadUp_CanReturnToSectionNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "MCP section return validation");
+
+        var mcpItem = session.FindByAutomationId("SettingsNav.Mcp", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, mcpItem, "SettingsNav.Mcp", "MCP settings navigation item");
+        session.PressEnter();
+        Assert.True(
+            session.WaitUntilOnscreen("Mcp.AddServer", TimeSpan.FromSeconds(10)),
+            $"MCP settings page did not become visible before section return validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        var addServerButton = session.FindByAutomationId("Mcp.AddServer", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, addServerButton, "Mcp.AddServer", "MCP add server action");
+
+        session.PressVirtualGamepadDPadUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("SettingsNav.Mcp"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from the MCP top-row action to the MCP section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsShortcutsContent_VirtualGamepadDPadUp_CanReturnToSectionNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var gamepad = session.CreateGamepadInput();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "shortcuts section return validation");
+
+        var shortcutsItem = session.FindByAutomationId("SettingsNav.Shortcuts", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, shortcutsItem, "SettingsNav.Shortcuts", "shortcuts settings navigation item");
+        session.PressEnter();
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                gamepad.PressDown,
+                () =>
+                {
+                    var recorder = session.FindFirstByAutomationIdPrefix("Shortcuts.Record.", TimeSpan.FromMilliseconds(100));
+                    return recorder is not null && session.IsFocusedElement(recorder);
+                },
+                attempts: 6),
+            $"Virtual gamepad D-pad Down did not enter the Shortcuts content from the section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        gamepad.PressUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("SettingsNav.Shortcuts"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from the shortcuts content to the Shortcuts section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsShortcutsRestoreAll_VirtualGamepadDPadUp_CanReturnToTrailingShortcutAction()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var gamepad = session.CreateGamepadInput();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "shortcuts restore-all return validation");
+
+        var shortcutsItem = session.FindByAutomationId("SettingsNav.Shortcuts", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, shortcutsItem, "SettingsNav.Shortcuts", "shortcuts settings navigation item");
+        session.PressEnter();
+
+        var restoreAllButton = FindAndScrollIntoView(session, "Shortcuts.RestoreAll", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, restoreAllButton, "Shortcuts.RestoreAll", "shortcuts restore-all action");
+
+        gamepad.PressUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("Shortcuts.Restore.search")
+                    || session.IsFocusWithinAutomationId("Shortcuts.Record.search"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from the shortcuts restore-all action to the trailing shortcut control."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsShortcutsRestoreAll_KeyboardUp_CanReturnToTrailingShortcutAction()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "shortcuts restore-all keyboard return validation");
+
+        var shortcutsItem = session.FindByAutomationId("SettingsNav.Shortcuts", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, shortcutsItem, "SettingsNav.Shortcuts", "shortcuts settings navigation item");
+        session.PressEnter();
+
+        var restoreAllButton = FindAndScrollIntoView(session, "Shortcuts.RestoreAll", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, restoreAllButton, "Shortcuts.RestoreAll", "shortcuts restore-all action");
+
+        session.PressUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("Shortcuts.Restore.search")
+                    || session.IsFocusWithinAutomationId("Shortcuts.Record.search"),
+                TimeSpan.FromSeconds(3)),
+            $"Keyboard Up did not return from the shortcuts restore-all action to the trailing shortcut control."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsDiagnosticsContent_VirtualGamepadDPadUp_CanReturnToSectionNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        var gamepad = session.CreateGamepadInput();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "diagnostics section return validation");
+
+        var diagnosticsItem = session.FindByAutomationId("SettingsNav.Diagnostics", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, diagnosticsItem, "SettingsNav.Diagnostics", "diagnostics settings navigation item");
+        session.PressEnter();
+
+        Assert.True(
+            MoveFocusUntil(
+                session,
+                gamepad.PressDown,
+                () => session.IsFocusWithinAutomationId("Diagnostics.GamepadStart")
+                    || session.IsFocusWithinAutomationId("Diagnostics.GamepadStop")
+                    || session.IsFocusWithinAutomationId("Diagnostics.GamepadRefresh"),
+                attempts: 6),
+            $"Virtual gamepad D-pad Down did not enter the diagnostics actions from the section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+
+        gamepad.PressUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("SettingsNav.Diagnostics"),
+                TimeSpan.FromSeconds(3)),
+            $"Virtual gamepad D-pad Up did not return from the diagnostics content to the Diagnostics section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
+            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+    }
+
+    [SkippableFact]
+    public void SettingsDiagnosticsContent_KeyboardUp_CanReturnToSectionNavigation()
+    {
+        GuiTestGate.RequireEnabled();
+
+        using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
+        using var session = WindowsGuiAppSession.LaunchFresh();
+        EnsureMainWindowWide(session);
+
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "diagnostics keyboard section return validation");
+
+        var diagnosticsItem = session.FindByAutomationId("SettingsNav.Diagnostics", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, diagnosticsItem, "SettingsNav.Diagnostics", "diagnostics settings navigation item");
+        session.PressEnter();
+
+        var startButton = session.FindByAutomationId("Diagnostics.GamepadStart", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, startButton, "Diagnostics.GamepadStart", "diagnostics gamepad start action");
+
+        session.PressUp();
+
+        Assert.True(
+            WaitUntil(
+                () => session.IsFocusWithinAutomationId("SettingsNav.Diagnostics"),
+                TimeSpan.FromSeconds(3)),
+            $"Keyboard Up did not return from the diagnostics content to the Diagnostics section navigation item."
+            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
+            + $"{Environment.NewLine}DetailedFocus={session.DescribeFocusedElementDetailed()}"
             + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
     }
 

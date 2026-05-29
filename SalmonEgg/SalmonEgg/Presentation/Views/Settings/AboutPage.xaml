@@ -46,7 +46,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -61,7 +63,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -130,7 +134,9 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -166,7 +172,9 @@
                                                Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                         <ListView ItemsSource="{x:Bind ViewModel.OpenSourceAcknowledgements, Mode=OneWay}"
                                   SelectionMode="None"

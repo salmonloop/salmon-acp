@@ -66,6 +66,18 @@ public class SettingsPageBase : Page
     internal Control? TryGetSectionEntryFocusTarget()
         => GetSectionEntryFocusTarget();
 
+    protected virtual IEnumerable<Control?> GetSectionFocusReturnTargets()
+    {
+        yield return GetSectionEntryFocusTarget();
+    }
+
+    internal IReadOnlyList<Control> TryGetSectionFocusReturnTargets()
+        => GetSectionFocusReturnTargets()
+            .Where(CanHoldSectionReturnFocusTarget)
+            .Distinct()
+            .Cast<Control>()
+            .ToArray();
+
     protected Control? FirstAvailableSectionEntryTarget(params Control?[] candidates)
         => candidates.FirstOrDefault(CanReceiveSectionEntryFocus);
 
@@ -86,6 +98,16 @@ public class SettingsPageBase : Page
         }
 
         return candidate.IsEnabled || candidate.AllowFocusWhenDisabled;
+    }
+
+    private static bool CanHoldSectionReturnFocusTarget(Control? candidate)
+    {
+        if (candidate is null)
+        {
+            return false;
+        }
+
+        return candidate.Visibility == Visibility.Visible;
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool>? predicate)

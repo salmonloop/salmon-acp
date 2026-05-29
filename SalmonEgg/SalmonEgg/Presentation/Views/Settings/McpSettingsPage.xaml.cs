@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System.Collections.Generic;
 using SalmonEgg.Presentation.Models.Settings;
 using SalmonEgg.Presentation.ViewModels.Settings;
 using SalmonEgg.Presentation.Views;
@@ -20,6 +21,12 @@ public sealed partial class McpSettingsPage : SettingsPageBase
 
     protected override Control? GetSectionEntryFocusTarget()
         => FirstAvailableSectionEntryTarget(McpReloadButton, McpAddServerButton);
+
+    protected override IEnumerable<Control?> GetSectionFocusReturnTargets()
+    {
+        yield return McpReloadButton;
+        yield return McpAddServerButton;
+    }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

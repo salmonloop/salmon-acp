@@ -51,7 +51,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -66,7 +68,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -81,7 +85,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -113,6 +119,35 @@
                                                FontWeight="SemiBold" />
                                 </Grid>
 
+                                <StackPanel Spacing="8"
+                                            Padding="{StaticResource SettingsRowPadding}">
+                                    <Button x:Name="DiagnosticsGamepadStartButton"
+                                            x:Uid="Diagnostics_GamepadStart"
+                                            AutomationProperties.AutomationId="Diagnostics.GamepadStart"
+                                            Content="开始监测"
+                                            Command="{x:Bind ViewModel.GamepadDiagnostics.StartMonitoringCommand}"
+                                            IsEnabled="{x:Bind ViewModel.GamepadDiagnostics.CanStartMonitoring, Mode=OneWay}"
+                                            HorizontalAlignment="Stretch" />
+                                    <Button x:Name="DiagnosticsGamepadStopButton"
+                                            x:Uid="Diagnostics_GamepadStop"
+                                            AutomationProperties.AutomationId="Diagnostics.GamepadStop"
+                                            Content="停止监测"
+                                            Command="{x:Bind ViewModel.GamepadDiagnostics.StopMonitoringCommand}"
+                                            IsEnabled="{x:Bind ViewModel.GamepadDiagnostics.CanStopMonitoring, Mode=OneWay}"
+                                            AllowFocusWhenDisabled="True"
+                                            HorizontalAlignment="Stretch" />
+                                    <Button x:Name="DiagnosticsGamepadRefreshButton"
+                                            x:Uid="Diagnostics_GamepadRefresh"
+                                            AutomationProperties.AutomationId="Diagnostics.GamepadRefresh"
+                                            Content="刷新一次"
+                                            Command="{x:Bind ViewModel.GamepadDiagnostics.RefreshSnapshotCommand}"
+                                            HorizontalAlignment="Stretch" />
+                                </StackPanel>
+
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
                                 <StackPanel HorizontalAlignment="Stretch">
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -128,7 +163,9 @@
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -144,7 +181,9 @@
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -160,7 +199,9 @@
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -176,7 +217,9 @@
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -192,7 +235,9 @@
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -208,7 +253,9 @@
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
 
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                    <Border Height="1"
+                                            Margin="16,0"
+                                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                     <controls:ResponsiveFormRow>
                                         <controls:ResponsiveFormRow.Label>
@@ -224,34 +271,6 @@
                                                        TextWrapping="WrapWholeWords"/>
                                         </controls:ResponsiveFormRow.Value>
                                     </controls:ResponsiveFormRow>
-
-                                    <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
-
-                                    <StackPanel Spacing="8"
-                                                XYFocusKeyboardNavigation="Enabled"
-                                                Padding="{StaticResource SettingsRowPadding}">
-                                        <Button x:Name="DiagnosticsGamepadStartButton"
-                                                x:Uid="Diagnostics_GamepadStart"
-                                                AutomationProperties.AutomationId="Diagnostics.GamepadStart"
-                                                Content="开始监测"
-                                                Command="{x:Bind ViewModel.GamepadDiagnostics.StartMonitoringCommand}"
-                                                IsEnabled="{x:Bind ViewModel.GamepadDiagnostics.CanStartMonitoring, Mode=OneWay}"
-                                                HorizontalAlignment="Stretch" />
-                                        <Button x:Name="DiagnosticsGamepadStopButton"
-                                                x:Uid="Diagnostics_GamepadStop"
-                                                AutomationProperties.AutomationId="Diagnostics.GamepadStop"
-                                                Content="停止监测"
-                                                Command="{x:Bind ViewModel.GamepadDiagnostics.StopMonitoringCommand}"
-                                                IsEnabled="{x:Bind ViewModel.GamepadDiagnostics.CanStopMonitoring, Mode=OneWay}"
-                                                AllowFocusWhenDisabled="True"
-                                                HorizontalAlignment="Stretch" />
-                                        <Button x:Name="DiagnosticsGamepadRefreshButton"
-                                                x:Uid="Diagnostics_GamepadRefresh"
-                                                AutomationProperties.AutomationId="Diagnostics.GamepadRefresh"
-                                                Content="刷新一次"
-                                                Command="{x:Bind ViewModel.GamepadDiagnostics.RefreshSnapshotCommand}"
-                                                HorizontalAlignment="Stretch" />
-                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -277,7 +296,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -292,7 +313,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <Grid Style="{StaticResource SettingsRowGridStyle}">
                                     <Grid.RowDefinitions>
@@ -324,7 +347,9 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                         <Expander IsExpanded="{x:Bind ViewModel.LiveLogViewer.IsExpanded, Mode=TwoWay}"
                                   Background="Transparent"
@@ -407,7 +432,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>
@@ -426,7 +453,9 @@
                                     </controls:ResponsiveFormRow.Value>
                                 </controls:ResponsiveFormRow>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <controls:ResponsiveFormRow>
                                     <controls:ResponsiveFormRow.Label>

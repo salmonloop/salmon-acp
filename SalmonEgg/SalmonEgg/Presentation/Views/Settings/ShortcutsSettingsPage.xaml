@@ -46,19 +46,20 @@
                                    Style="{StaticResource SettingsSectionTitleTextStyle}"/>
 
                         <Border Style="{StaticResource SettingsSectionContainerStyle}">
-                            <StackPanel>
+                            <StackPanel XYFocusKeyboardNavigation="Enabled">
                                 <Grid Style="{StaticResource SettingsRowGridStyle}">
                                     <TextBlock x:Uid="Shortcuts_AppOnlyHint"
                                                Text="这些快捷键仅在 SalmonEgg 窗口处于前台时生效，不会注册系统级热键，也不会覆盖输入框内的原生编辑行为。"
                                                Style="{StaticResource SettingsRowDescriptionTextStyle}"/>
                                 </Grid>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
-                                <ListView x:Name="ShortcutsListView"
-                                          ItemsSource="{x:Bind ViewModel.Shortcuts, Mode=OneWay}"
-                                          SelectionMode="None">
-                                    <ListView.ItemTemplate>
+                                <ItemsControl x:Name="ShortcutsItemsHost"
+                                              ItemsSource="{x:Bind ViewModel.Shortcuts, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ShortcutEntryViewModel">
                                             <controls:ResponsiveFormRow>
                                                 <controls:ResponsiveFormRow.Label>
@@ -81,6 +82,7 @@
 
                                                         <Button Grid.Column="1"
                                                                 x:Uid="Shortcuts_RestoreSingle"
+                                                                AutomationProperties.AutomationId="{x:Bind RestoreAutomationId, Mode=OneWay}"
                                                                 Content="恢复"
                                                                 Command="{x:Bind RestoreDefaultCommand}"
                                                                 VerticalAlignment="Center"/>
@@ -88,10 +90,12 @@
                                                 </controls:ResponsiveFormRow.Value>
                                             </controls:ResponsiveFormRow>
                                         </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
-                                <MenuFlyoutSeparator Margin="16,0" Visibility="Visible"/>
+                                <Border Height="1"
+                                        Margin="16,0"
+                                        Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                                 <Grid Style="{StaticResource SettingsRowGridStyle}">
                                     <Grid.ColumnDefinitions>
@@ -104,8 +108,10 @@
                                                Style="{StaticResource SettingsRowDescriptionTextStyle}"
                                                VerticalAlignment="Center"/>
 
-                                    <Button Grid.Column="1"
+                                    <Button x:Name="RestoreAllButton"
+                                            Grid.Column="1"
                                             x:Uid="Shortcuts_RestoreAll"
+                                            AutomationProperties.AutomationId="Shortcuts.RestoreAll"
                                             Content="全部恢复默认"
                                             Command="{x:Bind ViewModel.RestoreDefaultsCommand}"
                                             VerticalAlignment="Center"/>
