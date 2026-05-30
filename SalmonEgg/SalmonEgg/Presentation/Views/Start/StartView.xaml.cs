@@ -53,7 +53,7 @@ public sealed partial class StartView : Page, IPrimaryContentFocusTarget
         if (ViewModel.Suggestions.Count > 0
             && FindSuggestionButton(ViewModel.Suggestions[0].AutomationId) is Button firstSuggestion)
         {
-            return firstSuggestion.Focus(FocusState.Programmatic);
+            return firstSuggestion.Focus(FocusState.Keyboard);
         }
 
         return TryFocusPromptBox();
@@ -67,7 +67,7 @@ public sealed partial class StartView : Page, IPrimaryContentFocusTarget
     private bool TryFocusPromptBox()
     {
         return FindPromptBox() is TextBox promptBox
-            && promptBox.Focus(FocusState.Programmatic);
+            && promptBox.Focus(FocusState.Keyboard);
     }
 
     private DependencyObject? FindPromptBox()

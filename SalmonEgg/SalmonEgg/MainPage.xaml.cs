@@ -710,18 +710,14 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
         UpdateMainNavAutomationSelectionState();
         await _startupNavigation.ActivateInitialContentAsync().ConfigureAwait(true);
         BootLogDebug("MainPage: initial shell content activated");
-        InitializeTray();
-        await _chatViewModel.RestoreAsync();
-
         _ = DispatcherQueue.TryEnqueue(
             Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
             () =>
             {
-                if (MainNavView.XamlRoot is not null)
-                {
-                    MainNavView.Focus(FocusState.Programmatic);
-                }
+                _ = TryMoveFocusFromCurrentContentIntoMainNavigation();
             });
+        InitializeTray();
+        await _chatViewModel.RestoreAsync();
     }
 
     private void AttachGamepadInput()

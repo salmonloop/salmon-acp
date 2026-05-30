@@ -144,6 +144,29 @@ public sealed class NavigationCoreTests
     }
 
     [Fact]
+    public void MainPage_StartupFocusSeed_UsesConcreteNavigationTargetInsteadOfNavigationRoot()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+        var loadedSection = ExtractSection(code, "private async void OnMainPageLoaded", "private void AttachGamepadInput");
+
+        Assert.Contains("TryMoveFocusFromCurrentContentIntoMainNavigation();", loadedSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainNavView.Focus(FocusState.Programmatic);", loadedSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainPage_StartupFocusSeed_IsScheduledBeforeChatRestore()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\MainPage.xaml.cs");
+        var loadedSection = ExtractSection(code, "private async void OnMainPageLoaded", "private void AttachGamepadInput");
+        var focusSeedIndex = loadedSection.IndexOf("TryMoveFocusFromCurrentContentIntoMainNavigation();", StringComparison.Ordinal);
+        var restoreIndex = loadedSection.IndexOf("await _chatViewModel.RestoreAsync();", StringComparison.Ordinal);
+
+        Assert.True(focusSeedIndex >= 0, "MainPage should schedule a concrete startup navigation focus seed.");
+        Assert.True(restoreIndex >= 0, "MainPage should still restore chat state during load.");
+        Assert.True(focusSeedIndex < restoreIndex, "MainPage should seed startup navigation focus before long-running chat restore.");
+    }
+
+    [Fact]
     public void DependencyInjection_ShellStartupNavigationService_IsScopedToShellInstance()
     {
         var code = LoadFile(@"SalmonEgg\SalmonEgg\DependencyInjection.cs");
@@ -621,6 +644,17 @@ public sealed class NavigationCoreTests
         Assert.Contains("ComposerShell.MoveUpEscapeHandler = HandlePromptMoveUpEscape;", code, StringComparison.Ordinal);
         Assert.Contains("promptBox.XYFocusUp = firstSuggestion;", code, StringComparison.Ordinal);
         Assert.Contains("button.XYFocusDown = FindPromptBox();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartView_DirectionalFocusEntry_UsesKeyboardFocusState()
+    {
+        var code = LoadFile(@"SalmonEgg\SalmonEgg\Presentation\Views\Start\StartView.xaml.cs");
+
+        Assert.Contains("firstSuggestion.Focus(FocusState.Keyboard)", code, StringComparison.Ordinal);
+        Assert.Contains("promptBox.Focus(FocusState.Keyboard)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("firstSuggestion.Focus(FocusState.Programmatic)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("promptBox.Focus(FocusState.Programmatic)", code, StringComparison.Ordinal);
     }
 
     [Fact]
