@@ -595,7 +595,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
         return new SyntheticVirtualKeyGamepadTestInput(this);
     }
 
-    public IGamepadTestInput CreateGamepadInput()
+    public IGamepadTestInput CreateConfiguredGamepadInput()
     {
         return _gamepadInput ??= GamepadTestInputFactory.Create(this);
     }
@@ -607,7 +607,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void PressVirtualGamepadDPadDown()
     {
-        CreateGamepadInput().PressDown();
+        CreateSyntheticGamepadInput().PressDown();
     }
 
     internal void PressSyntheticGamepadUp()
@@ -617,7 +617,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void PressVirtualGamepadDPadUp()
     {
-        CreateGamepadInput().PressUp();
+        CreateSyntheticGamepadInput().PressUp();
     }
 
     internal void PressSyntheticGamepadLeft()
@@ -627,7 +627,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void PressVirtualGamepadDPadLeft()
     {
-        CreateGamepadInput().PressLeft();
+        CreateSyntheticGamepadInput().PressLeft();
     }
 
     internal void PressSyntheticGamepadRight()
@@ -637,7 +637,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void PressVirtualGamepadDPadRight()
     {
-        CreateGamepadInput().PressRight();
+        CreateSyntheticGamepadInput().PressRight();
     }
 
     internal void PressSyntheticGamepadActivate()
@@ -647,7 +647,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void PressVirtualGamepadA()
     {
-        CreateGamepadInput().PressActivate();
+        CreateSyntheticGamepadInput().PressActivate();
     }
 
     internal void PressSyntheticGamepadBack()
@@ -657,7 +657,7 @@ internal sealed class WindowsGuiAppSession : IDisposable
 
     public void PressVirtualGamepadB()
     {
-        CreateGamepadInput().PressBack();
+        CreateSyntheticGamepadInput().PressBack();
     }
 
     public void PressTab()

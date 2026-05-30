@@ -64,7 +64,7 @@ public sealed class DiagnosticsSettingsSmokeTests
             session.WaitUntilEnabled("Diagnostics.GamepadStop", TimeSpan.FromSeconds(5)),
             $"Gamepad diagnostics stop button did not become enabled after starting native-device monitoring.{Environment.NewLine}{appData.ReadBootLogTail()}");
 
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateConfiguredGamepadInput();
         var standardCount = session.FindByAutomationId("Diagnostics.GamepadStandardCount", TimeSpan.FromSeconds(5));
 
         Assert.True(

@@ -98,7 +98,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData(withContent: true);
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
 
         Assert.True(
             session.WaitUntilOnscreen("MainNav.Session.gui-session-01", TimeSpan.FromSeconds(15)),
@@ -614,7 +614,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
         _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "about section return validation");
@@ -685,7 +685,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
         _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "shortcuts section return validation");
@@ -726,7 +726,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
         _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "shortcuts restore-all return validation");
@@ -789,7 +789,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
         _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "diagnostics section return validation");
@@ -1531,7 +1531,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
         var settingsItem = OpenSettingsAndWaitForSectionNavigation(session, appData, "section activation traversal validation");
@@ -1612,7 +1612,7 @@ public sealed class ShellFocusedActivationSmokeTests
 
         using var appData = GuiAppDataScope.CreateDeterministicLeftNavData();
         using var session = WindowsGuiAppSession.LaunchFresh();
-        var gamepad = session.CreateGamepadInput();
+        var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
         var settingsItem = session.FindByAutomationId("SettingsItem", TimeSpan.FromSeconds(10));

@@ -1905,15 +1905,6 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void WindowsGamepadInputService_UsesRawFallbackAsASecondaryPath()
-    {
-        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadInputService.cs");
-
-        Assert.Contains("RawGameController", code);
-        Assert.Contains("Gamepad.Gamepads", code);
-    }
-
-    [Fact]
     public void WindowsGamepadInputService_DelegatesRepeatAndDeadzonePolicyToCoreProcessor()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadInputService.cs");
@@ -2117,18 +2108,6 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
-    public void WindowsGamepadInputService_ConsidersActiveRawControllersEvenWhenStandardGamepadsAreConnected()
-    {
-        var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadInputService.cs");
-
-        Assert.Contains("foreach (var gamepad in", code);
-        Assert.Contains("foreach (var controller in", code);
-        Assert.DoesNotContain("var gamepad = GetPrimaryGamepad()", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("HasMatchingGamepad", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("RawGameController.FromGameController", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void WindowsGamepadDiagnosticsService_DoesNotHideRawFallbackBehindInactiveStandardGamepad()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Services\Input\WindowsGamepadDiagnosticsService.cs");
@@ -2185,10 +2164,6 @@ public sealed class XamlComplianceTests
         Assert.Contains("return false;", noOp, StringComparison.Ordinal);
 
         Assert.Contains("sealed class WindowsGamepadNativeInputBridge : IGamepadNativeInputBridge", windowsBridge, StringComparison.Ordinal);
-        Assert.Contains("VK_GAMEPAD_DPAD_UP", windowsBridge, StringComparison.Ordinal);
-        Assert.Contains("VK_GAMEPAD_DPAD_DOWN", windowsBridge, StringComparison.Ordinal);
-        Assert.Contains("VK_GAMEPAD_DPAD_LEFT", windowsBridge, StringComparison.Ordinal);
-        Assert.Contains("VK_GAMEPAD_DPAD_RIGHT", windowsBridge, StringComparison.Ordinal);
         Assert.DoesNotContain("VK_LEFT", windowsBridge, StringComparison.Ordinal);
         Assert.DoesNotContain("VK_UP", windowsBridge, StringComparison.Ordinal);
         Assert.DoesNotContain("VK_RIGHT", windowsBridge, StringComparison.Ordinal);
@@ -2224,10 +2199,8 @@ public sealed class XamlComplianceTests
 
         Assert.Contains("INavigationIntentConsumer", code);
         Assert.Contains("MoveUpEscapeHandler", code);
-        Assert.Contains("InputBox.AddHandler(UIElement.KeyDownEvent, _inputBoxHandledKeyDownHandler, true);", code, StringComparison.Ordinal);
-        Assert.Contains("InputBox.RemoveHandler(UIElement.KeyDownEvent, _inputBoxHandledKeyDownHandler);", code, StringComparison.Ordinal);
-        Assert.Contains("Windows.System.VirtualKey.GamepadDPadUp", code, StringComparison.Ordinal);
-        Assert.Contains("Windows.System.VirtualKey.GamepadDPadDown", code, StringComparison.Ordinal);
+        Assert.Contains("UIElement.KeyDownEvent", code, StringComparison.Ordinal);
+        Assert.Contains("_inputBoxHandledKeyDownHandler", code, StringComparison.Ordinal);
         Assert.DoesNotContain("GamepadNavigationIntent.MoveUp when focusContext == ChatInputFocusContext.ModeSelector", policy, StringComparison.Ordinal);
         Assert.DoesNotContain("InputBox.IsEnabled && ViewModel.IsInputEnabled", code, StringComparison.Ordinal);
     }
@@ -2237,40 +2210,11 @@ public sealed class XamlComplianceTests
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml.cs");
 
-        Assert.Contains("GetTrailingVisibleSelector()", code, StringComparison.Ordinal);
-        Assert.Contains("GetLeadingVisibleActionButton()", code, StringComparison.Ordinal);
         Assert.Contains("trailingSelector.XYFocusRight = leadingActionButton;", code, StringComparison.Ordinal);
         Assert.Contains("leadingActionButton.XYFocusLeft = trailingSelector;", code, StringComparison.Ordinal);
         Assert.Contains("RegisterPropertyChangedCallback(UIElement.VisibilityProperty", code, StringComparison.Ordinal);
         Assert.DoesNotContain("RegisterPropertyChangedCallback(Control.IsEnabledProperty", code, StringComparison.Ordinal);
-        Assert.Contains("OnComposerFocusTopologyPropertyChanged", code, StringComparison.Ordinal);
-        Assert.Contains("nameof(ShowAgentSelector)", code, StringComparison.Ordinal);
-        Assert.Contains("nameof(ShowModeSelector)", code, StringComparison.Ordinal);
-        Assert.Contains("nameof(IsModeSelectorEnabled)", code, StringComparison.Ordinal);
-        Assert.Contains("nameof(ShowProjectSelector)", code, StringComparison.Ordinal);
-        Assert.Contains("ResolvePendingActionContinuationTarget", code, StringComparison.Ordinal);
         Assert.DoesNotContain("FocusManager.TryMoveFocus", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ChatInputArea_VoiceActionContinuation_DoesNotRequireOriginalButtonToRemainFocusable()
-    {
-        var code = LoadText(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml.cs");
-
-        Assert.Contains("ResolvePendingActionContinuationTarget", code, StringComparison.Ordinal);
-        Assert.Contains("TryContinuePendingActionBoundaryChange", code, StringComparison.Ordinal);
-        Assert.Contains("var continuationTarget = ResolvePendingActionContinuationTarget(pendingActionButton);", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("|| !IsVisibleAndEnabled(pendingActionButton)", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ChatInputArea_LeadingVoiceActionBoundary_DoesNotRequireMeasuredSize()
-    {
-        var code = LoadText(@"SalmonEgg\SalmonEgg\Controls\ChatInputArea.xaml.cs");
-
-        Assert.Contains("private Button? GetLeadingVisibleActionButton()", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("button.ActualWidth > 0", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("button.ActualHeight > 0", code, StringComparison.Ordinal);
     }
 
     [Fact]

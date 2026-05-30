@@ -22,7 +22,7 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
     private DispatcherQueueTimer? _timer;
     private bool _isStarted;
     private bool _isDisposed;
-    private InputPath _activeInputPath = InputPath.None;
+    private readonly GamepadInputPathTracker _inputPathTracker = new();
 
     public WindowsGamepadInputService(
         ILogger<WindowsGamepadInputService> logger,
@@ -113,7 +113,7 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
             _connectedGamepads.Clear();
             _connectedRawControllers.Clear();
             _isStarted = false;
-            _activeInputPath = InputPath.None;
+            _ = _inputPathTracker.Reset();
         }
     }
 
@@ -154,7 +154,7 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
             lock (_sync)
             {
                 _intentProcessor.Reset();
-                UpdateInputPath(InputPath.None);
+                UpdateInputPath(hasActiveReading: false, GamepadInputPath.None);
             }
 
             return;
@@ -186,7 +186,7 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
         var rawReadings = Array.ConvertAll(rawControllers, _rawMapper.GetInputReading);
         var selected = GamepadActiveReadingSelector.TrySelectActiveReading(gamepadReadings, rawReadings, out var selection);
 
-        UpdateInputPath(selection.InputPath);
+        UpdateInputPath(selected, selection.InputPath);
         reading = selection.Reading;
         return selected;
     }
@@ -228,21 +228,21 @@ public sealed class WindowsGamepadInputService : IGamepadInputService
         IntentRaised?.Invoke(this, intent);
     }
 
-    private void UpdateInputPath(InputPath path)
+    private void UpdateInputPath(bool hasActiveReading, GamepadInputPath path)
     {
-        if (_activeInputPath == path)
+        var transition = _inputPathTracker.Apply(hasActiveReading, path);
+        if (!transition.Changed)
         {
             return;
         }
 
-        _activeInputPath = path;
-        if (path == InputPath.None)
+        if (transition.Path == GamepadInputPath.None)
         {
             _logger.LogDebug("Gamepad input path is now idle.");
             return;
         }
 
-        _logger.LogInformation("Gamepad input path is using {InputPath}.", path);
+        _logger.LogInformation("Gamepad input path is using {InputPath}.", transition.Path);
     }
 
     private void ThrowIfDisposed()
