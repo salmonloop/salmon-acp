@@ -475,6 +475,17 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     private async ValueTask<ShellNavigationResult> EnsureChatContentAsync(long? activationToken = null)
     {
         var result = await NavigateToContentAsync(typeof(ChatView), activationToken: activationToken).ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            var reason = result.FailureReason ?? "Unknown";
+            BootLogDebug($"Content navigation rejected: target=ChatView reason={reason} token={activationToken?.ToString() ?? "<null>"}");
+            _logger.LogWarning(
+                "Shell content navigation rejected. target={Target} reason={Reason} activationToken={ActivationToken}",
+                nameof(ChatView),
+                reason,
+                activationToken);
+        }
+
         _titleBarAdapter.UpdateBackButtonState();
         return result;
     }
@@ -483,6 +494,17 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     {
         var pageType = typeof(SalmonEgg.Presentation.Views.Discover.DiscoverSessionsPage);
         var result = await NavigateToContentAsync(pageType, activationToken: activationToken).ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            var reason = result.FailureReason ?? "Unknown";
+            BootLogDebug($"Content navigation rejected: target={pageType.Name} reason={reason} token={activationToken?.ToString() ?? "<null>"}");
+            _logger.LogWarning(
+                "Shell content navigation rejected. target={Target} reason={Reason} activationToken={ActivationToken}",
+                pageType.Name,
+                reason,
+                activationToken);
+        }
+
         _titleBarAdapter.UpdateBackButtonState();
         return result;
     }
@@ -490,6 +512,17 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     private async ValueTask<ShellNavigationResult> EnsureStartContentAsync(long? activationToken = null)
     {
         var result = await NavigateToContentAsync(typeof(StartView), activationToken: activationToken).ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            var reason = result.FailureReason ?? "Unknown";
+            BootLogDebug($"Content navigation rejected: target=StartView reason={reason} token={activationToken?.ToString() ?? "<null>"}");
+            _logger.LogWarning(
+                "Shell content navigation rejected. target={Target} reason={Reason} activationToken={ActivationToken}",
+                nameof(StartView),
+                reason,
+                activationToken);
+        }
+
         _titleBarAdapter.UpdateBackButtonState();
         return result;
     }
@@ -498,6 +531,17 @@ public sealed partial class MainPage : Page, INavigationIntentConsumer
     {
         var pageType = GetSettingsShellPageType();
         var result = await NavigateToContentAsync(pageType, key, activationToken).ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            var reason = result.FailureReason ?? "Unknown";
+            BootLogDebug($"Content navigation rejected: target={pageType.Name} reason={reason} token={activationToken?.ToString() ?? "<null>"}");
+            _logger.LogWarning(
+                "Shell content navigation rejected. target={Target} reason={Reason} activationToken={ActivationToken}",
+                pageType.Name,
+                reason,
+                activationToken);
+        }
+
         if (result.Succeeded)
         {
             (ContentFrame.Content as SalmonEgg.Presentation.Views.SettingsShellPage)?.NavigateToSection(key);

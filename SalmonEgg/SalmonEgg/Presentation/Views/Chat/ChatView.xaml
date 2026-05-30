@@ -307,6 +307,8 @@
                                                 Visibility="{x:Bind ViewModel.ShouldShowConversationInputSurface, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                     <controls:ResponsiveContentHost.Child>
                         <controls:ChatInputArea x:Name="ConversationInputArea"
+                                                Loaded="OnConversationInputAreaLoaded"
+                                                Unloaded="OnConversationInputAreaUnloaded"
                                                 ViewModel="{x:Bind ViewModel, Mode=OneWay}"
                                                 SubmitCommand="{x:Bind ViewModel.SendPromptCommand}"
                                                 IsSubmitButtonEnabled="{x:Bind ViewModel.CanSendPromptUi, Mode=OneWay}"

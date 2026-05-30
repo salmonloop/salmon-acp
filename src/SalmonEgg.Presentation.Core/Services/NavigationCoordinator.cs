@@ -360,6 +360,15 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 || !IsLatestActivationToken(request.Version)
                 || request.CancellationToken.IsCancellationRequested)
             {
+                if (!navigationResult.Succeeded)
+                {
+                    _logger.LogWarning(
+                        "Navigation activation rejected before chat shell. sessionId={SessionId} version={Version} reason={Reason}",
+                        request.SessionId,
+                        request.Version,
+                        navigationResult.FailureReason ?? ActivationFaultReasons.ChatShellNavigationFailed);
+                }
+
                 MarkSessionActivationFaulted(
                     request,
                     navigationResult.Succeeded
@@ -386,6 +395,15 @@ public sealed class NavigationCoordinator : INavigationCoordinator
                 .ConfigureAwait(true);
             if (!activated || !IsLatestActivationToken(request.Version) || request.CancellationToken.IsCancellationRequested)
             {
+                if (!activated)
+                {
+                    _logger.LogWarning(
+                        "Navigation activation rejected during conversation selection. sessionId={SessionId} version={Version} reason={Reason}",
+                        request.SessionId,
+                        request.Version,
+                        ActivationFaultReasons.ConversationSelectionFailed);
+                }
+
                 MarkSessionActivationFaulted(
                     request,
                     activated ? ActivationFaultReasons.SupersededAfterConversationSelection : ActivationFaultReasons.ConversationSelectionFailed);

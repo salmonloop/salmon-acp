@@ -256,7 +256,7 @@ public sealed class ChatViewXamlTests
         Assert.Contains("IsFocusEngagementEnabled=\"True\"", chatViewXaml, StringComparison.Ordinal);
         Assert.Contains("XYFocusKeyboardNavigation=\"Enabled\"", chatViewXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedItem =", chatViewCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("ChatInputArea", chatViewCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryFocusFirstVisibleSelector", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("FocusManager.TryMoveFocus", chatViewCode, StringComparison.Ordinal);
         Assert.DoesNotContain("VisualTreeHelper.", chatViewCode, StringComparison.Ordinal);
     }
@@ -278,10 +278,10 @@ public sealed class ChatViewXamlTests
     public void ChatView_PrimaryContentTarget_PrefersInputBoxBeforeTranscriptViewport()
     {
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
-        var inputFocus = code.IndexOf("ConversationInputArea.TryFocusInputBox()", StringComparison.Ordinal);
+        var inputFocus = code.IndexOf("ConversationInputArea is not null", StringComparison.Ordinal);
         var transcriptFocus = code.IndexOf("return MessagesList.Focus(FocusState.Programmatic);", StringComparison.Ordinal);
 
-        Assert.True(inputFocus >= 0, "ChatView should attempt to focus the composer input box.");
+        Assert.True(inputFocus >= 0, "ChatView should null-check the composer before attempting input focus.");
         Assert.True(transcriptFocus >= 0, "ChatView should still provide transcript viewport fallback focus.");
         Assert.True(
             inputFocus < transcriptFocus,
@@ -291,9 +291,15 @@ public sealed class ChatViewXamlTests
     [Fact]
     public void ChatView_ComposerMoveUpEscapeHandler_ReturnsInputFocusToTranscriptViewport()
     {
+        var xaml = LoadChatViewXaml();
         var code = LoadText(@"SalmonEgg\SalmonEgg\Presentation\Views\Chat\ChatView.xaml.cs");
 
-        Assert.Contains("ConversationInputArea.MoveUpEscapeHandler = TryFocusTranscriptViewport;", code, StringComparison.Ordinal);
+        Assert.Contains("Loaded=\"OnConversationInputAreaLoaded\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Unloaded=\"OnConversationInputAreaUnloaded\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("private void OnConversationInputAreaLoaded(object sender, RoutedEventArgs e)", code, StringComparison.Ordinal);
+        Assert.Contains("inputArea.MoveUpEscapeHandler = TryFocusTranscriptViewport;", code, StringComparison.Ordinal);
+        Assert.Contains("private void OnConversationInputAreaUnloaded(object sender, RoutedEventArgs e)", code, StringComparison.Ordinal);
+        Assert.Contains("inputArea.MoveUpEscapeHandler = null;", code, StringComparison.Ordinal);
         Assert.Contains("private bool TryFocusTranscriptViewport()", code, StringComparison.Ordinal);
         Assert.Contains("return MessagesList.Focus(FocusState.Programmatic);", code, StringComparison.Ordinal);
     }

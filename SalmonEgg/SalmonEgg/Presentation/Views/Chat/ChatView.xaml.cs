@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using SalmonEgg.Controls;
 using SalmonEgg.Presentation.Models;
 using SalmonEgg.Presentation.Transcript;
 using SalmonEgg.Presentation.Utilities;
@@ -47,10 +48,25 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             _messagesListHandledPointerWheelChangedHandler = OnMessagesListPointerWheelChanged;
 
             this.InitializeComponent();
-            ConversationInputArea.MoveUpEscapeHandler = TryFocusTranscriptViewport;
 
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
+        }
+
+        private void OnConversationInputAreaLoaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is ChatInputArea inputArea)
+            {
+                inputArea.MoveUpEscapeHandler = TryFocusTranscriptViewport;
+            }
+        }
+
+        private void OnConversationInputAreaUnloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is ChatInputArea inputArea)
+            {
+                inputArea.MoveUpEscapeHandler = null;
+            }
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -336,6 +352,7 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
         public bool TryFocusPrimaryContentTarget()
         {
             if (ViewModel.ShouldShowConversationInputSurface
+                && ConversationInputArea is not null
                 && ConversationInputArea.TryFocusInputBox())
             {
                 return true;
