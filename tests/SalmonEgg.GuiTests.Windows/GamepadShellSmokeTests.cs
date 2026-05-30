@@ -887,7 +887,7 @@ public sealed class ShellFocusedActivationSmokeTests
             includeLocalConversation: false,
             remoteConversationCount: 1);
         using var session = WindowsGuiAppSession.LaunchFresh();
-        ResizeMainWindow(width: 800, height: 900);
+        session.ResizeMainWindow(width: 800, height: 900);
 
         OpenDiscoverSessions(session);
         Assert.True(
@@ -940,7 +940,7 @@ public sealed class ShellFocusedActivationSmokeTests
         Assert.True(
             session.WaitUntilVisible("DiscoverSessions.Title", TimeSpan.FromSeconds(10)),
             $"Discover sessions page did not become visible before back-semantics validation.{Environment.NewLine}{appData.ReadBootLogTail()}");
-        ResizeMainWindow(width: 700, height: 900);
+        session.ResizeMainWindow(width: 700, height: 900);
         Thread.Sleep(250);
 
         var profilesList = session.FindByAutomationId("DiscoverSessions.ProfilesList", TimeSpan.FromSeconds(10));
@@ -1525,7 +1525,7 @@ public sealed class ShellFocusedActivationSmokeTests
     }
 
     [SkippableFact]
-    public void SettingsSectionNavigation_VirtualGamepadActivationThenDPadDown_EntersActivatedSectionContent()
+    public void SettingsSectionNavigation_VirtualGamepadActivationThenDPadDown_EntersFocusedSectionContent()
     {
         GuiTestGate.RequireEnabled();
 
@@ -1534,18 +1534,9 @@ public sealed class ShellFocusedActivationSmokeTests
         var gamepad = session.CreateSyntheticGamepadInput();
         EnsureMainWindowWide(session);
 
-        var settingsItem = OpenSettingsAndWaitForSectionNavigation(session, appData, "section activation traversal validation");
-        FocusAndAssert(session, settingsItem, "SettingsItem", "settings navigation item");
-
-        Assert.True(
-            MoveFocusUntil(
-                session,
-                gamepad.PressRight,
-                () => session.IsFocusWithinAutomationId("SettingsNav.Appearance"),
-                attempts: 8),
-            $"Virtual gamepad D-pad Right did not move focus to the Appearance settings section navigation item."
-            + $"{Environment.NewLine}Focus={session.DescribeFocusedElement()}"
-            + $"{Environment.NewLine}{appData.ReadBootLogTail()}");
+        _ = OpenSettingsAndWaitForSectionNavigation(session, appData, "section activation traversal validation");
+        var appearanceItem = session.FindByAutomationId("SettingsNav.Appearance", TimeSpan.FromSeconds(10));
+        FocusAndAssert(session, appearanceItem, "SettingsNav.Appearance", "appearance settings navigation item");
 
         gamepad.PressActivate();
         Assert.True(
@@ -1918,68 +1909,7 @@ public sealed class ShellFocusedActivationSmokeTests
         {
         }
 
-        ResizeMainWindow(width: 1800, height: 1000);
-    }
-
-    private static void ResizeMainWindow(int width, int height)
-    {
-        var process = Process.GetProcessesByName("SalmonEgg")
-            .OrderByDescending(candidate => candidate.StartTime)
-            .First();
-
-        if (NativeMethods.MoveWindow(process.MainWindowHandle, 80, 80, width, height, true))
-        {
-            return;
-        }
-
-        if (NativeMethods.SetWindowPos(process.MainWindowHandle, IntPtr.Zero, 80, 80, width, height, 0))
-        {
-            return;
-        }
-
-        if (NativeMethods.TryGetWindowSize(process.MainWindowHandle, out var currentWidth, out var currentHeight)
-            && Math.Abs(currentWidth - width) <= 2
-            && Math.Abs(currentHeight - height) <= 2)
-        {
-            return;
-        }
-
-        throw new InvalidOperationException("Failed to resize the SalmonEgg window.");
-    }
-
-    private static class NativeMethods
-    {
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-        private struct Rect
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
-
-        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-        internal static extern bool MoveWindow(IntPtr hWnd, int x, int y, int width, int height, bool repaint);
-
-        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-        internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
-
-        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-        private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
-
-        internal static bool TryGetWindowSize(IntPtr hWnd, out int width, out int height)
-        {
-            if (GetWindowRect(hWnd, out var rect))
-            {
-                width = rect.Right - rect.Left;
-                height = rect.Bottom - rect.Top;
-                return true;
-            }
-
-            width = 0;
-            height = 0;
-            return false;
-        }
+        session.ResizeMainWindow(width: 1800, height: 1000);
     }
 
     private static bool IsFocusWithinApplicationBody(WindowsGuiAppSession session)

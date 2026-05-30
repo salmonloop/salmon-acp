@@ -766,7 +766,7 @@ internal sealed class GuiAppDataScope : IDisposable
     public void WriteMcpYaml(string yaml)
     {
         Directory.CreateDirectory(_configDirectory);
-        File.WriteAllText(_mcpYamlPath, yaml, Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(_mcpYamlPath, yaml, Encoding.UTF8);
     }
 
     private void Seed(
@@ -779,8 +779,8 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
 
-        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildConversationsJson(_projectRootPath, sessionCount, withContent, messageCountPerSession, firstSessionDisplayName),
             Encoding.UTF8);
@@ -806,8 +806,8 @@ internal sealed class GuiAppDataScope : IDisposable
             projects.Add((projectId, $"GUI Project {index:00}", rootPath));
         }
 
-        File.WriteAllText(_appYamlPath, BuildMultiProjectAppYaml(projects), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildMultiProjectAppYaml(projects), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildMultiProjectConversationsJson(
                 projects.Select(project => (project.ProjectId, project.RootPath)).ToArray(),
@@ -823,8 +823,8 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
 
-        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildVariableHeightConversationsJson(_projectRootPath, messageCount),
             Encoding.UTF8);
@@ -835,8 +835,8 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_configDirectory);
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
-        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildMarkdownHeavyConversationsJson(_projectRootPath, messageCount),
             Encoding.UTF8);
@@ -847,8 +847,8 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_configDirectory);
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
-        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildTallLastMessageConversationsJson(_projectRootPath, messageCount),
             Encoding.UTF8);
@@ -863,7 +863,7 @@ internal sealed class GuiAppDataScope : IDisposable
             ?? throw new InvalidOperationException("SALMONEGG_GUI_CONTROL_FILE was not set.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(controlPath)!);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             controlPath,
             JsonSerializer.Serialize(new
             {
@@ -880,8 +880,8 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
 
-        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildMarkdownRenderConversationsJson(_projectRootPath),
             Encoding.UTF8);
@@ -893,8 +893,8 @@ internal sealed class GuiAppDataScope : IDisposable
         Directory.CreateDirectory(_conversationsDirectory);
         Directory.CreateDirectory(_projectRootPath);
 
-        File.WriteAllText(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(_appYamlPath, BuildAppYaml(_projectRootPath), Encoding.UTF8);
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildToolCallConversationsJson(_projectRootPath),
             Encoding.UTF8);
@@ -920,11 +920,11 @@ internal sealed class GuiAppDataScope : IDisposable
 
         var agentScriptPath = ResolveSlowReplayAgentScriptPath();
 
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _appYamlPath,
             BuildAppYaml(_projectRootPath, profileId),
             Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildSlowRemoteReplayConversationsJson(
                 _projectRootPath,
@@ -934,7 +934,7 @@ internal sealed class GuiAppDataScope : IDisposable
                 localMessageCount,
                 remoteConversationCount),
             Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _serverYamlPath,
             BuildServerYaml(
                 profileId,
@@ -966,11 +966,11 @@ internal sealed class GuiAppDataScope : IDisposable
         var agentScriptPath = ResolveSlowReplayAgentScriptPath();
         var agentArgsPrefix = $"-NoLogo -NoProfile -ExecutionPolicy Bypass -File {QuoteCommandLineArgument(agentScriptPath)}";
 
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _appYamlPath,
             BuildAppYaml(_projectRootPath, profileA),
             Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _conversationsPath,
             BuildCrossProfileRemoteReplayConversationsJson(
                 _projectRootPath,
@@ -979,11 +979,11 @@ internal sealed class GuiAppDataScope : IDisposable
                 cachedMessageCount,
                 localMessageCount),
             Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _serverYamlPath,
             BuildServerYaml(profileA, "powershell.exe", $"{agentArgsPrefix} -SessionId gui-remote-session-01 -MessageCount {replayMessageCount} -ListDelayMs 700"),
             Encoding.UTF8);
-        File.WriteAllText(
+        TestFileIo.WriteAllTextWithRetry(
             _secondaryServerYamlPath,
             BuildServerYaml(profileB, "powershell.exe", $"{agentArgsPrefix} -SessionId gui-remote-session-02 -MessageCount {replayMessageCount} -ListDelayMs 0"),
             Encoding.UTF8);

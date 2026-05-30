@@ -155,7 +155,11 @@ internal static class GuiTestGate
 
     private static string ComputeSha256(string path)
     {
-        using var stream = File.OpenRead(path);
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
         var hash = SHA256.HashData(stream);
         return Convert.ToHexString(hash);
     }
@@ -324,6 +328,34 @@ public sealed class GuiTestGateTests : IDisposable
         Assert.Contains("MSIX SHA256", result.FailureMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ValidateCurrentInstall_WhenExecutableIsOpenWithReadWriteSharing_StillReturnsSuccess()
+    {
+        var installedExecutablePath = CreateFile("installed", "SalmonEgg.exe", "installed-binary-v1");
+        var msixPath = CreateFile("artifacts", "SalmonEgg.msix", "msix-binary-v1");
+        var markerPath = CreateMarker(
+            configuration: "Debug",
+            packageIdentity: "SalmonEgg.Package",
+            installedExecutablePath: installedExecutablePath,
+            installedExecutableSha256: ComputeSha256(installedExecutablePath),
+            msixPath: msixPath,
+            msixSha256: ComputeSha256(msixPath));
+
+        using var heldOpen = new FileStream(
+            installedExecutablePath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite | FileShare.Delete);
+
+        var result = GuiTestGate.ValidateCurrentInstall(
+            markerPath,
+            actualPackageIdentity: "SalmonEgg.Package",
+            actualInstalledExecutablePath: installedExecutablePath);
+
+        Assert.True(result.IsCurrentInstall);
+        Assert.Null(result.FailureMessage);
+    }
+
     public void Dispose()
     {
         try
@@ -379,7 +411,11 @@ public sealed class GuiTestGateTests : IDisposable
 
     private static string ComputeSha256(string path)
     {
-        using var stream = File.OpenRead(path);
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
         var hash = SHA256.HashData(stream);
         return Convert.ToHexString(hash);
     }
