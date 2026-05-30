@@ -197,7 +197,7 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
     }
 
     private static T? FindAncestorOrSelf<T>(DependencyObject? start)
-        where T : DependencyObject
+        where T : class, DependencyObject
     {
         var current = start;
         while (current is not null)
