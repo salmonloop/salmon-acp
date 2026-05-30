@@ -137,7 +137,7 @@ public sealed partial class DiscoverSessionsPage : Page, INavigationIntentConsum
     }
 
     private static T? FindAncestorOrSelf<T>(DependencyObject? start, Func<T, bool>? predicate = null)
-        where T : DependencyObject
+        where T : class, DependencyObject
     {
         var current = start;
         while (current is not null)
@@ -150,11 +150,11 @@ public sealed partial class DiscoverSessionsPage : Page, INavigationIntentConsum
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return default;
+        return null;
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)
-        where T : DependencyObject
+        where T : class, DependencyObject
     {
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
@@ -172,6 +172,6 @@ public sealed partial class DiscoverSessionsPage : Page, INavigationIntentConsum
             }
         }
 
-        return default;
+        return null;
     }
 }
