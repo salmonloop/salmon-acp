@@ -7,6 +7,9 @@ internal static class GamepadTestInputFactory
     public static IGamepadTestInput Create(WindowsGuiAppSession session)
     {
         var backend = Environment.GetEnvironmentVariable(BackendEnvVar);
+        // The default backend is synthetic VirtualKey injection. This validates
+        // the app's gamepad-key routing path, but it does not exercise the
+        // Windows.Gaming.Input polling path used by a physical controller.
         if (string.IsNullOrWhiteSpace(backend)
             || string.Equals(backend, "synthetic", StringComparison.OrdinalIgnoreCase))
         {
