@@ -173,7 +173,7 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)
-        where T : class, DependencyObject
+        where T : DependencyObject
     {
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
@@ -191,11 +191,11 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
             }
         }
 
-        return null;
+        return default;
     }
 
     private static T? FindAncestorOrSelf<T>(DependencyObject? current)
-        where T : class, DependencyObject
+        where T : DependencyObject
     {
         while (current is not null)
         {
@@ -207,7 +207,7 @@ public sealed partial class StartView : Page, INavigationIntentConsumer, IPrimar
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 
     private static bool IsDescendantOrSelf(DependencyObject? current, DependencyObject target)

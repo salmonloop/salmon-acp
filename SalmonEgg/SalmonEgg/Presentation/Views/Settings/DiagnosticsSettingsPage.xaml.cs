@@ -71,7 +71,7 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
             }
         }
 
-        return null;
+        return default;
     }
 
     private async Task HandlePageUnloadedAsync()
@@ -197,7 +197,7 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
     }
 
     private static T? FindAncestorOrSelf<T>(DependencyObject? start)
-        where T : class, DependencyObject
+        where T : DependencyObject
     {
         var current = start;
         while (current is not null)
@@ -210,7 +210,7 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 
     private Button? ResolveFocusedGamepadActionButtonFromControlState()
@@ -230,7 +230,7 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
             return DiagnosticsGamepadRefreshButton;
         }
 
-        return null;
+        return default;
     }
 
     private bool TryFocusOwnerSectionNavigation()
@@ -261,6 +261,6 @@ public sealed partial class DiagnosticsSettingsPage : SettingsPageBase, INavigat
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 }

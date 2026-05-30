@@ -397,11 +397,11 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)
-        where T : class, DependencyObject
+        where T : DependencyObject
     {
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
@@ -419,11 +419,11 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
             }
         }
 
-        return null;
+        return default;
     }
 
     private static System.Collections.Generic.IEnumerable<T> FindDescendants<T>(DependencyObject root, Func<T, bool> predicate)
-        where T : class, DependencyObject
+        where T : DependencyObject
     {
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < count; i++)
@@ -442,7 +442,7 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
     }
 
     private static T? FindAncestorOrSelf<T>(DependencyObject? start, Func<T, bool>? predicate = null)
-        where T : class, DependencyObject
+        where T : DependencyObject
     {
         var current = start;
         while (current is not null)
@@ -455,7 +455,7 @@ public sealed partial class SettingsShellPage : Page, INavigationIntentConsumer
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 
 }
