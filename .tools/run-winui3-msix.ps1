@@ -462,6 +462,52 @@ function ConvertTo-ProcessArgumentString {
     }) -join ' '
 }
 
+function Clear-SalmonEggDebugEnvironmentOverrides {
+    $exactNames = @(
+        'SALMONEGG_APPDATA_ROOT',
+        'SALMONEGG_GUI'
+    )
+    $prefixes = @(
+        'SALMONEGG_GUI_'
+    )
+
+    $namesToClear = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($name in $exactNames) {
+        [void]$namesToClear.Add($name)
+    }
+
+    $userVariables = [Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::User)
+    foreach ($key in $userVariables.Keys) {
+        if ($key -isnot [string]) {
+            continue
+        }
+
+        foreach ($prefix in $prefixes) {
+            if ($key.StartsWith($prefix, [System.StringComparison]::Ordinal)) {
+                [void]$namesToClear.Add($key)
+                break
+            }
+        }
+    }
+
+    $clearedNames = New-Object System.Collections.Generic.List[string]
+    foreach ($name in $namesToClear) {
+        $hadProcessValue = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, [EnvironmentVariableTarget]::Process))
+        $hadUserValue = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, [EnvironmentVariableTarget]::User))
+
+        [Environment]::SetEnvironmentVariable($name, $null, [EnvironmentVariableTarget]::Process)
+        [Environment]::SetEnvironmentVariable($name, $null, [EnvironmentVariableTarget]::User)
+
+        if ($hadProcessValue -or $hadUserValue) {
+            $clearedNames.Add($name) | Out-Null
+        }
+    }
+
+    if ($clearedNames.Count -gt 0) {
+        Write-Host "Cleared SalmonEgg debug environment overrides: $($clearedNames -join ', ')"
+    }
+}
+
 function Show-LogTail {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
@@ -541,6 +587,7 @@ function Invoke-LoggedProcess {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+Clear-SalmonEggDebugEnvironmentOverrides
 $certCacheDir = Join-Path $repoRoot '.tools\certs'
 $storePublisherSubject = 'CN=0B694F0E-510C-433A-A6F7-1484D6A39E19'
 $certPfxPath = Join-Path $certCacheDir 'SalmonEgg-store-dev.pfx'

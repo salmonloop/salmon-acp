@@ -38,6 +38,17 @@ public sealed class XamlComplianceTests
     }
 
     [Fact]
+    public void WinUiMsixScript_ClearsDebugEnvironmentOverridesBeforeLaunch()
+    {
+        var script = LoadText(@".tools\run-winui3-msix.ps1");
+
+        Assert.Contains("Clear-SalmonEggDebugEnvironmentOverrides", script, StringComparison.Ordinal);
+        Assert.Contains("SALMONEGG_APPDATA_ROOT", script, StringComparison.Ordinal);
+        Assert.Contains("'SALMONEGG_GUI'", script, StringComparison.Ordinal);
+        Assert.Contains("[EnvironmentVariableTarget]::User", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MainPage_DoesNotDisableFocusOnInteraction()
     {
         var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\MainPage.xaml");
