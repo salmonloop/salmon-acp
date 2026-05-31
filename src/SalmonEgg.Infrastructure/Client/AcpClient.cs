@@ -39,6 +39,57 @@ namespace SalmonEgg.Infrastructure.Client
             string? SessionId = null,
             AskUserRequest? AskUserRequest = null);
 
+        private sealed class PendingSessionLoadReplayTracker
+        {
+            private long _lastRelevantUpdateUnixMs;
+            private int _graceConsumed;
+
+            public PendingSessionLoadReplayTracker(string sessionId, long requestSentUnixMs)
+            {
+                SessionId = sessionId;
+                RequestSentUnixMs = requestSentUnixMs;
+            }
+
+            public string SessionId { get; }
+
+            public long RequestSentUnixMs { get; }
+
+            public void RecordRelevantUpdate(long observedUnixMs)
+            {
+                if (observedUnixMs <= RequestSentUnixMs)
+                {
+                    return;
+                }
+
+                Interlocked.Exchange(ref _lastRelevantUpdateUnixMs, observedUnixMs);
+            }
+
+            public bool TryConsumeReplayGrace(TimeSpan timeout, out TimeSpan nextWait)
+            {
+                nextWait = timeout;
+                if (Interlocked.CompareExchange(ref _graceConsumed, 1, 0) != 0)
+                {
+                    return false;
+                }
+
+                var lastRelevantUpdateUnixMs = Interlocked.Read(ref _lastRelevantUpdateUnixMs);
+                if (lastRelevantUpdateUnixMs <= RequestSentUnixMs)
+                {
+                    return false;
+                }
+
+                var idleSinceLastReplay = TimeSpan.FromMilliseconds(
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - lastRelevantUpdateUnixMs);
+                if (idleSinceLastReplay >= timeout)
+                {
+                    return false;
+                }
+
+                nextWait = timeout - idleSinceLastReplay;
+                return nextWait > TimeSpan.Zero;
+            }
+        }
+
         private readonly AcpRequestTimeouts _timeouts;
         private readonly ITransport _transport;
         private readonly IMessageParser _parser;
@@ -52,6 +103,7 @@ namespace SalmonEgg.Infrastructure.Client
         private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonRpcResponse>> _pendingRequests = new();
         // Inbound tool requests (agent -> client) are correlated by request id so we can format responses correctly.
         private readonly ConcurrentDictionary<string, PendingInboundRequest> _pendingInboundRequests = new();
+        private readonly ConcurrentDictionary<string, PendingSessionLoadReplayTracker> _pendingSessionLoadReplayTrackers = new();
 
         private readonly object _lock = new();
         private bool _disposed;
@@ -771,8 +823,9 @@ namespace SalmonEgg.Infrastructure.Client
         private async Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken, TimeSpan? timeout = null)
         {
             var requestIdStr = request.Id?.ToString() ?? string.Empty;
-            var tcs = new TaskCompletionSource<JsonRpcResponse>();
+            var tcs = new TaskCompletionSource<JsonRpcResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pendingRequests[requestIdStr] = tcs;
+            PendingSessionLoadReplayTracker? replayTracker = null;
 
             try
             {
@@ -785,11 +838,19 @@ namespace SalmonEgg.Infrastructure.Client
 
                 var json = _parser.SerializeMessage(request);
                await _transport.SendMessageAsync(json, cancellationToken).ConfigureAwait(false);
-
-               // 等待响应或超时
-               using (var timeoutCts = new CancellationTokenSource(effectiveTimeout))
-               using (var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
+               var requestSentUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+               replayTracker = CreateSessionLoadReplayTracker(request, requestSentUnixMs);
+               if (replayTracker is not null)
                {
+                   _pendingSessionLoadReplayTrackers[requestIdStr] = replayTracker;
+               }
+
+               var nextWait = effectiveTimeout;
+
+               while (true)
+               {
+                   using var timeoutCts = new CancellationTokenSource(nextWait);
+                   using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
                    var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, waitCts.Token)).ConfigureAwait(false);
                     if (completedTask == tcs.Task)
                     {
@@ -801,6 +862,13 @@ namespace SalmonEgg.Infrastructure.Client
                         throw new OperationCanceledException(cancellationToken);
                     }
 
+                    // ACP does not correlate session/update notifications to a specific session/load
+                    // request, so we allow only a single bounded same-session grace window here.
+                    if (replayTracker?.TryConsumeReplayGrace(effectiveTimeout, out nextWait) == true)
+                    {
+                        continue;
+                    }
+
                     var lastRxMs = Interlocked.Read(ref _lastReceivedUnixMs);
                     var lastRxAge =
                         lastRxMs <= 0
@@ -810,7 +878,7 @@ namespace SalmonEgg.Infrastructure.Client
                     var msg = $"Request timed out (method={request.Method}, id={requestIdStr}, timeout={effectiveTimeout.TotalSeconds:0}s, lastRx={lastRxAge}).";
                     _errorLogger.LogError(new ErrorLogEntry("REQ_TIMEOUT", msg, ErrorSeverity.Warning, nameof(SendRequestAsync)));
                     throw new TimeoutException(msg);
-                }
+               }
             }
             
             
@@ -820,8 +888,29 @@ namespace SalmonEgg.Infrastructure.Client
                 _pendingRequests.TryRemove(requestIdStr, out _);
                 throw;
             }
+            finally
+            {
+                if (replayTracker is not null)
+                {
+                    _pendingSessionLoadReplayTrackers.TryRemove(requestIdStr, out _);
+                }
+            }
+        }
 
+        private static PendingSessionLoadReplayTracker? CreateSessionLoadReplayTracker(
+            JsonRpcRequest request,
+            long requestSentUnixMs)
+        {
+            if (!string.Equals(request.Method, "session/load", StringComparison.Ordinal)
+                || !request.Params.HasValue)
+            {
+                return null;
+            }
 
+            var loadParams = FromElement(request.Params.Value, AcpJsonContext.Default.SessionLoadParams);
+            return string.IsNullOrWhiteSpace(loadParams?.SessionId)
+                ? null
+                : new PendingSessionLoadReplayTracker(loadParams.SessionId, requestSentUnixMs);
         }
 
         /// <summary>
@@ -1076,6 +1165,15 @@ namespace SalmonEgg.Infrastructure.Client
                 if (updateParams == null || updateParams.Update == null)
                 {
                     return;
+                }
+
+                var observedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                foreach (var pendingReplayTracker in _pendingSessionLoadReplayTrackers.Values)
+                {
+                    if (string.Equals(pendingReplayTracker.SessionId, updateParams.SessionId, StringComparison.Ordinal))
+                    {
+                        pendingReplayTracker.RecordRelevantUpdate(observedUnixMs);
+                    }
                 }
 
                 SessionUpdateReceived?.Invoke(this, new SessionUpdateEventArgs(updateParams.SessionId, updateParams.Update));
