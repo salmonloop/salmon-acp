@@ -644,6 +644,36 @@ public sealed class StartViewModelTests
     }
 
     [Fact]
+    public void ComposerSelectorSlots_ExposeThreeVisibleStartSelectors()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var syncContext = new ImmediateSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(syncContext);
+        try
+        {
+            var preferences = CreatePreferences();
+            using var chat = CreateChatViewModel(syncContext, preferences, Mock.Of<ISessionManager>());
+            var workflow = new Mock<IChatLaunchWorkflow>();
+
+            using var nav = CreateNavigationViewModel(chat, Mock.Of<ISessionManager>(), preferences);
+            var startViewModel = CreateStartViewModel(chat.ViewModel, preferences, nav, workflow.Object);
+
+            var slots = startViewModel.ComposerSelectorSlots;
+
+            Assert.True(slots.Agent.IsVisible);
+            Assert.True(slots.Mode.IsVisible);
+            Assert.True(slots.Project.IsVisible);
+            Assert.Same(startViewModel.SelectStartAgentDisplayCommand, slots.Agent.SelectionCommand);
+            Assert.Same(startViewModel.SelectStartModeDisplayCommand, slots.Mode.SelectionCommand);
+            Assert.Same(startViewModel.SelectStartProjectDisplayCommand, slots.Project.SelectionCommand);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task StartSelectorProjection_WhenModeDraftFails_ShowsBlockingModePlaceholderWithoutClearingAgentAndProject()
     {
         var originalContext = SynchronizationContext.Current;

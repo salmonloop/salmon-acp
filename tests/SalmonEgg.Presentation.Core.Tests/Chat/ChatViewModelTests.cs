@@ -54,7 +54,7 @@ using Xunit;
 namespace SalmonEgg.Presentation.Core.Tests.Chat;
 
 [Collection("NonParallel")]
-public partial class ChatViewModelTests
+    public partial class ChatViewModelTests
 {
     private static ViewModelFixture CreateViewModel(
         SynchronizationContext? syncContext = null,
@@ -295,6 +295,24 @@ public partial class ChatViewModelTests
             new ProjectAffinityResolver(),
             new ImmediateUiDispatcher(),
             Mock.Of<IStringLocalizer<CoreStrings>>());
+    }
+
+    [Fact]
+    public async Task ComposerSelectorSlots_HideAgentAndProject_AndDisableModeWhilePromptInFlight()
+    {
+        await using var fixture = CreateViewModel();
+
+        var initialSlots = fixture.ViewModel.ComposerSelectorSlots;
+        Assert.False(initialSlots.Agent.IsVisible);
+        Assert.True(initialSlots.Mode.IsVisible);
+        Assert.False(initialSlots.Project.IsVisible);
+        Assert.True(initialSlots.Mode.IsEnabled);
+        Assert.Same(fixture.ViewModel.SelectChatModeDisplayCommand, initialSlots.Mode.SelectionCommand);
+
+        fixture.ViewModel.IsPromptSubmitInFlight = true;
+
+        var blockedSlots = fixture.ViewModel.ComposerSelectorSlots;
+        Assert.False(blockedSlots.Mode.IsEnabled);
     }
 
     [Fact]

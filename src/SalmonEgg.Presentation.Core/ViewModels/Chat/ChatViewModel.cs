@@ -34,6 +34,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services.Chat;
 using SalmonEgg.Presentation.Core.Services.Chat.Slash;
+using SalmonEgg.Presentation.Core.ViewModels.Composer;
 using SalmonEgg.Presentation.Core.Services.ProjectAffinity;
 using SalmonEgg.Presentation.Core.Services.Input;
 using SalmonEgg.Presentation.Core.Services;
@@ -464,6 +465,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
     [NotifyPropertyChangedFor(nameof(IsTextInputEnabled))]
     [NotifyPropertyChangedFor(nameof(AreComposerToolsEnabled))]
+    [NotifyPropertyChangedFor(nameof(ComposerSelectorSlots))]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
     private bool _isPromptInFlight;
 
@@ -472,6 +474,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
     [NotifyPropertyChangedFor(nameof(IsTextInputEnabled))]
     [NotifyPropertyChangedFor(nameof(AreComposerToolsEnabled))]
+    [NotifyPropertyChangedFor(nameof(ComposerSelectorSlots))]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
     private bool _isPromptSubmitInFlight;
 
@@ -480,6 +483,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
     [NotifyPropertyChangedFor(nameof(IsTextInputEnabled))]
     [NotifyPropertyChangedFor(nameof(AreComposerToolsEnabled))]
+    [NotifyPropertyChangedFor(nameof(ComposerSelectorSlots))]
     [NotifyPropertyChangedFor(nameof(CanStartVoiceInput))]
     [NotifyPropertyChangedFor(nameof(CanStopVoiceInput))]
     private bool _isVoiceInputListening;
@@ -801,6 +805,17 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     public ChatComposerPresentationState ComposerState => ResolveInputState();
 
     public SelectorProjectionResult ChatModeSelectorProjection => ResolveChatModeSelectorProjection();
+
+    public ComposerSelectorSlotsPresentation ComposerSelectorSlots
+        => new(
+            Agent: ComposerSelectorSlotPresentation.Hidden(),
+            Mode: new(
+                IsVisible: true,
+                IsEnabled: AreComposerToolsEnabled,
+                Items: ChatModeSelectorItems,
+                SelectedItem: SelectedChatModeSelectorItem,
+                SelectionCommand: SelectChatModeDisplayCommand),
+            Project: ComposerSelectorSlotPresentation.Hidden());
 
     public IReadOnlyList<ComposerSelectorItemViewModel> ChatModeSelectorItems
         => ChatModeSelectorProjection.DisplayItems;
@@ -1141,6 +1156,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     [NotifyPropertyChangedFor(nameof(IsInputEnabled))]
     [NotifyPropertyChangedFor(nameof(IsTextInputEnabled))]
     [NotifyPropertyChangedFor(nameof(AreComposerToolsEnabled))]
+    [NotifyPropertyChangedFor(nameof(ComposerSelectorSlots))]
     [NotifyPropertyChangedFor(nameof(CanSendPromptUi))]
     private AskUserRequestViewModel? _pendingAskUserRequest;
 
@@ -1496,6 +1512,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable, IAcpChatCoordin
     {
         OnPropertyChanged(nameof(ComposerState));
         OnPropertyChanged(nameof(ChatModeSelectorProjection));
+        OnPropertyChanged(nameof(ComposerSelectorSlots));
         OnPropertyChanged(nameof(ChatModeSelectorItems));
         OnPropertyChanged(nameof(SelectedChatModeSelectorItem));
         OnPropertyChanged(nameof(IsInputEnabled));

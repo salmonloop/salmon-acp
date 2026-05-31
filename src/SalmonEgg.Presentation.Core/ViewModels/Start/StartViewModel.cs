@@ -15,6 +15,7 @@ using SalmonEgg.Domain.Services;
 using SalmonEgg.Presentation.Core.Resources;
 using SalmonEgg.Presentation.Core.Services;
 using SalmonEgg.Presentation.Core.Services.Chat;
+using SalmonEgg.Presentation.Core.ViewModels.Composer;
 using SalmonEgg.Presentation.Core.ViewModels.Chat.Selectors;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using SalmonEgg.Presentation.ViewModels.Navigation;
@@ -105,6 +106,27 @@ public sealed partial class StartViewModel : ObservableObject
     public SelectorProjectionResult StartModeSelectorProjection => ResolveStartModeSelectorProjection();
 
     public SelectorProjectionResult StartProjectSelectorProjection => ResolveStartProjectSelectorProjection();
+
+    public ComposerSelectorSlotsPresentation ComposerSelectorSlots
+        => new(
+            Agent: new(
+                IsVisible: true,
+                IsEnabled: true,
+                Items: StartAgentSelectorItems,
+                SelectedItem: SelectedStartAgentSelectorItem,
+                SelectionCommand: SelectStartAgentDisplayCommand),
+            Mode: new(
+                IsVisible: true,
+                IsEnabled: IsStartModeSelectorEnabled,
+                Items: StartModeSelectorItems,
+                SelectedItem: SelectedStartModeSelectorItem,
+                SelectionCommand: SelectStartModeDisplayCommand),
+            Project: new(
+                IsVisible: true,
+                IsEnabled: true,
+                Items: StartProjectSelectorItems,
+                SelectedItem: SelectedStartProjectSelectorItem,
+                SelectionCommand: SelectStartProjectDisplayCommand));
 
     public IReadOnlyList<ComposerSelectorItemViewModel> StartAgentSelectorItems
         => StartAgentSelectorProjection.DisplayItems;
@@ -479,6 +501,7 @@ public sealed partial class StartViewModel : ObservableObject
         OnPropertyChanged(nameof(StartAgentSelectorProjection));
         OnPropertyChanged(nameof(StartModeSelectorProjection));
         OnPropertyChanged(nameof(StartProjectSelectorProjection));
+        OnPropertyChanged(nameof(ComposerSelectorSlots));
         OnPropertyChanged(nameof(StartAgentSelectorItems));
         OnPropertyChanged(nameof(StartModeSelectorItems));
         OnPropertyChanged(nameof(StartProjectSelectorItems));
@@ -882,6 +905,7 @@ public sealed partial class StartViewModel : ObservableObject
         if (previousSnapshot.IsEnabled != nextSnapshot.IsEnabled)
         {
             OnPropertyChanged(nameof(IsStartModeSelectorEnabled));
+            OnPropertyChanged(nameof(ComposerSelectorSlots));
         }
 
         if (previousSnapshot.CanSubmitPrompt != nextSnapshot.CanSubmitPrompt)

@@ -142,22 +142,10 @@
                                     SubmitCommand="{x:Bind ViewModel.StartSessionAndSendCommand}"
                                     IsSubmitButtonEnabled="{x:Bind ViewModel.CanStartSessionAndSendUi, Mode=OneWay}"
                                     InputBoxAutomationId="StartView.PromptBox"
-                                    ShowAgentSelector="True"
-                                    AgentSelectorItemsSource="{x:Bind ViewModel.StartAgentSelectorItems, Mode=OneWay}"
-                                    SelectedAgentSelectorItem="{x:Bind ViewModel.SelectedStartAgentSelectorItem, Mode=OneWay}"
-                                    AgentSelectionCommand="{x:Bind ViewModel.SelectStartAgentDisplayCommand}"
                                     AgentSelectorAutomationId="StartView.AgentSelector"
-                                    ShowModeSelector="True"
-                                    ModeSelectorItemsSource="{x:Bind ViewModel.StartModeSelectorItems, Mode=OneWay}"
-                                    SelectedModeSelectorItem="{x:Bind ViewModel.SelectedStartModeSelectorItem, Mode=OneWay}"
-                                    ModeSelectionCommand="{x:Bind ViewModel.SelectStartModeDisplayCommand}"
-                                    IsModeSelectorEnabled="{x:Bind ViewModel.IsStartModeSelectorEnabled, Mode=OneWay}"
                                     ModeSelectorAutomationId="StartView.ModeSelector"
-                                    ShowProjectSelector="True"
-                                    ProjectSelectorItemsSource="{x:Bind ViewModel.StartProjectSelectorItems, Mode=OneWay}"
-                                    SelectedProjectSelectorItem="{x:Bind ViewModel.SelectedStartProjectSelectorItem, Mode=OneWay}"
-                                    ProjectSelectionCommand="{x:Bind ViewModel.SelectStartProjectDisplayCommand}"
-                                    ProjectSelectorAutomationId="StartView.ProjectSelector" />
+                                    ProjectSelectorAutomationId="StartView.ProjectSelector"
+                                    SelectorSlots="{x:Bind ViewModel.ComposerSelectorSlots, Mode=OneWay}" />
         </Grid>
 
         <Grid Grid.RowSpan="2"

@@ -9,8 +9,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using SalmonEgg.Domain.Models;
 using SalmonEgg.Presentation.Core.Services.Input;
+using SalmonEgg.Presentation.Core.ViewModels.Composer;
 using SalmonEgg.Presentation.Core.ViewModels.Chat.Selectors;
 using SalmonEgg.Presentation.ViewModels.Chat;
 using XamlFocusManager = Microsoft.UI.Xaml.Input.FocusManager;
@@ -48,139 +48,6 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             typeof(ChatInputArea),
             new PropertyMetadata("InputBox"));
 
-    public static readonly DependencyProperty ShowAgentSelectorProperty =
-        DependencyProperty.Register(
-            nameof(ShowAgentSelector),
-            typeof(bool),
-            typeof(ChatInputArea),
-            new PropertyMetadata(false, OnComposerFocusTopologyPropertyChanged));
-
-    public static readonly DependencyProperty AgentItemsSourceProperty =
-        DependencyProperty.Register(
-            nameof(AgentItemsSource),
-            typeof(object),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty SelectedAgentProperty =
-        DependencyProperty.Register(
-            nameof(SelectedAgent),
-            typeof(ServerConfiguration),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty AgentSelectorItemsSourceProperty =
-        DependencyProperty.Register(
-            nameof(AgentSelectorItemsSource),
-            typeof(object),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty SelectedAgentSelectorItemProperty =
-        DependencyProperty.Register(
-            nameof(SelectedAgentSelectorItem),
-            typeof(ComposerSelectorItemViewModel),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty AgentSelectionCommandProperty =
-        DependencyProperty.Register(
-            nameof(AgentSelectionCommand),
-            typeof(ICommand),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty ShowModeSelectorProperty =
-        DependencyProperty.Register(
-            nameof(ShowModeSelector),
-            typeof(bool),
-            typeof(ChatInputArea),
-            new PropertyMetadata(true, OnComposerFocusTopologyPropertyChanged));
-
-    public static readonly DependencyProperty ModeItemsSourceProperty =
-        DependencyProperty.Register(
-            nameof(ModeItemsSource),
-            typeof(object),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty SelectedModeProperty =
-        DependencyProperty.Register(
-            nameof(SelectedMode),
-            typeof(SessionModeViewModel),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty ModeSelectorItemsSourceProperty =
-        DependencyProperty.Register(
-            nameof(ModeSelectorItemsSource),
-            typeof(object),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty SelectedModeSelectorItemProperty =
-        DependencyProperty.Register(
-            nameof(SelectedModeSelectorItem),
-            typeof(ComposerSelectorItemViewModel),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty ModeSelectionCommandProperty =
-        DependencyProperty.Register(
-            nameof(ModeSelectionCommand),
-            typeof(ICommand),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty IsModeSelectorEnabledProperty =
-        DependencyProperty.Register(
-            nameof(IsModeSelectorEnabled),
-            typeof(bool),
-            typeof(ChatInputArea),
-            new PropertyMetadata(false, OnComposerFocusTopologyPropertyChanged));
-
-    public static readonly DependencyProperty ShowProjectSelectorProperty =
-        DependencyProperty.Register(
-            nameof(ShowProjectSelector),
-            typeof(bool),
-            typeof(ChatInputArea),
-            new PropertyMetadata(false, OnComposerFocusTopologyPropertyChanged));
-
-    public static readonly DependencyProperty ProjectItemsSourceProperty =
-        DependencyProperty.Register(
-            nameof(ProjectItemsSource),
-            typeof(object),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty SelectedProjectIdProperty =
-        DependencyProperty.Register(
-            nameof(SelectedProjectId),
-            typeof(string),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty ProjectSelectorItemsSourceProperty =
-        DependencyProperty.Register(
-            nameof(ProjectSelectorItemsSource),
-            typeof(object),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty SelectedProjectSelectorItemProperty =
-        DependencyProperty.Register(
-            nameof(SelectedProjectSelectorItem),
-            typeof(ComposerSelectorItemViewModel),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
-    public static readonly DependencyProperty ProjectSelectionCommandProperty =
-        DependencyProperty.Register(
-            nameof(ProjectSelectionCommand),
-            typeof(ICommand),
-            typeof(ChatInputArea),
-            new PropertyMetadata(null));
-
     public static readonly DependencyProperty AgentSelectorAutomationIdProperty =
         DependencyProperty.Register(
             nameof(AgentSelectorAutomationId),
@@ -201,6 +68,15 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
             typeof(string),
             typeof(ChatInputArea),
             new PropertyMetadata("ChatInputArea.ProjectSelector"));
+
+    public static readonly DependencyProperty SelectorSlotsProperty =
+        DependencyProperty.Register(
+            nameof(SelectorSlots),
+            typeof(ComposerSelectorSlotsPresentation),
+            typeof(ChatInputArea),
+            new PropertyMetadata(
+                ComposerSelectorSlotsPresentation.Empty,
+                OnComposerFocusTopologyPropertyChanged));
 
     public static readonly DependencyProperty MoveUpEscapeHandlerProperty =
         DependencyProperty.Register(
@@ -250,120 +126,6 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
         set => SetValue(InputBoxAutomationIdProperty, value);
     }
 
-    public bool ShowAgentSelector
-    {
-        get => (bool)GetValue(ShowAgentSelectorProperty);
-        set => SetValue(ShowAgentSelectorProperty, value);
-    }
-
-    public object? AgentItemsSource
-    {
-        get => GetValue(AgentItemsSourceProperty);
-        set => SetValue(AgentItemsSourceProperty, value);
-    }
-
-    public ServerConfiguration? SelectedAgent
-    {
-        get => (ServerConfiguration?)GetValue(SelectedAgentProperty);
-        set => SetValue(SelectedAgentProperty, value);
-    }
-
-    public object? AgentSelectorItemsSource
-    {
-        get => GetValue(AgentSelectorItemsSourceProperty);
-        set => SetValue(AgentSelectorItemsSourceProperty, value);
-    }
-
-    public ComposerSelectorItemViewModel? SelectedAgentSelectorItem
-    {
-        get => (ComposerSelectorItemViewModel?)GetValue(SelectedAgentSelectorItemProperty);
-        set => SetValue(SelectedAgentSelectorItemProperty, value);
-    }
-
-    public ICommand? AgentSelectionCommand
-    {
-        get => (ICommand?)GetValue(AgentSelectionCommandProperty);
-        set => SetValue(AgentSelectionCommandProperty, value);
-    }
-
-    public bool ShowModeSelector
-    {
-        get => (bool)GetValue(ShowModeSelectorProperty);
-        set => SetValue(ShowModeSelectorProperty, value);
-    }
-
-    public object? ModeItemsSource
-    {
-        get => GetValue(ModeItemsSourceProperty);
-        set => SetValue(ModeItemsSourceProperty, value);
-    }
-
-    public SessionModeViewModel? SelectedMode
-    {
-        get => (SessionModeViewModel?)GetValue(SelectedModeProperty);
-        set => SetValue(SelectedModeProperty, value);
-    }
-
-    public object? ModeSelectorItemsSource
-    {
-        get => GetValue(ModeSelectorItemsSourceProperty);
-        set => SetValue(ModeSelectorItemsSourceProperty, value);
-    }
-
-    public ComposerSelectorItemViewModel? SelectedModeSelectorItem
-    {
-        get => (ComposerSelectorItemViewModel?)GetValue(SelectedModeSelectorItemProperty);
-        set => SetValue(SelectedModeSelectorItemProperty, value);
-    }
-
-    public ICommand? ModeSelectionCommand
-    {
-        get => (ICommand?)GetValue(ModeSelectionCommandProperty);
-        set => SetValue(ModeSelectionCommandProperty, value);
-    }
-
-    public bool IsModeSelectorEnabled
-    {
-        get => (bool)GetValue(IsModeSelectorEnabledProperty);
-        set => SetValue(IsModeSelectorEnabledProperty, value);
-    }
-
-    public bool ShowProjectSelector
-    {
-        get => (bool)GetValue(ShowProjectSelectorProperty);
-        set => SetValue(ShowProjectSelectorProperty, value);
-    }
-
-    public object? ProjectItemsSource
-    {
-        get => GetValue(ProjectItemsSourceProperty);
-        set => SetValue(ProjectItemsSourceProperty, value);
-    }
-
-    public string? SelectedProjectId
-    {
-        get => (string?)GetValue(SelectedProjectIdProperty);
-        set => SetValue(SelectedProjectIdProperty, value);
-    }
-
-    public object? ProjectSelectorItemsSource
-    {
-        get => GetValue(ProjectSelectorItemsSourceProperty);
-        set => SetValue(ProjectSelectorItemsSourceProperty, value);
-    }
-
-    public ComposerSelectorItemViewModel? SelectedProjectSelectorItem
-    {
-        get => (ComposerSelectorItemViewModel?)GetValue(SelectedProjectSelectorItemProperty);
-        set => SetValue(SelectedProjectSelectorItemProperty, value);
-    }
-
-    public ICommand? ProjectSelectionCommand
-    {
-        get => (ICommand?)GetValue(ProjectSelectionCommandProperty);
-        set => SetValue(ProjectSelectionCommandProperty, value);
-    }
-
     public string AgentSelectorAutomationId
     {
         get => (string)GetValue(AgentSelectorAutomationIdProperty);
@@ -380,6 +142,12 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
     {
         get => (string)GetValue(ProjectSelectorAutomationIdProperty);
         set => SetValue(ProjectSelectorAutomationIdProperty, value);
+    }
+
+    public ComposerSelectorSlotsPresentation SelectorSlots
+    {
+        get => (ComposerSelectorSlotsPresentation)GetValue(SelectorSlotsProperty);
+        set => SetValue(SelectorSlotsProperty, value);
     }
 
     public Func<bool>? MoveUpEscapeHandler
@@ -1093,17 +861,17 @@ public sealed partial class ChatInputArea : UserControl, INavigationIntentConsum
 
     private void OnModeSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ExecuteSelectorCommand(sender, ModeSelectionCommand);
+        ExecuteSelectorCommand(sender, SelectorSlots.Mode.SelectionCommand);
     }
 
     private void OnAgentSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ExecuteSelectorCommand(sender, AgentSelectionCommand);
+        ExecuteSelectorCommand(sender, SelectorSlots.Agent.SelectionCommand);
     }
 
     private void OnProjectSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ExecuteSelectorCommand(sender, ProjectSelectionCommand);
+        ExecuteSelectorCommand(sender, SelectorSlots.Project.SelectionCommand);
     }
 
     private static void ExecuteSelectorCommand(object sender, ICommand? command)

@@ -92,6 +92,36 @@ public sealed partial class RealUserConfigSmokeTests
     }
 
     [SkippableFact]
+    public void VisibleRealSession_ChatComposer_UsesModeSelectorSubsetOnly()
+    {
+        GuiTestGate.RequireEnabled();
+
+        var candidates = LoadRealTranscriptAuditCandidates()
+            .Where(candidate => candidate.MessageCount > 0)
+            .OrderByDescending(candidate => candidate.MessageCount)
+            .ThenByDescending(candidate => candidate.MarkdownLikeMessageCount)
+            .ToArray();
+        Skip.If(candidates.Length == 0, "No real conversations with transcript messages were found in the current SalmonEgg app data.");
+
+        using var session = WindowsGuiAppSession.LaunchFresh();
+
+        var candidate = candidates
+            .FirstOrDefault(item => session.TryFindByAutomationId(SessionAutomationId(item.ConversationId), TimeSpan.FromSeconds(1)) is not null);
+        Skip.If(candidate is null, $"No real transcript candidate is currently visible in the left navigation. Candidates: {string.Join(", ", candidates.Select(c => c.ConversationId))}");
+
+        var sessionItem = session.FindByAutomationId(SessionAutomationId(candidate.ConversationId), TimeSpan.FromSeconds(10));
+        session.ActivateElement(sessionItem);
+
+        Assert.True(
+            session.WaitUntilVisible("ChatView.CurrentSessionTitle", TimeSpan.FromSeconds(20)),
+            $"Conversation header did not appear for real session {candidate.ConversationId}.");
+
+        _ = session.WaitUntilHidden("ChatView.LoadingOverlay", TimeSpan.FromSeconds(20));
+
+        AssertChatComposerUsesModeSelectorSubsetOnly(session, $"visible-real-session-{candidate.ConversationId}");
+    }
+
+    [SkippableFact]
     public void SelectSpecificRemoteBoundSession_ByConversationId_CompletesSlowLoadWithoutCrashing()
     {
         GuiTestGate.RequireEnabled();
@@ -134,6 +164,8 @@ public sealed partial class RealUserConfigSmokeTests
         Assert.True(
             headerStillVisible && overlayStillHidden,
             $"Conversation {conversationId} stopped rendering stably after the loading overlay cleared. headerStillVisible={headerStillVisible} overlayStillHidden={overlayStillHidden}");
+
+        AssertChatComposerUsesModeSelectorSubsetOnly(session, $"real-config-target-{conversationId}");
     }
 
     [SkippableFact]
@@ -559,6 +591,8 @@ public sealed partial class RealUserConfigSmokeTests
         Assert.True(
             statusVisibleAtMs.Value <= statusVisibleBudgetMs,
             $"Loading status pill appeared too late on first open. Conversation={candidate.ConversationId} LocalMessageCount={candidate.LocalMessageCount} statusAtMs={statusVisibleAtMs} budgetMs={statusVisibleBudgetMs}{Environment.NewLine}{string.Join(Environment.NewLine, timeline)}");
+
+        AssertChatComposerUsesModeSelectorSubsetOnly(session, $"largest-remote-first-open-{candidate.ConversationId}");
     }
 
     [SkippableFact]
@@ -2431,6 +2465,64 @@ public sealed partial class RealUserConfigSmokeTests
         {
             return $"<capture failed: {ex.Message}>";
         }
+    }
+
+    private static void AssertChatComposerUsesModeSelectorSubsetOnly(WindowsGuiAppSession session, string scenario)
+    {
+        Assert.True(
+            WaitUntil(
+                () => IsActuallyVisible(session, "ChatInputArea.ModeSelector"),
+                TimeSpan.FromSeconds(6),
+                TimeSpan.FromMilliseconds(120)),
+            $"Expected chat composer mode selector to remain visible for scenario '{scenario}'.");
+
+        var agentVisible = WaitUntil(
+            () => IsActuallyVisible(session, "ChatInputArea.AgentSelector"),
+            TimeSpan.FromMilliseconds(800),
+            TimeSpan.FromMilliseconds(120));
+        var projectVisible = WaitUntil(
+            () => IsActuallyVisible(session, "ChatInputArea.ProjectSelector"),
+            TimeSpan.FromMilliseconds(800),
+            TimeSpan.FromMilliseconds(120));
+        if (!agentVisible && !projectVisible)
+        {
+            return;
+        }
+
+        var captureRoot = Path.Combine(Path.GetTempPath(), "SalmonEgg.GuiTests");
+        Directory.CreateDirectory(captureRoot);
+        var screenshotPath = Path.Combine(
+            captureRoot,
+            $"composer-selector-subset-{scenario}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.png");
+        screenshotPath = TryCaptureMainWindow(session, screenshotPath);
+        Assert.Fail(
+            $"Expected chat composer to hide agent/project selectors for scenario '{scenario}'. agentVisible={agentVisible} projectVisible={projectVisible}{Environment.NewLine}" +
+            $"Screenshot: {screenshotPath}{Environment.NewLine}" +
+            $"VisibleTexts=[{string.Join(" | ", session.GetVisibleTexts())}]{Environment.NewLine}" +
+            $"VisibleButtons=[{string.Join(" | ", session.GetVisibleButtons())}]");
+    }
+
+    private static bool IsActuallyVisible(WindowsGuiAppSession session, string automationId)
+    {
+        var element = session.TryFindByAutomationId(automationId, TimeSpan.FromMilliseconds(150));
+        return element is not null && HasUsableOnscreenBounds(session, element);
+    }
+
+    private static bool HasUsableOnscreenBounds(WindowsGuiAppSession session, AutomationElement element)
+    {
+        if (TryGetIsOffscreen(element))
+        {
+            return false;
+        }
+
+        var bounds = element.BoundingRectangle;
+        var windowBounds = session.MainWindow.BoundingRectangle;
+        return bounds.Width > 20
+               && bounds.Height > 20
+               && bounds.Left >= windowBounds.Left
+               && bounds.Top >= windowBounds.Top
+               && bounds.Right <= windowBounds.Right
+               && bounds.Bottom <= windowBounds.Bottom;
     }
 
     private sealed record RealReplayCandidate(
