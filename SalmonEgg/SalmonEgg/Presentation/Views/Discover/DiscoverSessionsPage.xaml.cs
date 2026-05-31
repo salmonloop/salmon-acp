@@ -150,7 +150,7 @@ public sealed partial class DiscoverSessionsPage : Page, INavigationIntentConsum
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 
     private static T? FindDescendant<T>(DependencyObject root, Func<T, bool> predicate)
@@ -172,6 +172,6 @@ public sealed partial class DiscoverSessionsPage : Page, INavigationIntentConsum
             }
         }
 
-        return null;
+        return default;
     }
 }

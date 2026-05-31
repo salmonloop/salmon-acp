@@ -260,7 +260,7 @@ public sealed partial class SettingsShellPage : Page, IPrimaryContentFocusTarget
             }
         }
 
-        return null;
+        return default;
     }
 
 }

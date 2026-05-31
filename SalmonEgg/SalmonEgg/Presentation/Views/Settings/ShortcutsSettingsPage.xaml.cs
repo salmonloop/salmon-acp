@@ -126,6 +126,6 @@ public sealed partial class ShortcutsSettingsPage : SettingsPageBase
             current = VisualTreeHelper.GetParent(current);
         }
 
-        return null;
+        return default;
     }
 }

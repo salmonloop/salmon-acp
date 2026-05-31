@@ -130,6 +130,6 @@ public sealed partial class StartView : Page, IPrimaryContentFocusTarget
             }
         }
 
-        return null;
+        return default;
     }
 }

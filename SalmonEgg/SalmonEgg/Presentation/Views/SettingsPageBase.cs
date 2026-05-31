@@ -145,6 +145,6 @@ public class SettingsPageBase : Page
             }
         }
 
-        return null;
+        return default;
     }
 }
