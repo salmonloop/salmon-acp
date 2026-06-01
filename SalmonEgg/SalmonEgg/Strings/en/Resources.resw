@@ -981,6 +981,9 @@
   <data name="About_OpenAppData.Content" xml:space="preserve">
     <value>Open app data folder</value>
   </data>
+  <data name="About_ReportInappropriateAiContent.Content" xml:space="preserve">
+    <value>Report inappropriate AI content</value>
+  </data>
   <data name="About_OpenReleaseNotes.Content" xml:space="preserve">
     <value>Open release notes</value>
   </data>

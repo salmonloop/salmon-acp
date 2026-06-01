@@ -14,6 +14,52 @@ namespace SalmonEgg.Presentation.Core.Tests.Settings;
 public sealed class AboutViewModelTests
 {
     [Fact]
+    public async Task ReportInappropriateAiContentCommand_WhenSupportEmailConfigured_OpensMailtoUri()
+    {
+        var openedUris = new List<Uri>();
+        var shell = new Mock<IPlatformShellService>();
+        shell.Setup(service => service.OpenUriAsync(It.IsAny<Uri>()))
+            .Returns<Uri>(uri =>
+            {
+                openedUris.Add(uri);
+                return Task.FromResult(true);
+            });
+
+        var supportInfo = new Mock<IAppSupportInfoService>();
+        supportInfo.SetupGet(service => service.ReportInappropriateAiContentEmail)
+            .Returns("report@example.test");
+
+        var viewModel = CreateViewModel(
+            Mock.Of<IOpenSourceAcknowledgementsProvider>(),
+            shell: shell.Object,
+            supportInfo: supportInfo.Object);
+
+        Assert.True(viewModel.CanReportInappropriateAiContent);
+
+        await viewModel.ReportInappropriateAiContentCommand.ExecuteAsync(null);
+
+        var opened = Assert.Single(openedUris);
+        Assert.Equal("mailto", opened.Scheme);
+        Assert.Contains("report@example.test", opened.OriginalString, StringComparison.Ordinal);
+        Assert.Contains("subject=", opened.OriginalString, StringComparison.Ordinal);
+        Assert.Contains("body=", opened.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CanReportInappropriateAiContent_WhenSupportEmailMissing_ReturnsFalse()
+    {
+        var supportInfo = new Mock<IAppSupportInfoService>();
+        supportInfo.SetupGet(service => service.ReportInappropriateAiContentEmail)
+            .Returns(string.Empty);
+
+        var viewModel = CreateViewModel(
+            Mock.Of<IOpenSourceAcknowledgementsProvider>(),
+            supportInfo: supportInfo.Object);
+
+        Assert.False(viewModel.CanReportInappropriateAiContent);
+    }
+
+    [Fact]
     public void Constructor_ProjectsOpenSourceAcknowledgementsWithLocalizedFallbacks()
     {
         var acknowledgements = new Mock<IOpenSourceAcknowledgementsProvider>();
@@ -81,7 +127,9 @@ public sealed class AboutViewModelTests
 
     private static AboutViewModel CreateViewModel(
         IOpenSourceAcknowledgementsProvider acknowledgements,
-        IStringLocalizer<CoreStrings>? localizer = null)
+        IStringLocalizer<CoreStrings>? localizer = null,
+        IPlatformShellService? shell = null,
+        IAppSupportInfoService? supportInfo = null)
     {
         var capabilities = new Mock<IPlatformCapabilityService>();
         capabilities.SetupGet(service => service.SupportsExternalFileOpen).Returns(true);
@@ -89,8 +137,13 @@ public sealed class AboutViewModelTests
         var documents = new Mock<IAppDocumentService>();
         documents.SetupGet(service => service.DocsRootPath).Returns("C:/app/docs");
 
+        var defaultSupportInfo = new Mock<IAppSupportInfoService>();
+        defaultSupportInfo.SetupGet(service => service.ReportInappropriateAiContentEmail)
+            .Returns("report@example.test");
+
         return new AboutViewModel(
-            Mock.Of<IPlatformShellService>(),
+            shell ?? Mock.Of<IPlatformShellService>(),
+            supportInfo ?? defaultSupportInfo.Object,
             capabilities.Object,
             Mock.Of<IStorageLocationService>(),
             Mock.Of<IAppDataService>(),

@@ -47,6 +47,10 @@
     <PackageReference Include="Uno.Extensions.Reactive" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyMetadata Include="SalmonEgg.ReportInappropriateAiContentEmail" Value="shangxin9515@outlook.com" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(TargetFramework)' != ''">
     <OpenSourceAcknowledgementsGeneratedDirectory>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)</OpenSourceAcknowledgementsGeneratedDirectory>
     <OpenSourceAcknowledgementsGeneratedFile>$(OpenSourceAcknowledgementsGeneratedDirectory)\OpenSourceAcknowledgements.tsv</OpenSourceAcknowledgementsGeneratedFile>

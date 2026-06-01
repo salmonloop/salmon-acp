@@ -432,6 +432,9 @@
   <data name="About_OpenAppData.Content" xml:space="preserve">
     <value>打开应用数据目录</value>
   </data>
+  <data name="About_ReportInappropriateAiContent.Content" xml:space="preserve">
+    <value>举报不当 AI 内容</value>
+  </data>
   <data name="About_OpenReleaseNotes.Content" xml:space="preserve">
     <value>打开更新日志</value>
   </data>

@@ -111,6 +111,13 @@
                                                 Command="{x:Bind ViewModel.OpenAppDataFolderCommand}"
                                                 IsEnabled="{x:Bind ViewModel.CanOpenExternalFiles, Mode=OneWay}"
                                                 HorizontalAlignment="Stretch"/>
+                                        <Button x:Name="AboutReportInappropriateAiContentButton"
+                                                x:Uid="About_ReportInappropriateAiContent"
+                                                AutomationProperties.AutomationId="About.Support.ReportAiContent"
+                                                Content="举报不当 AI 内容"
+                                                Command="{x:Bind ViewModel.ReportInappropriateAiContentCommand}"
+                                                IsEnabled="{x:Bind ViewModel.CanReportInappropriateAiContent, Mode=OneWay}"
+                                                HorizontalAlignment="Stretch"/>
                                         <Button x:Name="AboutOpenReleaseNotesButton"
                                                 x:Uid="About_OpenReleaseNotes"
                                                 AutomationProperties.AutomationId="About.Support.OpenReleaseNotes"

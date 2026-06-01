@@ -1522,6 +1522,7 @@ public sealed class XamlComplianceTests
             "About_SupportTitle.Text",
             "About_SupportActionsTitle.Text",
             "About_OpenAppData.Content",
+            "About_ReportInappropriateAiContent.Content",
             "About_OpenReleaseNotes.Content",
             "About_OpenPrivacyPolicy.Content",
             "About_CopyVersionInfo.Content",
@@ -1913,6 +1914,17 @@ public sealed class XamlComplianceTests
         Assert.Contains("ItemsSource=\"{x:Bind ViewModel.OpenSourceAcknowledgements, Mode=OneWay}\"", xaml);
         Assert.Contains("x:DataType=\"settings:OpenSourceAcknowledgementViewModel\"", xaml);
         Assert.DoesNotContain("Binding OpenSourceAcknowledgements", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AboutPage_SupportActionsIncludeReportInappropriateAiContent()
+    {
+        var xaml = LoadXaml(@"SalmonEgg\SalmonEgg\Presentation\Views\Settings\AboutPage.xaml");
+
+        Assert.Contains("x:Uid=\"About_ReportInappropriateAiContent\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"About.Support.ReportAiContent\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{x:Bind ViewModel.ReportInappropriateAiContentCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{x:Bind ViewModel.CanReportInappropriateAiContent, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

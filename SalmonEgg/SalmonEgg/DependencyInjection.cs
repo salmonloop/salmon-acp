@@ -192,6 +192,7 @@ public static class DependencyInjection
         services.AddSingleton<IAppDataService, AppDataService>();
         services.AddSingleton<IAppMaintenanceService, AppMaintenanceService>();
         services.AddSingleton<IAppDocumentService, AppDocumentService>();
+        services.AddSingleton<IAppSupportInfoService>(_ => new AppSupportInfoService(typeof(App).Assembly));
         services.AddSingleton<IConversationStore, ConversationStore>();
         services.AddSingleton<IPlatformCapabilityService, PlatformCapabilityService>();
         services.AddSingleton<ITransportSupportPolicy, TransportSupportPolicy>();

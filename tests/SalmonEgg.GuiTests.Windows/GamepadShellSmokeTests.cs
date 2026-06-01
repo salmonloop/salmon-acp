@@ -1052,6 +1052,7 @@ public sealed class ShellFocusedActivationSmokeTests
                 session,
                 gamepad.PressDown,
                 () => session.IsFocusWithinAutomationId("About.Support.OpenAppData")
+                    || session.IsFocusWithinAutomationId("About.Support.ReportAiContent")
                     || session.IsFocusWithinAutomationId("About.Support.OpenReleaseNotes")
                     || session.IsFocusWithinAutomationId("About.Support.OpenPrivacyPolicy")
                     || session.IsFocusWithinAutomationId("About.Support.CopyVersionInfo"),

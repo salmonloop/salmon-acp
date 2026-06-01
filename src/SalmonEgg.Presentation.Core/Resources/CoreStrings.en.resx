@@ -276,6 +276,12 @@
   <data name="About_ClipboardUnsupported" xml:space="preserve">
     <value>Clipboard copy is not supported on this platform.</value>
   </data>
+  <data name="About_ReportAiContentSubject" xml:space="preserve">
+    <value>Report inappropriate AI content shown in Salmon Egg</value>
+  </data>
+  <data name="About_ReportAiContentBodyPrompt" xml:space="preserve">
+    <value>Please describe the inappropriate AI-generated content shown in Salmon Egg.</value>
+  </data>
   <data name="Platform_ExternalOpenUnsupported" xml:space="preserve">
     <value>Opening local files or folders is not supported on this platform.</value>
   </data>
