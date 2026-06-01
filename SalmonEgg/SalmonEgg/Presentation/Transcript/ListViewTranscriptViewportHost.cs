@@ -91,6 +91,22 @@ public sealed class ListViewTranscriptViewportHost : ITranscriptViewportHost
         _listView.ScrollIntoView(item, ToNativeAlignment(alignment));
     }
 
+    public bool TryFocusItem(int index, FocusState focusState)
+    {
+        if (index < 0 || index >= _listView.Items.Count)
+        {
+            return false;
+        }
+
+        if (_listView.ContainerFromIndex(index) is not ListViewItem container)
+        {
+            return false;
+        }
+
+        return container.Focus(focusState)
+            || container.Focus(FocusState.Programmatic);
+    }
+
     public bool TryScrollByItems(int itemDelta)
     {
         if (itemDelta == 0 || _listView.Items.Count <= 0)

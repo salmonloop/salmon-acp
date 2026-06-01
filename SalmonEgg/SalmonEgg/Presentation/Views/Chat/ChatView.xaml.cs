@@ -504,23 +504,13 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             }
 
             var current = XamlFocusManager.GetFocusedElement(MessagesList.XamlRoot) as DependencyObject;
-            if (FindAncestorOrSelf<ListViewItem>(current) is ListViewItem itemContainer
-                && IsDescendantOf(itemContainer, MessagesList))
+            if (DependencyObjectAncestry.FindAncestorOrSelf<ListViewItem>(current) is ListViewItem itemContainer
+                && DependencyObjectAncestry.IsDescendantOf(itemContainer, MessagesList))
             {
                 return false;
             }
 
-            while (current is not null)
-            {
-                if (ReferenceEquals(current, MessagesList))
-                {
-                    return true;
-                }
-
-                current = VisualTreeHelper.GetParent(current);
-            }
-
-            return false;
+            return DependencyObjectAncestry.IsDescendantOf(current, MessagesList);
         }
 
         private bool IsTranscriptMessageLayerFocusWithin()
@@ -531,34 +521,18 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             }
 
             var current = XamlFocusManager.GetFocusedElement(MessagesList.XamlRoot) as DependencyObject;
-            return FindAncestorOrSelf<ListViewItem>(current) is ListViewItem itemContainer
-                && IsDescendantOf(itemContainer, MessagesList);
+            return DependencyObjectAncestry.FindAncestorOrSelf<ListViewItem>(current) is ListViewItem itemContainer
+                && DependencyObjectAncestry.IsDescendantOf(itemContainer, MessagesList);
         }
 
         private static Control? FindFirstInteractiveTranscriptChild(DependencyObject root)
-        {
-            var count = VisualTreeHelper.GetChildrenCount(root);
-            for (var index = 0; index < count; index++)
-            {
-                var child = VisualTreeHelper.GetChild(root, index);
-                if (child is Control control
-                    && control is not ListViewItem
+            => DependencyObjectAncestry.FindDescendant<Control>(
+                root,
+                static control =>
+                    control is not ListViewItem
                     && control.Visibility == Visibility.Visible
                     && control.IsEnabled
-                    && control.IsTabStop)
-                {
-                    return control;
-                }
-
-                var nested = FindFirstInteractiveTranscriptChild(child);
-                if (nested is not null)
-                {
-                    return nested;
-                }
-            }
-
-            return null;
-        }
+                    && control.IsTabStop);
 
         private bool TryMoveFocusFromTranscriptMessageToChildControl()
         {
@@ -568,8 +542,8 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             }
 
             var current = XamlFocusManager.GetFocusedElement(MessagesList.XamlRoot) as DependencyObject;
-            var focusedItemContainer = FindAncestorOrSelf<ListViewItem>(current);
-            if (focusedItemContainer is null || !IsDescendantOf(focusedItemContainer, MessagesList))
+            var focusedItemContainer = DependencyObjectAncestry.FindAncestorOrSelf<ListViewItem>(current);
+            if (focusedItemContainer is null || !DependencyObjectAncestry.IsDescendantOf(focusedItemContainer, MessagesList))
             {
                 return false;
             }
@@ -599,9 +573,9 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             }
 
             var current = XamlFocusManager.GetFocusedElement(MessagesList.XamlRoot) as DependencyObject;
-            var focusedItemContainer = FindAncestorOrSelf<ListViewItem>(current);
+            var focusedItemContainer = DependencyObjectAncestry.FindAncestorOrSelf<ListViewItem>(current);
             var currentIndex = -1;
-            if (focusedItemContainer is not null && IsDescendantOf(focusedItemContainer, MessagesList))
+            if (focusedItemContainer is not null && DependencyObjectAncestry.IsDescendantOf(focusedItemContainer, MessagesList))
             {
                 currentIndex = MessagesList.IndexFromContainer(focusedItemContainer);
             }
@@ -624,7 +598,7 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
                 return true;
             }
 
-            if (MessagesList.ContainerFromIndex(targetIndex) is not ListViewItem targetContainer)
+            if (!_transcriptViewportHost.TryFocusItem(targetIndex, FocusState.Keyboard))
             {
                 if (MessagesList.Items[targetIndex] is not object item)
                 {
@@ -632,7 +606,7 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
                 }
 
                 _pendingTranscriptMessageFocusIndex = targetIndex;
-                MessagesList.ScrollIntoView(item, ScrollIntoViewAlignment.Leading);
+                _transcriptViewportHost.ScrollItemIntoView(targetIndex, TranscriptItemScrollAlignment.Leading);
                 _activeTranscriptMessageAnchorItem = item;
                 _isTranscriptViewportLayerActive = false;
                 _isTranscriptChildControlLayerActive = false;
@@ -641,21 +615,20 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             }
 
             _pendingTranscriptMessageFocusIndex = null;
-            _activeTranscriptMessageAnchorItem = MessagesList.ItemFromContainer(targetContainer);
+            _activeTranscriptMessageAnchorItem = MessagesList.Items[targetIndex];
             _isTranscriptViewportLayerActive = false;
             _isTranscriptChildControlLayerActive = false;
-            return TryFocusTranscriptNavigationTarget(targetContainer);
+            return true;
         }
 
         private void TryApplyPendingTranscriptMessageFocus()
         {
-            if (_pendingTranscriptMessageFocusIndex is not int pendingIndex
-                || MessagesList?.ContainerFromIndex(pendingIndex) is not ListViewItem pendingContainer)
+            if (_pendingTranscriptMessageFocusIndex is not int pendingIndex)
             {
                 return;
             }
 
-            if (TryFocusTranscriptNavigationTarget(pendingContainer))
+            if (_transcriptViewportHost.TryFocusItem(pendingIndex, FocusState.Keyboard))
             {
                 _pendingTranscriptMessageFocusIndex = null;
             }
@@ -669,8 +642,8 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
             }
 
             var current = XamlFocusManager.GetFocusedElement(MessagesList.XamlRoot) as DependencyObject;
-            var focusedItemContainer = FindAncestorOrSelf<ListViewItem>(current);
-            if (focusedItemContainer is null || !IsDescendantOf(focusedItemContainer, MessagesList))
+            var focusedItemContainer = DependencyObjectAncestry.FindAncestorOrSelf<ListViewItem>(current);
+            if (focusedItemContainer is null || !DependencyObjectAncestry.IsDescendantOf(focusedItemContainer, MessagesList))
             {
                 if (_isTranscriptChildControlLayerActive && TryFocusStoredTranscriptMessageAnchor())
                 {
@@ -698,12 +671,13 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
                 return false;
             }
 
-            if (MessagesList.ContainerFromItem(_activeTranscriptMessageAnchorItem) is not ListViewItem container)
+            var anchorIndex = MessagesList.Items.IndexOf(_activeTranscriptMessageAnchorItem);
+            if (anchorIndex < 0)
             {
                 return false;
             }
 
-            return TryFocusTranscriptNavigationTarget(container);
+            return _transcriptViewportHost.TryFocusItem(anchorIndex, FocusState.Keyboard);
         }
 
         private void ClearTranscriptMessageLayerState()
@@ -717,39 +691,6 @@ public sealed partial class ChatView : Page, INavigationIntentConsumer, IPrimary
         {
             return target.Focus(FocusState.Keyboard)
                 || target.Focus(FocusState.Programmatic);
-        }
-
-        private static T? FindAncestorOrSelf<T>(DependencyObject? start)
-            where T : class
-        {
-            var current = start;
-            while (current is not null)
-            {
-                if (current is T match)
-                {
-                    return match;
-                }
-
-                current = VisualTreeHelper.GetParent(current);
-            }
-
-            return default;
-        }
-
-        private static bool IsDescendantOf(DependencyObject? current, DependencyObject ancestor)
-        {
-            var node = current;
-            while (node is not null)
-            {
-                if (ReferenceEquals(node, ancestor))
-                {
-                    return true;
-                }
-
-                node = VisualTreeHelper.GetParent(node);
-            }
-
-            return false;
         }
 
         private void RegisterUserViewportIntent()

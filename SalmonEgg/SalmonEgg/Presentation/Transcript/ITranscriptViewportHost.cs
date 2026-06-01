@@ -18,6 +18,8 @@ public interface ITranscriptViewportHost : IDisposable
 
     void ScrollItemIntoView(int index, TranscriptItemScrollAlignment alignment = TranscriptItemScrollAlignment.Default);
 
+    bool TryFocusItem(int index, FocusState focusState);
+
     bool TryScrollByItems(int itemDelta);
 
     bool TryFocusViewport(FocusState focusState);

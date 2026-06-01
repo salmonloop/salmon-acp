@@ -12,7 +12,11 @@ public sealed class AppSupportInfoService : IAppSupportInfoService
 
     public AppSupportInfoService(Assembly assembly)
     {
-        ArgumentNullException.ThrowIfNull(assembly);
+        if (assembly is null)
+        {
+            throw new ArgumentNullException(nameof(assembly));
+        }
+
         _reportInappropriateAiContentEmail = ResolveAssemblyMetadataValue(
             assembly,
             ReportInappropriateAiContentEmailMetadataKey);
